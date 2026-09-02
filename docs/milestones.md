@@ -62,14 +62,18 @@ Exit criterion: stiffness tests pass; licence cleared; anchor dataset(s) chosen.
 
 **Resource cost this session (rough)**
 
-| Item | Wall-clock | Notes |
-|---|---|---|
-| Session total | ≈ 1 h 35 min (00:49–~02:25 UTC) | one agent session, 4 vCPU / 15 GB container |
-| Candidate installs | ≈ 12 min aggregate, mostly overlapped in background | QSDsan ≈ 6 min (largest: ~1.0 GB venv), bsm2-python ≈ 2 min (0.7 GB), EXPOsan ≈ 2 min, PyADM1ODE ≈ 1 min (0.5 GB), PyADM1 clone < 1 min |
-| ADM1F | ≈ 5 min total | PETSc-from-source attempt failed after 1.5 min (network policy); `apt-get petsc-dev libadolc-dev libcolpack-dev` ≈ 45 s; two direct compiles ≈ 30 s each; PETSc source clone 0.6 GB (unused) |
-| Probes | < 3 min aggregate compute | PyADM1 ≈ 50 s per full run (×3 runs incl. two adapter fixes); bsm2-python ≈ 10 s; QSDsan ≈ 8 s incl. warm-up; ADM1F ≈ 2 s per variant; PyADM1ODE test suite 20 s (790 tests) |
-| Disk | ≈ 3.3 GB scratch | five venvs + PETSc source; all under the session scratchpad, nothing in the repo |
-| CI | not yet run | first run will be on the branch push |
+| Item | Wall-clock | Disk | Notes |
+|---|---|---|---|
+| Session total | ≈ 1 h 40 min | — | one agent session; 4 vCPU / 15 GB container |
+| Install: QSDsan + EXPOsan | ≈ 8 min (background) | 1.0 GB | largest dependency tree |
+| Install: bsm2-python | ≈ 2 min (background) | 0.7 GB | numba, matplotlib pulled in |
+| Install: PyADM1ODE | ≈ 1 min | 0.5 GB | test suite 790 tests / 20 s |
+| Install: PyADM1 | < 1 min | — | git clone only |
+| Build: ADM1F | ≈ 5 min | 0.6 GB | PETSc-from-source failed (network policy, 1.5 min); apt `petsc-dev` 45 s; 2 compiles ≈ 30 s each |
+| Probes: all candidates | < 3 min compute | 32 KB results | PyADM1 ≈ 50 s/run ×3; bsm2-python ≈ 10 s; QSDsan ≈ 8 s; ADM1F ≈ 2 s/variant |
+| CI (GitHub Actions) | 2 runs × 3 jobs, ≈ 25 s each | — | first runs on the branch |
+
+Totals: ≈ 3.3 GB scratch disk (all outside the repo), no GPU, no external services.
 
 No LLM-agent compute was spent inside the benchmark (no workflows exist yet); the
 figures above are development cost only.

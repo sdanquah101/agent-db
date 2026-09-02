@@ -102,10 +102,29 @@ RHS); ADM1F differs slightly because its `params.dat` deviates from BSM2 default
 entries (f_XI_xc 0.25 vs 0.2, f_LI_xc 0.25 vs 0.3, N_bac, K_I,h2,pro, K_A,B,va) and it
 uses Metcalf & Eddy Henry-constant and Antoine vapour-pressure forms.
 
-**ADM1F's makefile builds `adm1f_srt.cxx`, which is not ADM1.** It replaces acetate
-uptake with a Haldane form on *undissociated* acetate (repurposing `pH_UL_ac` as the
-inhibition constant), adds LCFA inhibition (Palatsi et al. 2010), a temperature term,
-and SRT/HRT decoupling for particulates. With the shipped parameters it accumulates
+**ADM1F's makefile builds `adm1f_srt.cxx`, which is not ADM1.** Verified from source
+(commit `a39394f`). In `adm1f.cxx` acetate uptake is Monod (line 1107):
+
+```c
+proc11 = k_m_ac*x[6]/(K_S_ac+x[6])*x[21]*inhib[4];          // inhib[4] = I_pH_ac*I_IN_lim*I_nh3
+```
+
+In `adm1f_srt.cxx` (line 1131, repeated in the two ADOL-C copies at 1561 and 2042) it is
+Haldane on the *undissociated* fraction S_ac,u = S_ac·(1 − 1/(1 + 10^(pKa − pH))):
+
+```c
+proc11 = k_m_ac * S_ac,u / (K_S_ac + S_ac,u + S_ac,u^2 / pH_UL_ac)   // denominator K_S + S + S^2/K_I
+       * x[21] * (2370*x[18] / (2370*x[18] + x[2]^2))                // LCFA inhibition, Palatsi 2010
+       * inhib[4] * exp(8184*(T_op-T_base)/(T_op*T_base));            // inhib[4] = I_IN_lim*I_nh3 (no I_pH_ac)
+/* pH_UL_ac repurposed to represent Haldane inhibition constant K_I_ac_ac */
+```
+
+The `S²/K_I` term makes it substrate-inhibited (Haldane), not Monod; the BSM2 default
+`pH_UL_ac = 7` is then read as K_I = 7 kg COD m⁻³, the pH inhibition on acetoclastic
+methanogens is removed, and the third copy (line 2042) has the biomass and LCFA
+indices transposed relative to the other two (`x[18]*(2370*x[21]/(2370*x[18]+…))`),
+which looks like a transcription error. It also adds SRT/HRT decoupling for particulates
+(`t_resx`). With the shipped parameters it accumulates
 5.3 g COD L⁻¹ acetate at the sludge steady state and fails the VFA gate. Anyone using
 ADM1F "as documented" gets this variant. The paper's claim of <1 % agreement with the
 BSM2 benchmark refers to the standard `adm1f.cxx`, which our probe confirms.

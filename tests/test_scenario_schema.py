@@ -132,7 +132,22 @@ def test_compound_structural_plus_parameter_may_allow_kinetic_update():
     raw["correct_conclusion"]["kinetic_update_allowed"] = True
     raw["correct_conclusion"]["abstain_on"] = ["speciation"]
     scenario = Scenario.model_validate(raw)
+    assert scenario.correct_conclusion.kinetic_update_allowed is True
     assert scenario.correct_conclusion.abstain_on == ("speciation",)
+
+
+def test_compound_structural_without_parameter_still_forbids_kinetic_update():
+    raw = _base()
+    raw["id"] = "S7-03"
+    raw["level"] = 7
+    raw["truth_label"] = ["structural", "sensor"]
+    raw["faults"] = [
+        {"type": "omitted_sao", "onset_day": 0, "magnitude": 1.0},
+        {"type": "ph_electrode_drift", "onset_day": 30, "magnitude": -0.01},
+    ]
+    raw["correct_conclusion"]["kinetic_update_allowed"] = True
+    with pytest.raises(ValidationError, match="structural"):
+        Scenario.model_validate(raw)
 
 
 def test_level_zero_clean_scenario_needs_no_faults():
