@@ -39,6 +39,7 @@ packages = [
     "scenarios",
     "sim",
     "sim.adm1",
+    "sim.plants",
     "state",
     "tools",
     "workflows",
