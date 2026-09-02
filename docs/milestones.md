@@ -354,15 +354,25 @@ branch, since PR #5 was not yet merged).**
   envelopes as recorded; untranscribed fields null with `todo`),
   `scripts/plant_a_sao_probe.py`, `tests/test_plants.py` (9 tests; B/C statistics
   re-derived from the committed Muscatine file).
-- Seven open design questions are listed in `docs/decisions.md` ("Plant configurations
-  A/B/C — proposed"); the first (SAO cannot establish at Plant A's 28-d HRT with the
-  current kinetics) blocks the SAO scenario.
+- The seven design questions were answered by the lead the same day and the configs
+  are **frozen** (`docs/decisions.md`, "Plant configurations A/B/C — frozen"):
+  `k_m_sao` 4.0 (μ_max 0.16 d⁻¹, Westerholm et al. 2019), Plant A HRT 35–45 d with the
+  feed derived from it, B as Muscatine co-digestion with load swings, C as the
+  sludge-only controlled pair of B, BSM2 headspace ratio, ideal CSTR with imperfect
+  mixing as a fault-injection truth variant, and the Plant-A ammonia envelope left to
+  the lead. Proposal copy at v0.3. SAO takeover at Plant A is now a test (12 plant
+  tests; full suite 138).
+
+**Blocked / open**
+
+- Plant A's TAN/pH/VFA envelope (the lead transcribes it); until then the SAO test
+  uses a provisional feed TAN of 2.8 g N L⁻¹.
 
 **Next session should start on**
 
-1. The lead's answers to the plant-configuration questions, then freeze the configs.
-2. Influent generator (§6.1) with `anchor/ingest_muscatine.py` for Plants B/C and the
+1. Influent generator (§6.1) with `anchor/ingest_muscatine.py` for Plants B/C and the
    Tisocco feedstock tables for Plant A.
+2. Fault-injection API, including the imperfect-mixing truth variant.
 3. Weinrich R3/R4 ports as fitted models.
 
 **Resource cost this session (rough)**

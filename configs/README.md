@@ -28,7 +28,9 @@ is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
   anchoring with sources, truth-model extensions, scenario subset, and the
   *distribution* of the hidden active-volume error (its realisation is sampled per run
   and is hidden truth). B and C are re-derived from the Muscatine daily file by
-  `tests/test_plants.py`. Proposed, not frozen (decisions log 2026-09-02).
+  `tests/test_plants.py`. Frozen by the lead's answers of 2026-09-02 (decisions log,
+  "Plant configurations A/B/C — frozen").
 - `plant_a_statistics.yaml` — the published operating envelopes Plant A is anchored to
-  (Tisocco et al. 2024, 2026), with `todo` nulls where the tables are not yet
-  transcribed.
+  (Tisocco et al. 2024, 2026), the published HRT inconsistency and the chosen 35–45 d,
+  with `todo` nulls where the tables are not yet transcribed (the lead transcribes the
+  ammonia envelope).

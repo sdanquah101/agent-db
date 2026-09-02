@@ -46,9 +46,12 @@ The virtual plants (`sim/plants/`, `configs/plants/`):
   anchoring status and scenario subsets follow the decisions log; every dataset-anchored
   number names its source and Plants B/C's feed, HRT, SRT, temperature and zero-delivery
   statistics are re-derived from the committed Muscatine daily file; the V/Q-vs-HRT
-  consistency check fires; the hidden active-volume error is seeded, bounded and
-  two-sided and never touches the declared config; declared vs true geometry compile
-  with every plant's truth extensions.
+  consistency check fires; B and C are a controlled pair (same geometry, temperature
+  and hidden-error distribution, feeds differ); headspace is the BSM2 ratio and marked
+  assumed; the hidden active-volume error is seeded, bounded and two-sided and never
+  touches the declared config; declared vs true geometry compile with every plant's
+  truth extensions; and SAO takes over at Plant A's declared geometry and 40-d HRT
+  within 180 d (the condition of the SAO-scenario decision; provisional feed TAN).
 
 `conftest.py` provides the default configuration, the Rosen & Jeppsson (2006) initial
 state and the probe-definition module as fixtures.

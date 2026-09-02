@@ -661,7 +661,7 @@ thermophilic sibling would be a silent unit-like choice).
 
 ---
 
-## 2026-09-02 — Plant configurations A/B/C — **proposed, not frozen** (design content for the lead)
+## 2026-09-02 — Plant configurations A/B/C — proposed (superseded the same day by the lead's answers, next entry)
 
 **Proposal.** A plant is a *declared* configuration (`configs/plants/plant_<id>.yaml`,
 schema `sim/plants/schema.py`) that a workflow may read — geometry, set points, feed
@@ -729,3 +729,41 @@ model); the run layer that writes the sampled hidden geometry to `runs/<id>/trut
 **Alternatives.** One shared plant schema with per-plant overrides (rejected: each
 plant's provenance is different and should be readable on its own); put the hidden
 error realisation in the config (rejected: CLAUDE.md rule 1).
+
+---
+
+## 2026-09-02 — Plant configurations A/B/C — **frozen** (the lead's answers to the seven questions)
+
+1. **SAO kinetics and Plant A's HRT.** `k_m_sao` is raised from 2.0 to **4.0 kg COD
+   kg COD⁻¹ d⁻¹** (μ_max = Y·k_m = 0.16 d⁻¹, doubling 4.3 d), the fast end of the 3–20 d
+   generation times measured for syntrophic acetate-oxidising co-cultures (Westerholm
+   et al. 2019, *Environ. Sci. Technol.* 53, doi:10.1021/acs.est.9b00288). Plant A's
+   HRT is set at **35–45 d (median 40)**, inside the 32–50 d that the published volumes
+   imply (Tisocco et al. 2024, doi:10.1007/s11783-024-1810-9: 650 m³ at 13–20 m³ d⁻¹).
+   Verified: at Plant A's declared geometry and 40-d HRT under ≈ 200 mg L⁻¹ free
+   ammonia, a 0.05 kg COD m⁻³ SAO seed grows ≈ 9× within 180 d and removes > 95 % of
+   the acetate the inhibited acetoclasts leave (S_ac 15.5 → 0.6 kg COD m⁻³;
+   `tests/test_plants.py::test_sao_establishes_at_plant_a`, provisional feed TAN
+   2.8 g N L⁻¹ until answer 7); at the BSM2 20-d HRT SAO still washes out (X_sao
+   0.05 → 0.0077 in 60 d, `tests/test_adm1_extensions.py`). The 60-d takeover test of
+   the earlier draft is kept as is.
+2. **Plant A hydraulics.** The Tisocco volumes are kept (650 m³); the feed rate is
+   derived from the chosen HRT (16.25 m³ d⁻¹, 14.4–18.6), which is consistent with the
+   published 11–18 m³ d⁻¹ slurry plus 2 t d⁻¹ silage; the published inconsistency (stated
+   28 d vs 32–50 d from the volumes) is recorded in `configs/plant_a_statistics.yaml`.
+3. **Plant B** is Muscatine-anchored co-digestion with load swings and makes no
+   high-nitrogen claim. The ammonia scenarios — Level-5 "true ammonia-inhibition
+   shift", Level-6 "omitted SAO pathway" and their Level-7 compound — run only on
+   Plant A. Proposal copy updated to v0.3 (§6.1, §6.3, §7: the factorial is 16 scenarios
+   × 3 tiers × 2 plants).
+4. **Plant C** is the sludge-only version of Plant B: B and C share geometry, temperature
+   and hidden-error distribution and form a **controlled pair** that differs only in the
+   co-substrate streams (tested).
+5. **Headspace volumes** use the BSM2 ratio V_gas/V_liq = 300/3400 = 0.0882 (A 57.4 m³,
+   B/C 162 m³), marked as assumed in every config (tested).
+6. **Mixing** is an ideal CSTR in the plant contract (the schema allows nothing else).
+   Imperfect mixing is a fault-injection *truth variant* of the Level-6 "Imperfect
+   mixing" scenario: recorded now, implemented with the fault-injection API.
+7. **Plant A's ammonia envelope** will be transcribed by the lead; the nulls in
+   `configs/plant_a_statistics.yaml` stay until then, and the SAO test's feed TAN is
+   marked provisional.
