@@ -28,8 +28,10 @@ The ADM1 core (`sim/adm1/`):
   decision and must not be shortened or loosened to pass.
 - `test_adm1_extensions.py` — the §6.1 extensions (`configs/adm1/extensions.yaml`,
   `sim/adm1/extensions.py`): every extension row conserves COD, C and N (charge too,
-  except the calcite row whose −2 is an artefact of S_IC being uncharged in the matrix;
-  a dynamic test shows the speciated balance closes); each additive extension, when
+  except the calcite row whose −2 is a matrix convention, S_IC carrying charge 0 as a
+  total; the calcium balance and the 2 eq/mol alkalinity drop are tested dynamically
+  instead, since electroneutrality is enforced by the pH solver); each additive
+  extension, when
   inert, reproduces the base Probe-1 oracle; the carbonate switch is pinned as a small
   genuine change; SAO takes over at a 60-d HRT under high free ammonia, washes out at
   20 d, and is inhibited less than acetoclasts; Davies coefficients have the right limits

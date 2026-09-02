@@ -406,6 +406,12 @@ after the refactor.
 **Rule added to CLAUDE.md.** A follow-on session confirms its predecessor's PR is merged
 before starting, or branches from the predecessor's branch.
 
+**Alternatives.** Keep the duplicate core and merge #2 later (rejected: two cores, two
+oracles, a reconciliation debt that only grows); merge the duplicate and port #2's
+dynamic ring test onto it (rejected: #2 had already been reviewed against the decisions
+log and had the stronger evidence); keep both cores and pick by ring-test score
+(rejected: the scores were not comparable, since only #2 ran the dynamic case).
+
 ---
 
 ## 2026-09-02 — Formulation of the three truth-model extensions
@@ -441,11 +447,15 @@ switchable.
 **The calcite row's charge residual of −2.** The row {S_ca −1, S_IC −1, X_caco3 +1}
 does not close on charge because S_IC is an *uncharged total* in the matrix (charge
 content 0; its split into CO₂/HCO₃⁻/CO₃²⁻ is algebraic) while the species that actually
-leaves is CO₃²⁻. It is an artefact of that convention, not a loss of charge: after
-speciation the balance closes, because the carbonate removed carried −2, exactly the
-+2 of the calcium removed. `tests/test_adm1_extensions.py` asserts −2 for this row in
-the matrix test and asserts a closed speciated charge balance at every output time
-while calcite is forming.
+leaves is CO₃²⁻. The −2 is a **matrix convention**, not a tested property: that the
+solution stays electroneutral is enforced by the pH solver whatever the row says, so a
+"charge balance closes" test would be vacuous (one was written and removed after
+review). What is tested instead: the matrix test asserts −2 for this row; a calcium
+balance (S_ca + X_caco3 follows dilution only) checks the S_ca and X_caco3 entries; an
+alkalinity check (the weak-acid alkalinity computed from the reported speciation drops
+by 2 eq per mol CaCO₃ once the ammonium re-speciation caused by the pH drop is
+accounted for) checks the speciation output against the states; the S_IC entry is
+covered by the static carbon balance.
 
 **Evidence.** Inert-identity tests: SAO, ionic strength and calcite each enabled but
 inert reproduce the base Probe 1 to solver tolerance (1e-4 where extra states change

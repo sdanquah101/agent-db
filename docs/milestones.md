@@ -261,15 +261,25 @@ The duplicate core is discarded. CLAUDE.md now carries the follow-on-session rul
   (Davies, A scaled to T_op), carbonate second dissociation (own switch, default off),
   calcite precipitation (S_ca, X_caco3, SI rate). Formulation, defaults and the lead's
   domain answers in `docs/decisions.md`.
-- `tests/test_adm1_extensions.py`: 25 tests — conservation of every row (charge −2 for
-  the calcite row: an artefact of S_IC being uncharged in the matrix; a dynamic test
-  shows the speciated balance closes), state layout, compile-time rejections, inert
+- `tests/test_adm1_extensions.py`: 28 tests — conservation of every row (charge −2 for
+  the calcite row by matrix convention, S_IC carrying charge 0 as a total; the calcium
+  balance and the 2 eq/mol alkalinity drop are tested dynamically instead), the
+  ionic-strength iteration cap raising, units on every derived quantity, state layout,
+  compile-time rejections, inert
   identity against the Probe-1 oracle for all three additive extensions, the carbonate
   switch pinned as a small genuine change, SAO takeover (60-d HRT, 2.8 g N/L, 300 d)
   and washout (20-d HRT), SAO NH₃ term weaker than acetoclastic, Davies limits and
   A(T), ionic-strength pH/NH₃ shifts, calcite as a sink, all four together, determinism.
-- Full suite on the combined code: 120 passed, including the dynamic-influent ring test
+- Full suite on the combined code: 123 passed, including the dynamic-influent ring test
   (max relative discrepancy 1.5e-4, unchanged).
+- Independent review round (coordinating session): ionic-strength iteration cap and
+  criterion moved to `configs/adm1/solver.yaml` (`ionic_strength_solver`, relative
+  criterion, non-convergence raises); a vacuous "charge balance closes" test replaced
+  by calcium-balance and alkalinity-drop tests; inert tolerances tightened to the
+  measured gaps (1e-5 / 1e-8 / 1e-5); washout test bounded from both sides; loader moved
+  to `defaults.py`; rate table and stoichiometric matrices read-only; units table for
+  every derived quantity; ionic strength reported whether or not the correction is
+  applied; missing extension constants raise instead of defaulting.
 
 **Blocked / open**
 
@@ -298,6 +308,7 @@ The duplicate core is discarded. CLAUDE.md now carries the follow-on-session rul
 | Extensions on the #2 core | ≈ 1 h 15 min | — | worktree on the #2 branch |
 | Full suite (`pytest -q`), combined code | ≈ 4.5 min per run, 4 runs | — | dominated by the sample-and-hold ring test |
 | Domain-answer revision (SAO NH₃, carbonate switch, A(T)) | ≈ 40 min | — | incl. SAO takeover probes (≈ 1 min compute) |
+| Review round (M1, M2, L1–L5, nits) | ≈ 35 min | — | 2 fast test runs + 1 full run (≈ 4.5 min) |
 | CI (GitHub Actions) | 3 jobs per push on #2 and #4 | — | |
 
 No LLM-agent compute inside the benchmark; development cost only.
