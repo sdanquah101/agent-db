@@ -373,3 +373,85 @@ design open past the week-9 gate); drop Plant A entirely (rejected: loses the
 grass-silage/slurry domain where ADM1 defaults are weakest); run Plant A in the full
 factorial with a caveat (rejected: a caveat does not change what the statistics
 assume).
+
+---
+
+## 2026-09-02 — Duplicate ADM1 core: PR #2 is canonical; PR #4 reduced to the extensions
+
+**What happened.** The third session of the day started the truth-model extensions
+from `main` without checking the open PR list. PR #2 (the `sim/adm1/` Petersen-matrix
+core, 79 tests, dynamic-influent ring test passing at 1.5e-4) was open but unmerged, so
+the session re-implemented a second ADM1 core with a different layout, ring-tested only
+against the constant-feed oracle (73 tests, no dynamic case), and opened PR #4 on top
+of it.
+
+**Decision (by the lead).** PR #2 is canonical. Sequence: merge #2 first (after merging
+`main` into it and fixing the one CI failure, `tests/` not importable as a package under
+plain `pytest`); rebase the extension work onto the merged core, keeping only SAO, the
+Davies ionic-strength correction, the precipitation rows and speciation switches, and
+their tests; discard the duplicate core; re-run the full ring test including the dynamic
+case on the combined code. PR #4 is repointed at that branch.
+
+**Reason.** Two cores would mean two oracles, two parameter schemas and a permanent
+reconciliation debt; #2 had the stronger evidence (all three acceptance cases) and had
+already been through the decisions log.
+
+**Refactors kept from the duplicate.** Two behaviour-preserving changes to
+`sim/adm1/model.py` were worth carrying over because the extensions need them:
+`integrate()` (the sample-and-hold / linear influent loop, now callable with any
+right-hand side of the same signature) and `gas_exchange()` (the transfer terms and
+headspace derivatives as a function). Probe 1/2 and the dynamic ring test pass unchanged
+after the refactor.
+
+**Rule added to CLAUDE.md.** A follow-on session confirms its predecessor's PR is merged
+before starting, or branches from the predecessor's branch.
+
+---
+
+## 2026-09-02 — Formulation of the three truth-model extensions
+
+**Decision.** The §6.1 extensions are additive rows and components over the standard
+Petersen matrix, declared in `configs/adm1/extensions.yaml` in the same expression
+format as the base matrix, compiled by `sim/adm1/extensions.py` into an
+`ExtendedModel` whose first 29 states are the base states (so every base ring test
+applies to the extended model with all extensions inert). Each extension is independently
+switchable.
+
+1. **Syntrophic acetate oxidation (`sao`).** One biomass component `X_sao` and two
+   processes: acetate uptake by SAO (`S_ac → 4 H₂ + CO₂`, yield `Y_sao`, Monod on S_ac
+   with the acetate-uptake pH and NH₃ inhibition functions, H₂ product inhibition as for
+   the C4/propionate degraders) and first-order decay to composites. Defaults
+   `Y_sao` 0.04, `k_m_sao` 2.0 d⁻¹ (μ_max = 0.08 d⁻¹, within the published 0.02–0.1
+   range for thermophilic and ammonia-stressed sludge); `K_S_sao` 0.3 kg COD m⁻³,
+   `K_I_h2_sao` 3.5e-6 kg COD m⁻³. With BSM2 defaults SAO washes out at a 20-day HRT
+   and takes over at a 40-day HRT with high free ammonia; both are tested.
+2. **Ionic-strength correction (`ionic_strength`).** Davies activity coefficients
+   (A 0.509, b 0.3, I capped at 0.5 M) applied to the charge balance and to every
+   acid–base equilibrium; pH is reported as −log₁₀(a_H⁺); the pH inhibition functions and
+   free-ammonia inhibition see activities. I is solved by fixed-point iteration together
+   with the charge balance. No new states; the switch lives in the speciation routine.
+3. **Calcite precipitation (`precipitation`).** Components `S_ca` (kmol m⁻³, charge +2)
+   and `X_caco3` (kmol m⁻³, inert solid); carbonate speciation adds the second
+   dissociation (pK_a2 10.33 at 25 °C, van 't Hoff corrected); rate
+   `k_prec · (√SI − 1)^n` for SI > 1 with `K_sp` 10^−8.48, `n` 2, and the reverse
+   dissolution disabled by default. The row removes one carbonate from S_IC and one Ca²⁺,
+   so its charge residual is **−2 by convention**; the conservation test asserts that
+   value rather than zero for this row. COD, C and N balances close for every row.
+
+**Evidence.** Inert-identity tests (each extension enabled with zero seed / switch off
+reproduces the base Probe 1 to the stated tolerance, tightest for SAO and ionic
+strength; precipitation to 1e-2 because the carbonate speciation changes the pH solve
+even at zero calcium); qualitative tests (SAO takeover and washout, Davies limiting
+behaviour, pH and NH₃ shifts under ionic strength, calcite as a sink for HCO₃⁻ and Ca).
+No published oracle exists for the combined model; the formulations follow QSDsan's
+ADM1p extension (read as an equation reference only) and the literature cited in
+`docs/adm1_comparison.md` §6.
+
+**Open for domain review.** SAO kinetic defaults; whether NH₃ inhibition of SAO should
+be weaker than for acetoclastic methanogens (currently the same function); the
+precipitation rate law and default `k_prec`.
+
+**Alternatives.** Hand-editing the base matrix per extension (rejected: this is what the
+Petersen-as-data decision was made to avoid); ions as ODE states for the activity
+correction (rejected: same reasons as the algebraic-pH decision); a full mineral
+equilibrium module (rejected for Phase 1: calcite is the only sink §6.1 asks for).

@@ -206,6 +206,7 @@ influent by end of week 6, else fall back to a bsm2-python fork.
 **Blocked / open**
 
 - Open-dataset identification (Milestone-1 exit criterion, §8) is still not started.
+  → Done the same day by the anchor session (Milestone 1, second session, above).
 - The sample-and-hold ring test makes `pytest -q` take ≈ 3 min. Acceptable for CI; if it
   becomes a nuisance, the candidates are an analytical Jacobian (removes ≈ 30 RHS
   evaluations per restart) or a compiled RHS, not a shorter horizon.
@@ -233,3 +234,64 @@ influent by end of week 6, else fall back to a bsm2-python fork.
 | CI (GitHub Actions) | 3 jobs per push | — | expect ≈ 4 min per pytest job |
 
 No LLM-agent compute inside the benchmark (no workflows yet); development cost only.
+
+### Session 2026-09-02 (third session) — truth-model extensions on the PR #2 core
+
+**Reconciliation first.** This session initially re-implemented the ADM1 core from
+`main` because PR #2 was still open (see `docs/decisions.md`, "Duplicate ADM1 core").
+On the lead's instruction PR #2 was merged with `main`, its CI fixed (`tests/__init__.py`)
+and merged; the extension work was rebuilt on #2's core and PR #4 was repointed at it.
+The duplicate core is discarded. CLAUDE.md now carries the follow-on-session rule.
+
+**Done**
+
+- `sim/adm1/model.py`: behaviour-preserving refactor exposing `integrate()` and
+  `gas_exchange()` so an extended right-hand side reuses the influent handling and gas
+  transfer unchanged. All base tests and the full ring test (including the 280-day
+  dynamic case) pass unchanged.
+- `sim/adm1/physchem_ext.py`: extended speciation with optional Davies activity
+  correction and carbonate second dissociation; falls back to the base routine when
+  both switches are off and S_ca = 0.
+- `sim/adm1/extensions.py` + `configs/adm1/extensions.yaml`: extension declarations
+  (components, processes with expression-valued stoichiometry, parameters, speciation
+  switches), `compile_extended()` (validates names, rate code, overrides; embeds the
+  base matrix), `rhs_extended()`, `simulate_extended()` returning an `ExtendedResult`
+  with pH, activities, ionic strength and gas quantities.
+- Extensions: SAO (X_sao, uptake + decay), ionic strength (Davies), calcite
+  precipitation (S_ca, X_caco3). Formulation and defaults in `docs/decisions.md`.
+- `tests/test_adm1_extensions.py`: 19 tests — conservation of every row (charge −2 for
+  the calcite row by convention), state layout, compile-time rejections, inert identity
+  against the Probe-1 oracle, SAO takeover (40-d HRT, high NH₃) and washout (20-d HRT),
+  Davies limits, ionic-strength pH/NH₃ shifts, calcite as a sink, all three together,
+  determinism.
+- Full suite on the combined code: 114 passed, including the dynamic-influent ring test
+  (max relative discrepancy 1.5e-4, unchanged).
+
+**Blocked / open**
+
+- No external oracle for the extended model; correctness rests on conservation,
+  inert identity and qualitative behaviour. Domain review of the SAO defaults and the
+  precipitation rate law is requested in the PR.
+- The precipitation extension changes the pH solve at zero calcium (carbonate second
+  dissociation), so its inert identity is 1e-2, not 1e-4.
+
+**Next session should start on**
+
+1. Domain review and merge of PR #4 (extensions only).
+2. Plants A–C (`sim/plants/`): geometry, temperature, feedstock definitions;
+   `configs/plant_a_statistics.yaml` from the Tisocco et al. envelopes.
+3. Influent generator (§6.1) with `anchor/ingest_muscatine.py` feeding the Plant-B/C
+   statistics.
+4. Weinrich R3/R4 ports as fitted models.
+
+**Resource cost this session (rough)**
+
+| Item | Wall-clock | Disk | Notes |
+|---|---|---|---|
+| Session total | ≈ 3 h | — | ≈ 1 h lost to the duplicate core and its reconciliation |
+| Duplicate core (discarded) | ≈ 1 h | — | 73 tests; not merged |
+| Extensions on the #2 core | ≈ 1 h 15 min | — | worktree on the #2 branch |
+| Full suite (`pytest -q`), combined code | ≈ 4.5 min per run, 3 runs | — | dominated by the sample-and-hold ring test |
+| CI (GitHub Actions) | 3 jobs per push on #2 and #4 | — | |
+
+No LLM-agent compute inside the benchmark; development cost only.

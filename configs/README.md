@@ -14,3 +14,8 @@ is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
 - `adm1/plant_bsm2.yaml` — BSM2 digester volumes and temperature.
 - `adm1/solver.yaml` — `solve_ivp` method and tolerances, pH root-find bracket and
   tolerances, negative-state clipping flag.
+- `adm1/extensions.yaml` — the §6.1 extensions as additional components, processes
+  (same expression format as the base matrix), parameters and speciation switches:
+  `sao` (X_sao, acetate oxidation + decay), `ionic_strength` (Davies activity
+  correction; no new states) and `precipitation` (S_ca, X_caco3, carbonate speciation,
+  calcite rate law). Loaded by `sim.adm1.load_extensions`; each is switchable.
