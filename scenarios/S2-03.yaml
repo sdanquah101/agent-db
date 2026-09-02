@@ -1,0 +1,23 @@
+# Example scenario from proposal Appendix B: gas-meter scale error on the food-waste
+# plant at the constrained instrumentation tier. Truth label: sensor. The correct
+# conclusion is to flag the gas-flow sensor and estimate its scale factor without
+# touching any yield or kinetic parameter (§6.3, Level 2).
+id: S2-03
+plant: B
+tier: A
+level: 2
+duration_days: 180
+truth_label: [sensor]
+faults:
+  - type: gas_meter_scale
+    onset_day: 60
+    magnitude: 1.08
+correct_conclusion:
+  flag_sensor: gas_flow
+  estimate_scale_factor: true
+  kinetic_update_allowed: false
+  abstain_on: []
+budget:
+  simulator_evals: 4000
+  wall_clock_min: 90
+  assay_units: 2
