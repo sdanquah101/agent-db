@@ -1,0 +1,589 @@
+# Observation model (proposal §6.1 "Observation model", §6.4 instrumentation tiers).
+# Schema: sim/observe/schema.py (ObservationConfig). Loader: sim/observe/defaults.py.
+#
+# ONE catalogue of channels; the three tiers are masks over it (`tier` is the lowest tier
+# at which a channel is observed). An instrument carries the measurement statistics, so
+# plants that share an instrument share its numbers and a plant that differs overrides
+# only what differs (`plants.<id>.instruments`).
+#
+# Sources:
+#   muscatine_scada: Schroer & Just 2024, SCADA-raw.csv (500,400 rows at 1 minute,
+#                    2022-03-18 to 2023-02-28, 347.8 d). Derived by
+#                    anchor/ingest_muscatine.py through
+#                    scripts/muscatine_scada_observation.py into
+#                    anchor/derived/muscatine-scada-sensor-statistics.json, which
+#                    tests/test_observe.py checks this file against, and re-derives from
+#                    the committed 60-day extract. Measurement noise is the robust scale
+#                    of the one-minute differences, 1.4826 MAD / sqrt(2); "flatline"
+#                    counts runs of >= 10 identical minutes; the instrument limits are
+#                    the provider's data-dictionary ranges (85-150 degF, 0-1120 cfm),
+#                    which the record actually reaches (the temperature sits at its lower
+#                    limit on 0.066 % of minutes). Missingness is the record's own
+#                    dropout: 19 gaps in 347.8 d, 0.0966 % of minutes absent, median 2
+#                    min, longest 421 min -- the providers deleted 485 rows they assumed
+#                    were power surges (README.txt), so this is the dropout of the
+#                    *published* record and is a lower bound on the plant's.
+#   ASSUMED:         a DESIGN value with no source, flagged for the lead's review. Drift,
+#                    fouling, every laboratory assay and every Plant A number are assumed:
+#                    a year of SCADA cannot separate instrument drift from process change,
+#                    Muscatine logs no pH probe, methane analyser or hydrogen analyser at
+#                    minute resolution, and Plant A is statistics-anchored (decision
+#                    2026-09-02, "Plant A is statistics-anchored for all of Phase 1").
+#
+# Units: every channel declares its own; gas channels carry `standard_conditions` and
+# solids a wet/dry `basis` (CLAUDE.md rule 6). Rates are per day, durations in days.
+version: 1
+
+standard_conditions:
+  stp_dry:
+    name: "STP dry (0 degC, 1.013 bar, water vapour removed)"
+    temperature_K: 273.15
+    pressure_bar: 1.013
+    moisture: dry
+
+# How reactor COD becomes TS and VS (sim/observe/truth.py). ADM1 has no solids state.
+solids:
+  cod_per_vs:          # kg COD per kg of the class (VS mass)
+    carbohydrate: 1.19 # DESIGN: VDI 4630 theoretical CH4 yield / 0.35 m3 CH4 per kg COD,
+    protein: 1.42      #   the same equivalents the influent catalogue uses
+    lipid: 2.90        #   (sim/influent/schema.py, COD_EQUIVALENTS_KG_COD_PER_KG)
+    inert: 1.42        # DESIGN: sludge-derived inerts; ASSUMED for the reactor, whose
+                       #   inerts are a blend of the feeds' (the catalogue's per-feed
+                       #   equivalents are 1.2 lignocellulosic / 1.42 sludge-derived)
+    biomass: 1.42      # DESIGN: ADM1 biomass C5H7O2N, 1.42 kg COD/kg VSS
+    composite: 1.42    # DESIGN: X_xc is decayed biomass in the BSM2 form
+  include_vfa_in_vs: false   # DESIGN: VFA volatilise during drying at 105 degC
+  source: >-
+    DESIGN. Class equivalents as in configs/influent/feed_fractionation.yaml (lead's
+    freeze 2026-09-02); the reactor's single inert equivalent is ASSUMED at the
+    sludge-derived value. TS adds the conservative ash the feed carries and any calcite
+    the precipitation extension has formed.
+
+# Conditional missingness (§6.1): instruments fail during foaming and overload, so a gap
+# is evidence and interpolating over it destroys information.
+stress:
+  vfa_coupling: 1.5     # DESIGN: log-hazard per doubling of total VFA above the run median
+  gas_coupling: 1.0     # DESIGN: log-hazard per doubling of |gas-rate deviation|
+  max_probability: 0.9  # DESIGN: even a failed instrument occasionally records
+  vfa_quantity: vfa_total
+  gas_quantity: biogas_volume
+  source: >-
+    DESIGN, ASSUMED. The functional form (doublings away from the run's own median, so no
+    plant-specific threshold is needed) is a modelling choice; the two couplings set how
+    strongly missingness is informative. At the couplings above, a channel of sensitivity
+    1.0 with a 1 % base rate loses ~3 % of samples when VFA double and ~8 % when they
+    quadruple with the gas rate halved. Reviewed by the lead before the freeze; the
+    Level-4 scenario multiplies the sensitivity (scenarios/, fault informative_missingness).
+
+instruments:
+  temperature_probe:
+    noise_cv: 0.0
+    noise_sd_abs: 0.0291       # K; muscatine_scada D1_TEMPERATURE, robust one-minute sd
+    resolution: 0.005556       # K; muscatine_scada: the record quantises to 0.01 degF
+    drift:
+      sd_per_sqrt_d: 0.02      # K/sqrt(d); ASSUMED (a year of SCADA cannot separate probe
+      bound: 0.5               #   drift from real temperature change)
+      mode: offset
+      source: "ASSUMED: a Pt100 in a thermowell drifts within +-0.5 K between calibrations"
+    fouling: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "ASSUMED: a thermowell does not foul"}
+    flatline:
+      onset_per_d: 0.0172      # muscatine_scada: 6 runs of >= 10 identical minutes in 347.8 d
+      mean_duration_d: 0.0443  # muscatine_scada: mean run 63.8 min
+      source: "muscatine_scada (D1_TEMPERATURE)"
+    saturation:
+      minimum: 302.594         # K = 85 degF; muscatine_scada data dictionary, and the
+      maximum: 338.706         # K = 150 degF; record sits at the lower limit 0.066 % of the time
+      source: "muscatine_scada: SCADA-data-dictionary.csv acceptable values"
+    missingness:
+      base_probability: 0.000966  # muscatine_scada: 0.0966 % of minutes absent from the record
+      stress_sensitivity: 0.0     # DESIGN: a thermowell probe is unaffected by foaming
+      source: "muscatine_scada dropouts; the stress sensitivity is ASSUMED"
+    source: "muscatine_scada (digester temperature, 1-minute)"
+
+  gas_meter:
+    noise_cv: 0.0200           # muscatine_scada Biogas: robust one-minute sd / median
+    noise_sd_abs: 0.0
+    resolution: 0.0            # muscatine_scada: the channel is not quantised (3.6e-6 m3/d)
+    drift:
+      sd_per_sqrt_d: 0.002     # -; ASSUMED (gain drift of a thermal-mass or diaphragm meter)
+      bound: 0.05
+      mode: gain
+      source: "ASSUMED: +-5 % gain between calibrations"
+    fouling: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "ASSUMED: condensate traps are drained"}
+    flatline:
+      onset_per_d: 0.00287     # muscatine_scada: 1 run of >= 10 identical minutes in 347.8 d
+      mean_duration_d: 0.05    # muscatine_scada: 72 min
+      source: "muscatine_scada (Biogas)"
+    saturation:
+      minimum: 0.0
+      maximum: 45669.3         # m3/d = 1120 cfm; muscatine_scada data dictionary
+      source: "muscatine_scada: SCADA-data-dictionary.csv acceptable values"
+    missingness:
+      base_probability: 0.000966
+      stress_sensitivity: 0.5  # DESIGN: foam reaching the meter line does stop it
+      source: "muscatine_scada dropouts; the stress sensitivity is ASSUMED"
+    source: "muscatine_scada (total biogas flow, 1-minute)"
+
+  ph_electrode:
+    noise_cv: 0.0
+    noise_sd_abs: 0.02         # pH units; ASSUMED (repeatability of an in-line electrode)
+    resolution: 0.01
+    drift:
+      sd_per_sqrt_d: 0.01      # pH/sqrt(d); ASSUMED: ~0.05 pH per month of walk
+      bound: 0.3
+      mode: offset
+      source: "ASSUMED: an in-line electrode is recalibrated before it exceeds +-0.3 pH"
+    fouling:
+      onset_per_d: 0.0056      # ASSUMED: a fouling episode about every 180 d
+      mean_duration_d: 14.0    # ASSUMED: found and cleaned at the next round
+      offset: -0.15            # ASSUMED: a fouled junction reads low
+      source: "ASSUMED"
+    flatline: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "ASSUMED"}
+    saturation: {minimum: 0.0, maximum: 14.0, source: "ASSUMED: the electrode's range"}
+    missingness:
+      base_probability: 0.005  # ASSUMED
+      stress_sensitivity: 1.0  # DESIGN: the probe that foaming actually takes out
+      source: "ASSUMED"
+    source: "ASSUMED: Muscatine logs pH once a day in the laboratory file, not on SCADA"
+
+  ch4_analyser:
+    noise_cv: 0.0
+    noise_sd_abs: 0.005        # m3 CH4/m3 dry biogas; ASSUMED (0.5 %-point, IR analyser)
+    resolution: 0.001
+    drift:
+      sd_per_sqrt_d: 0.002     # -; ASSUMED: zero/span drift between weekly calibrations
+      bound: 0.05
+      mode: gain
+      source: "ASSUMED"
+    fouling:
+      onset_per_d: 0.01        # ASSUMED: condensation on the cell every ~100 d
+      mean_duration_d: 3.0
+      gain: 0.97
+      source: "ASSUMED"
+    flatline: {onset_per_d: 0.002, mean_duration_d: 1.0, source: "ASSUMED: a hung analyser holds its last reading"}
+    saturation: {minimum: 0.0, maximum: 1.0, source: "ASSUMED: a fraction"}
+    missingness:
+      base_probability: 0.01   # ASSUMED
+      stress_sensitivity: 1.5  # DESIGN: carry-over during foaming takes the analyser out
+      source: "ASSUMED"
+    source: "ASSUMED: Muscatine measures no gas composition"
+
+  h2_analyser:
+    noise_cv: 0.15             # ASSUMED: trace H2 at ppm level
+    noise_sd_abs: 0.5          # ppmv; ASSUMED
+    resolution: 0.1
+    drift: {sd_per_sqrt_d: 0.01, bound: 0.25, mode: gain, source: "ASSUMED"}
+    fouling: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "ASSUMED"}
+    flatline: {onset_per_d: 0.002, mean_duration_d: 1.0, source: "ASSUMED"}
+    saturation: {minimum: 0.0, maximum: 10000.0, source: "ASSUMED: a trace-H2 cell's range, ppmv"}
+    missingness: {base_probability: 0.02, stress_sensitivity: 1.0, source: "ASSUMED"}
+    source: "ASSUMED: no anchor measures off-gas hydrogen"
+
+  lab_solids:
+    noise_cv: 0.03             # ASSUMED: as configs/influent/generator.yaml (gravimetric TS/VS)
+    drift: {sd_per_sqrt_d: 0.0, bound: 0.0, mode: offset, source: "ASSUMED: a lab method does not drift"}
+    fouling: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "ASSUMED"}
+    flatline: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "ASSUMED"}
+    saturation: {minimum: 0.0, source: "ASSUMED: a concentration cannot be negative"}
+    missingness:
+      base_probability: 0.02   # ASSUMED: a sample is occasionally not taken
+      stress_sensitivity: 0.5  # DESIGN: sampling is skipped when the digester is upset
+      source: "ASSUMED"
+    source: "ASSUMED: as the influent generator's assay noise (gravimetric, 3 %)"
+
+  lab_cod:
+    noise_cv: 0.10             # ASSUMED: dichromate COD of a heterogeneous sludge
+    drift: {sd_per_sqrt_d: 0.0, bound: 0.0, mode: offset, source: "ASSUMED"}
+    fouling: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "ASSUMED"}
+    flatline: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "ASSUMED"}
+    saturation: {minimum: 0.0, source: "ASSUMED"}
+    missingness: {base_probability: 0.02, stress_sensitivity: 0.5, source: "ASSUMED"}
+    source: "ASSUMED: as configs/influent/generator.yaml"
+
+  lab_nitrogen:
+    noise_cv: 0.05             # ASSUMED: Kjeldahl / gas-sensing electrode
+    drift: {sd_per_sqrt_d: 0.0, bound: 0.0, mode: offset, source: "ASSUMED"}
+    fouling: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "ASSUMED"}
+    flatline: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "ASSUMED"}
+    saturation: {minimum: 0.0, source: "ASSUMED"}
+    missingness: {base_probability: 0.02, stress_sensitivity: 0.5, source: "ASSUMED"}
+    source: "ASSUMED: as configs/influent/generator.yaml"
+
+  lab_titration:
+    noise_cv: 0.05             # ASSUMED: alkalinity titration
+    drift: {sd_per_sqrt_d: 0.0, bound: 0.0, mode: offset, source: "ASSUMED"}
+    fouling: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "ASSUMED"}
+    flatline: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "ASSUMED"}
+    saturation: {minimum: 0.0, source: "ASSUMED"}
+    missingness: {base_probability: 0.02, stress_sensitivity: 0.5, source: "ASSUMED"}
+    source: "ASSUMED: as configs/influent/generator.yaml"
+
+  lab_vfa:
+    noise_cv: 0.08             # ASSUMED: total VFA by titration or distillation
+    drift: {sd_per_sqrt_d: 0.0, bound: 0.0, mode: offset, source: "ASSUMED"}
+    fouling: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "ASSUMED"}
+    flatline: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "ASSUMED"}
+    saturation: {minimum: 0.0, source: "ASSUMED"}
+    missingness: {base_probability: 0.02, stress_sensitivity: 0.5, source: "ASSUMED"}
+    source: "ASSUMED"
+
+  lab_vfa_gc:
+    noise_cv: 0.10             # ASSUMED: per-acid gas chromatography
+    drift: {sd_per_sqrt_d: 0.0, bound: 0.0, mode: offset, source: "ASSUMED"}
+    fouling: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "ASSUMED"}
+    flatline: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "ASSUMED"}
+    saturation: {minimum: 0.0, source: "ASSUMED"}
+    missingness: {base_probability: 0.03, stress_sensitivity: 0.5, source: "ASSUMED"}
+    source: "ASSUMED"
+
+  activity_test:
+    noise_cv: 0.20             # ASSUMED: a batch SMA test on a sludge sample
+    drift: {sd_per_sqrt_d: 0.0, bound: 0.0, mode: offset, source: "ASSUMED"}
+    fouling: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "ASSUMED"}
+    flatline: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "ASSUMED"}
+    saturation: {minimum: 0.0, source: "ASSUMED"}
+    missingness: {base_probability: 0.05, stress_sensitivity: 0.0, source: "ASSUMED"}
+    source: "ASSUMED: no anchor runs activity tests"
+
+  operator_log:
+    noise_cv: 0.0
+    drift: {sd_per_sqrt_d: 0.0, bound: 0.0, mode: offset, source: "not applicable"}
+    fouling: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "not applicable"}
+    flatline: {onset_per_d: 0.0, mean_duration_d: 0.0, source: "not applicable"}
+    saturation: {source: "not applicable"}
+    missingness: {base_probability: 0.0, stress_sensitivity: 0.0, source: "not applicable"}
+    source: >-
+      The feed log is produced by the influent generator (mis-logged masses and unrecorded
+      deliveries are modelled there, decisions log "Influent generator: stochastic
+      structure") and passed through unchanged; this instrument adds nothing.
+
+channels:
+  # ---------------------------------------------------------------- Tier A (§6.4)
+  feed_mass:
+    name: feed_mass
+    kind: log
+    tier: A
+    unit: "kg wet/d"
+    basis: wet
+    instrument: operator_log
+    truth_quantity: null
+    unavailable_reason: >-
+      Not derived from the reactor truth: the operator's feed log comes from the influent
+      generator (sim.influent.generator.OperatorRecord) and is passed through by
+      sim.observe.model.observe, with its own mis-logs and omissions.
+    interval_d: 1.0
+    description: "Logged wet mass of each feed per day."
+    source: "sim/influent/generator.py"
+  reactor_temperature:
+    name: reactor_temperature
+    kind: sensor
+    tier: A
+    unit: "K"
+    basis: "n/a"
+    instrument: temperature_probe
+    truth_quantity: reactor_temperature
+    interval_d: 1.0
+    description: "Daily-mean digester temperature."
+    source: "muscatine_scada"
+  ph:
+    name: ph
+    kind: sensor
+    tier: A
+    unit: "pH units"
+    basis: "n/a"
+    instrument: ph_electrode
+    truth_quantity: ph
+    interval_d: 1.0
+    description: "Daily digester pH (§6.4 Tier A)."
+    source: "ASSUMED instrument; the schedule is proposal §6.4"
+  biogas_volume:
+    name: biogas_volume
+    kind: sensor
+    tier: A
+    unit: "m3/d"
+    basis: "n/a"
+    instrument: gas_meter
+    truth_quantity: biogas_volume
+    interval_d: 1.0
+    standard_conditions:
+      name: "STP dry (0 degC, 1.013 bar, water vapour removed)"
+      temperature_K: 273.15
+      pressure_bar: 1.013
+      moisture: dry
+    description: >-
+      Daily corrected biogas volume (§6.4 Tier A). "Corrected" is the point of the
+      standard conditions: the model's own q_gas is at T_op and includes water vapour,
+      and is never what this channel reports.
+    source: "muscatine_scada"
+  ts:
+    name: ts
+    kind: assay
+    tier: A
+    unit: "kg TS/m3"
+    basis: wet
+    instrument: lab_solids
+    truth_quantity: ts
+    interval_d: 7.0
+    weekdays_only: true
+    lag_d: 1
+    description: "Weekly total solids of the digestate."
+    source: "ASSUMED instrument; the weekly schedule is proposal §6.4"
+  vs:
+    name: vs
+    kind: assay
+    tier: A
+    unit: "kg VS/kg TS"
+    basis: dry
+    instrument: lab_solids
+    truth_quantity: vs
+    interval_d: 7.0
+    weekdays_only: true
+    lag_d: 1
+    description: "Weekly volatile solids of the digestate, on a dry basis."
+    source: "ASSUMED instrument; the weekly schedule is proposal §6.4"
+
+  # ---------------------------------------------------------------- Tier B adds
+  ch4_fraction:
+    name: ch4_fraction
+    kind: sensor
+    tier: B
+    unit: "m3 CH4/m3 dry biogas"
+    basis: "n/a"
+    instrument: ch4_analyser
+    truth_quantity: ch4_fraction
+    interval_d: 0.0416666667
+    standard_conditions:
+      name: "dry biogas (water vapour removed)"
+      temperature_K: 273.15
+      pressure_bar: 1.013
+      moisture: dry
+    description: >-
+      Continuous methane fraction, logged hourly. The truth trajectory is interpolated
+      onto the sample times, so a run that wants a genuinely hourly signal asks the truth
+      model for hourly output; sampling faster than the truth grid adds no information.
+    source: "ASSUMED instrument (Muscatine measures no gas composition)"
+  alkalinity:
+    name: alkalinity
+    kind: assay
+    tier: B
+    unit: "kg CaCO3/m3"
+    basis: wet
+    instrument: lab_titration
+    truth_quantity: alkalinity
+    interval_d: 7.0
+    weekdays_only: true
+    lag_d: 0
+    description: >-
+      Weekly bicarbonate (partial) alkalinity, 50 x S_hco3. A stated proxy for a
+      titration, the same convention the influent generator uses for a feed.
+    source: "ASSUMED instrument, reported the same day (as configs/influent/generator.yaml)"
+  vfa_total:
+    name: vfa_total
+    kind: assay
+    tier: B
+    unit: "kg/m3 (as the acids)"
+    basis: wet
+    instrument: lab_vfa
+    truth_quantity: vfa_total
+    interval_d: 7.0
+    weekdays_only: true
+    lag_d: 2
+    description: "Weekly total VFA, the four acids at their own COD equivalents."
+    source: "ASSUMED instrument; the weekly schedule is proposal §6.4"
+  tan:
+    name: tan
+    kind: assay
+    tier: B
+    unit: "kg N/m3"
+    basis: wet
+    instrument: lab_nitrogen
+    truth_quantity: tan
+    interval_d: 7.0
+    weekdays_only: true
+    lag_d: 1
+    description: "Weekly total ammoniacal nitrogen of the digestate."
+    source: "ASSUMED instrument; the weekly schedule is proposal §6.4"
+  cod_total:
+    name: cod_total
+    kind: assay
+    tier: B
+    unit: "kg COD/m3"
+    basis: wet
+    instrument: lab_cod
+    truth_quantity: cod_total
+    interval_d: 7.0
+    weekdays_only: true
+    lag_d: 3
+    description: "Weekly total COD of the digestate."
+    source: "ASSUMED instrument; the weekly schedule is proposal §6.4"
+
+  # ---------------------------------------------------------------- Tier C adds
+  vfa_acetate:
+    name: vfa_acetate
+    kind: assay
+    tier: C
+    unit: "kg/m3 (as the acid)"
+    basis: wet
+    instrument: lab_vfa_gc
+    truth_quantity: vfa_acetate
+    interval_d: 7.0
+    weekdays_only: true
+    lag_d: 2
+    description: "VFA speciation by gas chromatography (§6.4 Tier C)."
+    source: "ASSUMED instrument"
+  vfa_propionate:
+    name: vfa_propionate
+    kind: assay
+    tier: C
+    unit: "kg/m3 (as the acid)"
+    basis: wet
+    instrument: lab_vfa_gc
+    truth_quantity: vfa_propionate
+    interval_d: 7.0
+    weekdays_only: true
+    lag_d: 2
+    description: "VFA speciation by gas chromatography (§6.4 Tier C)."
+    source: "ASSUMED instrument"
+  vfa_butyrate:
+    name: vfa_butyrate
+    kind: assay
+    tier: C
+    unit: "kg/m3 (as the acid)"
+    basis: wet
+    instrument: lab_vfa_gc
+    truth_quantity: vfa_butyrate
+    interval_d: 7.0
+    weekdays_only: true
+    lag_d: 2
+    description: "VFA speciation by gas chromatography (§6.4 Tier C)."
+    source: "ASSUMED instrument"
+  vfa_valerate:
+    name: vfa_valerate
+    kind: assay
+    tier: C
+    unit: "kg/m3 (as the acid)"
+    basis: wet
+    instrument: lab_vfa_gc
+    truth_quantity: vfa_valerate
+    interval_d: 7.0
+    weekdays_only: true
+    lag_d: 2
+    description: "VFA speciation by gas chromatography (§6.4 Tier C)."
+    source: "ASSUMED instrument"
+  cod_soluble:
+    name: cod_soluble
+    kind: assay
+    tier: C
+    unit: "kg COD/m3"
+    basis: wet
+    instrument: lab_cod
+    truth_quantity: cod_soluble
+    interval_d: 7.0
+    weekdays_only: true
+    lag_d: 3
+    description: >-
+      Soluble COD: half of the "richer fractionation" of §6.4 Tier C, with TKN. A full
+      carbohydrate/protein/lipid split of the digestate is NOT offered (open question for
+      the lead: it would need a declared analytical convention the anchor cannot supply).
+    source: "ASSUMED instrument"
+  tkn:
+    name: tkn
+    kind: assay
+    tier: C
+    unit: "kg N/m3"
+    basis: wet
+    instrument: lab_nitrogen
+    truth_quantity: tkn
+    interval_d: 7.0
+    weekdays_only: true
+    lag_d: 3
+    description: "Total Kjeldahl nitrogen of the digestate (§6.4 Tier C fractionation)."
+    source: "ASSUMED instrument"
+  offgas_h2:
+    name: offgas_h2
+    kind: sensor
+    tier: C
+    unit: "ppmv (dry biogas)"
+    basis: "n/a"
+    instrument: h2_analyser
+    truth_quantity: offgas_h2
+    interval_d: 0.0416666667
+    standard_conditions:
+      name: "dry biogas (water vapour removed)"
+      temperature_K: 273.15
+      pressure_bar: 1.013
+      moisture: dry
+    description: "Off-gas hydrogen, logged hourly (§6.4 Tier C)."
+    source: "ASSUMED instrument"
+  offgas_h2s:
+    name: offgas_h2s
+    kind: sensor
+    tier: C
+    unit: "ppmv (dry biogas)"
+    basis: "n/a"
+    instrument: h2_analyser
+    truth_quantity: null
+    unavailable_reason: >-
+      The truth model carries no sulfur: the extended ADM1 of proposal §6.1 adds ionic
+      strength, syntrophic acetate oxidation and a precipitation/inorganic-carbon sink,
+      and nothing else. An H2S channel would have to be invented rather than observed, so
+      it is declared here and not produced. Open for the lead: either a sulfate-reduction
+      extension (a truth-model change, not an observation one) or dropping H2S from the
+      Tier-C list of §6.4.
+    interval_d: 0.0416666667
+    description: "Off-gas hydrogen sulfide (§6.4 Tier C) -- declared, not implemented."
+    source: "proposal §6.4"
+  activity_ac:
+    name: activity_ac
+    kind: assay
+    tier: C
+    unit: "kg COD/m3/d"
+    basis: wet
+    instrument: activity_test
+    truth_quantity: activity_ac
+    interval_d: 28.0
+    weekdays_only: true
+    lag_d: 7
+    description: >-
+      Periodic specific methanogenic activity of the sludge (§6.4 Tier C): the maximum
+      acetoclastic rate k_m_ac x X_ac, i.e. a batch assay at saturating acetate with no
+      inhibition. A stated convention, not a simulated batch test.
+    source: "ASSUMED instrument and schedule"
+
+plants:
+  A:
+    plant_id: A
+    note: >-
+      Statistics-anchored (decision 2026-09-02). Nothing about Plant A's instrumentation
+      is anchored to data: the Tisocco et al. papers report what was measured and how
+      often, not the instruments' noise or failure statistics. The overrides below are
+      ASSUMED and describe a farm-scale plant with coarser instruments and a manually kept
+      record; the laboratory instruments are the shared (also assumed) ones.
+    instruments:
+      temperature_probe:
+        noise_sd_abs: 0.1
+        resolution: 0.1
+        saturation: {minimum: 273.15, maximum: 353.15, source: "ASSUMED: a 0-80 degC probe"}
+        missingness: {base_probability: 0.01, stress_sensitivity: 0.0, source: "ASSUMED: a manually kept record"}
+        flatline: {onset_per_d: 0.0172, mean_duration_d: 0.0443, source: "ASSUMED: the Muscatine rate carried over; no Plant A record exists"}
+        source: "ASSUMED: farm-scale instrumentation; no Plant A dataset exists"
+      gas_meter:
+        noise_cv: 0.05
+        saturation: {minimum: 0.0, maximum: 5000.0, source: "ASSUMED: sized for a 650 m3 digester"}
+        missingness: {base_probability: 0.01, stress_sensitivity: 0.5, source: "ASSUMED"}
+        flatline: {onset_per_d: 0.00287, mean_duration_d: 0.05, source: "ASSUMED: the Muscatine rate carried over; no Plant A record exists"}
+        source: "ASSUMED: farm-scale gas meter, 5 % of reading"
+      ph_electrode:
+        missingness: {base_probability: 0.02, stress_sensitivity: 1.0, source: "ASSUMED"}
+        source: "ASSUMED: farm-scale instrumentation"
+  B:
+    plant_id: B
+    note: >-
+      Dataset-anchored: every temperature-probe and gas-meter number marked
+      muscatine_scada is the Muscatine digester's own, re-derived by tests/test_observe.py.
+      No overrides.
+  C:
+    plant_id: C
+    note: >-
+      The same digester as Plant B fed only its sludge streams (the controlled pair of the
+      frozen plant decision), so it carries the same instruments. No overrides.
