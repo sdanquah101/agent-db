@@ -1,0 +1,448 @@
+"""Fault injection (sim/faults) and the Level-6 imperfect-mixing truth variant.
+
+What is tested and why it cannot pass vacuously:
+
+* every :class:`~scenarios.schema.FaultType` has declared magnitude semantics with a unit
+  and a layer, the benchmark-card table covers the closed set, and out-of-range
+  magnitudes are refused;
+* a scenario routes to the right layers — the Appendix-B gas-meter example touches the
+  observation layer and nothing else;
+* each layer's applier does what the semantics say: the influent faults change the truth
+  but not the log (unrecorded), the log's basis but not the catalogue (mislabelled), and
+  the solids trend (moisture); the parameter fault splits the run at its onset and moves
+  only the named constants; the state fault scales biomass only; the structural fault
+  removes an extension from the fitted model while the truth keeps it;
+* **a faulted run differs from its clean twin only by the fault** — the influent
+  generator's and the observation model's own draws are untouched, because the fault
+  layer has its own stream;
+* the two-zone reactor wired in as the ``imperfect_mixing`` truth variant reduces to the
+  ideal CSTR at magnitude 0 and otherwise produces a *load-dependent* residual against
+  the CSTR, which is the signature the Level-6 row asks for.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from scenarios.schema import (
+    Budget,
+    CorrectConclusion,
+    Fault,
+    FaultType,
+    Scenario,
+    TruthLabel,
+    load_scenario,
+)
+from sim.adm1 import (
+    compile_extended,
+    extended_state,
+    load_extensions,
+    load_matrix,
+    load_parameters,
+    load_solver_config,
+    simulate_extended,
+)
+from sim.faults import (
+    FAULT_SEMANTICS,
+    InfluentFaults,
+    MislabelledFeed,
+    MoistureRamp,
+    ObservationFaults,
+    UnrecordedDelivery,
+    apply_state_faults,
+    benchmark_card_rows,
+    build_plan,
+    declared_faults,
+    fitted_extensions,
+    parameter_segments,
+    semantics_for,
+    truth_mixing,
+)
+from sim.influent import (
+    generate_influent,
+    load_feed_fractionation,
+    load_generator_config,
+)
+from sim.observation import load_observation_config, observe
+from sim.plants import declared_geometry, load_all_plants
+from sim.plants.mixing import compile_two_zone, initial_state, simulate_two_zone
+from tests.test_observation import _flat_channels
+
+BUDGET = Budget(simulator_evals=1000, wall_clock_min=10.0, assay_units=0)
+PLANT_B_FEEDS = ("primary_sludge", "thickened_was", "high_strength_waste", "fog")
+
+
+def _scenario(
+    *faults: Fault,
+    level: int = 2,
+    labels: tuple[TruthLabel, ...] = (TruthLabel.SENSOR,),
+    **kwargs: object,
+) -> Scenario:
+    """A minimal scenario carrying the given faults."""
+    defaults = {
+        "id": "S9-01",
+        "plant": "B",
+        "tier": "B",
+        "level": level,
+        "duration_days": 200.0,
+        "truth_label": labels,
+        "faults": faults,
+        "correct_conclusion": CorrectConclusion(kinetic_update_allowed=False),
+        "budget": BUDGET,
+        "seed": 4,
+    }
+    return Scenario.model_validate(defaults | kwargs)
+
+
+# ------------------------------------------------------------------ semantics
+
+
+def test_every_fault_type_has_semantics_with_a_unit_and_a_layer():
+    assert set(FAULT_SEMANTICS) == set(FaultType)
+    layers = set()
+    for fault, spec in FAULT_SEMANTICS.items():
+        assert spec.fault is fault
+        assert spec.magnitude_unit, fault
+        assert spec.description.endswith("."), fault
+        layers.add(spec.layer)
+    assert layers == {"influent", "parameter", "state", "structure", "observation", "workflow"}
+    rows = benchmark_card_rows()
+    assert len(rows) == len(FaultType)
+    assert all(len(r) == 4 for r in rows)
+
+
+def test_magnitudes_outside_the_declared_range_are_refused():
+    spec = semantics_for(FaultType.GAS_METER_SCALE)
+    spec.validate_magnitude(1.08)
+    with pytest.raises(ValueError, match="above the maximum"):
+        spec.validate_magnitude(5.0)
+    with pytest.raises(ValueError, match="below the minimum"):
+        semantics_for(FaultType.IMPERFECT_MIXING).validate_magnitude(-0.1)
+    with pytest.raises(ValueError, match="above the maximum"):
+        build_plan(
+            _scenario(Fault(type=FaultType.GAS_METER_SCALE, onset_day=10.0, magnitude=9.0)),
+            PLANT_B_FEEDS,
+        )
+
+
+def test_the_appendix_b_scenario_routes_to_the_observation_layer_only():
+    scenario = load_scenario("scenarios/S2-03.yaml")
+    plan = build_plan(scenario, PLANT_B_FEEDS)
+    assert plan.layers == ("observation",)
+    assert plan.observation.scales == {"gas_flow": (60.0, 1.08)}
+    assert not plan.influent and not plan.parameter and not plan.state and not plan.structure
+    assert declared_faults(scenario) == {"observation": ["gas_meter_scale"]}
+
+
+def test_faults_route_to_their_layers():
+    plan = build_plan(
+        _scenario(
+            Fault(type=FaultType.UNRECORDED_DELIVERY, onset_day=50.0, magnitude=3.0),
+            Fault(type=FaultType.AMMONIA_INHIBITION_SHIFT, onset_day=80.0, magnitude=0.5),
+            Fault(type=FaultType.BIOMASS_MISINITIALISED, onset_day=0.0, magnitude=0.2),
+            Fault(type=FaultType.OMITTED_SAO, onset_day=0.0, magnitude=0.0),
+            Fault(type=FaultType.TOOL_FAILURE, onset_day=0.0, magnitude=0.3),
+            level=7,
+            labels=(TruthLabel.INFLUENT, TruthLabel.PARAMETER, TruthLabel.STATE),
+        ),
+        PLANT_B_FEEDS,
+    )
+    assert plan.layers == ("influent", "parameter", "state", "structure", "workflow")
+    assert plan.influent.unrecorded == (UnrecordedDelivery("fog", 50, 3.0),)  # last feed
+    assert plan.parameter.multipliers == ((80.0, "K_I_nh3", 0.5),)
+    assert plan.state.biomass_multiplier == 0.2
+    assert plan.structure.omit_from_fitted == ("sao",)
+    assert plan.workflow.tool_failure == (("bayes_mcmc", 0.3),)
+    assert plan.influent.seed == 5  # scenario seed + 1: its own stream
+
+
+# ------------------------------------------------------------------ appliers
+
+
+def test_parameter_fault_splits_the_run_and_moves_only_its_own_constants():
+    params = load_parameters()
+    plan = build_plan(
+        _scenario(
+            Fault(type=FaultType.HYDROLYSIS_REGIME_CHANGE, onset_day=60.0, magnitude=0.4),
+            level=5,
+            labels=(TruthLabel.PARAMETER,),
+        ),
+        PLANT_B_FEEDS,
+    )
+    segments = parameter_segments(plan, params)
+    assert [(s, e) for s, e, _ in segments] == [(0.0, 60.0), (60.0, 200.0)]
+    before, after = segments[0][2], segments[1][2]
+    assert before.kinetics == params.kinetics
+    for name in ("k_hyd_ch", "k_hyd_pr", "k_hyd_li"):
+        assert getattr(after.kinetics, name) == pytest.approx(0.4 * getattr(params.kinetics, name))
+    # nothing else moves
+    unchanged = after.kinetics.model_dump()
+    for name in ("k_hyd_ch", "k_hyd_pr", "k_hyd_li"):
+        unchanged[name] = getattr(params.kinetics, name)
+    assert unchanged == params.kinetics.model_dump()
+    assert after.stoichiometry == params.stoichiometry and after.physchem == params.physchem
+    # with no parameter fault there is exactly one segment
+    plain = parameter_segments(build_plan(_scenario(), PLANT_B_FEEDS), params)
+    assert len(plain) == 1 and plain[0][2].kinetics == params.kinetics
+
+
+def test_state_fault_scales_biomass_only():
+    plan = build_plan(
+        _scenario(
+            Fault(type=FaultType.BIOMASS_MISINITIALISED, onset_day=0.0, magnitude=0.1),
+            level=4,
+            labels=(TruthLabel.STATE,),
+        ),
+        PLANT_B_FEEDS,
+    )
+    names = ("S_su", "X_ch", "X_su", "X_ac", "X_h2", "X_I", "S_cat")
+    y0 = np.arange(1.0, len(names) + 1.0)
+    y = apply_state_faults(y0, plan, names)
+    assert y[0] == y0[0] and y[1] == y0[1] and y[5] == y0[5] and y[6] == y0[6]
+    for i in (2, 3, 4):
+        assert y[i] == pytest.approx(0.1 * y0[i])
+    np.testing.assert_array_equal(y0, np.arange(1.0, len(names) + 1.0))  # not modified in place
+
+
+def test_structural_fault_removes_the_extension_from_the_fitted_model_only():
+    """The truth keeps every extension its plant declares; the fitted model loses one."""
+    plants = load_all_plants()
+    truth_extensions = plants["A"].truth_model.extensions
+    plan = build_plan(
+        _scenario(
+            Fault(type=FaultType.OMITTED_SAO, onset_day=0.0, magnitude=0.0),
+            plant="A",
+            level=6,
+            labels=(TruthLabel.STRUCTURAL,),
+        ),
+        ("cattle_slurry", "grass_silage"),
+    )
+    fitted = fitted_extensions(plan, truth_extensions)
+    assert "sao" in truth_extensions and "sao" not in fitted
+    assert set(fitted) == set(truth_extensions) - {"sao"}
+    # with no structural fault the fitted model gets the truth's list unchanged
+    assert fitted_extensions(build_plan(_scenario(), PLANT_B_FEEDS), truth_extensions) == tuple(
+        truth_extensions
+    )
+
+
+# ------------------------------------------------- the fault is the only difference
+
+
+def test_influent_faults_change_the_truth_without_disturbing_the_baseline_draws():
+    """A faulted run and its clean twin differ only by the fault.
+
+    The generator's own draws are untouched because the fault layer has its own stream.
+    """
+    catalogue = load_feed_fractionation()
+    generator = load_generator_config()
+    plant = load_all_plants()["A"]
+    params = load_parameters()
+    kwargs = dict(seed=3, n_days=140)
+    clean = generate_influent(plant, catalogue, generator, params, **kwargs)
+    faults = InfluentFaults(
+        mislabelled=(MislabelledFeed("grass_silage", 40.0, 80.0, 20.0),),
+        unrecorded=(UnrecordedDelivery("grass_silage", 50, 3.0),),
+        moisture=(MoistureRamp("cattle_slurry", 20.0, 120.0, -0.3),),
+        seed=99,
+    )
+    dirty = generate_influent(plant, catalogue, generator, params, faults=faults, **kwargs)
+
+    # the run's own draws are untouched
+    assert dirty.truth.fractionations == clean.truth.fractionations
+    np.testing.assert_array_equal(
+        dirty.truth.feeds["grass_silage"].mislogged_days,
+        clean.truth.feeds["grass_silage"].mislogged_days,
+    )
+    # unrecorded: truth up, log unchanged, and the day is recorded as unrecorded truth
+    silage_truth = dirty.truth.feeds["grass_silage"].delivered_kg
+    assert silage_truth[50] > clean.truth.feeds["grass_silage"].delivered_kg[50]
+    assert dirty.observed.feed_log_kg_wet_d["grass_silage"][50] == pytest.approx(
+        clean.observed.feed_log_kg_wet_d["grass_silage"][50]
+    )
+    assert 50 in dirty.truth.feeds["grass_silage"].unrecorded_days
+    # moisture: wetter by the end of the window, unchanged before the onset
+    slurry = dirty.truth.feeds["cattle_slurry"].ts
+    base = clean.truth.feeds["cattle_slurry"].ts
+    assert slurry[10] == pytest.approx(base[10])
+    assert slurry[125] == pytest.approx(0.7 * base[125], rel=1e-9)
+    # mislabelled, on its own: the influent differs inside the window and nowhere else
+    only_mislabelled = InfluentFaults(
+        mislabelled=(MislabelledFeed("grass_silage", 40.0, 80.0, 20.0),), seed=99
+    )
+    windowed = generate_influent(
+        plant, catalogue, generator, params, faults=only_mislabelled, **kwargs
+    )
+    conc = windowed.truth.influent.concentrations
+    base_conc = clean.truth.influent.concentrations
+    assert not np.allclose(conc[60], base_conc[60])
+    np.testing.assert_allclose(conc[5], base_conc[5])
+    np.testing.assert_allclose(conc[100], base_conc[100])
+    # COD moves between classes without the delivered mass changing
+    np.testing.assert_allclose(
+        windowed.truth.feeds["grass_silage"].delivered_kg,
+        clean.truth.feeds["grass_silage"].delivered_kg,
+    )
+    # the catalogue itself is untouched
+    assert load_feed_fractionation().feeds["grass_silage"] == catalogue.feeds["grass_silage"]
+
+
+def test_observation_faults_change_the_record_without_disturbing_the_stream():
+    """A sensor fault moves the reading only; noise, gaps and every other sensor are identical."""
+    config = load_observation_config()
+    channels = _flat_channels(n_days=200)
+    clean = observe(channels, config, "B", seed=1)
+    faults = ObservationFaults(
+        scales={"gas_flow": (60.0, 1.08)},
+        ramps={"ph": (30.0, -0.01)},
+        flatlines={"ch4_fraction": (100.0, 106.0)},
+    )
+    dirty = observe(channels, config, "B", seed=1, faults=faults)
+
+    gas_clean, gas_dirty = clean["gas_flow"], dirty["gas_flow"]
+    np.testing.assert_array_equal(gas_clean.missing, gas_dirty.missing)
+    ok = ~gas_clean.missing
+    before = gas_clean.sample_t[ok] < 60.0
+    np.testing.assert_allclose(gas_dirty.value[ok][before], gas_clean.value[ok][before])
+    ratio = gas_dirty.value[ok][~before] / gas_clean.value[ok][~before]
+    np.testing.assert_allclose(ratio, 1.08, rtol=1e-9)
+    # the pH ramp accumulates from its onset and is zero before it
+    ph_clean, ph_dirty = clean["ph"], dirty["ph"]
+    delta = ph_dirty.value - ph_clean.value
+    assert np.nanmax(np.abs(delta[:30])) < 1e-12
+    assert delta[-1] < -0.1
+    # the forced flatline holds the value over its window
+    ch4 = dirty["ch4_fraction"]
+    window = (ch4.sample_t >= 101.0) & (ch4.sample_t < 106.0)
+    assert ch4.flatlined[window].all()
+    held = ch4.value[window & ~ch4.missing]
+    assert np.allclose(held, held[0]) if held.size else True
+    # every other sensor is bit-identical
+    for name in ("alkalinity", "cod_total", "tan", "temperature", "vfa_total"):
+        np.testing.assert_array_equal(clean[name].value, dirty[name].value)
+    with pytest.raises(ValueError, match="unknown sensors"):
+        observe(
+            channels, config, "B", seed=1, faults=ObservationFaults(scales={"nope": (1.0, 2.0)})
+        )
+
+
+# --------------------------------------- the Level-6 imperfect-mixing truth variant
+
+
+def _mixing_run(stagnant: float, feed_scale: float, days: float = 60.0):
+    """Plant C under a mixing structure, at a scaled constant feed; returns the effluent COD."""
+    from sim.influent import constant_influent, nominal_mass_rates, truth_parameters
+
+    catalogue = load_feed_fractionation()
+    plant = load_all_plants()["C"]
+    params = load_parameters()
+    rates = {k: v * feed_scale for k, v in nominal_mass_rates(plant, catalogue).items()}
+    influent = constant_influent(catalogue, rates)
+    truth = truth_parameters(params, catalogue, rates)
+    geometry = declared_geometry(plant)
+    plan = build_plan(
+        _scenario(
+            Fault(type=FaultType.IMPERFECT_MIXING, onset_day=0.0, magnitude=stagnant),
+            plant="C",
+            level=6,
+            labels=(TruthLabel.STRUCTURAL,),
+        )
+        if stagnant > 0.0
+        else _scenario(),
+        ("primary_sludge", "thickened_was"),
+    )
+    mixing = truth_mixing(plan)
+    model = compile_two_zone(
+        truth, geometry, load_matrix(), load_solver_config(), load_extensions(),
+        plant.truth_model.extensions, mixing,
+    )  # fmt: skip
+    from tests.conftest import RJ2006_GAS_STATE  # noqa: F401  (imported for clarity)
+
+    y0 = initial_state(model, _base_state())
+    result = simulate_two_zone(
+        y0=y0, influent=influent, model=model, t_span=(0.0, days), t_eval=np.array([days])
+    )
+    assert result.success
+    return result, mixing
+
+
+def _base_state() -> np.ndarray:
+    """The R&J 2006 29-state vector (the probe harness's steady state)."""
+    import importlib.util
+    import sys
+
+    from sim.adm1.model import state_vector
+    from tests.conftest import CANDIDATES_DIR, RJ2006_GAS_STATE
+
+    spec = importlib.util.spec_from_file_location("probe_common", CANDIDATES_DIR / "common.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["probe_common"] = module
+    spec.loader.exec_module(module)
+    return state_vector(module.STEADY_STATE_RJ2006, RJ2006_GAS_STATE)
+
+
+def test_imperfect_mixing_is_the_cstr_at_magnitude_zero():
+    """Magnitude 0 gives the ideal CSTR the plant contract declares, exactly."""
+    plan = build_plan(_scenario(), PLANT_B_FEEDS)
+    assert truth_mixing(plan).ideal
+    zero = build_plan(
+        _scenario(
+            Fault(type=FaultType.IMPERFECT_MIXING, onset_day=0.0, magnitude=0.0),
+            level=6,
+            labels=(TruthLabel.STRUCTURAL,),
+        ),
+        PLANT_B_FEEDS,
+    )
+    assert truth_mixing(zero).ideal
+    # and the two-zone reactor at that structure reproduces the extended model bit for bit
+    result, _structure = _mixing_run(0.0, 1.0, days=30.0)
+    catalogue = load_feed_fractionation()
+    from sim.influent import constant_influent, nominal_mass_rates, truth_parameters
+
+    plant = load_all_plants()["C"]
+    rates = nominal_mass_rates(plant, catalogue)
+    params = truth_parameters(load_parameters(), catalogue, rates)
+    geometry = declared_geometry(plant)
+    model = compile_extended(
+        params, geometry, load_matrix(), load_solver_config(), load_extensions(),
+        plant.truth_model.extensions,
+    )  # fmt: skip
+    reference = simulate_extended(
+        y0=extended_state(model, _base_state(), {}),
+        influent=constant_influent(catalogue, rates),
+        model=model,
+        t_span=(0.0, 30.0),
+        t_eval=np.array([30.0]),
+    )
+    np.testing.assert_allclose(result.y[:, -1], reference.y[:, -1], rtol=1e-10)
+
+
+def test_imperfect_mixing_gives_a_load_dependent_residual():
+    """§6.3 Level 6: a load-proportional residual against the CSTR, not a kinetic signature.
+
+    A bypass sends a fraction of the influent straight to the effluent, so the COD that
+    escapes unreacted — and the gas that is therefore not made — scales with the load.
+    Measured here at 0.6x, 1.0x and 1.4x the declared feed: the gas deficit is 24.7, 41.2
+    and 57.9 m3/d, i.e. proportional to within a few per cent, while the *relative*
+    deficit stays near 6 % (the feed concentration is unchanged, only its flow). A
+    residual that grows with throughput this way is what tells an analyst the fault is
+    hydraulic rather than kinetic.
+    """
+    deficits, relative = {}, {}
+    for scale in (0.6, 1.0, 1.4):
+        ideal, _ = _mixing_run(0.0, scale)
+        mixed, structure = _mixing_run(0.30, scale)
+        assert structure.stagnant_fraction == pytest.approx(0.30)
+        assert structure.bypass_fraction == pytest.approx(0.06)  # a fifth of the stagnant share
+        gas_ideal = float(ideal.active.derived["q_gas_stp_dry"][-1])
+        gas_mixed = float(mixed.active.derived["q_gas_stp_dry"][-1])
+        deficits[scale] = gas_ideal - gas_mixed
+        relative[scale] = deficits[scale] / gas_ideal
+        # the effluent also carries unreacted feed past the reactor
+        assert np.sum(mixed.effluent[:, -1]) > np.sum(ideal.effluent[:, -1])
+    assert deficits[1.4] > deficits[1.0] > deficits[0.6] > 0.0, deficits
+    assert all(0.03 < r < 0.10 for r in relative.values()), relative  # a real signal
+    # proportional to the load, to within 10 %
+    for scale in (0.6, 1.4):
+        assert deficits[scale] / deficits[1.0] == pytest.approx(scale, rel=0.10), deficits

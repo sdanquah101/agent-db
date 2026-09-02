@@ -34,6 +34,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from sim.faults.plan import ObservationFaults
 from sim.observation.channels import CHANNEL_UNITS, TruthChannels, condition_flags, flags_at
 from sim.observation.schema import (
     EpisodeModel,
@@ -159,6 +160,7 @@ def _sensor_series(
     overload: np.ndarray,
     foaming: np.ndarray,
     rng: np.random.Generator,
+    faults: ObservationFaults,
 ) -> SensorSeries:
     """One sensor's record; consumes this sensor's block of the run's stream."""
     t = sample_times(spec.sampling_interval_d, horizon_d)
@@ -197,7 +199,17 @@ def _sensor_series(
             drift[i] = offset
         value = value + drift
 
-    value = value * (1.0 + spec.noise.cv * z_noise) + spec.noise.sd_abs * z_noise
+    # injected sensor faults act on the calibration, before the instrument's own noise
+    if spec.name in faults.ramps:
+        onset, rate = faults.ramps[spec.name]
+        value = value + rate * np.maximum(t - onset, 0.0)
+    if spec.name in faults.scales:
+        onset, factor = faults.scales[spec.name]
+        value = np.where(t >= onset, value * factor, value)
+
+    cv = spec.noise.cv * faults.noise_scale
+    sd_abs = spec.noise.sd_abs * faults.noise_scale
+    value = value * (1.0 + cv * z_noise) + sd_abs * z_noise
 
     saturated = np.zeros(n, dtype=bool)
     if spec.saturation is not None:
@@ -209,14 +221,26 @@ def _sensor_series(
             value = np.minimum(value, spec.saturation.high)
 
     flatlined, _ = episode_mask(spec.flatline, u_flat, dt)
+    if spec.name in faults.flatlines:
+        onset, end = faults.flatlines[spec.name]
+        flatlined = flatlined | ((t >= onset) & (t < end))
     for i in range(1, n):
         if flatlined[i]:
             value[i] = value[i - 1]
 
     idx = np.clip(np.searchsorted(channels.t, t, side="right") - 1, 0, channels.t.size - 1)
     missing = np.zeros(n, dtype=bool)
+    scaled = spec.missingness.model_copy(
+        update={
+            "base_rate": min(spec.missingness.base_rate * faults.missing_scale, 1.0),
+            "stress_multipliers": {
+                flag: m * faults.stress_scale
+                for flag, m in spec.missingness.stress_multipliers.items()
+            },
+        }
+    )
     for i in range(n):
-        rate = spec.missingness.rate(flags_at(overload, foaming, int(idx[i])))
+        rate = scaled.rate(flags_at(overload, foaming, int(idx[i])))
         missing[i] = u_missing[i] < rate
     value = np.where(missing, np.nan, value)
 
@@ -243,6 +267,7 @@ def observe(
     seed: int,
     horizon_d: float | None = None,
     sensors: Sequence[str] | None = None,
+    faults: ObservationFaults | None = None,
 ) -> ObservationRecord:
     """Observe a run at one instrumentation tier.
 
@@ -255,6 +280,10 @@ def observe(
         sensors: Subset of the tier's sensors to report (default: all of them). A subset
             never changes another sensor's values: the stream is consumed for every
             sensor of the tier in sorted order regardless.
+        faults: Observation-layer fault directives (:mod:`sim.faults`). They change the
+            record only: the digester is untouched, and the stream is consumed
+            identically, so a faulted record differs from its clean twin only by the
+            fault (tested).
 
     Returns:
         The workflow-visible record.
@@ -293,9 +322,17 @@ def observe(
     )
 
     rng = np.random.default_rng(seed)
+    applied = faults or ObservationFaults()
+    unknown_targets = (set(applied.ramps) | set(applied.scales) | set(applied.flatlines)) - set(
+        config.sensors
+    )
+    if unknown_targets:
+        raise ValueError(f"observation faults name unknown sensors {sorted(unknown_targets)}")
     out: dict[str, SensorSeries] = {}
     for name in sorted(spec_tier.sensors):
-        series = _sensor_series(config.sensors[name], channels, horizon, overload, foaming, rng)
+        series = _sensor_series(
+            config.sensors[name], channels, horizon, overload, foaming, rng, applied
+        )
         if name in requested:
             out[name] = series
     return ObservationRecord(tier=tier, seed=int(seed), horizon_d=horizon, sensors=out)
