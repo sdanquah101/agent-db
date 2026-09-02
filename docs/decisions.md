@@ -1397,3 +1397,105 @@ layers would make its truth label ambiguous); let the magnitude be a typed union
 fault (rejected: the scenario schema is frozen and a float plus a declared unit is
 auditable); size imperfect mixing with three independent numbers (rejected: a scenario
 row carries one magnitude, and the fixed ratios are recorded here).
+
+---
+
+## 2026-09-02 — FREEZE (by the lead): observation defaults, and missingness as a tier policy
+
+**Decision.** The lead's answers to the flags raised on PR #11. They supersede the
+provisional numbers in "Observation model: channels, sensor specs, tier masks, conditional
+missingness" (same day) wherever the two differ. `configs/observation/sensors.yaml` goes
+to **version 2**.
+
+### 1. Missingness is declared by tier and by instrument kind, not per sensor
+
+The lead gave the base rate *per tier* and the multipliers *per kind of instrument*, which
+is a different shape from the per-sensor block the branch had. The schema follows the
+answer rather than paraphrasing it: `MissingnessPolicy` carries
+
+| | A | B | C |
+|---|---|---|---|
+| base rate | 0.08 | 0.04 | 0.02 |
+
+with multipliers 4× (overload) and 3× (foaming) for online instruments and 1.5× for lab
+assays, and `SensorSpec` no longer carries a missingness block at all.
+
+**The reasoning behind the shape, recorded because it now constrains the code.** How often
+a scheduled sample is simply lost is a property of the *plant's monitoring capability* —
+the constrained Tier-A plant loses most — while how much worse it gets under stress is a
+property of the *instrument* — a probe in a foaming digester fails far more than a grab
+sample sent to a laboratory. Two other values are tier properties by the same argument and
+moved with it: **laboratory turnaround** (7/3/1 d at A/B/C) and the **recalibration
+cadence** (quarterly at A, monthly at B and C). `SensorSpec` therefore lost `missingness`
+and `lag_d`, `DriftModel.recalibration_interval_d` became the boolean `recalibrated`, and
+`TierSpec` gained `lab_turnaround_d` and `recalibration_interval_d`. Tiers remain **masks
+on identical truth** (§6.4): the truth is the same, only the quality of the window differs.
+
+**Interpretations made where the answer was silent, each flagged here rather than buried:**
+
+- The lead gave **one** lab figure ("1.5× lab assays"). It is applied to **both** flags,
+  not to overload alone. The earlier draft gave lab assays an overload multiplier and no
+  foaming one; a foaming digester makes grab sampling harder too, so the symmetric reading
+  is the conservative one.
+- The recalibration cadence applies to every sensor that declares `recalibrated: true` —
+  the pH probe, the CH₄ analyser and the H₂ cell. So the CH₄ analyser is now recalibrated
+  monthly at Tiers B and C and quarterly at Tier A, which the lead did not say explicitly
+  but follows from making the cadence a tier property.
+- The digester thermocouple and the gas meter declare `recalibrated: false`: neither is
+  routinely recalibrated in the field, and the gas meter's error is a *scale* error
+  injected as the Level-2 `gas_meter_scale` fault rather than a zero drift.
+
+### 2. Sensor defaults, and the two conversions they needed
+
+pH noise 0.02 (absolute); CH₄ ±1 % **absolute**, i.e. one percentage point of methane
+content, not 1 % of the reading (`sd_abs: 0.01`, `cv: 0`); laboratory cv 3 % TS/VS, 5 %
+COD, 8 % VFA, 5 % alkalinity. All marked `ASSUMED (lead's default)`.
+
+Two figures were given per month and the model is a random walk, whose sd accumulates as
+`s√t`, so `s = (per month) / √30 d`:
+
+- **pH drift 0.05–0.1 pH/month** → `sd_per_sqrt_d` 0.0091–0.0183; the **midpoint 0.0137**
+  (0.075 pH/month) is used, and the range is recorded in the file.
+- **CH₄ drift 0.5 %/month absolute** → `sd_per_sqrt_d` **0.0009** fraction/√d.
+
+Two sensors are **not** in the lead's list and keep the branch's assumptions, flagged:
+**TAN** at cv 0.05 (a gas-sensing electrode, kept at the alkalinity/COD level) and the
+**H₂ cell** at cv 0.15 with a 1.0 ppm floor. The 8 % VFA figure is applied to all four
+speciated assays as well as to total VFA; valerate sits near the quantification limit, so
+8 % is probably optimistic there and the file says so.
+
+### 3. Feed bases, FOG and the overload threshold — approved as proposed
+
+- Plant A's **cattle slurry moved onto the same Tisocco 2024 basis as the silage**
+  (approved). This went beyond the literal wording of the #10 freeze, which named silage
+  only, and was flagged as such: leaving slurry on the old basis dropped Plant A's OLR to
+  1.17 kg VS m⁻³ d⁻¹, outside the published 1.4–2.1 band, and moving it restores 1.78.
+- **FOG at 2.0 % TS** (approved), the anchor-derived value that replaced the assumed 10 %.
+  The error and its detection are recorded in the **benchmark card**, `docs/benchmark_card.md`
+  §5.1, at the lead's instruction: it is the clearest example the project has of the anchor
+  catching a plausible design value that was wrong.
+- **FOS/TAC overload threshold 0.40** (approved), the ~92nd percentile of the plant's own
+  column.
+
+### 4. Consequences in the tests
+
+`tests/test_observation.py` now checks the tier properties as *tier* properties: the base
+rates 8/4/2 %, the turnarounds 7/3/1 d and the cadences 90/30/30 d as declared; and,
+observed, that on identical truth and the tiers' shared sensors Tier A loses ~4× as many
+samples as Tier C, that the laboratory lag on a weekly assay is the tier's, and that the
+pH probe's drift is reset on the tier's cadence — with only the cadence varied, so the
+same stream and the same draws produce both walks, and the ratio of their rms offsets is
+the √3 the reset interval predicts.
+
+The conditional-missingness ratio is now **4** rather than the 2 the earlier entry's
+test-sizing note quotes, because the online overload multiplier changed. Over forty seeds
+the estimator gives 3.96 ± 0.07 (pH), 4.12 ± 0.07 (gas flow) and 3.92 ± 0.06 (CH₄), so it
+remains unbiased; pooled over the twelve seeds the test uses, the standard error is ~0.12
+and the 20 % tolerance is a ~6 sd bound.
+
+**Alternatives.** Keep the per-sensor missingness block and set every sensor's base rate
+from the tier at load time (rejected: the same number would then be written fifteen times
+and could drift); make the multipliers tier-dependent too (rejected: the lead gave one
+set, and an instrument's failure mode under foaming is not a function of how well the
+plant is instrumented); keep the recalibration interval on the sensor and let the tier
+override it (rejected: two places to look for one number).

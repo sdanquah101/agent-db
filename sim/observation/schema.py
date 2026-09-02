@@ -67,16 +67,21 @@ class DriftModel(_Frozen):
 
     The drift is an additive offset in the channel's own unit, updated once per sample:
     ``d(t+1) = clip(d(t) + sd_per_sqrt_d sqrt(dt) z, -bound, +bound)``. A recalibration
-    every ``recalibration_interval_d`` days resets it to zero, which is what makes the
-    Level-2 "drift then step-recalibration" signature (§6.3).
+    resets it to zero, which is what makes the Level-2 "drift then step-recalibration"
+    signature (§6.3). *How often* an instrument is recalibrated is a property of the
+    plant, not of the instrument, so the cadence is the tier's
+    (:attr:`TierSpec.recalibration_interval_d`) and the sensor only declares whether it is
+    recalibrated at all (lead's decision 2026-09-02: monthly at Tiers B and C, quarterly
+    at Tier A).
     """
 
     sd_per_sqrt_d: _NonNeg = Field(
         description="Random-walk scale, channel unit per sqrt(day); 0 = no drift"
     )
     bound: _NonNeg = Field(description="Absolute bound on the accumulated offset, channel unit")
-    recalibration_interval_d: _Pos | None = Field(
-        default=None, description="Days between recalibrations (offset reset to 0); None = never"
+    recalibrated: bool = Field(
+        default=False,
+        description="Whether the instrument is recalibrated on the tier's cadence, - (else never)",
     )
     source: str = ""
 
@@ -145,6 +150,41 @@ class MissingnessModel(_Frozen):
         return min(p, 1.0)
 
 
+class MissingnessPolicy(_Frozen):
+    """How missingness is declared: a base rate per **tier**, multipliers per instrument **kind**.
+
+    Lead's decision of 2026-09-02. A tier is a plant's monitoring capability, so how often
+    a scheduled sample is simply lost belongs to the tier (a constrained Tier-A plant
+    loses more), while how much worse it gets under stress belongs to the kind of
+    instrument (an online probe in a foaming digester fails far more often than a grab
+    sample sent to a laboratory). Every value is ASSUMED: the anchor's SCADA file is
+    pre-cleaned, so no dropout statistics exist to fit.
+    """
+
+    base_rate_by_tier: dict[Literal["A", "B", "C"], _Frac] = Field(
+        description="Probability that a scheduled sample is lost, by tier, -"
+    )
+    stress_multipliers_by_kind: dict[Literal["online", "lab"], dict[ConditionFlag, _Pos]] = Field(
+        description="Multiplier on the base rate while each flag is raised, by instrument kind, -"
+    )
+    source: str = ""
+
+    @model_validator(mode="after")
+    def _complete(self) -> MissingnessPolicy:
+        if set(self.base_rate_by_tier) != {"A", "B", "C"}:
+            raise ValueError("base_rate_by_tier must cover tiers A, B and C")
+        if set(self.stress_multipliers_by_kind) != {"online", "lab"}:
+            raise ValueError("stress_multipliers_by_kind must cover 'online' and 'lab'")
+        return self
+
+    def model_for(self, tier: str, kind: str) -> MissingnessModel:
+        """The resolved missingness model of one sensor kind at one tier."""
+        return MissingnessModel(
+            base_rate=self.base_rate_by_tier[tier],  # type: ignore[index]
+            stress_multipliers=dict(self.stress_multipliers_by_kind[kind]),  # type: ignore[index]
+        )
+
+
 class SensorSpec(_Frozen):
     """The declared model of one instrument or lab assay.
 
@@ -167,7 +207,6 @@ class SensorSpec(_Frozen):
         default="none", description="Wet or dry basis of a solids quantity"
     )
     sampling_interval_d: _Pos = Field(description="Days between samples, d")
-    lag_d: _NonNeg = Field(description="Turnaround: report time - sample time, d")
     noise: NoiseModel
     drift: DriftModel | None = Field(default=None, description="Zero drift, if any")
     fouling: FoulingModel | None = Field(default=None, description="Fouling episodes, if any")
@@ -175,7 +214,6 @@ class SensorSpec(_Frozen):
         default=None, description="Flatline episodes (the reading holds its last value), if any"
     )
     saturation: SaturationModel | None = Field(default=None, description="Readable range, if any")
-    missingness: MissingnessModel
     source: str = Field(default="", description="Where the numbers come from")
 
     @model_validator(mode="after")
@@ -193,12 +231,24 @@ class TierSpec(_Frozen):
 
     A tier is an **observation mask**: the underlying truth is identical across tiers, and
     a higher tier only adds channels. That containment is validated here and tested.
+
+    The tier also carries the plant's **monitoring capability**, which the lead's decision
+    of 2026-09-02 makes a tier property rather than a per-sensor one: how quickly the
+    laboratory returns a result, how often instruments are recalibrated, and (through
+    :class:`MissingnessPolicy`) how often a scheduled sample is simply lost. The truth is
+    still identical across tiers; only the quality of the window onto it differs.
     """
 
     tier: Literal["A", "B", "C"]
     sensors: tuple[str, ...] = Field(description="Sensor ids readable at this tier")
     feed_assays: tuple[str, ...] = Field(
         description="Influent-generator assay names visible at this tier (sim.influent.generator)"
+    )
+    lab_turnaround_d: _NonNeg = Field(
+        description="Days from sample to result for a lab assay at this tier, d (online = 0)"
+    )
+    recalibration_interval_d: _Pos = Field(
+        description="Days between instrument recalibrations at this tier, d"
     )
     note: str = ""
 
@@ -245,6 +295,7 @@ class ObservationConfig(_Frozen):
 
     version: int
     conditions: ConditionThresholds
+    missingness: MissingnessPolicy
     sensors: dict[str, SensorSpec]
     tiers: dict[Literal["A", "B", "C"], TierSpec]
 

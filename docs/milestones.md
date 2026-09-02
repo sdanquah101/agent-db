@@ -664,3 +664,66 @@ self-review, not an independent one.
 | Docs | ≈ 15 min | — | |
 
 No LLM-agent compute inside the benchmark; development cost only.
+
+---
+
+### Session 2026-09-02 (seventh session, continued) — the lead's freeze applied to PR #11
+
+Same branch. The lead answered the two flags raised above (sensor specs, missingness rule)
+and approved the three domain findings; PR #11 is now the Milestone-2 observation and
+fault-injection component, reviewed and marked ready.
+
+**Done**
+
+- **Missingness restructured as a tier policy** (`MissingnessPolicy`), because the lead
+  gave the base rate per tier (8/4/2 % at A/B/C) and the multipliers per instrument kind
+  (4× overload and 3× foaming online, 1.5× lab). Two more values moved with it by the same
+  argument — a tier is the plant's monitoring capability, not the instrument's: laboratory
+  turnaround (7/3/1 d) and recalibration cadence (90/30/30 d). `SensorSpec` lost
+  `missingness` and `lag_d`; `DriftModel.recalibration_interval_d` became the boolean
+  `recalibrated`. Tiers are still masks on identical truth.
+- **Sensor defaults set to the lead's figures** (`configs/observation/sensors.yaml`,
+  version 2), with the two per-month drifts converted to random-walk scales — pH
+  0.05–0.1 pH/month → `sd_per_sqrt_d` 0.0137 (the midpoint of 0.0091–0.0183), CH₄
+  0.5 %/month → 0.0009 — and the CH₄ tolerance read as ±1 *percentage point* of methane
+  content rather than 1 % of the reading.
+- **`docs/benchmark_card.md` written**: intended use, the explicit non-claims, the
+  anchoring status of each plant, the hidden/visible table, known limitations, and §5.1
+  "corrections the anchor caught", where the FOG solids error is recorded at the lead's
+  instruction.
+- **Tests follow the restructuring** (19 in `tests/test_observation.py`): the tier
+  properties as declared, and observed — Tier A loses ~4× the samples of Tier C on the
+  tiers' shared sensors and identical truth; the weekly assay's lag is the tier's; and
+  with only the cadence varied (same stream, same draws) the pH walk's rms offset scales
+  as the √3 the reset interval predicts, resetting at every boundary and only there.
+- Decisions entry, `configs/README.md` and this file updated.
+
+**Flagged to the lead (interpretations where the answer was silent)**
+
+- The single lab multiplier (1.5×) is applied to **both** flags, not overload alone.
+- The tier's recalibration cadence applies to every sensor declaring `recalibrated: true`,
+  so the CH₄ analyser is now recalibrated monthly at B/C and quarterly at A.
+- **TAN** (cv 5 %) and the **H₂ cell** (cv 15 % + 1 ppm floor) were not in the lead's list
+  and keep the branch's assumptions. The 8 % VFA figure is applied to all four speciated
+  assays; valerate sits near the quantification limit, so 8 % is probably optimistic there.
+
+**Blocked / open**
+
+Unchanged from the entry above (H₂S, reactor temperature, workflow-layer faults, the
+requested-assay budget). The missingness rates remain **assumed** and unfittable: the only
+open SCADA file is pre-cleaned.
+
+**Next session should start on**
+
+1. The run harness: `runs/<id>/truth/` and `calls.jsonl`, wiring generator → truth model
+   → observation record → scenario, with the workflow-layer faults applied.
+2. The remaining scenario YAMLs (19 of them, v0.3) with their answer keys.
+3. Weinrich R3/R4 ports as the fitted models.
+
+**Resource cost (this continuation)**
+
+| Item | Wall-clock | Disk | Notes |
+|---|---|---|---|
+| Schema/config/model restructuring | ≈ 20 min | — | |
+| Test updates and re-sizing | ≈ 20 min | — | 3 suite runs + a 40-seed convergence check |
+| Benchmark card and decisions entry | ≈ 20 min | — | |

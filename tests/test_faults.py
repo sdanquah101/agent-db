@@ -352,12 +352,18 @@ def test_observation_faults_change_the_record_without_disturbing_the_stream():
     delta = ph_dirty.value - ph_clean.value
     assert np.nanmax(np.abs(delta[:30])) < 1e-12
     assert delta[-1] < -0.1
-    # the forced flatline holds the value over its window
+    # the forced flatline holds the value over its window. A sample lost to missingness is
+    # reported as missing rather than flatlined (the flags are masked by ~missing), so the
+    # claim is that every sample in the window is one or the other, and every *reported*
+    # one is flatlined and holds the same value.
     ch4 = dirty["ch4_fraction"]
     window = (ch4.sample_t >= 101.0) & (ch4.sample_t < 106.0)
-    assert ch4.flatlined[window].all()
-    held = ch4.value[window & ~ch4.missing]
-    assert np.allclose(held, held[0]) if held.size else True
+    assert (ch4.flatlined | ch4.missing)[window].all()
+    reported = window & ~ch4.missing
+    assert reported.any()
+    assert ch4.flatlined[reported].all()
+    held = ch4.value[reported]
+    np.testing.assert_allclose(held, held[0])
     # every other sensor is bit-identical
     for name in ("alkalinity", "cod_total", "tan", "temperature", "vfa_total"):
         np.testing.assert_array_equal(clean[name].value, dirty[name].value)

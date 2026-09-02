@@ -13,9 +13,15 @@ into the :class:`ObservationRecord` a workflow may read. Per sensor, in this ord
    ``sqrt((value cv)^2 + sd_abs^2)`` rather than the two perfectly correlated.
 5. **Saturation** — clipped to the readable range; clipped samples are flagged.
 6. **Flatline** — inside an episode the sensor repeats its last reported value.
-7. **Missingness** — the sample is dropped with a probability that depends on the
-   condition flags raised at that time (:class:`~sim.observation.schema.MissingnessModel`).
-8. **Lag** — the record's ``report_t`` is the sample time plus the turnaround.
+7. **Missingness** — the sample is dropped with a probability that depends on the tier
+   and on the condition flags raised at that time
+   (:class:`~sim.observation.schema.MissingnessPolicy`).
+8. **Lag** — the record's ``report_t`` is the sample time plus the tier's laboratory
+   turnaround (online instruments report immediately).
+
+The **tier** supplies the missing rate, the laboratory turnaround and the recalibration
+cadence; the **sensor** supplies everything intrinsic to the instrument (lead's decision
+of 2026-09-02).
 
 **Randomness.** One ``numpy.random.default_rng(seed)`` stream per run (CLAUDE.md rule 4),
 consumed per sensor in **sorted sensor-name order** and, within a sensor, in a fixed
@@ -41,6 +47,7 @@ from sim.faults.plan import ObservationFaults
 from sim.observation.channels import TruthChannels, condition_flags, flags_at
 from sim.observation.schema import (
     EpisodeModel,
+    MissingnessModel,
     ObservationConfig,
     SensorSpec,
     TierSpec,
@@ -164,8 +171,15 @@ def _sensor_series(
     foaming: np.ndarray,
     rng: np.random.Generator,
     faults: ObservationFaults,
+    missingness: MissingnessModel,
+    lag_d: float,
+    recalibration_interval_d: float,
 ) -> SensorSeries:
-    """One sensor's record; consumes this sensor's block of the run's stream."""
+    """One sensor's record; consumes this sensor's block of the run's stream.
+
+    ``missingness``, ``lag_d`` and ``recalibration_interval_d`` are the **tier's**
+    (:class:`~sim.observation.schema.TierSpec`), not the sensor's.
+    """
     t = sample_times(spec.sampling_interval_d, horizon_d)
     n = t.size
     dt = spec.sampling_interval_d
@@ -193,10 +207,10 @@ def _sensor_series(
         drift = np.empty(n)
         for i in range(n):
             if (
-                spec.drift.recalibration_interval_d is not None
+                spec.drift.recalibrated
                 and i > 0
-                and int(t[i] // spec.drift.recalibration_interval_d)
-                != int(t[i - 1] // spec.drift.recalibration_interval_d)
+                and int(t[i] // recalibration_interval_d)
+                != int(t[i - 1] // recalibration_interval_d)
             ):
                 offset = 0.0
             offset = float(np.clip(offset + step * z_drift[i], -spec.drift.bound, spec.drift.bound))
@@ -236,12 +250,11 @@ def _sensor_series(
 
     idx = np.clip(np.searchsorted(channels.t, t, side="right") - 1, 0, channels.t.size - 1)
     missing = np.zeros(n, dtype=bool)
-    scaled = spec.missingness.model_copy(
+    scaled = missingness.model_copy(
         update={
-            "base_rate": min(spec.missingness.base_rate * faults.missing_scale, 1.0),
+            "base_rate": min(missingness.base_rate * faults.missing_scale, 1.0),
             "stress_multipliers": {
-                flag: m * faults.stress_scale
-                for flag, m in spec.missingness.stress_multipliers.items()
+                flag: m * faults.stress_scale for flag, m in missingness.stress_multipliers.items()
             },
         }
     )
@@ -257,7 +270,7 @@ def _sensor_series(
         gas_convention=spec.gas_convention,
         solids_basis=spec.solids_basis,
         sample_t=t,
-        report_t=t + spec.lag_d,
+        report_t=t + lag_d,
         value=value,
         missing=missing,
         saturated=saturated & ~missing,
@@ -336,8 +349,18 @@ def observe(
         raise ValueError(f"observation faults name unknown sensors {sorted(unknown_targets)}")
     out: dict[str, SensorSeries] = {}
     for name in sorted(spec_tier.sensors):
+        sensor = config.sensors[name]
         series = _sensor_series(
-            config.sensors[name], channels, horizon, overload, foaming, rng, applied
+            sensor,
+            channels,
+            horizon,
+            overload,
+            foaming,
+            rng,
+            applied,
+            config.missingness.model_for(tier, sensor.kind),
+            spec_tier.lab_turnaround_d if sensor.kind == "lab" else 0.0,
+            spec_tier.recalibration_interval_d,
         )
         if name in requested:
             out[name] = series

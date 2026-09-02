@@ -16,6 +16,10 @@ What is tested and why it cannot pass vacuously:
   value, saturation clipping, and **conditional missingness** — gaps are several times
   more likely inside the stress window than outside it, which is the property that makes
   naive interpolation destroy information;
+* the three properties the lead made **tier** properties rather than sensor ones — the
+  base missing rate, the laboratory turnaround and the recalibration cadence — are read
+  from the tier and really differ between tiers, on identical truth and an identical
+  sensor set;
 * one seeded stream, consumed per sensor in sorted order: same seed same record, and
   changing one sensor's spec leaves the sensors that precede it bit-identical.
 """
@@ -38,7 +42,13 @@ from sim.observation import (
     observe,
 )
 from sim.observation.channels import KG_CACO3_PER_KMOL_CHARGE, M_ACETIC
-from sim.observation.schema import MissingnessModel, NoiseModel, SaturationModel, SensorSpec
+from sim.observation.schema import (
+    MissingnessModel,
+    MissingnessPolicy,
+    NoiseModel,
+    SaturationModel,
+    SensorSpec,
+)
 
 DEGF_TO_K = 5.0 / 9.0
 
@@ -46,6 +56,12 @@ DEGF_TO_K = 5.0 / 9.0
 @pytest.fixture(scope="module")
 def config() -> ObservationConfig:
     return load_observation_config()
+
+
+def _without_missingness(config: ObservationConfig) -> ObservationConfig:
+    """The same configuration with no samples lost — missingness is now a tier policy."""
+    quiet = config.missingness.model_copy(update={"base_rate_by_tier": dict.fromkeys("ABC", 0.0)})
+    return config.model_copy(update={"missingness": quiet})
 
 
 def _flat_channels(n_days: int = 200, stress_from: int | None = None) -> TruthChannels:
@@ -122,6 +138,13 @@ def test_schema_rejections(config):
     raw["tiers"]["A"]["sensors"] = ["nonexistent"]
     with pytest.raises(ValidationError, match="unknown sensors"):
         ObservationConfig.model_validate(raw)
+    policy = config.missingness.model_dump()
+    with pytest.raises(ValidationError, match="must cover tiers A, B and C"):
+        MissingnessPolicy.model_validate(policy | {"base_rate_by_tier": {"A": 0.08, "B": 0.04}})
+    with pytest.raises(ValidationError, match="must cover 'online' and 'lab'"):
+        MissingnessPolicy.model_validate(
+            policy | {"stress_multipliers_by_kind": {"online": {"overload": 4.0}}}
+        )
 
 
 def test_missingness_rate_compounds_and_caps():
@@ -129,6 +152,88 @@ def test_missingness_rate_compounds_and_caps():
     assert m.rate(frozenset()) == pytest.approx(0.1)
     assert m.rate(frozenset({"overload"})) == pytest.approx(0.3)
     assert m.rate(frozenset({"overload", "foaming"})) == pytest.approx(1.0)  # capped
+
+
+def test_missingness_and_turnaround_are_tier_properties(config):
+    """The lead's decision of 2026-09-02, as declared and as resolved per sensor.
+
+    A tier is the plant's monitoring capability: the constrained plant loses the most
+    samples and waits the longest for a laboratory result. The stress multipliers are the
+    other way round — they belong to the *kind* of instrument, so they are identical
+    across tiers and an online probe degrades far more than a grab sample.
+    """
+    policy = config.missingness
+    assert [policy.base_rate_by_tier[t] for t in "ABC"] == [0.08, 0.04, 0.02]
+    assert [config.tiers[t].lab_turnaround_d for t in "ABC"] == [7.0, 3.0, 1.0]
+    assert [config.tiers[t].recalibration_interval_d for t in "ABC"] == [90.0, 30.0, 30.0]
+    online = policy.stress_multipliers_by_kind["online"]
+    lab = policy.stress_multipliers_by_kind["lab"]
+    assert online == {"overload": 4.0, "foaming": 3.0}
+    assert lab == {"overload": 1.5, "foaming": 1.5}
+    for flag in ("overload", "foaming"):
+        assert online[flag] > lab[flag], flag
+    # resolved per sensor: the same probe is described differently at each tier
+    for tier in "ABC":
+        for kind in ("online", "lab"):
+            model = policy.model_for(tier, kind)
+            assert model.base_rate == policy.base_rate_by_tier[tier]
+            assert model.stress_multipliers == policy.stress_multipliers_by_kind[kind]
+    assert policy.model_for("A", "online").rate(frozenset({"overload"})) == pytest.approx(0.32)
+
+
+def test_the_tier_sets_the_missing_rate_the_lag_and_the_recalibration_cadence(config):
+    """Observed: identical truth and identical sensors, three tiers, three windows onto it.
+
+    Read at the tiers' shared sensors only, so nothing here can come from a difference in
+    the sensor set. Tier C is the last 6,000-day realisation; the counts are large enough
+    that the ordering is not a coincidence (Tier A loses ~480 of 6,000 pH samples, Tier C
+    ~120, and a Poisson standard error on either is under 25).
+    """
+    channels = _flat_channels(n_days=6000)
+    lost = {}
+    for tier in "ABC":
+        record = observe(channels, config, tier, seed=5)
+        lost[tier] = int(record["ph"].missing.sum()) + int(record["gas_flow"].missing.sum())
+        # the laboratory turnaround is the tier's, and online instruments report at once
+        assert np.all(record["ph"].report_t == record["ph"].sample_t)
+        if tier != "A":
+            weekly = record["alkalinity"]
+            assert np.all(weekly.report_t - weekly.sample_t == config.tiers[tier].lab_turnaround_d)
+    assert lost["A"] > lost["B"] > lost["C"] > 0
+    assert lost["A"] / lost["C"] == pytest.approx(4.0, rel=0.25)  # 8 % against 2 %
+
+
+def test_the_recalibration_cadence_is_the_tier_s(config):
+    """Only the tier's cadence changes: same tier, same sensors, same stream, same draws.
+
+    A random walk of daily step ``s`` reset every ``T`` days has mean square offset
+    ``s^2 T / 2``, so quarterly recalibration leaves an offset ``sqrt(3)`` times the size
+    of monthly. Both stay far inside the probe's 0.5 pH bound, so the bound does not
+    confound the comparison.
+    """
+    channels = _flat_channels(n_days=6000)
+    spec = config.sensors["ph"]
+    assert spec.drift is not None and spec.drift.recalibrated
+    quiet = spec.model_copy(update={"noise": NoiseModel(cv=0.0, sd_abs=1e-12), "fouling": None})
+    base = _without_missingness(config).model_copy(
+        update={"sensors": {**config.sensors, "ph": quiet}}
+    )
+    offsets = {}
+    for interval in (30.0, 90.0):
+        tier = base.tiers["A"].model_copy(update={"recalibration_interval_d": interval})
+        cfg = base.model_copy(update={"tiers": {**base.tiers, "A": tier}})
+        offsets[interval] = observe(channels, cfg, "A", seed=5)["ph"].value - 7.30
+    step = spec.drift.sd_per_sqrt_d
+    # the walk restarts from zero at every boundary of the declared cadence, and only there
+    for interval, offset in offsets.items():
+        boundaries = np.arange(int(interval), offset.size, int(interval))
+        assert np.abs(offset[boundaries]).max() <= 5.0 * step, interval
+        assert np.abs(offset).max() > 10.0 * step  # it does drift in between
+        assert np.abs(offset).max() < spec.drift.bound  # and never reaches the bound
+    ratio = np.sqrt(np.mean(offsets[90.0] ** 2) / np.mean(offsets[30.0] ** 2))
+    assert ratio == pytest.approx(np.sqrt(3.0), rel=0.25)
+    # up to the first reset the two are the same walk, drawn from the same stream
+    np.testing.assert_allclose(offsets[30.0][:30], offsets[90.0][:30])
 
 
 @pytest.mark.skipif(not SCADA_FILE.exists(), reason="Muscatine SCADA file not fetched")
@@ -260,7 +365,7 @@ def test_schedule_lag_and_units(config):
     weekly = record["alkalinity"]
     assert daily.sample_t.size == 200 and weekly.sample_t.size == 29
     np.testing.assert_allclose(np.diff(weekly.sample_t), 7.0)
-    assert np.all(weekly.report_t - weekly.sample_t == config.sensors["alkalinity"].lag_d)
+    assert np.all(weekly.report_t - weekly.sample_t == config.tiers["C"].lab_turnaround_d)
     assert record.units["gas_flow"] == "m3/d"
     assert daily.gas_convention == "stp_dry" and record["digestate_vs"].solids_basis == "wet"
     with pytest.raises(KeyError, match="not readable"):
@@ -282,7 +387,7 @@ def test_noise_is_unbiased_and_of_the_declared_size(config):
     # so the residual is noise on top of a bounded random walk: isolate the noise by
     # switching the walk off, and check the walk stays inside its bound with it on.
     spec = config.sensors["temperature"]
-    assert spec.drift is not None and spec.drift.recalibration_interval_d is None
+    assert spec.drift is not None and not spec.drift.recalibrated
     no_drift = spec.model_copy(update={"drift": None, "flatline": None})
     cfg = config.model_copy(update={"sensors": {**config.sensors, "temperature": no_drift}})
     quiet = observe(channels, cfg, "B", seed=7)["temperature"]
@@ -300,10 +405,10 @@ def test_relative_and_absolute_noise_are_independent_draws(config):
     assert spec.noise.cv > 0.0 and spec.noise.sd_abs > 0.0  # the one sensor with both
     value = 12.0
     channels = _flat_channels(n_days=4000)
-    quiet = spec.model_copy(
-        update={"drift": None, "saturation": None, "missingness": MissingnessModel(base_rate=0.0)}
+    quiet = spec.model_copy(update={"drift": None, "saturation": None})
+    cfg = _without_missingness(config).model_copy(
+        update={"sensors": {**config.sensors, "h2_offgas": quiet}}
     )
-    cfg = config.model_copy(update={"sensors": {**config.sensors, "h2_offgas": quiet}})
     reported = observe(channels, cfg, "C", seed=17)["h2_offgas"].value
     independent = float(np.hypot(value * spec.noise.cv, spec.noise.sd_abs))
     correlated = value * spec.noise.cv + spec.noise.sd_abs
@@ -316,17 +421,14 @@ def test_drift_is_bounded_and_reset_by_recalibration(config):
     """The pH probe's random walk stays inside its bound and jumps back at recalibration."""
     channels = _flat_channels(n_days=400)
     spec = config.sensors["ph"]
-    assert spec.drift is not None and spec.drift.recalibration_interval_d == 30.0
+    assert spec.drift is not None and spec.drift.recalibrated
+    assert config.tiers["B"].recalibration_interval_d == 30.0  # the cadence is the tier's
     # isolate the drift: no noise, no fouling, no missingness
-    quiet = spec.model_copy(
-        update={
-            "noise": NoiseModel(cv=0.0, sd_abs=1e-12),
-            "fouling": None,
-            "missingness": MissingnessModel(base_rate=0.0),
-        }
+    quiet = spec.model_copy(update={"noise": NoiseModel(cv=0.0, sd_abs=1e-12), "fouling": None})
+    cfg = _without_missingness(config).model_copy(
+        update={"sensors": {**config.sensors, "ph": quiet}}
     )
-    cfg = config.model_copy(update={"sensors": {**config.sensors, "ph": quiet}})
-    value = observe(channels, cfg, "A", seed=3)["ph"].value
+    value = observe(channels, cfg, "B", seed=3)["ph"].value
     offset = value - 7.30
     assert np.abs(offset).max() <= spec.drift.bound + 1e-9
     # the sample after each recalibration boundary starts again from zero
@@ -361,13 +463,13 @@ def test_flatline_holds_the_previous_value_and_saturation_clips(config):
 def test_missingness_is_conditional_on_the_process_state(config):
     """The §6.1 property: gaps cluster in the stress window, so interpolation loses information.
 
-    Pooled over twelve seeds, because the ratio is a ratio of two small counts: the
-    scarcest sensor here (gas flow, base rate 1 %) loses ~480 samples before the window
-    and ~960 inside it, a standard error near 6 % on the ratio, which is what makes the
-    20 % tolerance a real bound. At five seeds the same estimator sits 1.8 sd from its
-    own expectation often enough to flake; at forty seeds it converges to 2.055 +/- 0.088
-    and 1.981 +/- 0.061 for gas flow and pH, so the implementation is unbiased and only
-    the sample size was at fault.
+    All three sensors here are online probes, so the expected ratio is the online overload
+    multiplier, 4. Pooled over twelve seeds, because the ratio is a ratio of two counts:
+    at Tier B each sensor loses ~1,400 samples in the 3,000 calm days and ~5,700 in the
+    3,000 overloaded ones. Per seed the estimator has sd ~0.42, so pooling twelve gives a
+    standard error near 0.12 and the 20 % tolerance (+/- 0.8) is a ~6 sd bound rather than
+    a rubber stamp. Over forty seeds it converges to 3.96 +/- 0.07 (pH), 4.12 +/- 0.07
+    (gas flow) and 3.92 +/- 0.06 (CH4), so the implementation is unbiased.
     """
     channels = _flat_channels(n_days=6000, stress_from=3000)
     names = ("ph", "gas_flow", "ch4_fraction")
@@ -387,14 +489,18 @@ def test_missingness_is_conditional_on_the_process_state(config):
     for name in names:
         before = lost_before[name] / seen_before
         after = lost_after[name] / seen_after
-        spec = config.sensors[name].missingness
+        spec = config.missingness.model_for("B", config.sensors[name].kind)
         expected = spec.stress_multipliers["overload"]
         assert lost_before[name] > 300 and lost_after[name] > 600, (name, lost_before, lost_after)
         assert after > before, name
         assert after / before == pytest.approx(expected, rel=0.20), (name, before, after)
         assert before == pytest.approx(spec.base_rate, rel=0.15), name
-    # the lab assays carry an overload multiplier but no foaming one
-    assert "foaming" not in config.sensors["alkalinity"].missingness.stress_multipliers
+    # a laboratory assay degrades under the same overload, but far less than an online probe
+    lab = config.missingness.model_for("B", "lab")
+    online = config.missingness.model_for("B", "online")
+    flags = frozenset({"overload"})
+    assert lab.rate(flags) < online.rate(flags)
+    assert config.sensors["alkalinity"].kind == "lab"
 
 
 def test_one_seeded_stream_in_sorted_sensor_order(config):
