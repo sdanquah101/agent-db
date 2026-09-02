@@ -22,7 +22,7 @@ geometry:
   V_liq_declared: 650.0    # m3; the heated primary CSTR (tisocco_2024), kept as published
   V_gas: 57.4              # m3; ASSUMED: BSM2 headspace ratio 300/3400 = 0.0882 x V_liq (lead's answer 5)
   units_at_plant: 2
-  note: "AFBI has a heated primary and an unheated secondary digester in series; the benchmark models the heated primary only."
+  note: "AFBI has a heated primary and an unheated secondary digester in series; the benchmark models the heated primary only. V_gas is assumed (BSM2 headspace ratio 300/3400), not reported."
 hidden_active_volume:
   error_min: 0.05          # proposal §6.1: ±5–15 %
   error_max: 0.15

@@ -36,8 +36,10 @@ from sim.adm1 import (  # noqa: E402
     simulate_extended,
 )
 from sim.adm1.model import state_vector  # noqa: E402
+from sim.plants import KG_N_PER_KMOL  # noqa: E402
 
 RJ2006_GAS_STATE = {"S_gas_h2": 1.1032e-5, "S_gas_ch4": 1.6535, "S_gas_co2": 0.0135}
+I_S_AC = LIQUID_STATE_NAMES.index("S_ac")
 
 
 def _probe_common():
@@ -96,11 +98,11 @@ def main() -> None:
                 t_span=(0.0, horizon),
                 t_eval=np.array([horizon]),
             )
-            fa = float(base.S_nh3[-1]) * 14000.0
+            fa = float(base.S_nh3[-1]) * KG_N_PER_KMOL * 1000.0
             x_end = float(r.state("X_sao")[-1])
             print(
-                f"{hrt:6.0f} {s_in * 14:8.2f} {float(base.pH[-1]):6.2f} {fa:8.0f} "
-                f"{float(base.y[6, -1]):10.2f} {float(r.state('S_ac')[-1]):9.2f} "
+                f"{hrt:6.0f} {s_in * KG_N_PER_KMOL:8.2f} {float(base.pH[-1]):6.2f} {fa:8.0f} "
+                f"{float(base.y[I_S_AC, -1]):10.2f} {float(r.state('S_ac')[-1]):9.2f} "
                 f"{x_end:10.3f} {'yes' if x_end > 0.05 else 'no':>5}"
             )
 

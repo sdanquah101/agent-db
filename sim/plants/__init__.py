@@ -17,7 +17,7 @@ import numpy as np
 import yaml
 
 from sim.adm1.schema import PlantGeometry
-from sim.plants.schema import Anchoring, PlantConfig
+from sim.plants.schema import AmmoniaEnvelope, Anchoring, PlantConfig
 
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs" / "plants"
 PLANT_A_STATISTICS = CONFIG_DIR.parent / "plant_a_statistics.yaml"
@@ -25,8 +25,10 @@ PLANT_IDS = ("A", "B", "C")
 
 __all__ = [
     "CONFIG_DIR",
+    "KG_N_PER_KMOL",
     "PLANT_A_STATISTICS",
     "PLANT_IDS",
+    "AmmoniaEnvelope",
     "Anchoring",
     "HiddenGeometry",
     "PlantConfig",
@@ -34,6 +36,7 @@ __all__ = [
     "load_all_plants",
     "load_plant_a_statistics",
     "load_plant_config",
+    "plant_a_ammonia_envelope",
     "plant_a_digestate_tan",
     "sample_hidden_geometry",
     "true_geometry",
@@ -70,7 +73,17 @@ def load_plant_a_statistics(path: Path = PLANT_A_STATISTICS) -> dict:
 
 
 KG_N_PER_KMOL = 14.007
-"""Molar mass of nitrogen, kg N per kmol."""
+"""Molar mass of nitrogen, kg N per kmol (kmol N/m3 x KG_N_PER_KMOL x 1000 = mg N/L)."""
+
+
+def plant_a_ammonia_envelope(path: Path = PLANT_A_STATISTICS) -> AmmoniaEnvelope:
+    """The typed AFBI ammonia envelope (``plants.afbi_hillsborough.ammonia_envelope``)."""
+    stats = load_plant_a_statistics(path)
+    try:
+        raw = stats["plants"]["afbi_hillsborough"]["ammonia_envelope"]
+    except KeyError as exc:
+        raise ValueError(f"{path}: no plants.afbi_hillsborough.ammonia_envelope block") from exc
+    return AmmoniaEnvelope.model_validate(raw)
 
 
 def plant_a_digestate_tan(path: Path = PLANT_A_STATISTICS) -> float:
@@ -79,9 +92,8 @@ def plant_a_digestate_tan(path: Path = PLANT_A_STATISTICS) -> float:
     From ``ammonia_envelope.digestate_TAN_kg_N_m3`` (Tisocco et al. 2024, Section 3.2,
     weekly samples, 2.3-4.3 kg N/m3 -> 3.3 kg N/m3 = 0.2356 kmol N/m3).
     """
-    env = load_plant_a_statistics(path)["plants"]["afbi_hillsborough"]["ammonia_envelope"]
-    tan = env["digestate_TAN_kg_N_m3"]
-    return 0.5 * (float(tan["min"]) + float(tan["max"])) / KG_N_PER_KMOL
+    tan = plant_a_ammonia_envelope(path).digestate_TAN_kg_N_m3
+    return 0.5 * (tan["min"] + tan["max"]) / KG_N_PER_KMOL
 
 
 @dataclass(frozen=True)
@@ -110,12 +122,10 @@ def sample_hidden_geometry(cfg: PlantConfig, seed: int) -> HiddenGeometry:
     else:
         sign = -1.0 if hav.sign == "negative" else 1.0
     error = sign * magnitude
-    return HiddenGeometry(
-        plant_id=cfg.id,
-        seed=seed,
-        error_fraction=error,
-        V_liq_true=cfg.geometry.V_liq_declared * (1.0 + error),
-    )
+    v_true = cfg.geometry.V_liq_declared * (1.0 + error)
+    if not v_true > 0.0:
+        raise ValueError(f"true active volume must be positive, got {v_true} m3")
+    return HiddenGeometry(plant_id=cfg.id, seed=seed, error_fraction=error, V_liq_true=v_true)
 
 
 def declared_geometry(cfg: PlantConfig) -> PlantGeometry:

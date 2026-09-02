@@ -23,7 +23,7 @@ geometry:
   V_liq_declared: 1836.0   # m3; one of two 485,000-gal digesters (muscatine_paper)
   V_gas: 162.0             # m3; ASSUMED: BSM2 headspace ratio 300/3400 = 0.0882 x V_liq (answer 5)
   units_at_plant: 2
-  note: "The plant runs two parallel digesters; the benchmark models one and gives it half of the plant feed. Same geometry as Plant C (controlled pair)."
+  note: "The plant runs two parallel digesters; the benchmark models one and gives it half of the plant feed. Same geometry as Plant C (controlled pair). V_gas is assumed (BSM2 headspace ratio 300/3400), not reported."
 hidden_active_volume:
   error_min: 0.05          # proposal §6.1: ±5–15 %
   error_max: 0.15

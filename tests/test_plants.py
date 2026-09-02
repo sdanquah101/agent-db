@@ -11,21 +11,31 @@ import csv
 
 import numpy as np
 import pytest
+from pydantic import ValidationError
 
 from scenarios.schema import Plant
-from sim.adm1 import compile_extended, load_extensions
+from sim.adm1 import LIQUID_STATE_NAMES, compile_extended, load_extensions
 from sim.plants import (
+    CONFIG_DIR,
+    KG_N_PER_KMOL,
     PLANT_IDS,
     Anchoring,
     declared_geometry,
     load_all_plants,
     load_plant_a_statistics,
     load_plant_config,
+    plant_a_ammonia_envelope,
     plant_a_digestate_tan,
     sample_hidden_geometry,
     true_geometry,
 )
-from sim.plants.schema import HiddenActiveVolume, PlantConfig
+from sim.plants.schema import (
+    HiddenActiveVolume,
+    PlantConfig,
+    PositiveStatistic,
+    ScenarioSubset,
+    Statistic,
+)
 from tests.conftest import REPO_ROOT
 
 MUSCATINE_DAILY = REPO_ROOT / "anchor" / "raw" / "iowa-muscatine-wrrf" / "LABS-raw.csv"
@@ -96,11 +106,37 @@ def test_headspace_is_the_bsm2_ratio(plants):
         assert cfg.geometry.V_gas == pytest.approx(
             cfg.geometry.V_liq_declared * 300 / 3400, rel=5e-3
         )
-        assert "ASSUMED" in (cfg.geometry.note + _config_path(cfg.id).read_text())
+        assert "assumed" in cfg.geometry.note.lower()
 
 
-def _config_path(pid: str):
-    return load_plant_config.__globals__["CONFIG_DIR"] / f"plant_{pid}.yaml"
+def test_schema_rejects_bad_ranges_and_names(plants):
+    """Positivity and range constraints fail as validation errors, never as arithmetic."""
+    with pytest.raises(ValidationError, match="greater than 0"):
+        HiddenActiveVolume(error_min=0.0, error_max=0.15, sign="random")
+    with pytest.raises(ValidationError, match="less than 1"):
+        HiddenActiveVolume(error_min=0.05, error_max=1.0, sign="negative")
+    with pytest.raises(ValidationError, match="greater than 0"):
+        PositiveStatistic(median=0.0, p10=0.0, p90=1.0, unit="d", source="x")
+    with pytest.raises(ValidationError, match="greater than or equal to 1"):
+        Statistic(median=1.0, p10=0.0, p90=2.0, unit="d", source="x", n=-3)
+    cfg = plants["B"]
+    zero = cfg.hydraulics.hrt_d.model_dump() | {"median": 0.0, "p10": 0.0}
+    bad = cfg.model_dump()
+    bad["hydraulics"]["hrt_d"] = zero
+    with pytest.raises(ValidationError):  # not ZeroDivisionError
+        PlantConfig.model_validate(bad)
+    with pytest.raises(ValidationError, match="unknown scenario ids"):
+        ScenarioSubset(
+            factorial=True, levels=(0,), tiers=("A",), assigned_scenarios=("omited_sao",)
+        )
+    with pytest.raises(ValidationError, match="both assigned and excluded"):
+        ScenarioSubset(
+            factorial=True,
+            levels=(0,),
+            tiers=("A",),
+            assigned_scenarios=("omitted_sao",),
+            excluded_scenarios=("omitted_sao",),
+        )
 
 
 def test_every_dataset_anchored_number_names_its_source(plants):
@@ -123,7 +159,7 @@ def test_hrt_consistency_is_enforced(plants):
 
 
 def test_bad_file_id_is_rejected(tmp_path, plants):
-    text = (load_plant_config.__globals__["CONFIG_DIR"] / "plant_B.yaml").read_text()
+    text = (CONFIG_DIR / "plant_B.yaml").read_text()
     (tmp_path / "plant_A.yaml").write_text(text)
     with pytest.raises(ValueError, match="declares id"):
         load_plant_config("A", tmp_path)
@@ -194,24 +230,28 @@ def test_hidden_active_volume_is_seeded_bounded_and_two_sided(plants):
     assert declared_geometry(cfg).V_liq == cfg.geometry.V_liq_declared
 
 
-def test_signed_error_modes():
-    hav = HiddenActiveVolume(error_min=0.05, error_max=0.15, sign="negative")
+@pytest.mark.parametrize("sign", ["negative", "positive"])
+def test_signed_error_modes(sign):
+    hav = HiddenActiveVolume(error_min=0.05, error_max=0.15, sign=sign)
     cfg = load_plant_config("C").model_copy(update={"hidden_active_volume": hav})
     errors = [sample_hidden_geometry(cfg, s).error_fraction for s in range(50)]
-    assert all(e < 0 for e in errors)
+    expected = (lambda e: e < 0) if sign == "negative" else (lambda e: e > 0)
+    assert all(expected(e) for e in errors)
+    assert all(sample_hidden_geometry(cfg, s).V_liq_true > 0 for s in range(50))
     with pytest.raises(ValueError, match="error_min"):
         HiddenActiveVolume(error_min=0.2, error_max=0.1, sign="random")
 
 
 def test_plant_a_statistics_carry_the_transcribed_envelope():
     """The lead's transcription is present; pH and free ammonia stay null with reasons."""
-    stats = load_plant_a_statistics()
-    env = stats["plants"]["afbi_hillsborough"]["ammonia_envelope"]
-    assert env["digestate_TAN_kg_N_m3"] == {"min": 2.3, "max": 4.3}
-    assert env["digestate_pH"] is None and env["free_ammonia_kg_N_m3"] is None
-    assert env["modelled_KI_NH3_acetoclastic_kg_m3"] == 1.0
-    assert set(env["feed_TAN_g_N_per_kg_TS"]) == {"cattle_slurry", "grass_silage"}
-    assert "AFBI-anchored" in env["notes"]
+    raw = load_plant_a_statistics()["plants"]["afbi_hillsborough"]["ammonia_envelope"]
+    env = plant_a_ammonia_envelope()
+    assert env.digestate_TAN_kg_N_m3 == {"min": 2.3, "max": 4.3} == raw["digestate_TAN_kg_N_m3"]
+    assert env.digestate_pH is None and env.free_ammonia_kg_N_m3 is None
+    assert env.modelled_KI_NH3_acetoclastic_kg_m3 == 1.0
+    assert set(env.feed_TAN_g_N_per_kg_TS) == {"cattle_slurry", "grass_silage"}
+    assert "AFBI-anchored" in env.notes
+    assert plant_a_digestate_tan() == pytest.approx(3.3 / KG_N_PER_KMOL, rel=1e-9)
 
 
 def test_sao_establishes_at_plant_a(plants, rj2006_state, probe_common):
@@ -229,7 +269,6 @@ def test_sao_establishes_at_plant_a(plants, rj2006_state, probe_common):
     0.08 d^-1 it did not (scripts/plant_a_sao_probe.py).
     """
     from sim.adm1 import (
-        LIQUID_STATE_NAMES,
         Influent,
         extended_state,
         load_matrix,
@@ -249,8 +288,7 @@ def test_sao_establishes_at_plant_a(plants, rj2006_state, probe_common):
     geometry = declared_geometry(cfg)
     q = cfg.geometry.V_liq_declared / cfg.hydraulics.hrt_d.median
     u = np.array(probe_common.influent_vector(1.0))
-    tan = plant_a_digestate_tan()
-    assert tan == pytest.approx(3.3 / 14.007, rel=1e-6)  # 0.2356 kmol N/m3
+    tan = plant_a_digestate_tan()  # 0.2356 kmol N/m3
     u[LIQUID_STATE_NAMES.index("S_IN")] = tan
     influent = Influent.constant(u, q)
     t_eval = np.array([180.0])
@@ -264,7 +302,8 @@ def test_sao_establishes_at_plant_a(plants, rj2006_state, probe_common):
         t_span=(0.0, 180.0),
         t_eval=t_eval,
     )
-    assert float(base.S_nh3[-1]) * 14000.0 > 150.0  # free ammonia in the shift window
+    fa_mg_l = float(base.S_nh3[-1]) * KG_N_PER_KMOL * 1000.0
+    assert fa_mg_l > 150.0  # free ammonia in the pathway-shift window (measured 235)
     model = compile_extended(params, geometry, matrix, solver, ext, ("sao",))
     r = simulate_extended(
         y0=extended_state(model, rj2006_state, {"X_sao": 0.05}),
@@ -274,8 +313,9 @@ def test_sao_establishes_at_plant_a(plants, rj2006_state, probe_common):
         t_eval=t_eval,
     )
     assert r.success
-    assert float(r.state("X_sao")[-1]) > 5.0 * 0.05
-    assert float(r.state("S_ac")[-1]) < 0.1 * float(base.y[6, -1])
+    i_ac = LIQUID_STATE_NAMES.index("S_ac")
+    assert float(r.state("X_sao")[-1]) > 5.0 * 0.05  # measured 9.3x
+    assert float(r.state("S_ac")[-1]) < 0.1 * float(base.y[i_ac, -1])  # 18.8 -> 0.96
 
 
 def test_true_geometry_feeds_the_truth_model_and_declared_the_workflow(plants):

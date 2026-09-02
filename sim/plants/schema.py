@@ -19,8 +19,24 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from scenarios.schema import FaultType
+
 _Pos = Annotated[float, Field(gt=0)]
 _Frac = Annotated[float, Field(ge=0, le=1)]
+_OpenFrac = Annotated[float, Field(gt=0, lt=1)]
+
+COMPOUND_SCENARIO_IDS: tuple[str, ...] = (
+    "compound_drift_feed_bias",
+    "compound_sao_inhibition_shift",
+)
+"""Ids of the Level-7 compound scenarios of proposal §6.3 (two simultaneous faults: pH
+drift + feed mislabelling; omitted SAO + ammonia-inhibition shift). Single-fault
+scenarios are named by :class:`scenarios.schema.FaultType`."""
+
+SCENARIO_IDS: frozenset[str] = frozenset(f.value for f in FaultType) | frozenset(
+    COMPOUND_SCENARIO_IDS
+)
+"""Every scenario id a plant may assign or exclude."""
 
 
 class _Frozen(BaseModel):
@@ -55,7 +71,9 @@ class Statistic(_Frozen):
     p90: float
     unit: str = Field(description="Unit of all three values")
     source: str = Field(description="Citation key, plus how the number was derived")
-    n: int | None = Field(default=None, description="Number of observations behind it")
+    n: Annotated[int, Field(ge=1)] | None = Field(
+        default=None, description="Number of observations behind it"
+    )
 
     @model_validator(mode="after")
     def _ordered(self) -> Statistic:
@@ -64,6 +82,22 @@ class Statistic(_Frozen):
                 f"need p10 <= median <= p90, got {self.p10}, {self.median}, {self.p90}"
             )
         return self
+
+
+class PositiveStatistic(Statistic):
+    """A :class:`Statistic` of a strictly positive quantity (volumes, flows, times)."""
+
+    median: _Pos
+    p10: _Pos
+    p90: _Pos
+
+
+class NonNegativeStatistic(Statistic):
+    """A :class:`Statistic` that may reach zero (batch feeds with no-delivery days)."""
+
+    median: Annotated[float, Field(ge=0)]
+    p10: Annotated[float, Field(ge=0)]
+    p90: _Pos
 
 
 class Geometry(_Frozen):
@@ -85,8 +119,18 @@ class HiddenActiveVolume(_Frozen):
     run with a seed; the realisation is hidden truth.
     """
 
-    error_min: _Frac = Field(description="Smallest |relative error|, fraction of V_liq_declared")
-    error_max: _Frac = Field(description="Largest |relative error|, fraction of V_liq_declared")
+    error_min: _OpenFrac = Field(
+        description=(
+            "Smallest |relative error|, fraction of V_liq_declared; > 0 so a realisation "
+            "is never exact"
+        )
+    )
+    error_max: _OpenFrac = Field(
+        description=(
+            "Largest |relative error|, fraction of V_liq_declared; < 1 so the true volume "
+            "stays positive"
+        )
+    )
     sign: Literal["random", "negative", "positive"] = Field(
         description="'negative' = dead volume only (true < declared); 'random' = either"
     )
@@ -119,9 +163,9 @@ class Temperature(_Frozen):
 class Hydraulics(_Frozen):
     """Feed flow and retention time of the modelled unit."""
 
-    feed_flow_m3_d: Statistic = Field(description="Total liquid feed to the modelled unit")
-    hrt_d: Statistic = Field(description="Hydraulic retention time of the modelled unit")
-    srt_d: Statistic | None = Field(
+    feed_flow_m3_d: PositiveStatistic = Field(description="Total liquid feed to the modelled unit")
+    hrt_d: PositiveStatistic = Field(description="Hydraulic retention time of the modelled unit")
+    srt_d: PositiveStatistic | None = Field(
         default=None, description="Solids retention time as reported by the plant, if any"
     )
     hrt_consistency_tolerance: _Frac = Field(
@@ -158,10 +202,10 @@ class FeedStream(_Frozen):
     delivery: Literal["continuous", "batch"] = Field(
         description="'continuous' = pumped daily; 'batch' = discrete deliveries"
     )
-    volume_m3_d: Statistic | None = Field(
+    volume_m3_d: NonNegativeStatistic | None = Field(
         default=None, description="Delivered volume to the modelled unit, when known"
     )
-    mass_t_fm_d: Statistic | None = Field(
+    mass_t_fm_d: NonNegativeStatistic | None = Field(
         default=None, description="Delivered fresh mass, t/d, for feeds reported by mass"
     )
     zero_days_fraction: _Frac = Field(
@@ -197,6 +241,49 @@ class ScenarioSubset(_Frozen):
         default=(), description="Named scenarios of the listed levels that do not run here"
     )
     note: str = ""
+
+    @model_validator(mode="after")
+    def _known_scenarios(self) -> ScenarioSubset:
+        for field in ("assigned_scenarios", "excluded_scenarios"):
+            unknown = set(getattr(self, field)) - SCENARIO_IDS
+            if unknown:
+                raise ValueError(
+                    f"{field}: unknown scenario ids {sorted(unknown)}; known ids are the "
+                    f"FaultType values plus {list(COMPOUND_SCENARIO_IDS)}"
+                )
+        both = set(self.assigned_scenarios) & set(self.excluded_scenarios)
+        if both:
+            raise ValueError(f"scenarios both assigned and excluded: {sorted(both)}")
+        return self
+
+
+class AmmoniaEnvelope(_Frozen):
+    """The transcribed Plant-A ammonia block of ``configs/plant_a_statistics.yaml``.
+
+    Only the fields the SAO-establishment check and the influent generator read are
+    typed; ``digestate_pH`` and ``free_ammonia_kg_N_m3`` are allowed to be null with the
+    reason kept in the YAML comments.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    anchor_plant: str
+    source: str
+    temperature_C: float
+    digestate_TAN_kg_N_m3: dict[Literal["min", "max"], _Pos]
+    digestate_pH: float | None = None
+    free_ammonia_kg_N_m3: float | None = None
+    feed_TAN_g_N_per_kg_TS: dict[str, tuple[float, float]]
+    feed_TS_percent_FM: dict[str, tuple[float, float]]
+    modelled_KI_NH3_acetoclastic_kg_m3: _Pos
+    notes: str = ""
+
+    @model_validator(mode="after")
+    def _ordered(self) -> AmmoniaEnvelope:
+        tan = self.digestate_TAN_kg_N_m3
+        if tan["min"] > tan["max"]:
+            raise ValueError("digestate_TAN_kg_N_m3: min must not exceed max")
+        return self
 
 
 class PlantConfig(_Frozen):
