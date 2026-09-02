@@ -54,9 +54,6 @@ class SpeciationOptions(NamedTuple):
     """Calcite solubility product, -log10 of (mol/L)^2 (NaN when calcite is not enabled)."""
 
 
-OPTIONS_OFF = SpeciationOptions(False, False, 0.0, 0.0, 0.5, 10.33, math.nan)
-
-
 def water_permittivity(T: float) -> float:
     """Relative permittivity of liquid water at ``T`` (K), Malmberg & Maryott (1956) fit.
 
@@ -132,8 +129,19 @@ class ExtendedSpeciation(NamedTuple):
     S_nh3: float
     S_nh4_ion: float
     ionic_strength: float
+    """I = 0.5 sum(c z^2) over the species in the charge balance, mol/L. Always computed
+    from the returned speciation, whether or not the Davies correction is applied."""
     gamma1: float
     gamma2: float
+
+
+def _ionic_strength(
+    tot: _Totals, S_h: float, K_w: float, hco3: float, co3: float, nh3: float, vfa: float
+) -> float:
+    """I = 0.5 sum(c z^2), mol/L, with strong ions monovalent and ``vfa`` in kmol/m3."""
+    return 0.5 * (
+        tot.cat + tot.an + (tot.inn - nh3) + S_h + K_w / S_h + hco3 + 4.0 * co3 + 4.0 * tot.ca + vfa
+    )
 
 
 def davies_gamma(ionic_strength: float, z: int, A: float, b: float) -> float:
@@ -260,10 +268,22 @@ def speciate_extended(
         The speciation. With all options off and no calcium this is the base model's
         speciation (delegated to :mod:`sim.adm1.physchem`), so the standard ADM1 numbers
         are reproduced bit for bit; ``S_co3_ion`` is then the diagnostic estimate.
+
+    Raises:
+        ValueError: If the charge balance has no root in the bracket, or the ionic-strength
+            fixed-point iteration does not converge within
+            ``cfg.ionic_strength_solver.max_iter`` iterations.
     """
+    tot = _Totals(S_va, S_bu, S_pro, S_ac, S_IC, S_IN, S_cat, S_an, S_ca)
     if not opts.ionic_strength and not opts.carbonate and S_ca == 0.0:
         S_h = physchem.solve_pH(S_va, S_bu, S_pro, S_ac, S_IC, S_IN, S_cat, S_an, k, cfg)
         sp = physchem.speciate(S_h, S_va, S_bu, S_pro, S_ac, S_IC, S_IN, k)
+        vfa = (
+            sp.S_ac_ion / COD_PER_KMOL_AC
+            + sp.S_pro_ion / COD_PER_KMOL_PRO
+            + sp.S_bu_ion / COD_PER_KMOL_BU
+            + sp.S_va_ion / COD_PER_KMOL_VA
+        )
         return ExtendedSpeciation(
             S_h=S_h,
             pH=-math.log10(S_h),
@@ -276,17 +296,18 @@ def speciate_extended(
             S_co2=sp.S_co2,
             S_nh3=sp.S_nh3,
             S_nh4_ion=sp.S_nh4_ion,
-            ionic_strength=0.0,
+            ionic_strength=_ionic_strength(tot, S_h, k.K_w, sp.S_hco3_ion, 0.0, sp.S_nh3, vfa),
             gamma1=1.0,
             gamma2=1.0,
         )
 
-    tot = _Totals(S_va, S_bu, S_pro, S_ac, S_IC, S_IN, S_cat, S_an, S_ca)
     gamma1 = gamma2 = 1.0
     ionic = 0.0
     lo, hi = cfg.bracket_pH
     carb = opts.carbonate
-    for _ in range(8 if opts.ionic_strength else 1):
+    isc = cfg.ionic_strength_solver
+    converged = not opts.ionic_strength
+    for _ in range(isc.max_iter if opts.ionic_strength else 1):
         eq = equilibria(k, opts, gamma1, gamma2)
         f_lo, f_hi = _residual(lo, tot, eq, carb), _residual(hi, tot, eq, carb)
         if f_lo * f_hi > 0.0:
@@ -305,32 +326,28 @@ def speciate_extended(
         )
         S_h = 10.0**-pH_c
         hco3, co3, nh3, va, bu, pro, ac = _ions(S_h, tot, eq, carb)
-        if not opts.ionic_strength:
-            break
-        ionic_new = min(
-            0.5
-            * (
-                tot.cat
-                + tot.an
-                + (tot.inn - nh3)
-                + S_h
-                + eq.K_w / S_h
-                + hco3
-                + 4.0 * co3
-                + 4.0 * tot.ca
-                + ac / COD_PER_KMOL_AC
-                + pro / COD_PER_KMOL_PRO
-                + bu / COD_PER_KMOL_BU
-                + va / COD_PER_KMOL_VA
-            ),
-            opts.I_max,
+        vfa = (
+            ac / COD_PER_KMOL_AC
+            + pro / COD_PER_KMOL_PRO
+            + bu / COD_PER_KMOL_BU
+            + va / COD_PER_KMOL_VA
         )
+        ionic_new = _ionic_strength(tot, S_h, eq.K_w, hco3, co3, nh3, vfa)
+        if not opts.ionic_strength:
+            ionic = ionic_new
+            break
+        ionic_new = min(ionic_new, opts.I_max)
         gamma1 = davies_gamma(ionic_new, 1, opts.davies_A, opts.davies_b)
         gamma2 = davies_gamma(ionic_new, 2, opts.davies_A, opts.davies_b)
-        converged = abs(ionic_new - ionic) < 1e-10
+        converged = abs(ionic_new - ionic) <= isc.rtol_I * ionic_new
         ionic = ionic_new
         if converged:
             break
+    if not converged:
+        raise ValueError(
+            f"ionic-strength fixed-point iteration did not converge in {isc.max_iter} "
+            f"iterations (I = {ionic:.4e} mol/L, rtol_I = {isc.rtol_I:g})"
+        )
     S_co2 = S_IC - hco3 - co3
     if not carb:
         co3 = eq.K_a2_co2 * hco3 / S_h  # diagnostic only (not in the balance or S_co2)

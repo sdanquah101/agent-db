@@ -13,14 +13,14 @@ import json
 import numpy as np
 import pytest
 
-from sim.adm1 import LIQUID_STATE_NAMES, STATE_NAMES, Influent, simulate
+from sim.adm1 import LIQUID_STATE_NAMES, STATE_NAMES, Influent, load_extensions, simulate
 from sim.adm1.extensions import (
+    DERIVED_UNITS,
     EXTENSION_RATES,
     RateContext,
     compile_extended,
     conservation_residuals,
     extended_state,
-    load_extensions,
     simulate_extended,
 )
 from sim.adm1.physchem_ext import (
@@ -31,6 +31,7 @@ from sim.adm1.physchem_ext import (
     equilibria,
 )
 from sim.adm1.rates import inhibition_noncompetitive
+from sim.adm1.schema import IonicStrengthSolverConfig
 from tests.conftest import CANDIDATES_DIR
 
 ALL = ("sao", "ionic_strength", "carbonate", "precipitation")
@@ -117,11 +118,12 @@ def test_rows_conserve_cod_c_n_and_charge(
     assert np.max(np.abs(res["N"])) < 1e-12
     names = [p.name for p in model.processes]
     for j, name in enumerate(names, start=19):
-        # The calcite row {S_ca: -1, S_IC: -1, X_caco3: +1} shows -2 because S_IC is an
-        # uncharged *total* in the matrix (its CO2/HCO3-/CO3 2- split is algebraic) while
-        # the species that actually leaves is CO3 2-. After speciation the balance closes:
-        # the carbonate removed carried -2, matching the +2 of the calcium removed
-        # (checked dynamically in test_precipitation_leaves_the_charge_balance_closed).
+        # The calcite row {S_ca: -1, S_IC: -1, X_caco3: +1} shows -2 by matrix convention:
+        # S_IC carries charge 0 as an uncharged *total* (its CO2/HCO3-/CO3 2- split is
+        # algebraic) while the species that actually leaves is CO3 2-. That the solution
+        # stays neutral is not a testable property here (the pH solver enforces it); what
+        # the row must get right is tested by the calcium balance and the alkalinity drop
+        # (test_precipitation_conserves_calcium, test_precipitation_removes_two_eq_per_mol).
         expected = -2.0 if name == "precipitation_caco3" else 0.0
         assert res["charge"][j] == pytest.approx(expected, abs=1e-12), name
     assert np.max(np.abs(res["charge"][:19])) < 1e-12
@@ -198,8 +200,8 @@ def test_sao_inert_reduces_to_base(
         adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config, ("sao",), k_m_sao=0.0
     )
     r = _run(model, rj2006_state, feed, 30.0)
-    # the extra state changes the BDF step sequence, so agreement is to solver tolerance
-    np.testing.assert_allclose(r.y[:29], base.y, rtol=1e-4, atol=1e-10)
+    # the extra state changes the BDF step sequence; measured gap 1.8e-7 against rtol 1e-6
+    np.testing.assert_allclose(r.y[:29], base.y, rtol=1e-5, atol=1e-10)
     assert np.all(r.state("X_sao") == 0.0)
 
 
@@ -217,9 +219,10 @@ def test_ionic_strength_inert_reduces_to_base(
         davies_A=0.0,
     )
     r = _run(model, rj2006_state, feed, 30.0)
-    # same dimension, same equations; only root-find rounding differs
-    np.testing.assert_allclose(r.y, base.y, rtol=1e-6, atol=1e-12)
+    # same dimension, same equations; only root-find rounding differs (measured 6e-11)
+    np.testing.assert_allclose(r.y, base.y, rtol=1e-8, atol=1e-12)
     assert np.all(r.derived["gamma1"] == 1.0)
+    assert np.all(r.derived["ionic_strength"] > 0.0)  # reported even when not applied
 
 
 def test_precipitation_inert_reduces_to_base(
@@ -229,7 +232,7 @@ def test_precipitation_inert_reduces_to_base(
 
     With the carbonate second dissociation on its own switch (off here) the speciation
     delegates to the base routine, so the only difference is the two extra states
-    changing the BDF step sequence: the same 1e-4 as the SAO inert case.
+    changing the BDF step sequence: the same 1e-5 as the SAO inert case (measured 5e-7).
     """
     base = _base(rj2006_state, feed, adm1_params, adm1_plant, adm1_matrix, adm1_solver, 30.0)
     model = _model(
@@ -242,9 +245,9 @@ def test_precipitation_inert_reduces_to_base(
         k_prec_caco3=0.0,
     )
     r = _run(model, rj2006_state, feed, 30.0)
-    np.testing.assert_allclose(r.y[:29], base.y, rtol=1e-4, atol=1e-10)
+    np.testing.assert_allclose(r.y[:29], base.y, rtol=1e-5, atol=1e-10)
     assert np.all(r.state("X_caco3") == 0.0)
-    assert abs(r.final()["pH"] - float(base.pH[-1])) < 1e-4
+    assert abs(r.final()["pH"] - float(base.pH[-1])) < 1e-5
 
 
 def test_carbonate_switch_is_a_small_model_change(
@@ -329,9 +332,16 @@ def test_sao_takes_over_under_free_ammonia_inhibition(
 def test_sao_washes_out_at_short_srt(
     rj2006_state, feed, adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config
 ):
+    """At the BSM2 20-day HRT SAO grows a little but not enough.
+
+    Below 0.01 after 60 d, yet above the pure-washout bound 0.05 exp(-(D + k_dec) t)
+    = 7.5e-4 (measured 2.4e-3).
+    """
     model = _model(adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config, ("sao",))
     r = _run(model, rj2006_state, feed, 60.0, y_ext={"X_sao": 0.05})
-    assert r.state("X_sao")[-1] < 0.05
+    d_plus_dec = feed[1] / adm1_plant.V_liq + model.ext_params["k_dec_X_sao"]
+    washout = 0.05 * np.exp(-d_plus_dec * 60.0)
+    assert washout < r.state("X_sao")[-1] < 0.01
 
 
 def test_sao_ammonia_inhibition_is_separate_and_weaker(
@@ -429,34 +439,94 @@ def test_precipitation_sinks_inorganic_carbon(
     assert r.final()["pH"] < ref.final()["pH"]
 
 
-def test_precipitation_leaves_the_charge_balance_closed(
+def _weak_acid_alkalinity(r, k) -> np.ndarray:
+    """HCO3- + 2 CO3 2- + VFA- + OH- - H+, kmol charge/m3, from the speciated series."""
+    d = r.derived
+    cod = {"S_va": 208.0, "S_bu": 160.0, "S_pro": 112.0, "S_ac": 64.0}
+    vfa = sum(d[f"{n}_ion"] / c for n, c in cod.items())
+    return d["S_hco3_ion"] + 2.0 * d["S_co3_ion"] + vfa + k.K_w / d["S_h"] - d["S_h"]
+
+
+def test_precipitation_conserves_calcium(
     rj2006_state, feed, adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config
 ):
-    """The -2 matrix residual is an artefact: after speciation the solution is neutral.
+    """d(S_ca + X_caco3)/dt = D (u_ca - S_ca - X_caco3): total calcium follows dilution only.
 
-    With `carbonate` on, the speciated charge (cations - anions, including 2 Ca2+ and
-    2 CO3 2-) is zero at every output time while calcite is forming.
+    With reactor and feed both at u_ca the total must stay at u_ca to solver tolerance
+    while S_ca is converted to X_caco3; a wrong S_ca or X_caco3 entry would break this.
+    (At 0.02 kmol/m3 the supersaturation is large, so most of the calcium precipitates
+    within the first output interval and X_caco3 then relaxes with dilution.)
     """
     ca = {"S_ca": 0.02}
     both = ("carbonate", "precipitation")
     model = _model(adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config, both)
     r = _run(model, rj2006_state, feed, 20.0, y_ext=ca, u_ext=ca)
-    assert r.state("X_caco3")[-1] > 0.0
-    d = r.derived
-    cod = {"S_va": 208.0, "S_bu": 160.0, "S_pro": 112.0, "S_ac": 64.0}
-    vfa_charge = sum(d[f"{n}_ion"] / c for n, c in cod.items())
-    charge = (
-        r.state("S_cat")
-        + 2.0 * r.state("S_ca")
-        + d["S_nh4_ion"]
-        + d["S_h"]
-        - d["S_hco3_ion"]
-        - 2.0 * d["S_co3_ion"]
-        - vfa_charge
-        - r.state("S_an")
-        - model.base.k.K_w / d["S_h"]
+    x = r.state("X_caco3")
+    assert x[0] == 0.0 and x[1] > 1e-3 and x[-1] > 1e-3
+    assert r.state("S_ca")[-1] < 0.02
+    np.testing.assert_allclose(r.state("S_ca") + x, 0.02, rtol=1e-6)
+
+
+def test_precipitation_removes_two_eq_per_mol(
+    rj2006_state, feed, adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config
+):
+    """Alkalinity from the weak-acid species drops by 2 eq per mol CaCO3 formed.
+
+    Active vs inert (k_prec = 0) runs from the same state and feed. The drop in
+    HCO3- + 2 CO3 2- + VFA- + OH- - H+ (computed from the reported speciation, not from
+    the strong ions) equals 2 X_caco3 once the re-speciation of ammonium caused by the
+    pH drop is accounted for: the active run has a lower pH, hence more NH4+, which
+    takes up part of the alkalinity that the calcium removal freed. Before that
+    correction the raw ratio is 0.56 at the first output and 0.97 at the end.
+
+    What this can and cannot catch: a wrong S_ca or X_caco3 entry, or a speciation output
+    inconsistent with the states, fails it; a wrong S_IC entry does not (the charge
+    balance is enforced whatever S_IC does) and is covered by the static carbon balance.
+    """
+    ca = {"S_ca": 0.02}
+    both = ("carbonate", "precipitation")
+    active = _model(adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config, both)
+    inert = _model(
+        adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config, both, k_prec_caco3=0.0
     )
-    assert np.max(np.abs(charge)) < 1e-9
+    r = _run(active, rj2006_state, feed, 20.0, y_ext=ca, u_ext=ca)
+    ref = _run(inert, rj2006_state, feed, 20.0, y_ext=ca, u_ext=ca)
+    drop = _weak_acid_alkalinity(ref, active.base.k) - _weak_acid_alkalinity(r, active.base.k)
+    nh4_shift = ref.derived["S_nh4_ion"] - r.derived["S_nh4_ion"]
+    formed = r.state("X_caco3")
+    mask = formed > 1e-4
+    assert mask.any()
+    assert np.all(drop[mask] > 0.0) and np.all(nh4_shift[mask] < 0.0)
+    np.testing.assert_allclose((drop - nh4_shift)[mask] / (2.0 * formed[mask]), 1.0, rtol=1e-4)
+
+
+def test_ionic_strength_iteration_cap_raises(
+    rj2006_state, feed, adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config
+):
+    """Hitting the fixed-point cap is loud, not silent (CLAUDE.md: settings in configs/)."""
+    isc = IonicStrengthSolverConfig(max_iter=1, rtol_I=1e-12)
+    tight = adm1_solver.model_copy(
+        update={
+            "pH_solver": adm1_solver.pH_solver.model_copy(update={"ionic_strength_solver": isc})
+        }
+    )
+    model = _model(adm1_params, adm1_plant, adm1_matrix, tight, ext_config, ("ionic_strength",))
+    with pytest.raises(ValueError, match="did not converge"):
+        _run(model, rj2006_state, feed, 1.0)
+
+
+def test_every_derived_quantity_has_a_unit(
+    rj2006_state, feed, adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config
+):
+    model = _model(adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config, ALL)
+    r = _run(model, rj2006_state, feed, 1.0, y_ext={"S_ca": 0.01})
+    assert set(r.derived) == set(DERIVED_UNITS)
+    assert r.units is DERIVED_UNITS
+    assert all(u for u in DERIVED_UNITS.values())
+    with pytest.raises(TypeError):
+        EXTENSION_RATES["x"] = None  # type: ignore[index]
+    with pytest.raises(ValueError, match="read-only"):
+        model.nu[0, 0] = 1.0
 
 
 # ---------------------------------------------------------------- all together

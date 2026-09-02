@@ -13,3 +13,6 @@ pH_solver:
   xtol_pH: 1.0e-12          # absolute tolerance in pH units
   rtol: 8.9e-16             # brentq relative tolerance (>= 4 * machine eps)
   maxiter: 200
+  ionic_strength_solver:    # fixed-point iteration on I (extensions: Davies correction)
+    max_iter: 50            # measured 4-7 iterations per speciation; non-convergence raises
+    rtol_I: 1.0e-8          # relative change in I between iterations; ample against rtol 1e-6

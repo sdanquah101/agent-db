@@ -219,6 +219,15 @@ class PlantGeometry(_Frozen):
     T_op: _Pos = Field(description="Operating temperature, K")
 
 
+class IonicStrengthSolverConfig(_Frozen):
+    """Settings for the fixed-point iteration on ionic strength (extended speciation)."""
+
+    max_iter: Annotated[int, Field(gt=0)] = Field(
+        description="Maximum fixed-point iterations on I; exceeding it raises"
+    )
+    rtol_I: _Pos = Field(description="Convergence: relative change in I between iterations, -")
+
+
 class PHSolverConfig(_Frozen):
     """Settings for the bracketed root-find on the charge balance."""
 
@@ -226,6 +235,7 @@ class PHSolverConfig(_Frozen):
     xtol_pH: _Pos = Field(description="Absolute tolerance on the root, pH units")
     rtol: _Pos = Field(description="Relative tolerance passed to brentq, -")
     maxiter: Annotated[int, Field(gt=0)] = Field(description="Maximum brentq iterations")
+    ionic_strength_solver: IonicStrengthSolverConfig
 
     @field_validator("bracket_pH")
     @classmethod

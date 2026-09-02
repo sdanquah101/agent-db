@@ -5,7 +5,7 @@
 # contents; process stoichiometry is expression-valued over parameter names (base
 # parameters plus the extension's own), S_IC and S_IN written out explicitly; rate
 # expressions are documentation, the code is in sim/adm1/extensions.py. Extension
-# parameters carry a unit and a source. All three are off unless enabled when compiling
+# parameters carry a unit and a source. All four are off unless enabled when compiling
 # the extended model. With an extension enabled but its rate parameters at zero, the
 # model reproduces standard ADM1 (tests/test_adm1_extensions.py).
 #
@@ -112,11 +112,11 @@ extensions:
   # an unattributable alkalinity/pH residual (Level-6 scenario "Omitted precipitation").
   #
   # Charge convention: the row {S_ca: -1, S_IC: -1, X_caco3: +1} has a charge residual
-  # of -2. This is an artefact of S_IC being an UNCHARGED TOTAL in the matrix (charge 0;
-  # its split into CO2 / HCO3- / CO3 2- is algebraic), while the species that actually
-  # leaves is CO3 2-. The balance closes after speciation: the carbonate removed carried
-  # -2, matching the +2 of the calcium removed, so the solution's charge balance is
-  # unchanged by precipitation. The conservation test asserts -2 for this row.
+  # of -2. This is a MATRIX CONVENTION, not a tested property: S_IC carries charge 0 as
+  # an uncharged total (its split into CO2 / HCO3- / CO3 2- is algebraic), while the
+  # species that actually leaves is CO3 2-. Electroneutrality of the solution is enforced
+  # by the pH solver whatever the row says. The conservation test asserts -2 for this
+  # row; the calcium balance and the 2 eq/mol alkalinity drop are tested dynamically.
   precipitation:
     description: calcite precipitation as an inorganic-carbon and alkalinity sink
     components:

@@ -90,8 +90,10 @@ def compile_model(
         )
         for g in matrix.gas_transfer
     )
+    nu = compile_stoichiometry(matrix, params)
+    nu.setflags(write=False)
     return CompiledModel(
-        nu=compile_stoichiometry(matrix, params),
+        nu=nu,
         params=params,
         plant=plant,
         solver=solver,

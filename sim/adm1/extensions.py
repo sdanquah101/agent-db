@@ -18,14 +18,12 @@ from __future__ import annotations
 import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
+from types import MappingProxyType
 
 import numpy as np
-import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 from sim.adm1 import physchem, physchem_ext
-from sim.adm1.defaults import CONFIG_DIR
 from sim.adm1.model import CompiledModel, compile_model, gas_exchange, integrate
 from sim.adm1.petersen import Component, PetersenMatrix, Process, evaluate_expression
 from sim.adm1.rates import (
@@ -48,8 +46,35 @@ from sim.adm1.schema import (
     SolverStats,
 )
 
-EXTENSIONS_YAML = CONFIG_DIR / "extensions.yaml"
 _IDX = {name: i for i, name in enumerate(STATE_NAMES)}
+nan = math.nan
+
+DERIVED_UNITS: Mapping[str, str] = MappingProxyType(
+    {
+        "pH": "- (-log10 of the proton activity; concentration when ideal)",
+        "S_h": "kmol/m3 (proton concentration)",
+        "S_va_ion": "kg COD/m3",
+        "S_bu_ion": "kg COD/m3",
+        "S_pro_ion": "kg COD/m3",
+        "S_ac_ion": "kg COD/m3",
+        "S_hco3_ion": "kmol C/m3",
+        "S_co3_ion": "kmol C/m3 (diagnostic estimate unless the carbonate switch is on)",
+        "S_co2": "kmol C/m3 (free CO2)",
+        "S_nh3": "kmol N/m3",
+        "S_nh4_ion": "kmol N/m3",
+        "ionic_strength": "mol/L (0.5 sum c z^2 over the charge-balance species)",
+        "gamma1": "- (Davies activity coefficient, |z| = 1; 1 when the correction is off)",
+        "p_h2": "bar",
+        "p_ch4": "bar",
+        "p_co2": "bar",
+        "p_h2o": "bar",
+        "P_gas": "bar (headspace total)",
+        "q_gas": "m3/d at T_op normalised to P_atm (BSM2 convention)",
+        "q_gas_stp_dry": "m3/d at 0 C and 1 atm, water vapour removed",
+        "q_ch4_stp": "m3 CH4/d at 0 C and 1 atm, wet-gas fraction basis",
+    }
+)
+"""Units of every entry of :attr:`ExtendedResult.derived` (CLAUDE.md rule 6)."""
 
 
 class _Frozen(BaseModel):
@@ -82,20 +107,12 @@ class ExtensionSpec(_Frozen):
 
 
 class ExtensionsConfig(_Frozen):
-    """The parsed extensions file."""
+    """The parsed extensions file (loaded by :func:`sim.adm1.defaults.load_extensions`)."""
 
     version: int
     shared_parameters: dict[str, ExtensionParameter] = Field(default_factory=dict)
     """Constants used by more than one extension (always loaded, overridable)."""
     extensions: dict[str, ExtensionSpec]
-
-
-def load_extensions(path: Path = EXTENSIONS_YAML) -> ExtensionsConfig:
-    """Parse ``configs/adm1/extensions.yaml``."""
-    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict):
-        raise ValueError(f"{path}: expected a YAML mapping")
-    return ExtensionsConfig.model_validate(raw)
 
 
 # --------------------------------------------------------------------------- rates
@@ -151,12 +168,14 @@ def _rate_precipitation_caco3(c: RateContext) -> float:
     )
 
 
-EXTENSION_RATES: dict[str, RateFunction] = {
-    "uptake_acetate_sao": _rate_uptake_acetate_sao,
-    "decay_X_sao": _rate_decay_X_sao,
-    "precipitation_caco3": _rate_precipitation_caco3,
-}
-"""Rate code for every extension process the config may name."""
+EXTENSION_RATES: Mapping[str, RateFunction] = MappingProxyType(
+    {
+        "uptake_acetate_sao": _rate_uptake_acetate_sao,
+        "decay_X_sao": _rate_decay_X_sao,
+        "precipitation_caco3": _rate_precipitation_caco3,
+    }
+)
+"""Rate code for every extension process the config may name (read-only)."""
 
 
 # ------------------------------------------------------------------- compilation
@@ -280,15 +299,22 @@ def compile_extended(
 
     if "pK_a2_co2" not in ext_params:
         raise ValueError("extensions config must declare the shared parameter 'pK_a2_co2'")
+    calcite = any(p.name == "precipitation_caco3" for p in processes)
+    if calcite and "pK_sp_caco3" not in ext_params:
+        raise ValueError("the calcite extension must declare 'pK_sp_caco3'")
+    if ionic and not {"davies_A", "davies_b", "I_max"} <= ext_params.keys():
+        raise ValueError("the ionic-strength extension must declare davies_A, davies_b and I_max")
+    nu.setflags(write=False)
     options = physchem_ext.SpeciationOptions(
         ionic_strength=ionic,
         carbonate=carbonate,
-        # the configured A is the 25 C value; scale it to the operating temperature
-        davies_A=physchem_ext.davies_A_at(ext_params["davies_A"], plant.T_op) if ionic else 0.0,
-        davies_b=ext_params["davies_b"] if ionic else 0.0,
-        I_max=ext_params["I_max"] if ionic else 0.5,
+        # the configured A is the 25 C value; scale it to the operating temperature.
+        # Values of switched-off terms are NaN so that an accidental use is loud.
+        davies_A=physchem_ext.davies_A_at(ext_params["davies_A"], plant.T_op) if ionic else nan,
+        davies_b=ext_params["davies_b"] if ionic else nan,
+        I_max=ext_params["I_max"] if ionic else nan,
         pK_a2_co2=ext_params["pK_a2_co2"],
-        pK_sp_caco3=ext_params.get("pK_sp_caco3", math.nan),
+        pK_sp_caco3=ext_params["pK_sp_caco3"] if calcite else nan,
     )
     ext_names = tuple(c.name for c in components[N_LIQUID:])
     return ExtendedModel(
@@ -402,13 +428,21 @@ class ExtendedResult:
     """Trajectory of the extended model with derived quantities."""
 
     t: np.ndarray
+    """Output times, d."""
     y: np.ndarray
-    """``(n_states, n_times)`` in ``state_names`` order."""
+    """``(n_states, n_times)`` in ``state_names`` order; units as in the component list
+    (kg COD/m3, kmol C/m3 or kmol N/m3 per state)."""
     state_names: tuple[str, ...]
     derived: dict[str, np.ndarray]
+    """Per-time derived quantities; units in :data:`DERIVED_UNITS` / :attr:`units`."""
     success: bool
     message: str
     stats: SolverStats
+
+    @property
+    def units(self) -> Mapping[str, str]:
+        """Unit of every ``derived`` entry."""
+        return DERIVED_UNITS
 
     def state(self, name: str) -> np.ndarray:
         """Trajectory of one state by name."""
@@ -424,29 +458,7 @@ def derived_extended(y: np.ndarray, model: ExtendedModel) -> dict[str, np.ndarra
     base = model.base
     pc, plant, k = base.params.physchem, base.plant, base.k
     yr = np.maximum(y, 0.0) if base.solver.clip_negative_states_in_rates else y
-    names = (
-        "pH",
-        "S_h",
-        "S_va_ion",
-        "S_bu_ion",
-        "S_pro_ion",
-        "S_ac_ion",
-        "S_hco3_ion",
-        "S_co3_ion",
-        "S_co2",
-        "S_nh3",
-        "S_nh4_ion",
-        "ionic_strength",
-        "gamma1",
-        "p_h2",
-        "p_ch4",
-        "p_co2",
-        "p_h2o",
-        "P_gas",
-        "q_gas",
-        "q_gas_stp_dry",
-        "q_ch4_stp",
-    )
+    names = tuple(DERIVED_UNITS)
     n = y.shape[1]
     out = {name: np.empty(n) for name in names}
     g_h2, g_ch4, g_co2 = (_IDX[n_] for n_ in ("S_gas_h2", "S_gas_ch4", "S_gas_co2"))

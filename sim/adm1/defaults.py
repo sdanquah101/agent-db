@@ -10,6 +10,7 @@ from pathlib import Path
 
 import yaml
 
+from sim.adm1.extensions import ExtensionsConfig
 from sim.adm1.petersen import PetersenMatrix, load_petersen
 from sim.adm1.schema import ADM1Parameters, PlantGeometry, SolverConfig
 
@@ -18,6 +19,7 @@ PARAMS_BSM2 = CONFIG_DIR / "params_bsm2.yaml"
 PLANT_BSM2 = CONFIG_DIR / "plant_bsm2.yaml"
 SOLVER_DEFAULT = CONFIG_DIR / "solver.yaml"
 PETERSEN_MATRIX = CONFIG_DIR / "petersen_matrix.yaml"
+EXTENSIONS_YAML = CONFIG_DIR / "extensions.yaml"
 
 
 def _mapping(path: Path) -> dict:
@@ -45,3 +47,8 @@ def load_solver_config(path: Path = SOLVER_DEFAULT) -> SolverConfig:
 def load_matrix(path: Path = PETERSEN_MATRIX) -> PetersenMatrix:
     """The standard-ADM1 Petersen matrix from YAML."""
     return load_petersen(path)
+
+
+def load_extensions(path: Path = EXTENSIONS_YAML) -> ExtensionsConfig:
+    """The truth-model extension declarations (``extensions.yaml``)."""
+    return ExtensionsConfig.model_validate(_mapping(path))
