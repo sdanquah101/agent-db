@@ -515,3 +515,171 @@ draft is no longer reachable and was not kept with a loosened assertion.
 already at the fast end of the published range); make pK_a2 part of the base parameter
 schema (rejected: the base model does not use it; a shared extension parameter keeps the
 base schema frozen).
+
+---
+
+## 2026-09-02 — Mixing model: active zone + stagnant zone + bypass, ideal CSTR as the exact limit
+
+**Decision.** The "residence-time distribution to emulate imperfect mixing" of §6.1 is
+the compartment model of a non-ideal stirred tank (`sim/plants/reactor.py`): a
+well-mixed active zone of volume `V_true (1 − φ)`, a stagnant zone of volume `V_true φ`
+exchanging liquid with it at `k_ex V_stag` (no through-flow, full biochemistry, gas
+transfer into the shared headspace), and a bypass fraction `β` of the influent that
+short-circuits to the effluent. `β = φ = 0` *is* the extended model's own state vector
+and right-hand side, so the ideal CSTR is reproduced bit for bit against
+`sim.adm1.simulate` on the BSM2 case (`tests/test_plants.py`). The structure is checked
+against the analytical two-compartment tracer solution on S_cat and against the
+well-mixed limit at very fast exchange (which also checks that the stagnant zone's gas
+reaches the headspace). The declared model the operator holds is the ideal CSTR of the
+declared volume; the hidden truth is `(V_true, β, φ, k_ex)`.
+
+**Reason.** Tracer studies of full-scale digesters report exactly these two defects —
+non-effective volume (22 % in Capela et al. 2009; 75 % in Monteith & Stephenson 1978) and
+short-circuiting (up to 61 % of the flow in the latter) — and the Level-6 "imperfect
+mixing" scenario needs a *load-dependent* residual: a bypass passes unreacted feed in
+proportion to the load, and a stagnant zone starves part of the volume. Tanks-in-series
+(the other option the task named) moves the RTD towards plug flow, which is *less*
+dispersion than a CSTR and not what a badly mixed digester shows.
+
+**Priors** (`mixing_prior` in each plant YAML, all assumed, `# DESIGN`): bypass 1–10 %,
+stagnant share 3–30 %, exchange rate 0.2–2 d⁻¹, narrower for the "easy" Plant C. These
+are order-of-magnitude bands for the domain reviewer; the tracer literature gives
+extremes, not distributions.
+
+**Alternatives.** N tanks in series (rejected: wrong direction of non-ideality, see
+above); axial-dispersion model (rejected: a PDE, and the digesters are stirred tanks);
+CFD-derived compartment models with many zones (Segura et al. 2026; rejected for Phase 1:
+per-plant geometry we do not have, and the two-zone model already produces the residual
+signature). The headspace is kept at the declared volume: the active-volume error is not
+propagated to `V_gas` because with the BSM2 ratio a +15 % liquid error would make the
+headspace negative; the headspace only sets the fast gas dynamics.
+
+---
+
+## 2026-09-02 — Hidden active-volume error: fair sign, uniform magnitude on [5 %, 15 %]
+
+**Decision.** `sample_truth` draws `error = sign · U(0.05, 0.15)` with a fair coin for
+the sign, and `V_true = V_declared (1 + error)`. The error is therefore never zero and
+never outside the band the proposal states (tested over 300 seeds per plant).
+
+**Reason.** §6.1 says "±5–15 %", which reads as a band on the magnitude with either
+sign. A uniform magnitude puts no preferred value inside the band (there is no evidence
+for one); a symmetric sign avoids building a bias towards under- or over-declared
+volumes into the benchmark. A triangular distribution would concentrate mass at 10 %,
+which the proposal does not state.
+
+**Alternatives.** Uniform on [−15 %, +15 %] (rejected: allows errors that are too small
+to be detectable, which would make the volume error a non-fault in some seeds and
+the scenario label ambiguous); negative-only (grit accumulation is the common cause of
+a shrinking active volume, but a mis-declared geometry goes either way; rejected as a
+Phase-1 restriction, easy to add as a per-plant prior later); triangular (rejected as
+above).
+
+---
+
+## 2026-09-02 — Feedstock catalogue: total COD from TS × VS × COD/VS, Dirichlet truth around the catalogue fractionation
+
+**Decision.** A catalogue entry (`FeedstockSpec`) declares TS (wet basis), VS/TS (dry
+basis), COD per VS, a six-way COD fractionation (carbohydrate, protein, lipid,
+particulate inert, soluble inert, VFA-as-acetate), ammoniacal N, TKN, inorganic C, strong
+ions and calcium, with units in every field. The hidden truth per feed is a Dirichlet
+draw around the catalogue fractionation with a per-feed concentration `κ`
+(`sd_i ≈ √(m_i(1−m_i)/(κ+1))`); components the catalogue puts at zero stay zero. The
+influent builder (`sim/plants/feed.py`) blends feeds flow-weighted into the 26 ADM1
+liquid states; proteins/carbohydrates/lipids are fed directly (no `X_xc`), inerts go to
+`X_I`/`S_I`, all VFA to `S_ac`. COD equivalents 1.19 / 1.42 / 2.90 kg COD per kg
+carbohydrate / protein / lipid (VDI 4630 theoretical methane yields over 0.35 m³ CH₄
+per kg COD) convert the published crude fractions.
+
+**Nitrogen consistency.** Every catalogue entry declares its TKN, and the test suite
+checks it against the TKN implied by the fractionation and the ADM1 N contents
+(`N_aa` on proteins, `N_I` on inerts) within the entry's `tkn_tolerance`. Doing this
+showed that the BSM2 `N_I` (0.06 g N per g COD, derived for sludge inerts) over-counts
+the nitrogen of lignocellulosic inerts by a factor of several: with it, grass silage
+would carry 11 g N/L against the 6.6 g N/L its crude protein and ammonia give. Plants A
+and B therefore override `N_I` (0.001 and 0.0015 kmol N per kg COD, `# DESIGN`,
+assumed) so that every feed's implied TKN is within 10 % of the declared one; Plant C
+keeps the BSM2 value. The override is part of the *declared* plant (a workflow may see
+it), since it is the modeller's prior, not a hidden fault.
+
+**Sources per plant.**
+
+- *Plant A* (statistics-anchored). Geometry, temperature, feed quantities, OLR/HRT and
+  the ADM1 feed inputs from Tisocco et al. 2024 (§2.1; ESM Table S2, re-read this
+  session), feedstock chemistry from Tisocco et al. 2026 Table 1 (cattle manure, grass
+  silage), all transcribed with citations into `configs/plants/plant_a_statistics.yaml`.
+  Two published numbers were *not* used as printed and are recorded there: the ESM's
+  `S_IN` of cattle slurry (4.35–5.95 kg/m³, 4–5× the 1.08 g NH₄-N/L of the 2026 table)
+  and the 2026 table's NH₄-N of grass silage (7.28 g/L, more than the silage's total
+  crude-protein N per kg fresh matter; 10 % of crude-protein N assumed instead). ESM
+  Table S2 is read as mass-based per m³ of wet feed and as degradable organics only
+  (its values reproduce the published OLRs 1.4 and 2.1 to within 0.1). Inert shares come
+  from the published degradability (DQ_XC 69 % for manure) and from the grass-silage
+  BMP over its theoretical yield (assumed 25 %).
+- *Plant B* (dataset-anchored, with caveats). Geometry (one 485,000-gal digester),
+  36 °C, the SRT envelope (p05–p95 14.6–41.7 d), the HSW strength (COD 137.6 g/L,
+  VS 6.16 % w/w) and the FOG/HSW delivery statistics were computed this session from
+  the Muscatine daily file with the unit conversions written in the YAML. Muscatine
+  gives no COD fractionation and no nitrogen, so the food-waste entry is literature
+  (Zhang et al. 2007: moisture 70–74 %, VS/TS 83–87 %, VS destruction 81 %; Fisgativa
+  et al. 2016 and Bong et al. 2018 for the carbohydrate/protein/lipid ranges), marked
+  assumed. The recipe (food waste + Muscatine-strength HSW + FOG + dilution water at
+  14 % feed TS, HRT 31 d) is designed so that the digester TAN is ≈ 1.7 g N/L with free
+  ammonia at the acetoclastic inhibition constant: inhibited but not soured, which is
+  the regime the Level-5 ammonia scenario shifts. A more concentrated recipe sours the
+  standard-ADM1 kinetics (`K_I_nh3` 25 mg NH₃-N/L) within the 100-day check.
+- *Plant C* (dataset-anchored). BSM2 geometry and temperature; the Rosen & Jeppsson
+  2006 influent's COD shares (ch 0.095, pr 0.358, li 0.098, X_I 0.445) split into a
+  primary sludge and a TWAS entry (assumed split); sludge VS from Muscatine
+  (PS 3.0 %, TWAS 3.1 % w/w) and the same SRT envelope; Q = 170 m³/d (HRT 20 d, BSM2).
+  The Muscatine data dictionary swaps the PS/TWAS VS descriptions; the columns were
+  used by name.
+
+**How the Muscatine caveats were applied to Plant B.** (1) Only quantities Muscatine
+actually measures are taken from it (volumes, HSW COD/VS, temperature, SRT, pH, VFA,
+alkalinity, FOS/TAC, gas); nothing about food-waste composition is inferred from it.
+(2) Its gas flow (cfm, reference conditions unstated) is not used to anchor any
+yield; the gate below uses a COD-balance bound instead. (3) The caveats are written
+into the plant's `anchor.caveats` field so that the benchmark card can quote them.
+(4) The overload statistics (SRT 3.6–165 d, VFA to 3.6 g/L, FOS/TAC to 0.93, 12.8 % of
+days with VFA > 2 g/L) are recorded for the influent generator (next session), not
+encoded in the static plant.
+
+**Alternatives.** Per-fraction independent normal draws (rejected: fractions must sum to
+one and stay positive); a logit-normal (rejected: no simpler than the Dirichlet and no
+better founded); feeding composites `X_xc` with the BSM2 split (rejected: the split is
+then a hidden parameter of the catalogue, and modern practice fractionates directly);
+keeping the BSM2 `N_I` everywhere with a loose TKN tolerance (rejected: hides a factor-2
+nitrogen error behind a tolerance).
+
+---
+
+## 2026-09-02 — Plausibility gate reuse: pH, CH₄ fraction and VFA as is; biogas as a yield per kg COD fed
+
+**Decision.** The 100-day plant checks reuse the Milestone-1 `PLAUSIBLE` ranges
+(`scripts/adm1_candidates/common.py`) for pH (6.5–7.8), dry CH₄ fraction (0.55–0.72)
+and total VFA (1–1000 g COD/m³) unchanged. The biogas range (2200–3300 m³/d) cannot be
+transplanted, even scaled by COD load, because it assumes the BSM2 feed's 45 % inert
+share: Plant A's feed is 75 % degradable and gives 0.49 m³ biogas per kg COD fed against
+BSM2's 0.30. It is reused as a *methane yield*: lower bound = the gate's lower biogas
+flow at the gate's lower CH₄ fraction, converted to dry STP and divided by the BSM2 feed
+COD load (0.105 m³ CH₄ per kg COD fed); upper bound = the COD-balance limit 0.35 m³ CH₄
+per kg COD fed, which no model may exceed. Results: A 0.226, B 0.242, C 0.160.
+
+**Alternatives.** Scale the m³/d range by COD load (rejected: fails Plant A by 40 % for
+a physically correct reason); scale by *degradable* COD load (rejected: makes the gate
+depend on the catalogue's own inert share, i.e. circular).
+
+---
+
+## 2026-09-02 — Plant configurations carry ADM1 parameter overrides as declared data
+
+**Decision.** `PlantDeclared.parameter_overrides` (`'group.name' → value`) and
+`extension_overrides` are applied by `compile_reactor` to the base parameter set. They
+are visible to workflows (they are the modeller's plant-specific prior, e.g. the inert
+nitrogen content of lignocellulosic feeds); hidden parameter faults (Level 5) are the
+scenario layer's job and are not expressed here.
+
+**Reason.** Without a per-plant `N_I` the feedstock nitrogen of Plants A and B cannot be
+made consistent (previous entry); putting the override in the declared config keeps
+"what the operator's model assumes" in one auditable place.

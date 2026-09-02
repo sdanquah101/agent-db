@@ -312,3 +312,94 @@ The duplicate core is discarded. CLAUDE.md now carries the follow-on-session rul
 | CI (GitHub Actions) | 3 jobs per push on #2 and #4 | — | |
 
 No LLM-agent compute inside the benchmark; development cost only.
+
+### Session 2026-09-02 (fourth session) — Plants A, B, C with hidden active-volume error and RTD
+
+Predecessor PR #4 confirmed merged (`main` at 07a7fae) before branching.
+
+**Done**
+
+- `sim/plants/`: `schema.py` (`PlantDeclared` / `PlantTruth`, `FeedstockSpec`,
+  `CODFractionation`, `MixingPrior` / `MixingTruth`, `ActiveVolumePrior`,
+  `TemperatureControl`, `OperatingEnvelope`, `AnchorMetadata`; units in every numeric
+  field, frozen, `extra="forbid"`, envelope consistency validated); `sampling.py`
+  (`sample_truth(declared, seed)`: fair-sign uniform-magnitude volume error, uniform
+  mixing draws, Dirichlet fractionations; one `default_rng` stream, no other randomness);
+  `feed.py` (catalogue → 26-state ADM1 influent, flow-weighted; OLR/COD loading; TKN
+  consistency against the ADM1 N contents); `reactor.py` (active zone + stagnant zone +
+  bypass on the extended truth model, pure functions, bitwise CSTR limit; effluent after
+  the bypass; `apply_parameter_overrides`); `defaults.py` (the only file I/O: loaders).
+  Nothing in the package writes files (tested by AST).
+- `configs/plants/plant_a.yaml`, `plant_b.yaml`, `plant_c.yaml` with every design value
+  marked `# DESIGN` and sourced or marked "assumed"; `plant_a_statistics.yaml` with the
+  Tisocco et al. 2024 envelope and ESM Table S2 and the Tisocco et al. 2026 Table 1
+  transcribed with citations (the 2024 ESM was re-read this session; the 2024 main text
+  is behind a bot wall and its numbers come from the previous session's summary in
+  `docs/anchor_datasets.md`).
+- Muscatine daily-file statistics recomputed in SI for Plants B/C (feed volumes, HSW
+  COD/VS, temperature, pH, SRT, VFA, alkalinity, FOS/TAC, biogas; recorded in the YAML
+  comments and the decisions log).
+- `tests/test_plants.py`: 27 tests — configs load and are self-consistent; DESIGN markers
+  present; determinism, band and sign of the volume error over 300 seeds; Dirichlet
+  centred and scattered; COD and N conservation of every catalogue entry (with a wrong
+  TKN shown to fail); bitwise CSTR reduction against `sim.adm1.simulate`; non-ideal
+  mixing shown to change the answer; analytical two-compartment tracer solution; fast-
+  exchange well-mixed limit (checks the shared headspace); 100-day runs of each plant
+  under a sampled truth inside the plausibility gate; Plant B high-TAN behaviour; no
+  file writes in the package.
+- 5 decision-log entries (mixing model, hidden-error distribution, feedstock catalogue and
+  sources per plant with the Muscatine caveats, gate reuse, parameter overrides).
+
+**100-day plausibility runs** (nominal feed, sampled truth seed 2026, extended model with
+SAO + ionic strength + calcite; gate: pH 6.5–7.8, CH₄ 0.55–0.72 dry, VFA 1–1000 g COD/m³,
+CH₄ yield 0.105–0.35 m³ STP per kg COD fed):
+
+| Plant | V declared / true (error) | Mixing β, φ, k_ex | T °C | Q m³/d / HRT d | OLR kg VS/m³/d / COD kg/m³/d | pH | CH₄ dry | VFA g COD/m³ | q_gas m³/d (BSM2 conv.) | q_CH₄ m³/d STP | CH₄ yield m³/kg COD | TAN g N/L | NH₃ mg N/L | I mol/L | X_caco3 kmol/m³ | BDF steps / wall |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| A | 650 / 576 (−11.4 %) | 0.057, 0.174, 0.84 | 41 | 16.5 / 39.4 | 1.46 / 1.91 | 7.45 | 0.598 | 141 | 582 | 280 | 0.226 | 1.58 | 52 | 0.203 | 0.0375 | 463 / 2.1 s |
+| B | 1836 / 1627 (−11.4 %) | 0.048, 0.106, 0.84 | 36 | 59.6 / 30.8 | 3.85 / 6.12 | 7.24 | 0.603 | 103 | 5382 | 2717 | 0.242 | 1.72 | 26 | 0.150 | 0.0091 | 411 / 2.3 s |
+| C | 3400 / 3012 (−11.4 %) | 0.029, 0.074, 1.03 | 35 | 170.0 / 20.0 | 1.52 / 2.31 | 7.27 | 0.657 | 133 | 2282 | 1259 | 0.160 | 1.33 | 20 | 0.134 | 0.0199 | 395 / 1.6 s |
+
+All inside the gate. Plant B's free ammonia sits at the acetoclastic `K_I_nh3`
+(25 mg N/L): inhibited, not soured. The same seed gives the same volume error on every
+plant because the priors are identical; the run harness will use per-plant seeds.
+
+**Blocked / open**
+
+- Domain review of every `# DESIGN` value (PR checklist). The two published numbers not
+  used as printed (Tisocco 2024 ESM `S_IN` of slurry; Tisocco 2026 NH₄-N of grass
+  silage) and the `N_I` overrides for Plants A and B need the reviewer's eye.
+- Plant B's high-nitrogen regime is limited by standard ADM1's `K_I_nh3`: a recipe much
+  richer than the nominal one sours within 100 days. Whether Plant B should declare an
+  acclimated (larger) `K_I_nh3` is a domain decision for the Level-5 scenario design.
+- SAO does not establish in any plant at the nominal HRTs (`X_sao` ≤ 1e-3 kg COD/m³),
+  consistent with the open item of the previous session (`k_m_sao`).
+- Not done (out of scope by design): the stochastic influent generator (batch
+  deliveries, weekend omission, seasonal drift, mis-logged masses), the observation
+  model, fault injection, the run harness that writes `runs/<id>/truth/`.
+
+**Next session should start on**
+
+1. Domain review and merge of the plants PR.
+2. Influent generator (§6.1) drawing from the feedstock catalogues: Plant A weekday
+   silage pattern (Tisocco 2024), Plant B/C delivery statistics from
+   `anchor/ingest_muscatine.py` (to be written: unit-explicit ingestion of LABS-raw and
+   SCADA-raw, then the §8 step-2 statistics).
+3. Run harness: seeds per (plant, scenario), truth written under `runs/<id>/truth/` only.
+4. Weinrich R3/R4 ports as fitted models.
+
+**Resource cost this session (rough)**
+
+| Item | Wall-clock | Disk | Notes |
+|---|---|---|---|
+| Session total | ≈ 2 h 30 min | — | one agent session; 4 vCPU container |
+| Reading (CLAUDE.md, proposal, decisions, anchor docs, sim/adm1 API) | ≈ 20 min | — | |
+| Source retrieval (Tisocco 2026 Table 1 via PMC; 2024 ESM PDF via Springer static content; Springer main text bot-walled) | ≈ 15 min | 1.3 MB scratch | pypdf in a throwaway venv (system `cryptography` is broken) |
+| Muscatine statistics (LABS-raw, 1,103 rows) | < 1 min | — | plain csv, no ingestion module yet |
+| Plant runs during development | ≈ 3 min compute | — | ≈ 2 s per 100-day two-zone run |
+| `tests/test_plants.py` | 7 s | — | 27 tests |
+| Full suite (`python -m pytest -q`) | ≈ 4.5 min per run, 1 run | — | dominated by the sample-and-hold ring test |
+| CI (GitHub Actions) | 3 jobs per push | — | |
+
+No LLM-agent compute inside the benchmark; development cost only.
+

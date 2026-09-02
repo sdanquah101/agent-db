@@ -44,8 +44,12 @@ Probes 1–2 and the 280-day BSM2 dynamic influent (`tests/test_adm1_ring.py`). 
 extensions — syntrophic acetate oxidation, Davies ionic-strength correction, the
 carbonate second dissociation and calcite precipitation — are declared as additional
 rows and switches in `configs/adm1/extensions.yaml` and compiled onto the base matrix by
-`sim/adm1/extensions.py` (`tests/test_adm1_extensions.py`). The three plants and the
-influent generator are not started.
+`sim/adm1/extensions.py` (`tests/test_adm1_extensions.py`). The three virtual plants
+(`sim/plants/`, `configs/plants/`) declare geometry, temperature control, operating
+envelope and a feedstock catalogue, and draw their hidden truth (active-volume error,
+mixing structure, true fractionations) by seed; the truth model runs under an
+active-zone/stagnant-zone/bypass mixing structure that reduces bitwise to the CSTR
+(`tests/test_plants.py`). The influent generator is not started.
 
 Real-data anchor (proposal §8): open datasets identified, characterised and, where
 openly licensed, fetched into `anchor/raw/` by `python -m anchor.fetch` from
