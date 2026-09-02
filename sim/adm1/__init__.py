@@ -6,6 +6,14 @@ rates and physico-chemistry are pure functions, and :func:`simulate` integrates 
 """
 
 from sim.adm1.defaults import load_matrix, load_parameters, load_plant, load_solver_config
+from sim.adm1.extensions import (
+    ExtendedModel,
+    ExtendedResult,
+    compile_extended,
+    extended_state,
+    load_extensions,
+    simulate_extended,
+)
 from sim.adm1.model import CompiledModel, compile_model, derived_quantities, rhs, simulate
 from sim.adm1.petersen import PetersenMatrix, compile_stoichiometry, conservation_residuals
 from sim.adm1.schema import (
@@ -28,20 +36,26 @@ __all__ = [
     "STATE_NAMES",
     "ADM1Parameters",
     "CompiledModel",
+    "ExtendedModel",
+    "ExtendedResult",
     "Influent",
     "PetersenMatrix",
     "PlantGeometry",
     "SimulationResult",
     "SolverConfig",
     "SolverStats",
+    "compile_extended",
     "compile_model",
     "compile_stoichiometry",
     "conservation_residuals",
     "derived_quantities",
+    "extended_state",
+    "load_extensions",
     "load_matrix",
     "load_parameters",
     "load_plant",
     "load_solver_config",
     "rhs",
     "simulate",
+    "simulate_extended",
 ]
