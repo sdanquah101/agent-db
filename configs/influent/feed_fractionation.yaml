@@ -237,9 +237,28 @@ feeds:
     description: >-
       Fats, oils and grease from grease-trap collection (Muscatine FOG_gal: received on
       764 of 1,103 days, mean 46.8 m3/d for two digesters, p95 117, max 212). Composition
-      not measured at Muscatine; assumed lipid-dominated.
+      not measured at Muscatine; assumed lipid-dominated. TS is now DERIVED FROM THE
+      ANCHOR'S OWN BIOGAS rather than assumed (see `ts`): FOG is over half of Plant B's
+      COD load, so its solids content is what sets whether Plant B reproduces Muscatine.
     density: 950.0               # DESIGN  kg/m3; assumed
-    ts: 0.10                     # DESIGN  kg TS/kg wet; assumed
+    ts: 0.020                    # DESIGN  kg TS/kg wet; ANCHOR-DERIVED (influent-generator
+                                 # session, 2026-09-02), replacing an assumed 0.10 that was
+                                 # never checked against the plant it anchors to. At 0.10 the
+                                 # declared median recipe delivers 10,965 kg COD/d into the
+                                 # 1,836 m3 digester (OLR 5.97 kg COD/m3/d), of which FOG alone
+                                 # is 5,813; the truth model then produces 4,395 m3/d of biogas
+                                 # against the 2,111 m3/d per digester the Muscatine daily file
+                                 # measures (Biogas mean 4,222 m3/d for two), and under the
+                                 # generator's day-to-day swings the digester COLLAPSES
+                                 # (pH 4.50, CH4 0.9 %, acetate 10 kg COD/m3 over 180 d).
+                                 # At 0.020 the same run sits at pH 6.93, CH4 67 %, biogas
+                                 # 2,582 m3/d (+22 % on the measured value, inside the
+                                 # uncertainty of the 62 % CH4 and 0.35 m3 CH4/kg COD used to
+                                 # convert it). 1.5-3 % TS is also what grease-trap pumpings
+                                 # are: mostly water. Enforced by
+                                 # tests/test_plausibility.py::test_plant_b_reproduces_the_measured_biogas.
+                                 # FLAGGED FOR THE LEAD: an order-of-magnitude change to a
+                                 # provisional assumed value, forced by the anchor.
     vs_of_ts: 0.95               # DESIGN  kg VS/kg TS; assumed
     inert_cod_equivalent: 1.42   # DESIGN  kg COD/kg VS mass; SLUDGE VALUE BY THE LEAD'S INSTRUCTION (freeze 2026-09-02): FOG's small inert residue is grease-trap solids, taken at the sludge-derived 1.42, an assumption
     cod_per_vs_literature: 2.80  # DESIGN  kg COD/kg VS; CHECK: FOG taken as ~95 % lipid by mass at the stoichiometric COD of triolein C57H104O6 (2.89 g COD/g) with the rest carbohydrate-like, i.e. 2.7-2.9 (the lead's range); PR #7's 2.75 came from treating the 0.85 lipid COD share as a mass share; the fractionation below derives 2.741 (-2.1 %) at this feed's inert equivalent of 1.42
@@ -254,7 +273,7 @@ feeds:
       f_vfa: 0.0
     fractionation_concentration: 60.0    # DESIGN  -; assumed
     tan: 0.0                     # DESIGN  kmol N/m3; assumed
-    tkn: 0.033                   # DESIGN  kmol N/m3; derived from the fractionation with inert_N_I (was 0.105 with the old split)
+    tkn: 0.0067                  # DESIGN  kmol N/m3; derived from the fractionation with inert_N_I at the anchor-derived TS (0.033 at the old 10 % TS)
     tkn_tolerance: 0.15          # DESIGN  -
     inert_N_I: 0.0015  # DESIGN  kmol N/kg COD; PR #7 Plant B override (see food_waste)
     s_ic: 0.0                    # DESIGN  kmol C/m3; PR #7 value, no note
