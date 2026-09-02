@@ -53,5 +53,27 @@ The virtual plants (`sim/plants/`, `configs/plants/`):
   truth extensions; and SAO takes over at Plant A's declared geometry and 40-d HRT
   within 180 d (the condition of the SAO-scenario decision; provisional feed TAN).
 
+- `test_mixing.py` — the parked two-zone imperfect-mixing model
+  (`sim/plants/mixing.py`, the Level-6 truth variant, not the plant contract): bitwise
+  reduction to `simulate` (no extensions) and `simulate_extended` (all four) at
+  β = φ = 0, with a non-ideal structure shown to change the answer; the analytical
+  two-compartment tracer solution on S_cat; the fast-exchange well-mixed limit (which
+  also checks the stagnant zone's gas reaches the shared headspace); the plant contract
+  asserted CSTR-only (schema, YAMLs, package API); a plant's true geometry compiles
+  under the structure.
+
+The influent generator (`sim/influent/`, `configs/influent/`):
+
+- `test_influent.py` — the provisional feed-fractionation catalogue loads, covers every
+  frozen plant feed with the right kind, and has every numeric leaf marked `# DESIGN`;
+  units in every numeric field; the seeded true-fractionation draw is deterministic,
+  order-independent, sums to one and keeps catalogue zeros (200 seeds), and is centred
+  on the catalogue with the declared Dirichlet spread; the influent builder is
+  flow-weighted and COD-consistent, the true fractionation conserves COD, the plant
+  recipes reproduce the declared feed flows and Plant A's OLR lands in Tisocco's range;
+  every entry's TKN is consistent with the ADM1 N contents under its own inert N and the
+  non-sludge entries are shown inconsistent under BSM2's; nothing under `sim/influent`
+  or `sim/plants` writes files or references `truth/`.
+
 `conftest.py` provides the default configuration, the Rosen & Jeppsson (2006) initial
 state and the probe-definition module as fixtures.

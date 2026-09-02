@@ -800,3 +800,165 @@ free ammonia stays null until it is; both are marked with the reason.
    acetoclastic constant of 0.0018 kmol N m⁻³ that the base model keeps is the
    *unadapted* value, which is what makes the acetoclastic pathway collapse under
    Plant A's ammonia in the truth model and gives the SAO scenario its signature.
+
+**Addendum (salvage session, later the same day).** The lead re-sent the envelope with
+PR #8's review. It is identical, field for field, to the block already in
+`configs/plant_a_statistics.yaml` (checked by parsing both through `AmmoniaEnvelope`),
+so the file is unchanged, pH and free ammonia stay null with their stated reasons, and
+decisions 1 and 3 above are re-affirmed as the lead's. `test_sao_establishes_at_plant_a`
+reads the TAN midpoint from the file and carries no envelope literal. The "pending"
+item of the salvage session is closed.
+
+---
+
+## 2026-09-02 — Duplicate plant layer — salvage from PR #7 into the #6 contract
+
+**What happened.** Two sessions built the plant layer in parallel. PR #6
+(`claude/milestone-2-plant-configs`, merged at 5237ac7) went through the lead's seven
+answers and is the design authority: ideal CSTR in the plant contract, imperfect mixing
+as a Level-6 truth variant, Plant B as Muscatine co-digestion, ammonia scenarios on
+Plant A, `k_m_sao` 4.0, the feed catalogue as identity and delivery pattern only with
+fractionation deferred to the influent generator. PR #7 (`claude/milestone-2-plants`,
+draft, never merged) carried a different schema (`PlantDeclared` / `PlantTruth`) with its
+own plant YAMLs, a hidden-volume sampler, a 100-day plausibility table, and three pieces
+of engineering the lead wanted kept.
+
+**Decision (by the lead; executed by this session).** No design re-decision: every value
+frozen in #6 stands. One PR salvages from #7, adapted to #6's schema, and #7 is closed.
+
+*Kept, and where it went.*
+
+1. **Seeded true per-feed COD fractionation** (`sim/plants/sampling.py` →
+   `sim/influent/fractionation.py`). Dirichlet draw around the catalogue fractionation
+   with the feed's declared concentration `κ` (`sd_i ≈ √(m_i(1−m_i)/(κ+1))`); catalogue
+   zeros stay zero; one `numpy.random.default_rng(seed)` stream consumed in sorted
+   feed-id order, so the draw for a feed does not depend on which other feeds are listed
+   (tested). Returns a `TrueFractionations` object (hidden truth); writes nothing.
+2. **Feed catalogue → 26-state ADM1 influent** (`sim/plants/feed.py` →
+   `sim/influent/mapping.py`). Total COD = TS × VS/TS × COD/VS; the six-way split feeds
+   `X_ch`/`X_pr`/`X_li` directly (no composite), inerts to `X_I`/`S_I`, VFA to `S_ac`;
+   dissolved species flow-weighted; OLR and COD loading; TKN implied by the
+   fractionation and the ADM1 N contents (`N_aa` on proteins, `N_I` on inerts) checked
+   against the declared TKN. Recipes stay in kg wet/d because the frozen contract reports
+   silage by fresh mass; `nominal_mass_rates` converts a `PlantConfig`'s feed medians.
+   The catalogue values themselves are a **separate declared-data file**,
+   `configs/influent/feed_fractionation.yaml`, keyed by the #6 feed ids (`hsw_liquid` →
+   `high_strength_waste`, `twas` → `thickened_was`), every value `# DESIGN` and
+   `status: provisional` (next entry).
+3. **Two-zone mixing structure** (`sim/plants/reactor.py` → `sim/plants/mixing.py`,
+   *parked*). Active zone `V(1−φ)`, stagnant zone `Vφ` exchanging at `k_ex V_stag` with
+   full biochemistry and gas transfer into the shared headspace, bypass `β` of the
+   influent to the effluent. Compiled on a `PlantGeometry` (the true active volume from
+   `sim.plants.true_geometry`) instead of #7's `PlantDeclared`/`PlantTruth`. Reduces bit
+   for bit to `sim.adm1.simulate` (no extensions) and to `simulate_extended` (all four)
+   at `β = φ = 0`; verified against the analytical two-compartment tracer solution on
+   `S_cat` and the fast-exchange well-mixed limit (which also checks the stagnant zone's
+   gas reaches the headspace). #7's reasoning for this structure over tanks-in-series is
+   kept as the record: tracer studies of full-scale digesters report non-effective volume
+   (22 % in Capela et al. 2009; 75 % in Monteith & Stephenson 1978) and short-circuiting
+   (up to 61 % of flow in the latter), and the Level-6 scenario needs a load-dependent
+   residual; tanks-in-series moves the RTD towards plug flow, less dispersion than a
+   CSTR. The module docstring states it is not part of the plant contract; `PlantConfig`
+   carries no mixing parameters and the tests assert the YAMLs never will. #7's
+   `mixing_prior` bands (bypass 1–10 %, stagnant 3–30 %, exchange 0.2–2 d⁻¹) are **not**
+   carried: they belong to the fault-injection scenario definition, not to a plant.
+
+*Dropped.* `PlantDeclared`/`PlantTruth` and #7's plant YAMLs (their content is #6's,
+with different numbers for Plant B's feeds and C's geometry); the hidden-volume sampler
+(#6 has `sample_hidden_geometry`); the 100-day plausibility table and its methane-yield
+gate (needs #7's recipes and per-plant parameter overrides, neither in the contract);
+`apply_parameter_overrides` and the `parameter_overrides` field (the per-plant `N_I`
+override is recorded per feed as `inert_N_I`; decided the same day, see the inert-nitrogen entry); #7's
+`plant_a_statistics.yaml` (T2026 Table 1 transcription; #6's file has a `todo` for it
+and the values live in the catalogue descriptions); the `dilution_water` pseudo-feed;
+tests that duplicate #6's (config loading, hidden-volume determinism and bounds). The
+"never writes files" AST check is kept and now covers `sim/plants` and `sim/influent`.
+
+**Alternatives.** Merge both branches (rejected: two schemas for one contract, and #7's
+Plant B contradicts answer 3); drop #7 entirely (rejected: the fractionation sampler, the
+influent mapping and the verified mixing structure are the next milestone's work and
+were already tested); re-run #7's plausibility table on the #6 plants (rejected: it
+depends on provisional fractionation values and on `N_I` overrides the lead has not
+approved; it returns with the influent generator).
+
+---
+
+## 2026-09-02 — Feed fractionation values are provisional pending lead review
+
+**Decision.** `configs/influent/feed_fractionation.yaml` carries PR #7's per-feed
+composition (TS, VS/TS, COD/VS, six-way COD fractionation, Dirichlet concentration,
+TAN, TKN, inorganic C, strong ions, calcium) for cattle slurry, grass silage, food waste,
+high-strength waste, FOG, primary sludge and thickened WAS, with #7's citations and
+"assumed" notes verbatim and nothing added or re-derived. Every entry is
+`status: provisional` and every numeric leaf `# DESIGN`. The lead's answer 7 (#6)
+deliberately deferred these numbers, so they are **not frozen**; the schema will accept
+no other status until the lead reviews them, at which point the reviewed entries become
+`frozen` by a decision here.
+
+**What the lead is asked to review (summary; sources per value in the YAML).**
+
+| Feed (kind) | Fractionation ch/pr/li/xi/si/vfa | κ | Basis |
+|---|---|---|---|
+| cattle_slurry (slurry) | 0.34/0.17/0.13/0.22/0.02/0.12 | 150 | Tisocco 2026 Table 1 (TS, VS, XC/XP/XL, NH₄-N, VFA, DQ_XC 69 %); inerts and solubles assumed |
+| grass_silage (silage) | 0.327/0.148/0.075/0.25/0/0.20 | 100 | Tisocco 2026 Table 1; inert share from BMP over theoretical (Amon 2007, assumed 25 %); TAN **assumed** 10 % of crude-protein N because the table's 7.28 g/L cannot be per kg FM |
+| food_waste (food_waste) | 0.36/0.16/0.25/0.17/0.02/0.04 | 40 | Zhang 2007, Fisgativa 2016, Bong 2018; no frozen plant uses it |
+| high_strength_waste (hsw) | 0.20/0.10/0.55/0.08/0.02/0.05 | 30 | Muscatine COD 137.6 g/L and VS 6.16 % w/w measured; split assumed from COD/VS 2.23 |
+| fog (fog) | 0.05/0.05/0.85/0.04/0.01/0 | 60 | all assumed (lipid-dominated); Muscatine delivery statistics only |
+| primary_sludge (primary_sludge) | 0.15/0.25/0.15/0.40/0.02/0.03 | 200 | Muscatine VS 3.0 % w/w; split of the BSM2 influent's COD shares assumed |
+| thickened_was (thickened_was) | 0.05/0.45/0.05/0.44/0.01/0 | 300 | Muscatine VS 3.09 % w/w; BSM2 split assumed, biomass COD/VS 1.42 |
+
+**The inert-nitrogen question, carried as data rather than decided.** #7 found that the
+BSM2 `N_I` (0.06 g N/g COD, derived for sludge inerts) over-counts the nitrogen of
+lignocellulosic and food-waste inerts several-fold (grass silage: 11 g N/L implied
+against 6.6 g N/L from crude protein and ammonia) and applied per-plant overrides
+(A 0.001, B 0.0015 kmol N/kg COD) as a declared `PlantDeclared` field. The frozen
+`PlantConfig` has no override field and this PR adds none. Each catalogue entry records
+`inert_N_I`, the inert N under which its declared TKN is consistent with the
+ADM1 N contents (tested: every entry consistent under its own value; the five
+non-sludge entries inconsistent under BSM2's). *Decided the same day with the PR #8
+review* (entry "Per-feed inert nitrogen in the truth model"): the truth model applies
+the per-feed values, the fitted model keeps the ADM1 default, intentionally.
+
+**Alternatives.** Leave the numbers out until the lead supplies them (rejected: the
+mapping and the sampler need a catalogue to be tested against, and #7's sourced values
+are better than placeholders); merge them into `configs/plants` (rejected: the frozen
+contract keeps fractionation out of the plant files); mark them frozen because they
+carry citations (rejected: most of the inert/soluble/ion values are explicitly assumed).
+
+---
+
+## 2026-09-02 — Per-feed inert nitrogen in the truth model; the fitted model keeps the ADM1 default (intentional mismatch)
+
+**Decision (by the lead, with PR #8's review).** The truth model applies the per-feed
+inert nitrogen content `inert_N_I` of `configs/influent/feed_fractionation.yaml`
+(kmol N per kg COD of `X_I`/`S_I`: 0.001 for cattle slurry and grass silage, 0.0015 for
+food waste, high-strength waste and FOG, the BSM2 0.06/14 = 0.00429 for primary sludge
+and thickened WAS, all provisional with the rest of the catalogue). The fitted model
+(standard ADM1) keeps the ADM1 default `N_I` for every plant. The gap is **deliberate**:
+a small, real structural mismatch of exactly the kind the benchmark exists to expose
+(proposal §6.1, "the fitted model is structurally wrong by design"). Nobody should
+later "fix" it by aligning the two values; a scenario that wants them aligned says so.
+
+**Reason.** ADM1's default is a sewage-sludge value (Batstone et al. 2002); the inerts
+of lignocellulosic feeds and food waste carry much less nitrogen, and the truth model
+should be as realistic as the data allow. With the default, the ADM1-implied TKN of
+grass silage is 11 g N/L against the 6.6 g N/L its crude protein and ammonia give
+(tested in `tests/test_influent.py`: every catalogue entry is consistent under its own
+value, the five non-sludge entries inconsistent under the default). PR #7 had reached
+the same numbers but applied them as a plant-level parameter override visible to
+workflows; that field is not in the frozen contract and is not added.
+
+**Implementation (influent-generator session, not this PR).** ADM1 carries one `N_I`
+per reactor, so "per feed" means: the truth model's `N_I` is the COD-weighted mean of
+the `inert_N_I` of the feeds actually fed (recomputed when the recipe changes, i.e. a
+plant-level truth parameter derived from the catalogue, never a workflow-visible
+config), and the TKN the influent generator reports as a "routine assay" is the one
+implied by the per-feed values. The fitted model's parameter file stays the BSM2 set.
+Which quantities a workflow may see (feed TKN yes; the truth `N_I` no) follows CLAUDE.md
+rule 1 as for any other hidden truth.
+
+**Alternatives.** Per-plant override visible to workflows (PR #7; rejected: makes the
+modeller's prior carry the truth's value, removing the mismatch); a per-feed inert
+component in the state vector (rejected for Phase 1: adds states for a bookkeeping
+quantity); keep the ADM1 default in the truth too and loosen `tkn_tolerance` (rejected
+by the lead: hides a real factor-of-several nitrogen error behind a tolerance).

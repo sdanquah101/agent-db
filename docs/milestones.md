@@ -388,3 +388,80 @@ branch, since PR #5 was not yet merged).**
 | Code + tests + docs | ≈ 35 min | — | 2 fast test runs, 1 full run |
 
 No LLM-agent compute inside the benchmark; development cost only.
+
+### Session 2026-09-02 (fifth session) — salvage from PR #7 into the #6 contract
+
+PR #6 merged (5237ac7). A parallel session had built a second plant layer (PR #7, draft,
+different schema); the lead kept #6 as the design authority and asked for #7's
+engineering to be salvaged with no design re-decision (`docs/decisions.md`, "Duplicate
+plant layer — salvage"). Branch `claude/milestone-2-salvage-pr7` from `main`; PR #7
+closed as superseded.
+
+**Done**
+
+- `sim/influent/` (new package; the home of the §6.1 influent generator, whose
+  stochastic dynamics are a later session): `schema.py` (`CODFractionation`,
+  `FeedFractionation` keyed by the plants' feed ids with kind cross-check, units on every
+  field), `fractionation.py` (seeded Dirichlet draw of the hidden true fractionation,
+  one `default_rng(seed)` stream in sorted feed order, order-independent and
+  deterministic), `mapping.py` (recipe → 26-state ADM1 influent, flow-weighted; OLR and
+  COD loading; TKN implied vs declared; `nominal_mass_rates` from a `PlantConfig`),
+  `defaults.py` (loader).
+- `configs/influent/feed_fractionation.yaml`: PR #7's seven feed compositions with
+  their sources and "assumed" notes verbatim, every value `# DESIGN` and
+  `status: provisional` (decisions log, "Feed fractionation values are provisional").
+  The plant-level `N_I` override #7 used is recorded per feed as
+  `inert_N_I`, not applied anywhere.
+- `sim/plants/mixing.py` (parked): the two-zone imperfect-mixing structure from #7's
+  `reactor.py`, compiled on a `PlantGeometry` (true volume from `true_geometry`); the
+  Level-6 truth variant for the fault-injection API, not part of the plant contract.
+  Bitwise reduction to `simulate` and `simulate_extended` at β = φ = 0; analytical
+  tracer solution; fast-exchange limit (gas bookkeeping); the contract is asserted to
+  stay CSTR-only.
+- Tests: `tests/test_influent.py` (14) and `tests/test_mixing.py` (7), 21 new; full suite
+  162 passed (see the resource table). Duplicates of #6's tests dropped.
+- Not carried from #7: `PlantDeclared`/`PlantTruth`, its plant YAMLs, hidden-volume
+  sampler, 100-day plausibility table, parameter-override field, `dilution_water`.
+
+**Blocked / open**
+
+- ~~Pending: Plant A ammonia envelope from the lead~~ **Resolved with the PR #8
+  review**: the lead's envelope is identical to the block PR #6 committed
+  (`configs/plant_a_statistics.yaml` unchanged; addendum in `docs/decisions.md`).
+  `test_sao_establishes_at_plant_a` reads the TAN midpoint from the file and carries
+  no envelope literal.
+- The catalogue values are provisional; the influent generator cannot be frozen until
+  the lead reviews them. A first read against Tisocco 2026 Table 1 and the sludge/FOG
+  literature is posted on PR #8: the fractionations and the declared COD/VS are not
+  mutually consistent for high-strength waste (−20 %), primary sludge (−15 %) and FOG
+  (−12 %), and the cattle-slurry inert share (0.24) is at the degradable end of the
+  literature; to settle at the freeze.
+- **Inert nitrogen decided** (lead, `docs/decisions.md` "Per-feed inert nitrogen in the
+  truth model"): the truth model applies the per-feed `inert_N_I`, the fitted model keeps
+  the ADM1 default, an intentional structural mismatch. Implementation belongs to the
+  influent-generator session.
+- The 100-day plant plausibility check of #7 returns with the influent generator, once
+  the recipes and the `N_I` question are settled.
+
+**Next session should start on**
+
+1. Influent generator dynamics (§6.1) on `sim/influent`: delivery process from the
+   `FeedStream` schedules and `zero_days_fraction`, assay noise and lag, seasonal drift,
+   mis-logged deliveries; `anchor/ingest_muscatine.py` for the B/C statistics. In the
+   same session, implement the per-feed inert nitrogen in the truth model (COD-weighted
+   `inert_N_I` of the fed feeds as a hidden truth parameter; fitted model unchanged) and
+   settle the COD/VS-vs-fractionation consistency of the catalogue with the lead.
+3. Fault-injection API; the imperfect-mixing scenario picks up `sim/plants/mixing.py`
+   and owns the `(β, φ, k_ex)` distribution that #7 had as a plant prior.
+4. Weinrich R3/R4 ports as fitted models.
+
+**Resource cost this session (rough)**
+
+| Item | Wall-clock | Disk | Notes |
+|---|---|---|---|
+| Reading #6, #7, decisions, proposal | ≈ 15 min | — | |
+| Code + tests + docs | ≈ 40 min | — | 2 fast runs of the new tests (≈ 2 s), 1 full run |
+| Review round (envelope check, inert-N decision, composition read) | ≈ 20 min | — | 1 fast run, 1 full run |
+| Full suite (`pytest -q`) | ≈ 2 min 40 s, 162 passed | — | dominated by the sample-and-hold ring test, as before |
+
+No LLM-agent compute inside the benchmark; development cost only.

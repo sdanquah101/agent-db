@@ -6,6 +6,10 @@ run from an explicit seed (CLAUDE.md rule 4); the run layer writes it to
 ``runs/<id>/truth/``. :func:`declared_geometry` and :func:`true_geometry` produce the
 :class:`~sim.adm1.schema.PlantGeometry` the ADM1 model takes, from the declared and the
 true active volume respectively.
+
+:mod:`sim.plants.mixing` is *parked* and not part of this API: it implements the two-zone
+imperfect-mixing truth variant of the Level-6 scenario for the fault-injection API. The
+plant contract itself is an ideal CSTR (lead's decision 2026-09-02, answer 6).
 """
 
 from __future__ import annotations
