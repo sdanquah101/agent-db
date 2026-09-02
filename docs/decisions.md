@@ -111,9 +111,39 @@ constant feed isolates numerics from input handling).
 
 ## 2026-09-02 — Base ADM1 implementation for the truth model
 
-See `docs/adm1_comparison.md` for the evidence. **Recommendation, pending domain
-sign-off before Milestone 2:** build the truth model as our own Petersen-matrix ADM1
-in `sim/`, validated against bsm2-python and ADM1F (which agree to three significant
-figures), taking QSDsan's `ADM1`/`ADM1p` process definitions as the structural
-reference for how to express ionic speciation and precipitation as additional rows
-of the same matrix. This is a *recommendation*, not a decision, until reviewed.
+**Decision (accepted by the lead, 2026-09-02).** Build our own Petersen-matrix ADM1 in
+`sim/`, ring-tested continuously against **bsm2-python as the primary oracle** and
+against the other probed implementations (ADM1F standard variant, PyADM1, QSDsan) as
+secondary checks. Evidence in `docs/adm1_comparison.md`.
+
+**Conditions.**
+
+1. **Time-boxed to Milestone 2 (weeks 3–6).** The acceptance test is agreement with
+   bsm2-python to 3 significant figures on Probe 1, Probe 2 *and* the BSM2 dynamic
+   influent case (the 15-minute `digester_influent.csv` time series that PyADM1 ships,
+   Q ≈ 178 m³ d⁻¹ varying). If that is not met by the end of week 6, we **fall back to
+   a fork of bsm2-python** and add SAO, ionic-strength correction and the precipitation
+   sink there.
+2. **QSDsan / ADM1p is an equation reference only.** Its Petersen matrix
+   (`process_data/_adm1.tsv`) and `_adm1_p_extension.py` are read for stoichiometry,
+   speciation and precipitation formulations; QSDsan is **never a dependency** of this
+   repository.
+3. **Weinrich ADM1-R3 and R4 are ported from the published equations** (Weinrich &
+   Nelles 2021, and the model-structure/parameter PDFs in the MIT-licensed repository)
+   as the *fitted* models, and validated against the figures in Weinrich & Nelles 2021.
+
+**Reason.** Four independent implementations agree to 3 s.f., so correctness of a
+re-implementation can be established by ring tests; the three required extensions are
+rows in a matrix model but hand edits in every hand-expanded port; QSDsan's model layer
+is right but its simulation layer (global flowsheet state, ≈ 1 GB dependencies) is
+incompatible with the pure-function registry (CLAUDE.md rule 2) and the deployability
+constraint (proposal §2); ADM1F's toolchain is disproportionate and its default build is
+a modified model.
+
+**Alternatives.** Adopt bsm2-python directly (kept as the fallback); adopt QSDsan
+(rejected: dependency footprint and framework state); adopt ADM1F (rejected: toolchain,
+build, default variant); port Weinrich R3/R4 as the *truth* model (rejected: too
+simplified to carry SAO/ionic strength/precipitation).
+
+**Not re-run now.** Probe 1 is not re-run with the BSM2 dynamic influent at this
+milestone; that case is added to the Milestone-2 ring test instead.

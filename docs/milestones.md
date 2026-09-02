@@ -31,13 +31,15 @@ Exit criterion: stiffness tests pass; licence cleared; anchor dataset(s) chosen.
   figures on both probes; recommendation written up with reasons.
 - `docs/decisions.md` (eight entries), `README.md`.
 
+**Decided at end of session**
+
+- ADM1 recommendation **accepted** by the lead with three conditions (time-box to
+  weeks 3–6 with a bsm2-python-fork fallback; QSDsan/ADM1p as equation reference only,
+  never a dependency; Weinrich R3/R4 ported from the published equations as fitted
+  models). Recorded in `docs/decisions.md`.
+
 **Blocked / open**
 
-- **Domain sign-off on the ADM1 recommendation** (`docs/adm1_comparison.md` §6) is
-  required before Milestone 2 starts. The recommendation is to write our own
-  Petersen-matrix ADM1 in `sim/`, validated against bsm2-python and ADM1F, using
-  QSDsan's `ADM1`/`ADM1p` process definitions as the structural reference for the
-  SAO / ionic-strength / precipitation extensions.
 - **Open datasets not yet identified** (second half of the Milestone-1 exit criterion,
   proposal §8). Not started this session.
 - ADM1F could not be built as its README describes (PETSc external downloads are
@@ -47,14 +49,16 @@ Exit criterion: stiffness tests pass; licence cleared; anchor dataset(s) chosen.
 
 **Next session should start on**
 
-1. Get the ADM1 recommendation reviewed; record the decision in `docs/decisions.md`.
-2. Anchor-dataset search (§8): Tisocco et al. co-digestion data, Weinrich-group
+1. Anchor-dataset search (§8): Tisocco et al. co-digestion data, Weinrich-group
    agricultural plant data, Zenodo/Mendeley AD time series; record candidates and
-   licences.
-3. If the recommendation is accepted: `sim/adm1/` skeleton — state vector, Petersen
-   matrix as data (`configs/`), rate function, gas phase, algebraic pH — with a
-   ring test against `scripts/adm1_candidates/results/bsm2python.json` and
-   `adm1f.json` as the first `tests/` for `sim/`.
+   licences. This closes Milestone 1.
+2. Milestone 2 — `sim/adm1/` skeleton: state vector, Petersen matrix as data
+   (`configs/`), rate function, gas phase, algebraic pH; ring test against
+   `scripts/adm1_candidates/results/bsm2python.json` (primary oracle) and
+   `adm1f.json` on Probes 1 and 2, **plus the BSM2 dynamic influent case** (add a
+   bsm2-python probe run on PyADM1's `digester_influent.csv` to the harness first, so
+   the oracle values are recorded). Acceptance: 3 s.f. agreement on all three by end of
+   week 6, else fall back to a bsm2-python fork.
 
 **Resource cost this session (rough)**
 

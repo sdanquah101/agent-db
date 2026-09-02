@@ -1,6 +1,7 @@
 # ADM1 base-implementation comparison (Milestone 1, Task A)
 
-**Status: recommendation — requires domain sign-off before Milestone 2.**
+**Status: recommendation in §6 accepted by the lead on 2026-09-02, with conditions; see
+`docs/decisions.md` ("Base ADM1 implementation for the truth model").**
 Session 2026-09-02. Harness and raw records: `scripts/adm1_candidates/` (`results/*.json`).
 Environment: Ubuntu 24.04 container, 4 vCPU, Python 3.11.15, numpy 2.4.6, scipy 1.17.1.
 
