@@ -344,14 +344,25 @@ PR #4 merged (07a7fae). The lead's three follow-ups were done on a branch from `
 - Plant A's TAN/pH envelope is not yet in the repository; it is needed both for the
   influent generator and for the SAO-establishment condition.
 
+**Plant configurations A/B/C — proposed in a draft PR (branch from the follow-ups
+branch, since PR #5 was not yet merged).**
+
+- `sim/plants/schema.py` (declared plant contract with units and sources; hidden
+  active-volume error as a distribution), `sim/plants/__init__.py` (loader, seeded
+  sampling of the hidden geometry, declared vs true `PlantGeometry`),
+  `configs/plants/plant_{A,B,C}.yaml`, `configs/plant_a_statistics.yaml` (Tisocco
+  envelopes as recorded; untranscribed fields null with `todo`),
+  `scripts/plant_a_sao_probe.py`, `tests/test_plants.py` (9 tests; B/C statistics
+  re-derived from the committed Muscatine file).
+- Seven open design questions are listed in `docs/decisions.md` ("Plant configurations
+  A/B/C — proposed"); the first (SAO cannot establish at Plant A's 28-d HRT with the
+  current kinetics) blocks the SAO scenario.
+
 **Next session should start on**
 
-1. **Plant configurations A/B/C** (`sim/plants/`, `configs/plant_*.yaml`,
-   `configs/plant_a_statistics.yaml`): geometry, temperature, HRT envelope, feed
-   definitions, which extensions each plant's truth model enables, and the SAO
-   establishment check for Plant A. This PR has design content: flag it to the lead
-   before freezing anything.
-2. Influent generator (§6.1) with `anchor/ingest_muscatine.py` for Plants B/C.
+1. The lead's answers to the plant-configuration questions, then freeze the configs.
+2. Influent generator (§6.1) with `anchor/ingest_muscatine.py` for Plants B/C and the
+   Tisocco feedstock tables for Plant A.
 3. Weinrich R3/R4 ports as fitted models.
 
 **Resource cost this session (rough)**

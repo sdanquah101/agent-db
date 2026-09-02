@@ -658,3 +658,74 @@ scenario); put it on Plant C (rejected: same ammonia argument as B).
 adds a rate constant no scenario needs; the flag makes the omission visible); keep
 K_sp as a 25 °C config constant (rejected: a 70 % error in K_sp at 55 °C for Plant A's
 thermophilic sibling would be a silent unit-like choice).
+
+---
+
+## 2026-09-02 — Plant configurations A/B/C — **proposed, not frozen** (design content for the lead)
+
+**Proposal.** A plant is a *declared* configuration (`configs/plants/plant_<id>.yaml`,
+schema `sim/plants/schema.py`) that a workflow may read — geometry, set points, feed
+catalogue, anchoring — plus *distributions* for what the operator does not know; the
+realisation of those (the hidden active-volume error) is sampled per run from an
+explicit seed (`sim.plants.sample_hidden_geometry`) and is hidden truth. Every
+dataset-anchored number carries its source and is re-derived from the committed
+Muscatine daily file by `tests/test_plants.py`, so the configs cannot drift from the
+data they claim to summarise.
+
+| | Plant A | Plant B | Plant C |
+|---|---|---|---|
+| Domain | slurry + grass silage, 41 °C | sludge + HSW + FOG co-digestion, 35.3 °C, load swings | sludge streams only, 35.3 °C, steady |
+| Anchoring | statistics (Tisocco 2024/2026) | dataset (Muscatine) | dataset (Muscatine) |
+| Modelled unit | AFBI heated primary, 650 m³ | one of two 1,836 m³ digesters, half the plant feed | the same digester, sludge feeds only |
+| Feed (median, p10–p90) | 16.5 (13–20) m³ d⁻¹ from the paper's ranges | 94 (49–145) m³ d⁻¹ | 48 (31–69) m³ d⁻¹ |
+| HRT | 28 d as published (see question 2) | 19.5 (12.6–37.6) d; plant SRT 22 (16–35) d | 38 (27–60) d |
+| Hidden active volume | ±5–15 %, sign random | same | same |
+| Mixing | ideal CSTR | ideal CSTR | ideal CSTR |
+| Truth extensions | all four | all four | all four |
+| Scenarios | Levels 2–5 at Tier A **plus the SAO structural scenarios**, reported separately | full factorial; precipitation and ionic-strength structural scenarios | full factorial; same |
+
+**Decided by earlier entries and applied here.** Plants B and C dataset-anchored,
+Plant A statistics-anchored and outside the factorial (2026-09-02); the SAO Level-6
+scenario on Plant A (2026-09-02).
+
+**Open design questions, in the order they block work.**
+
+1. **SAO establishment at Plant A.** At the published 28-d HRT and 41 °C the truth
+   model with the current SAO kinetics (μ_max 0.08 d⁻¹, decay 0.02 d⁻¹,
+   `K_I_nh3_sao` 0.05) does not establish SAO: over 400 d a 0.05 kg COD m⁻³ seed
+   grows to 0.06–0.11 and removes under 5 % of the acetate at feed TAN of 1.4–2.8
+   g N L⁻¹ (`scripts/plant_a_sao_probe.py`, ADM1 STR feed). At 35 d it grows 4–6×; at
+   45 d it removes 40–80 % of the acetate. Options: (a) `k_m_sao` at the literature's
+   fast end (generation 3–5 d, μ_max 0.14–0.23 d⁻¹, Westerholm et al. 2019), (b) run
+   the SAO scenario at the long end of Plant A's HRT envelope, (c) accept a slow,
+   partial takeover as the scenario's signature. Recommendation: (a) with (b) as the
+   check, because the 2019 growth data are the better-documented number and the SAO
+   scenario must produce a persistent structured residual within a 180-d scenario.
+2. **Plant A hydraulics.** The paper's numbers disagree: 650 m³ at 13–20 m³ d⁻¹ gives
+   32–50 d, not the stated 28 d. The config carries both with a wide consistency
+   tolerance; the simulator must honour one.
+3. **Plant B's character.** Proposal §6.1 calls B a "food-waste digester, high
+   nitrogen". The data B is anchored to are municipal sludge with industrial organic
+   waste and FOG at low ammonia. The config describes what the data show and drops the
+   high-nitrogen claim; the proposal text needs the lead's edit, and the high-ammonia
+   domain lives on Plant A.
+4. **Plant C's definition.** Proposed as the same digester with only its sludge streams
+   (HRT 38 d), which keeps every number traceable but is longer-loaded than typical
+   municipal practice (15–25 d). Alternative: an independent sewage-sludge plant with
+   assumed geometry, which would not be dataset-anchored.
+5. **Headspace volumes** are assumed at 10 % of the liquid volume for all three plants
+   (not reported by any source).
+6. **Mixing.** Ideal CSTR everywhere, the dead volume carried by the hidden
+   active-volume error; a tanks-in-series RTD is in the schema but unused until a
+   scenario needs imperfect mixing.
+7. **Plant A's TAN/pH/VFA envelope** is not yet transcribed from the Tisocco tables
+   (`configs/plant_a_statistics.yaml` carries nulls with `todo` markers, none filled
+   from memory).
+
+**What is deliberately not here.** Feed COD fractionation, assay statistics, seasonal
+drift and delivery irregularity (influent generator, §6.1); sensor models (observation
+model); the run layer that writes the sampled hidden geometry to `runs/<id>/truth/`.
+
+**Alternatives.** One shared plant schema with per-plant overrides (rejected: each
+plant's provenance is different and should be readable on its own); put the hidden
+error realisation in the config (rejected: CLAUDE.md rule 1).

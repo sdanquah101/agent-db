@@ -23,3 +23,12 @@ is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
   1982 at T_op, in code, not a parameter). `shared_parameters` holds constants used by
   more than one extension (pK_a2). Loaded by `sim.adm1.load_extensions`; each extension
   is switchable independently.
+- `plants/plant_{A,B,C}.yaml` — the three virtual plants as *declared* to workflows
+  (schema `sim/plants/schema.py`): geometry, temperature, feed catalogue, hydraulics,
+  anchoring with sources, truth-model extensions, scenario subset, and the
+  *distribution* of the hidden active-volume error (its realisation is sampled per run
+  and is hidden truth). B and C are re-derived from the Muscatine daily file by
+  `tests/test_plants.py`. Proposed, not frozen (decisions log 2026-09-02).
+- `plant_a_statistics.yaml` — the published operating envelopes Plant A is anchored to
+  (Tisocco et al. 2024, 2026), with `todo` nulls where the tables are not yet
+  transcribed.
