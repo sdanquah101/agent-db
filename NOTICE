@@ -6,3 +6,8 @@ Licensed under the Apache License, Version 2.0 (see LICENSE).
 Scenario definitions (scenarios/), benchmark results and figures published from this
 repository are released under Creative Commons Attribution 4.0 International
 (CC-BY-4.0): https://creativecommons.org/licenses/by/4.0/
+
+Third-party data redistributed under anchor/raw/ keeps its own licence, recorded per
+file in anchor/MANIFEST.json and in an ATTRIBUTION.md beside the files. Currently:
+anchor/raw/iowa-muscatine-wrrf/ — Schroer & Just (2024), University of Iowa,
+https://doi.org/10.25820/data.006715, Open Data Commons Attribution License v1.0.
