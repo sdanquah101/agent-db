@@ -43,8 +43,9 @@ is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
   weekday / Markov), the lognormal AR(1) amount with its seasonal term, the moisture
   AR(1), unrecorded-delivery and mis-log rates, the assay schedule; and the shared assay
   noise and lag. Plant B/C values are re-derived from the Muscatine daily file by
-  `tests/test_generator.py` through `anchor/ingest_muscatine.py`; assumed values are
-  marked `ASSUMED`. Loaded by `sim.influent.load_generator_config`.
+  `tests/test_generator.py` through `anchor/ingest_muscatine.py` (seasonal amplitudes
+  are bounded by the monthly-mean statistic rather than equal to it); assumed values
+  are marked `ASSUMED`. Loaded by `sim.influent.load_generator_config`.
 - `plant_a_statistics.yaml` — the published operating envelopes Plant A is anchored to
   (Tisocco et al. 2024, 2026), the published HRT inconsistency and the chosen 35–45 d,
   with `todo` nulls where the tables are not yet transcribed (the lead transcribes the

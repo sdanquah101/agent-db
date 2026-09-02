@@ -1182,3 +1182,28 @@ observable); linear interpolation of the daily series (rejected: a delivery is n
 ramp; the ring-test decision keeps both treatments available); a shared AR(1) across
 feeds (rejected: no evidence of cross-feed correlation in the daily file beyond the
 seasonal term, which is shared by construction through the day of year).
+
+**Addendum (engineering review of PR #10, same day).**
+
+1. **Assays sample logged deliveries only.** An assay on an unrecorded delivery would
+   put hidden truth into the operator record (a record on a day whose log reads zero).
+   The sampling mask is now `logged > 0`; the schedule is anchored to the first eligible
+   day of the horizon (a weekly, weekdays-only schedule previously produced no samples
+   at all when day 0 fell on a weekend). Alternative: keep the sample as an intended
+   clue (rejected: the Level-3 "unrecorded delivery" scenario should be detectable from
+   the mass balance, not from a stray assay).
+2. **Solids vary, the liquor does not.** The per-delivery TS scales the particulate COD
+   and its organic N; the dissolved species per m³ (TAN, inorganic C, strong ions,
+   calcium, pH) stay at the catalogue values, so the reported TAN/TKN ratio moves with
+   the moisture by construction (slurry 0.45–0.67 at the assumed TS spread). Recorded
+   as the choice rather than scaling dissolved species with TS: dilution by rainwater
+   dilutes the liquor, a drier clamp does not concentrate it, and no anchor measures
+   both together. Revisit if a scenario needs feed TAN to track TS.
+3. **Seasonal amplitudes are bounded by the monthly-mean statistic**, not equal to it
+   (half the log ratio of the extreme monthly means over-states a true cycle by the
+   sampling noise of twelve monthly means of a 0.4–0.8 log-sd series); the test accepts
+   half that bound up to the bound plus 0.03. Moisture log sds are the assay column's
+   log sd less the assumed 0.03 assay cv in quadrature (0.32 / 0.20 / 0.47).
+4. **The horizon is not prefix-stable**: the stream blocks are `n_days` long, so seed and
+   horizon together identify a run (documented; a per-day stream layout would make the
+   generator O(feeds × days) slower for no scenario need).

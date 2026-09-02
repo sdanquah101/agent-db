@@ -30,14 +30,20 @@ by ``anchor/ingest_muscatine.py`` and ``tests/test_generator.py``):
    extra batch (``nonzero_median x exp(sigma z)``) arrives and never enters the log.
 6. **Mis-logged masses**: on a logged delivery, with ``mislog_probability``, the logged
    mass is the true mass times ``exp(mislog_log_sigma z)``.
-7. **Routine assays** on the feed's schedule (interval, weekdays only or not): TS, VS,
-   total COD, TKN, TAN, alkalinity, pH of that day's delivery, each with its assay's
-   noise (relative sd, or absolute for pH) and turnaround lag, reported with unit and
-   solids basis (:class:`AssayRecord`). TKN is the per-feed one (the intentional inert-N
-   mismatch, :mod:`sim.influent.nitrogen`). Alkalinity is the bicarbonate alkalinity of
-   the feed's inorganic carbon at its pH (``50 x S_IC x K_a1 / (K_a1 + 10^-pH)`` kg
-   CaCO3/m3, ``pK_a1`` the ADM1 base value), a stated proxy for a total-alkalinity
-   titration.
+7. **Routine assays** on the feed's schedule (interval, weekdays only or not, anchored
+   to the first eligible day of the horizon): TS, VS, total COD, TKN, TAN, alkalinity,
+   pH of that day's *logged* delivery (an unrecorded delivery is never sampled, so the
+   record cannot leak it), each with its assay's noise (relative sd, or absolute for pH)
+   and turnaround lag, reported with unit and solids basis (:class:`AssayRecord`). TKN
+   is the per-feed one (the intentional inert-N mismatch, :mod:`sim.influent.nitrogen`).
+   Alkalinity is the bicarbonate alkalinity of the feed's inorganic carbon at its pH
+   (``50 x S_IC x K_a1 / (K_a1 + 10^-pH)`` kg CaCO3/m3, ``pK_a1`` the ADM1 base value), a
+   stated proxy for a total-alkalinity titration. **Solids vary, the liquor does not:**
+   the per-delivery TS scales the particulate COD and its organic N (and so COD and TKN),
+   while the dissolved species per m3 (TAN, inorganic C, strong ions, calcium, pH) stay
+   at the catalogue values; the reported TAN/TKN ratio therefore moves with the
+   moisture, by construction (decisions log, "Influent generator: stochastic structure",
+   addendum).
 8. The **influent series** for :mod:`sim.adm1`: one sample per day, concentrations the
    flow-weighted mix of that day's true deliveries (true fractionation, true moisture,
    derived COD/VS), ``Q`` the true daily volume, **sample-and-hold** (a day's deliveries
@@ -52,7 +58,9 @@ whatever the model, so the stream layout is independent of the model), ``n`` nor
 the amount AR(1), ``n`` normals for the moisture AR(1), ``n`` uniforms and ``n`` normals
 for unrecorded deliveries, ``n`` uniforms and ``n`` normals for mis-logs; then per feed
 in sorted id order, per assay in sorted name order, ``n`` normals of assay noise. A
-change to a later stage cannot alter an earlier one (tested).
+change to a later stage cannot alter an earlier one (tested). The blocks are ``n_days``
+long, so the horizon is **not prefix-stable**: a 100-day run is not the first 100 days of
+a 200-day run with the same seed (the seed and the horizon together identify a run).
 
 **Hidden truth and the visible record.** :class:`InfluentTruth` is hidden truth (the run
 layer writes it to ``runs/<id>/truth/``; nothing here writes anything); the
@@ -138,7 +146,10 @@ class AssayModel(_Frozen):
 
     cv: _NonNeg = Field(description="Relative standard deviation of the assay, -")
     sd_abs: _NonNeg = Field(
-        default=0.0, description="Absolute standard deviation in the assay's unit (pH), unit"
+        default=0.0,
+        description=(
+            "Absolute standard deviation of the assay, in the assay's own unit (pH units for ph)"
+        ),
     )
     lag_d: Annotated[int, Field(ge=0)] = Field(description="Turnaround: report day - sample day, d")
     source: str = Field(default="", description="Where the numbers come from")
@@ -170,7 +181,8 @@ class DeliveryModel(_Frozen):
         )
     )
     days: tuple[Annotated[int, Field(ge=0, le=6)], ...] = Field(
-        default=(), description="Weekdays with a delivery (0 = Monday), weekday model"
+        default=(),
+        description="Weekdays with a delivery, indices 0-6 (0 = Monday), weekday model, -",
     )
     skip_probability: _Frac = Field(
         default=0.0, description="Probability a scheduled weekday delivery is skipped, -"
@@ -209,7 +221,9 @@ class DeliveryModel(_Frozen):
 class AmountModel(_Frozen):
     """Delivered amount on a delivery day: lognormal AR(1) around a seasonal median."""
 
-    nonzero_median: _Pos = Field(description="Median amount on delivery days, `unit`")
+    nonzero_median: _Pos = Field(
+        description="Median amount on delivery days, in `unit` (m3/d or t FM/d)"
+    )
     unit: Literal["m3/d", "t FM/d"] = Field(description="Unit the plant reports this feed in")
     log_sigma: _NonNeg = Field(description="Marginal sd of ln(amount) on delivery days, -")
     lag1: Annotated[float, Field(ge=0.0, lt=1.0)] = Field(
@@ -227,7 +241,7 @@ class AmountModel(_Frozen):
 class MoistureModel(_Frozen):
     """Total solids of a delivery: lognormal AR(1) around the catalogue TS, with a season."""
 
-    ts_log_sigma: _NonNeg = Field(description="Marginal sd of ln(TS) between deliveries, -")
+    ts_log_sigma: _NonNeg = Field(description="Marginal sd of the per-day ln(TS) process, -")
     lag1: Annotated[float, Field(ge=0.0, lt=1.0)] = Field(
         description="Lag-1 autocorrelation of ln(TS), -"
     )
@@ -343,7 +357,7 @@ class AssayRecord(_Frozen):
     assay: AssayName
     sample_day: Annotated[int, Field(ge=0)] = Field(description="Day the sample was taken, d")
     report_day: Annotated[int, Field(ge=0)] = Field(description="Day the result arrived, d")
-    value: float = Field(description="Reported value, in `unit`")
+    value: float = Field(description="Reported value, in the assay's own unit (`unit`)")
     unit: str = Field(description="Unit of `value`")
     basis: Literal["wet", "dry"] = Field(description="Solids basis of `value`")
 
@@ -356,7 +370,8 @@ class FeedTruth:
     delivered_kg: np.ndarray
     """True wet mass fed on each day, kg wet/d, including unrecorded deliveries."""
     ts: np.ndarray
-    """True total solids of the day's delivery, kg TS/kg wet (catalogue TS where none)."""
+    """True total solids on each day, kg TS/kg wet: the per-day AR(1) realisation, defined
+    every day and used on the days a delivery occurs."""
     unrecorded_days: tuple[int, ...]
     """Days on which an unrecorded delivery arrived."""
     mislogged_days: tuple[int, ...]
@@ -559,9 +574,12 @@ def generate_influent(
         ft = feeds_truth[fid]
         sched = g.assay_schedule
         weekday = (start_weekday + day) % 7
-        sampled = (day % sched.interval_d == 0) & (ft.delivered_kg > 0.0)
-        if sched.weekdays_only:
-            sampled &= weekday < 5
+        eligible = (weekday < 5) if sched.weekdays_only else np.ones(n_days, dtype=bool)
+        # the schedule is anchored to the first eligible day, so a horizon starting on a
+        # weekend still gets its weekly samples; only *logged* deliveries are sampled
+        # (an assay on an unlogged truck would leak hidden truth into the record)
+        first = int(np.argmax(eligible)) if eligible.any() else 0
+        sampled = eligible & ((day - first) % sched.interval_d == 0) & (logged[fid] > 0.0)
         for assay in sorted(sched.assays):
             z = rng.standard_normal(n_days)
             model = config.assays[assay]

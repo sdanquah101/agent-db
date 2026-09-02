@@ -11,10 +11,14 @@
 #   muscatine_daily: Schroer & Just 2024, LABS-raw.csv (1,103 days, 2020-01-01 to
 #                    2023-03-31; plant totals for two digesters, halved per modelled unit;
 #                    gallons x 0.00378541 = m3). Amount statistics are of ln(volume) on
-#                    delivery days; seasonal amplitudes are half the log of the ratio of
-#                    the highest to the lowest monthly mean; lag-1 values are of the daily
-#                    series (they include the seasonal term, so the AR(1) that reproduces
-#                    them is slightly over-persistent, accepted).
+#                    delivery days; seasonal amplitudes are BOUNDED BY (not equal to) half
+#                    the log of the ratio of the highest to the lowest monthly mean, which
+#                    over-states a true seasonal cycle by the sampling noise of 12 monthly
+#                    means (the test accepts 0.5x that bound up to the bound + 0.03);
+#                    lag-1 values are of the daily series (they include the seasonal
+#                    term, so the AR(1) that reproduces them is slightly over-persistent,
+#                    accepted); moisture log sds are the assay column's log sd less the
+#                    assumed 0.03 assay cv in quadrature.
 #   tisocco_2024:    Tisocco et al. 2024 (AFBI Hillsborough): slurry 11-18 m3/d, silage
 #                    2 t FM/d Monday-Friday, weekly TS/VS of the feeds, weekly N/NH4-N/VFA
 #                    of the slurry.
@@ -107,7 +111,7 @@ plants:
           seasonal_peak_doy: 200.0
           source: "muscatine_daily"
         moisture:
-          ts_log_sigma: 0.30       # muscatine_daily: sd of ln(PS-VS_percent) 0.32 less an assumed 0.03 assay cv (VS/TS fixed, so TS carries the variation)
+          ts_log_sigma: 0.32       # muscatine_daily: sd of ln(PS-VS_percent) 0.317 less an assumed 0.03 assay cv in quadrature (sqrt(0.317^2 - 0.03^2) = 0.316; VS/TS fixed, so TS carries the variation)
           lag1: 0.41               # muscatine_daily: lag-1 autocorrelation of ln(PS-VS_percent)
           seasonal_amplitude: 0.0  # muscatine_daily: no seasonal pattern in PS-VS
           seasonal_peak_doy: 0.0
@@ -130,7 +134,7 @@ plants:
           seasonal_peak_doy: 60.0
           source: "muscatine_daily"
         moisture:
-          ts_log_sigma: 0.19       # muscatine_daily: sd of ln(TWAS-VS_percent) 0.20 less the assay cv
+          ts_log_sigma: 0.20       # muscatine_daily: sd of ln(TWAS-VS_percent) 0.202 less the 0.03 assay cv in quadrature (0.200)
           lag1: 0.68               # muscatine_daily: lag-1 autocorrelation of ln(TWAS-VS_percent)
           seasonal_amplitude: 0.0
           seasonal_peak_doy: 0.0
@@ -153,7 +157,7 @@ plants:
           seasonal_peak_doy: 250.0
           source: "muscatine_daily"
         moisture:
-          ts_log_sigma: 0.45       # muscatine_daily: sd of ln(HSW-VS_percent) 0.475 less the assay cv
+          ts_log_sigma: 0.47       # muscatine_daily: sd of ln(HSW-VS_percent) 0.475 less the 0.03 assay cv in quadrature (0.474)
           lag1: 0.25               # muscatine_daily: lag-1 autocorrelation of ln(HSW-VS_percent)
           seasonal_amplitude: 0.0
           seasonal_peak_doy: 0.0
@@ -195,12 +199,12 @@ plants:
       primary_sludge:
         delivery: {model: continuous, source: "muscatine_daily: V-PS_gal > 0 on every day"}
         amount: {nonzero_median: 30.3, unit: "m3/d", log_sigma: 0.44, lag1: 0.39, seasonal_amplitude: 0.10, seasonal_peak_doy: 200.0, source: "muscatine_daily (as Plant B)"}
-        moisture: {ts_log_sigma: 0.30, lag1: 0.41, seasonal_amplitude: 0.0, seasonal_peak_doy: 0.0, source: "muscatine_daily (as Plant B)"}
+        moisture: {ts_log_sigma: 0.32, lag1: 0.41, seasonal_amplitude: 0.0, seasonal_peak_doy: 0.0, source: "muscatine_daily (as Plant B)"}
         logging: {unrecorded_probability_per_d: 0.0, unrecorded_log_sigma: 0.0, mislog_probability: 0.02, mislog_log_sigma: 0.3, source: "ASSUMED"}
         assay_schedule: {interval_d: 1, weekdays_only: true, assays: [ts, vs, cod, tkn, tan, ph, alkalinity], source: "as Plant B"}
       thickened_was:
         delivery: {model: continuous, source: "muscatine_daily: V-TWAS_gal > 0 on every day"}
         amount: {nonzero_median: 17.4, unit: "m3/d", log_sigma: 0.53, lag1: 0.88, seasonal_amplitude: 0.30, seasonal_peak_doy: 60.0, source: "muscatine_daily (as Plant B)"}
-        moisture: {ts_log_sigma: 0.19, lag1: 0.68, seasonal_amplitude: 0.0, seasonal_peak_doy: 0.0, source: "muscatine_daily (as Plant B)"}
+        moisture: {ts_log_sigma: 0.20, lag1: 0.68, seasonal_amplitude: 0.0, seasonal_peak_doy: 0.0, source: "muscatine_daily (as Plant B)"}
         logging: {unrecorded_probability_per_d: 0.0, unrecorded_log_sigma: 0.0, mislog_probability: 0.02, mislog_log_sigma: 0.3, source: "ASSUMED"}
         assay_schedule: {interval_d: 1, weekdays_only: false, assays: [ts, vs, cod, tkn, tan, ph, alkalinity], source: "as Plant B"}

@@ -230,7 +230,8 @@ class AssayStatistics:
     log_sigma: float
     """sd of ln(value) over the measured days, -."""
     lag1_log: float
-    """Lag-1 autocorrelation of ln(value) over consecutive measured days, -."""
+    """Lag-1 autocorrelation of ln(value) over consecutive *measurements* (missing days
+    dropped, so a pair may span a weekend), -."""
     measured_fraction_by_weekday: tuple[float, ...]
     """Fraction of days with a measurement per weekday (Monday first), -."""
 

@@ -120,13 +120,33 @@ def test_every_value_is_provisional_and_marked_design(catalogue):
 
 def test_units_in_every_numeric_field_description():
     """CLAUDE.md rule 6: a unit (or an explicit '-') in every numeric field description."""
-    for model_cls in (FeedFractionation, CODFractionation):
+    from sim.influent.generator import (
+        AmountModel,
+        AssayModel,
+        AssayRecord,
+        AssaySchedule,
+        DeliveryModel,
+        LoggingModel,
+        MoistureModel,
+    )
+
+    unit = re.compile(r"kg|kmol|m3|pH units|, -|, d\b|, 1/d|own unit|in `unit`")
+    for model_cls in (
+        FeedFractionation,
+        CODFractionation,
+        AssayModel,
+        AssaySchedule,
+        DeliveryModel,
+        AmountModel,
+        MoistureModel,
+        LoggingModel,
+        AssayRecord,
+    ):
         for name, field in model_cls.model_fields.items():
-            if "float" in str(field.annotation):
+            annotation = str(field.annotation)
+            if "float" in annotation or "int" in annotation:
                 desc = field.description or ""
-                assert re.search(r"kg|kmol|m3|pH units|, -", desc), (
-                    f"{model_cls.__name__}.{name}: {desc}"
-                )
+                assert unit.search(desc), f"{model_cls.__name__}.{name}: {desc}"
 
 
 def test_schema_rejections(catalogue):

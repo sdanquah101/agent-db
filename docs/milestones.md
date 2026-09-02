@@ -526,6 +526,14 @@ PRs #8 and #9 merged (41ffdd4). Branch `claude/milestone-2-influent-generator` f
 
 **Blocked / open**
 
+- Engineering review of PR #10 (coordinating session) applied the same day: weekly
+  assay schedules anchored to the first eligible day (a weekend start produced none);
+  assays sample logged deliveries only (no hidden-truth leak); the 30-day Plant C
+  integration now runs the truth parameters and asserts methane per COD fed (0.55,
+  band 0.40–0.70) and linear scaling with the load; the stream-order test now changes
+  the first-sorted feed's variate count; moisture log sds by quadrature; unit
+  descriptions tested on every generator model; docstring corrections (decisions log
+  addendum).
 - The catalogue stays `provisional` until the lead freezes it; every changed value is
   listed in the PR checklist. Flagged for the freeze: the silage TS basis (Foulum 31.9 %
   vs AFBI 20–25 %) and the inert COD equivalent (1.19 for both inert classes).
@@ -555,5 +563,6 @@ PRs #8 and #9 merged (41ffdd4). Branch `claude/milestone-2-influent-generator` f
 | Generator + ingest + tests | ≈ 45 min | — | generator ≈ 0.05 s per 365-day plant run |
 | Docs | ≈ 15 min | — | |
 | Full suite (`python -m pytest -q`) | ≈ 2 min 44 s, 182 passed | — | dominated by the sample-and-hold ring test |
+| Review round (M1–M3, L1–L7 of the coordinating session) | ≈ 25 min | — | 2 fast runs, 1 full run (see the PR for the count) |
 
 No LLM-agent compute inside the benchmark; development cost only.

@@ -219,18 +219,23 @@ def test_same_seed_same_run_and_the_stream_order_is_as_documented(
     # the true-fractionation draw is the head of the stream: identical to the seed-only API
     ids = [f.name for f in plants["B"].feeds]
     assert a.truth.fractionations == sample_true_fractionations(catalogue, ids, 3)
-    # a later stage cannot change an earlier one: thickened_was (sorted last) mis-logs
-    # and the assay noise leave fog / hsw / primary deliveries and the fractionation untouched
+    # a later stage cannot change an earlier one. fog sorts first: changing its delivery
+    # model (to a Markov chain with the same zero fraction, so the plant check still
+    # passes) changes fog's own deliveries but (uniforms always consumed) nothing else's,
+    # and changing its assay tuple shifts the noise of every later feed's assays while
+    # leaving every delivery and the fractionation bit-identical
     gen = config.plants["B"]
-    twas = gen.feeds["thickened_was"]
+    fog = gen.feeds["fog"]
     changed = gen.model_copy(
         update={
             "feeds": gen.feeds
             | {
-                "thickened_was": twas.model_copy(
+                "fog": fog.model_copy(
                     update={
-                        "logging": twas.logging.model_copy(update={"mislog_probability": 0.5}),
-                        "assay_schedule": twas.assay_schedule.model_copy(update={"interval_d": 3}),
+                        "delivery": DeliveryModel(
+                            model="markov", zero_fraction=0.31, persistence=0.5, source="test"
+                        ),
+                        "assay_schedule": fog.assay_schedule.model_copy(update={"assays": ("ts",)}),
                     }
                 )
             }
@@ -239,22 +244,22 @@ def test_same_seed_same_run_and_the_stream_order_is_as_documented(
     cfg2 = config.model_copy(update={"plants": config.plants | {"B": changed}})
     d = generate_influent(plants["B"], catalogue, cfg2, adm1_params, seed=3, n_days=200)
     assert d.truth.fractionations == a.truth.fractionations
-    for fid in ("fog", "high_strength_waste", "primary_sludge"):
+    assert not np.array_equal(d.truth.feeds["fog"].delivered_kg, a.truth.feeds["fog"].delivered_kg)
+    for fid in ("high_strength_waste", "primary_sludge", "thickened_was"):
         np.testing.assert_array_equal(
             d.truth.feeds[fid].delivered_kg, a.truth.feeds[fid].delivered_kg
         )
+        np.testing.assert_array_equal(d.truth.feeds[fid].ts, a.truth.feeds[fid].ts)
         np.testing.assert_array_equal(
             d.observed.feed_log_kg_wet_d[fid], a.observed.feed_log_kg_wet_d[fid]
         )
-    assert len(d.truth.feeds["thickened_was"].mislogged_days) > len(
-        a.truth.feeds["thickened_was"].mislogged_days
-    )
-    # assay records of the unchanged feeds are identical (noise drawn after all deliveries,
-    # per feed in sorted order, so fog / hsw / primary noise precedes thickened_was)
-    for fid in ("fog", "high_strength_waste", "primary_sludge"):
-        assert [r for r in d.observed.assays if r.feed_id == fid] == [
-            r for r in a.observed.assays if r.feed_id == fid
-        ]
+    # fewer fog assays -> fewer normals consumed before the later feeds' noise -> their
+    # assay values differ, on the same sample days (the schedule does not move)
+    for fid in ("high_strength_waste", "primary_sludge", "thickened_was"):
+        before = [r for r in a.observed.assays if r.feed_id == fid]
+        after = [r for r in d.observed.assays if r.feed_id == fid]
+        assert [(r.sample_day, r.assay) for r in before] == [(r.sample_day, r.assay) for r in after]
+        assert [r.value for r in before] != [r.value for r in after]
 
 
 # ----------------------------------------------------------------- delivery process
@@ -376,24 +381,79 @@ def test_influent_is_the_flow_weighted_mix_of_true_deliveries(runs, catalogue):
     assert summer > winter  # driest deliveries in late summer (peak_doy 230)
 
 
-def test_truth_model_integrates_the_generated_influent(runs, plants, adm1_params, rj2006_state):
-    """Plant C, 30 d of generated influent, standard ADM1 sample-and-hold: a sane digester."""
+def test_truth_model_integrates_the_generated_influent(
+    runs, plants, catalogue, adm1_params, rj2006_state
+):
+    """Plant C, 30 d of generated influent through ADM1 with the truth N_I: a sane digester.
+
+    Loading-referenced: methane COD produced (days 10-30, dry STP CH4 / 0.35 m3 per kg
+    COD) over COD fed lies in a yield band, and doubling the fed COD doubles the methane
+    (the BSM2 steady state is not far from this loading, so the window is representative).
+    """
+    from sim.influent import COD_STATES, truth_parameters
+
     run = runs["C"]
     inf = run.truth.influent
-    short = Influent(t=inf.t[:30], concentrations=inf.concentrations[:30], q=inf.q[:30])
-    r = simulate(
-        y0=rj2006_state,
-        influent=short,
-        params=adm1_params,
-        plant=declared_geometry(plants["C"]),
-        matrix=load_matrix(),
-        solver=load_solver_config(),
-        t_span=(0.0, 30.0),
-        t_eval=np.arange(0.0, 31.0),
+    truth = truth_parameters(
+        adm1_params, catalogue, run.truth.mean_recipe_kg_d, run.truth.fractionations.fractionations
     )
-    assert r.success and r.stats.n_segments == 30
-    assert 6.8 < r.pH.min() <= r.pH.max() < 7.8
-    assert r.q_gas.min() > 0 and np.all(np.isfinite(r.y))
+    assert pytest.approx(run.truth.N_I) == truth.stoichiometry.N_I
+    cod_idx = [_L[n] for n in COD_STATES]
+
+    def methane_per_cod(scale: float, sane: bool = True) -> tuple[float, float]:
+        conc = inf.concentrations[:30].copy()
+        conc[:, cod_idx] *= scale
+        short = Influent(t=inf.t[:30], concentrations=conc, q=inf.q[:30])
+        r = simulate(
+            y0=rj2006_state,
+            influent=short,
+            params=truth,
+            plant=declared_geometry(plants["C"]),
+            matrix=load_matrix(),
+            solver=load_solver_config(),
+            t_span=(0.0, 30.0),
+            t_eval=np.arange(0.0, 31.0),
+        )
+        assert r.success and r.stats.n_segments == 30
+        assert np.all(np.isfinite(r.y))
+        if sane:
+            assert 6.8 < r.pH.min() <= r.pH.max() < 7.8
+            assert r.q_gas.min() > 0
+        ch4_m3_d = r.q_gas_stp_dry * r.p_ch4 / (r.P_gas - r.p_h2o)
+        cod_out = float(ch4_m3_d[10:].mean()) / 0.35  # kg COD/d as methane
+        cod_in = float((short.q * conc[:, cod_idx].sum(axis=1)).mean())
+        return cod_out, cod_in
+
+    out1, in1 = methane_per_cod(1.0)
+    assert 0.40 < out1 / in1 < 0.70  # measured 0.55; degradable ~0.6-0.7 less biomass yield
+    out2, _ = methane_per_cod(2.0)
+    assert 1.7 < out2 / out1 < 2.2  # measured 1.99
+    # a 10x overload sours the digester (pH < 5) and fails the yield band: not vacuous
+    assert not (0.40 < methane_per_cod(10.0, sane=False)[0] / (10.0 * in1) < 0.70)
+
+
+def test_weekly_schedule_survives_a_weekend_start(plants, catalogue, config, adm1_params):
+    """Assays are anchored to the first eligible day, whatever weekday the horizon starts."""
+    counts = {}
+    for start_weekday in range(7):
+        a = generate_influent(
+            plants["A"], catalogue, config, adm1_params, seed=5, n_days=365,
+            start_weekday=start_weekday,
+        )  # fmt: skip
+        silage = [r for r in a.observed.assays if r.feed_id == "grass_silage" and r.assay == "ts"]
+        counts[start_weekday] = len(silage)
+        assert all(((start_weekday + r.sample_day) % 7) < 5 for r in silage)
+        assert len({r.sample_day % 7 for r in silage}) == 1  # one fixed weekday
+        # only logged deliveries are sampled: never a record on a day whose log reads 0
+        for r in a.observed.assays:
+            assert a.observed.feed_log_kg_wet_d[r.feed_id][r.sample_day] > 0.0
+        b = generate_influent(
+            plants["B"], catalogue, config, adm1_params, seed=5, n_days=365,
+            start_weekday=start_weekday,
+        )  # fmt: skip
+        fog = [r for r in b.observed.assays if r.feed_id == "fog" and r.assay == "cod"]
+        assert 40 <= len(fog) <= 53, (start_weekday, len(fog))
+    assert min(counts.values()) >= 50 and max(counts.values()) <= 53, counts
 
 
 # --------------------------------------------------------------------- assays
