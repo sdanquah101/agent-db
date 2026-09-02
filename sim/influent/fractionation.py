@@ -61,6 +61,34 @@ class TrueFractionations:
         return self.fractionations[feed_id]
 
 
+def draw_true_fractionations(
+    catalogue: FeedFractionationCatalogue | Mapping[str, FeedFractionation],
+    feed_ids: Iterable[str],
+    rng: np.random.Generator,
+    seed: int,
+) -> TrueFractionations:
+    """The draw of :func:`sample_true_fractionations` from a caller-owned stream.
+
+    The influent generator (:mod:`sim.influent.generator`) owns one stream per run and
+    makes this draw first, then consumes the same stream for its dynamics. ``seed`` is
+    recorded on the result and must be the seed ``rng`` was created from.
+    """
+    feeds = catalogue.feeds if isinstance(catalogue, FeedFractionationCatalogue) else catalogue
+    ids = sorted(feed_ids)
+    if len(set(ids)) != len(ids):
+        raise ValueError(f"feed ids must be unique, got {ids}")
+    missing = [i for i in ids if i not in feeds]
+    if missing:
+        raise KeyError(f"no feed_fractionation entry for {missing}")
+    drawn = {
+        fid: sample_fractionation(
+            feeds[fid].fractionation, feeds[fid].fractionation_concentration, rng
+        )
+        for fid in ids
+    }
+    return TrueFractionations(seed=int(seed), fractionations=drawn)
+
+
 def sample_true_fractionations(
     catalogue: FeedFractionationCatalogue | Mapping[str, FeedFractionation],
     feed_ids: Iterable[str],
@@ -80,18 +108,4 @@ def sample_true_fractionations(
         KeyError: If a feed id is not in the catalogue.
         ValueError: If a feed id is listed twice.
     """
-    feeds = catalogue.feeds if isinstance(catalogue, FeedFractionationCatalogue) else catalogue
-    ids = sorted(feed_ids)
-    if len(set(ids)) != len(ids):
-        raise ValueError(f"feed ids must be unique, got {ids}")
-    missing = [i for i in ids if i not in feeds]
-    if missing:
-        raise KeyError(f"no feed_fractionation entry for {missing}")
-    rng = np.random.default_rng(seed)
-    drawn = {
-        fid: sample_fractionation(
-            feeds[fid].fractionation, feeds[fid].fractionation_concentration, rng
-        )
-        for fid in ids
-    }
-    return TrueFractionations(seed=int(seed), fractionations=drawn)
+    return draw_true_fractionations(catalogue, feed_ids, np.random.default_rng(seed), seed)

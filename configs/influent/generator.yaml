@@ -1,0 +1,210 @@
+# Influent-generator statistics (proposal §6.1; schema sim/influent/generator.py).
+#
+# One block per plant, keyed by the plant's feed ids (configs/plants/plant_{A,B,C}.yaml);
+# sim.influent.generator.check_generator_against_plant asserts that the delivery models,
+# zero-day fractions, units and continuous-feed medians agree with the frozen plant
+# contract, and tests/test_generator.py re-derives every Plant B/C statistic marked
+# `muscatine_daily` from anchor/raw/iowa-muscatine-wrrf/LABS-raw.csv through
+# anchor/ingest_muscatine.py (dataset-anchored means regenerable from the data).
+#
+# Sources:
+#   muscatine_daily: Schroer & Just 2024, LABS-raw.csv (1,103 days, 2020-01-01 to
+#                    2023-03-31; plant totals for two digesters, halved per modelled unit;
+#                    gallons x 0.00378541 = m3). Amount statistics are of ln(volume) on
+#                    delivery days; seasonal amplitudes are BOUNDED BY (not equal to) half
+#                    the log of the ratio of the highest to the lowest monthly mean, which
+#                    over-states a true seasonal cycle by the sampling noise of 12 monthly
+#                    means (the test accepts 0.5x that bound up to the bound + 0.03);
+#                    lag-1 values are of the daily series (they include the seasonal
+#                    term, so the AR(1) that reproduces them is slightly over-persistent,
+#                    accepted); moisture log sds are the assay column's log sd less the
+#                    assumed 0.03 assay cv in quadrature.
+#   tisocco_2024:    Tisocco et al. 2024 (AFBI Hillsborough): slurry 11-18 m3/d, silage
+#                    2 t FM/d Monday-Friday, weekly TS/VS of the feeds, weekly N/NH4-N/VFA
+#                    of the slurry.
+#   tisocco_2026:    Tisocco et al. 2026 Table 1: slurry TS 3.6 +/- 1.4 % FM, silage
+#                    31.9 +/- 0.7 % FM (the spread of the feed TS between samples).
+#   ASSUMED:         no source; a design value flagged for the lead (decisions log,
+#                    "Influent generator: stochastic structure"). Assay noise, lags,
+#                    mis-log and unrecorded-delivery rates are assumed for every plant.
+#
+# Units: amounts in the unit the plant reports the feed in (m3/d or t FM/d); log sigmas
+# and amplitudes dimensionless (natural log); day-of-year in days; lags in days.
+version: 1
+
+assays:   # shared by all plants; values ASSUMED unless noted
+  ts:         {cv: 0.03, lag_d: 1, source: "ASSUMED: gravimetric TS repeatability ~3 %; 24 h at 105 C (tisocco_2024 §2.2.1) -> next-day report"}
+  vs:         {cv: 0.03, lag_d: 1, source: "ASSUMED: as ts (550 C for 2 h after the TS drying)"}
+  cod:        {cv: 0.10, lag_d: 3, source: "ASSUMED: dichromate COD of a heterogeneous feed ~10 %; 3-day turnaround"}
+  tkn:        {cv: 0.05, lag_d: 3, source: "ASSUMED: Kjeldahl ~5 %; 3-day turnaround"}
+  tan:        {cv: 0.05, lag_d: 1, source: "ASSUMED: gas-sensing electrode (tisocco_2024 §2.2.1) ~5 %"}
+  alkalinity: {cv: 0.05, lag_d: 0, source: "ASSUMED: titration ~5 %, same day"}
+  ph:         {cv: 0.0, sd_abs: 0.1, lag_d: 0, source: "ASSUMED: 0.1 pH units, same day"}
+
+plants:
+  A:
+    plant_id: A
+    note: >-
+      Statistics-anchored (tisocco_2024/2026). The silage weekday pattern and the slurry
+      range are published; everything else is assumed and marked.
+    feeds:
+      cattle_slurry:
+        delivery: {model: continuous, source: "tisocco_2024: slurry fed daily (plant_A.yaml)"}
+        amount:
+          nonzero_median: 14.5     # m3/d; plant_A.yaml median (tisocco_2024: 11-18 m3/d)
+          unit: "m3/d"
+          log_sigma: 0.19          # tisocco_2024: 11-18 m3/d read as p10-p90 -> sd ~2.7 on 14.5, cv 0.19
+          lag1: 0.5                # ASSUMED: day-to-day persistence of a pumped slurry feed
+          seasonal_amplitude: 0.0  # ASSUMED: no published seasonality of the slurry volume
+          seasonal_peak_doy: 0.0
+          source: "tisocco_2024 range; persistence and seasonality ASSUMED"
+        moisture:
+          ts_log_sigma: 0.20       # ASSUMED: between the tisocco_2024 sets (6.8 vs 7.5 % TS, 10 %) and the Foulum spread (3.6 +/- 1.4 % FM, tisocco_2026, cv 0.39)
+          lag1: 0.7                # ASSUMED: slurry in a store changes slowly
+          seasonal_amplitude: 0.10 # ASSUMED: the "wetter season" of the Level-3 scenario (rainwater into the slurry store in winter); driest deliveries in late summer
+          seasonal_peak_doy: 230.0
+          source: "ASSUMED (tisocco_2024/2026 give only the spread between samples)"
+        logging:
+          unrecorded_probability_per_d: 0.0   # a pumped, metered feed is not delivered unrecorded
+          unrecorded_log_sigma: 0.0
+          mislog_probability: 0.02            # ASSUMED: 2 % of daily volume entries mis-keyed
+          mislog_log_sigma: 0.3               # ASSUMED: a mis-keyed entry is off by ~30 %
+          source: "ASSUMED"
+        assay_schedule: {interval_d: 7, weekdays_only: false, assays: [ts, vs, tkn, tan, cod, ph, alkalinity], source: "tisocco_2024 §2.2.1: weekly TS/VS; weekly N, NH4-N, VFA of the slurry; COD, pH and alkalinity ASSUMED on the same weekly sample"}
+      grass_silage:
+        delivery: {model: weekday, days: [0, 1, 2, 3, 4], skip_probability: 0.0, source: "tisocco_2024 §2.1: 2 t FM/d Monday-Friday, none at weekends"}
+        amount:
+          nonzero_median: 2.0      # t FM/d; tisocco_2024
+          unit: "t FM/d"
+          log_sigma: 0.05          # ASSUMED: loader-bucket accuracy of a fixed 2 t ration
+          lag1: 0.0
+          seasonal_amplitude: 0.0
+          seasonal_peak_doy: 0.0
+          source: "tisocco_2024 (2 t FM/d); spread ASSUMED"
+        moisture:
+          ts_log_sigma: 0.05       # tisocco_2026: 31.9 +/- 0.7 % FM (cv 0.02) within a clamp; ASSUMED 0.05 to allow for clamp changes
+          lag1: 0.9                # ASSUMED: one clamp is fed for weeks
+          seasonal_amplitude: 0.05 # ASSUMED: wetter silage from the autumn cut
+          seasonal_peak_doy: 180.0
+          source: "tisocco_2026 spread; persistence and seasonality ASSUMED"
+        logging:
+          unrecorded_probability_per_d: 0.01  # ASSUMED: an unlogged loader bucket about every 100 d
+          unrecorded_log_sigma: 0.3
+          mislog_probability: 0.02
+          mislog_log_sigma: 0.3
+          source: "ASSUMED"
+        assay_schedule: {interval_d: 7, weekdays_only: true, assays: [ts, vs, tkn, tan, cod, ph], source: "tisocco_2024 §2.2.1: weekly TS/VS and NIRS composition of the silage; no alkalinity of an acid silage"}
+  B:
+    plant_id: B
+    note: >-
+      Dataset-anchored: every delivery and moisture statistic marked muscatine_daily is
+      re-derived from the committed daily file by tests/test_generator.py.
+    feeds:
+      primary_sludge:
+        delivery: {model: continuous, source: "muscatine_daily: V-PS_gal > 0 on every day"}
+        amount:
+          nonzero_median: 30.3     # m3/d; plant_B.yaml median (muscatine_daily V-PS_gal / 2)
+          unit: "m3/d"
+          log_sigma: 0.44          # muscatine_daily: sd of ln(V-PS)
+          lag1: 0.39               # muscatine_daily: lag-1 autocorrelation of V-PS
+          seasonal_amplitude: 0.10 # muscatine_daily: monthly means 51-71 m3/d (log half-ratio 0.17, part of it the sampling noise of 12 monthly means of a 0.44-log-sd series), peak July
+          seasonal_peak_doy: 200.0
+          source: "muscatine_daily"
+        moisture:
+          ts_log_sigma: 0.32       # muscatine_daily: sd of ln(PS-VS_percent) 0.317 less an assumed 0.03 assay cv in quadrature (sqrt(0.317^2 - 0.03^2) = 0.316; VS/TS fixed, so TS carries the variation)
+          lag1: 0.41               # muscatine_daily: lag-1 autocorrelation of ln(PS-VS_percent)
+          seasonal_amplitude: 0.0  # muscatine_daily: no seasonal pattern in PS-VS
+          seasonal_peak_doy: 0.0
+          source: "muscatine_daily"
+        logging:
+          unrecorded_probability_per_d: 0.0   # pumped and metered
+          unrecorded_log_sigma: 0.0
+          mislog_probability: 0.02
+          mislog_log_sigma: 0.3
+          source: "ASSUMED"
+        assay_schedule: {interval_d: 1, weekdays_only: true, assays: [ts, vs, cod, tkn, tan, ph, alkalinity], source: "muscatine_daily: PS-VS measured on weekdays (LABS data dictionary: weekend repeats removed); COD, N, pH, alkalinity of the sludge ASSUMED on the same sample"}
+      thickened_was:
+        delivery: {model: continuous, source: "muscatine_daily: V-TWAS_gal > 0 on every day"}
+        amount:
+          nonzero_median: 17.4     # m3/d; plant_B.yaml median (muscatine_daily V-TWAS_gal / 2)
+          unit: "m3/d"
+          log_sigma: 0.53          # muscatine_daily: sd of ln(V-TWAS)
+          lag1: 0.88               # muscatine_daily: lag-1 autocorrelation of V-TWAS
+          seasonal_amplitude: 0.30 # muscatine_daily: monthly means 25 (Jul-Sep) to 55 m3/d (Feb-Mar); half the log ratio is 0.39, 0.30 keeps the AR(1) share
+          seasonal_peak_doy: 60.0
+          source: "muscatine_daily"
+        moisture:
+          ts_log_sigma: 0.20       # muscatine_daily: sd of ln(TWAS-VS_percent) 0.202 less the 0.03 assay cv in quadrature (0.200)
+          lag1: 0.68               # muscatine_daily: lag-1 autocorrelation of ln(TWAS-VS_percent)
+          seasonal_amplitude: 0.0
+          seasonal_peak_doy: 0.0
+          source: "muscatine_daily"
+        logging:
+          unrecorded_probability_per_d: 0.0
+          unrecorded_log_sigma: 0.0
+          mislog_probability: 0.02
+          mislog_log_sigma: 0.3
+          source: "ASSUMED"
+        assay_schedule: {interval_d: 1, weekdays_only: false, assays: [ts, vs, cod, tkn, tan, ph, alkalinity], source: "muscatine_daily: TWAS-VS measured every day incl. weekends (93-98 % of days); the rest ASSUMED"}
+      high_strength_waste:
+        delivery: {model: markov, zero_fraction: 0.10, persistence: 0.84, source: "muscatine_daily: V-HSW_gal = 0 on 111 of 1,103 days; lag-1 autocorrelation of the delivery indicator 0.84 (mean run of no-delivery days 6.9)"}
+        amount:
+          nonzero_median: 23.6     # m3/d; muscatine_daily: median of V-HSW_gal on delivery days / 2 (plant_B.yaml's 21.2 is the all-day median)
+          unit: "m3/d"
+          log_sigma: 0.78          # muscatine_daily: sd of ln(V-HSW) on delivery days
+          lag1: 0.66               # muscatine_daily: lag-1 autocorrelation of V-HSW
+          seasonal_amplitude: 0.25 # muscatine_daily: monthly means 31 (Feb) to 61 m3/d (Aug-Sep)
+          seasonal_peak_doy: 250.0
+          source: "muscatine_daily"
+        moisture:
+          ts_log_sigma: 0.47       # muscatine_daily: sd of ln(HSW-VS_percent) 0.475 less the 0.03 assay cv in quadrature (0.474)
+          lag1: 0.25               # muscatine_daily: lag-1 autocorrelation of ln(HSW-VS_percent)
+          seasonal_amplitude: 0.0
+          seasonal_peak_doy: 0.0
+          source: "muscatine_daily"
+        logging:
+          unrecorded_probability_per_d: 0.01  # ASSUMED: a truck about every 100 d misses the log
+          unrecorded_log_sigma: 0.5
+          mislog_probability: 0.03            # ASSUMED: trucked loads are hand-logged
+          mislog_log_sigma: 0.3
+          source: "ASSUMED"
+        assay_schedule: {interval_d: 1, weekdays_only: true, assays: [ts, vs, cod, tkn, tan, ph, alkalinity], source: "muscatine_daily: HSW-VS and HSW-COD on weekdays (62-90 % of weekdays, 2-4 % of weekend days); N, pH, alkalinity ASSUMED"}
+      fog:
+        delivery: {model: weekday, days: [0, 1, 2, 3, 4], skip_probability: 0.05, source: "muscatine_daily: FOG_gal = 0 on 92-96 % of Saturdays/Sundays and 2-9 % of weekdays; overall 339 of 1,103 days"}
+        amount:
+          nonzero_median: 33.3     # m3/d; muscatine_daily: median of FOG_gal on delivery days / 2
+          unit: "m3/d"
+          log_sigma: 0.71          # muscatine_daily: sd of ln(FOG) on delivery days
+          lag1: 0.17               # muscatine_daily: lag-1 autocorrelation of FOG
+          seasonal_amplitude: 0.20 # muscatine_daily: monthly means 35 (Jun) to 64 m3/d (Sep)
+          seasonal_peak_doy: 250.0
+          source: "muscatine_daily"
+        moisture:
+          ts_log_sigma: 0.30       # ASSUMED: FOG composition is not measured at Muscatine; grease-trap loads vary widely
+          lag1: 0.2
+          seasonal_amplitude: 0.0
+          seasonal_peak_doy: 0.0
+          source: "ASSUMED"
+        logging:
+          unrecorded_probability_per_d: 0.01
+          unrecorded_log_sigma: 0.5
+          mislog_probability: 0.03
+          mislog_log_sigma: 0.3
+          source: "ASSUMED"
+        assay_schedule: {interval_d: 7, weekdays_only: true, assays: [ts, vs, cod, ph], source: "ASSUMED: FOG is not assayed at Muscatine; a weekly TS/VS/COD/pH is what a co-digestion plant would run"}
+  C:
+    plant_id: C
+    note: "The sludge streams of Plant B (controlled pair): identical statistics."
+    feeds:
+      primary_sludge:
+        delivery: {model: continuous, source: "muscatine_daily: V-PS_gal > 0 on every day"}
+        amount: {nonzero_median: 30.3, unit: "m3/d", log_sigma: 0.44, lag1: 0.39, seasonal_amplitude: 0.10, seasonal_peak_doy: 200.0, source: "muscatine_daily (as Plant B)"}
+        moisture: {ts_log_sigma: 0.32, lag1: 0.41, seasonal_amplitude: 0.0, seasonal_peak_doy: 0.0, source: "muscatine_daily (as Plant B)"}
+        logging: {unrecorded_probability_per_d: 0.0, unrecorded_log_sigma: 0.0, mislog_probability: 0.02, mislog_log_sigma: 0.3, source: "ASSUMED"}
+        assay_schedule: {interval_d: 1, weekdays_only: true, assays: [ts, vs, cod, tkn, tan, ph, alkalinity], source: "as Plant B"}
+      thickened_was:
+        delivery: {model: continuous, source: "muscatine_daily: V-TWAS_gal > 0 on every day"}
+        amount: {nonzero_median: 17.4, unit: "m3/d", log_sigma: 0.53, lag1: 0.88, seasonal_amplitude: 0.30, seasonal_peak_doy: 60.0, source: "muscatine_daily (as Plant B)"}
+        moisture: {ts_log_sigma: 0.20, lag1: 0.68, seasonal_amplitude: 0.0, seasonal_peak_doy: 0.0, source: "muscatine_daily (as Plant B)"}
+        logging: {unrecorded_probability_per_d: 0.0, unrecorded_log_sigma: 0.0, mislog_probability: 0.02, mislog_log_sigma: 0.3, source: "ASSUMED"}
+        assay_schedule: {interval_d: 1, weekdays_only: false, assays: [ts, vs, cod, tkn, tan, ph, alkalinity], source: "as Plant B"}

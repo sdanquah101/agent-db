@@ -1024,3 +1024,244 @@ equivalent instead of adjusting the sludge splits (not chosen; may be recorded b
 session if the adjusted splits become implausible); keep the slurry inert share at the
 fitted 0.24 (rejected: a fitted degradability is not a measured one, and the BMP
 evidence is independent).
+
+---
+
+## 2026-09-02 — Truth `N_I` weighting: inert-COD-weighted mean of the fed feeds
+
+**Decision.** `sim.influent.nitrogen.truth_inert_nitrogen` computes the truth model's
+`N_I` as the mean of the fed feeds' `inert_N_I` weighted by each feed's **inert COD
+load** (`m_k · COD_k · (f_xi + f_si)_k`), using the true fractionation when one is given.
+Under this weighting the inert-nitrogen load of the blend equals the sum of the per-feed
+loads exactly, which is what "per-feed inert N" means once ADM1 has only one `N_I`.
+`truth_parameters` returns a copy of the BSM2 set with that one field changed; the file
+and the loaded object are untouched (tested). The generator sets the run's `N_I` from
+the horizon's mean true recipe, so a run has one value (a scenario that changes the
+recipe mid-run inherits a small, known approximation; recorded here rather than adding a
+time-varying parameter to the truth model). The module docstring states that the gap to
+the fitted model is intentional and must not be "fixed".
+
+**Alternatives.** Weight by total COD (rejected: over-weights degradable feeds whose
+inerts are few); weight by wet mass (rejected: a dilute slurry would dominate a
+concentrated silage); a per-feed inert component in the state vector (rejected earlier,
+Phase 1).
+
+---
+
+## 2026-09-02 — Inert COD equivalent stays at the carbohydrate-like 1.19 kg COD/kg
+
+**Decision.** The derived COD/VS (`CODFractionation.cod_per_vs = 1 / Σ f_i/e_i`) uses
+1.19 kg COD/kg for both inert classes, as the lead's answer allowed unless a better
+equivalent was found. With that equivalent the adjusted sludge splits (HSW lipid COD
+share 0.75 → 2.15 against the measured 2.23; primary sludge lipid 0.35, inerts 0.33 →
+1.56 against 1.60; FOG lipid 0.95 → 2.72 against 2.80) are physically plausible (mass
+shares: HSW 56 % lipid; primary sludge 19 % lipid, 22 % protein, inside the typical
+composition of untreated primary sludge; FOG 95 % lipid), so no per-class inert
+equivalent was needed. The equivalents live in code
+(`sim/influent/schema.py::COD_EQUIVALENTS_KG_COD_PER_KG`) with their derivation, and the
+check is enforced twice: the schema rejects an entry whose literature value is more
+than `cod_per_vs_tolerance` (10 %) from the derived one, and `tests/test_influent.py`
+asserts every entry passes and that PR #7's FOG split fails.
+
+**Alternatives.** A lignin-like 1.9 kg COD/kg for lignocellulosic inerts and a
+biomass-like 1.42 for sludge-derived inerts (not adopted: it would let the sludge splits
+keep less lipid, but the inert *mass* is not what is measured either, and one convention
+for both inert classes keeps the derivation auditable; revisit if the lead's freeze
+finds a split implausible); keep COD/VS declared (rejected by the lead).
+
+**Cattle slurry arithmetic.** The lead's entry wrote "carbohydrate becomes 0.16" with
+inerts 0.40; with VFA 0.12, protein 0.17 and lipid 0.13 kept, 0.16 sums to 0.98. The
+inert share 0.40 is the substantive decision, so carbohydrate is 0.18 (particulate
+inerts 0.38 + soluble 0.02); the slip is noted in the YAML beside the value.
+
+---
+
+## 2026-09-02 — Tisocco 2024 Table 1 "NH4-N [g/kg TS]" is read as total N; the 2026 "7.28 g/L" is dropped
+
+**What the papers say (both read in full from this environment: Springer PDF and ESM;
+Europe PMC full text of the 2026 paper).** The 2024 methods (§2.2.1) describe ammonium
+N of the slurry by gas-sensing electrode, total N by Kjeldahl, and crude protein of the
+slurry as (total N − inorganic N) × 6.25; silage XP, XL and "ammonium nitrogen" by NIRS.
+Table 1 labels the row "NH4-N [g/kg TS]": silage 25.6 / 21.8, slurry 65.3 / 57.8.
+
+**Why it is total N.** (1) For silage the row equals XP/6.25 exactly: 160/6.25 = 25.6
+and 135/6.25 = 21.6, i.e. it is the crude-protein (total) N that NIRS reports. (2) The
+ESM Table S2 feeds it as `S_IN` for data set A: silage 25.6 × 20.1 % = 5.15 ≈ 5.1,
+slurry 65.3 × 6.8 % = 4.44 ≈ 4.35 kg N/m³ (set B does not reproduce either way).
+(3) Read as ammoniacal N the slurry would carry 65 g NH4-N per kg TS, and the AFBI
+digestate (2.3–4.3 kg N/m³) would hold less ammonia than its feed with no sink; read as
+total N the feed TKN is 4.4 g N/kg FM, ordinary for dilute cattle slurry. (4) The Foulum
+slurry's directly measured NH4-N (2026 Table 1, 1.08 g/L at 3.6 % TS = 30 g N/kg TS)
+is 0.49 of the 2024 value per kg TS, the literature TAN/TKN ratio of cattle slurry.
+The paper's label is therefore taken as a mislabel of a total-N column, and the paper's
+own use of it as `S_IN` as a modelling choice of theirs, not repeated here.
+
+**Consequence for the catalogue.** `tkn` of cattle slurry and grass silage is the 2024
+basis (mean of the two data sets: 61.6 and 23.7 g N per kg TS) at the catalogue's own
+TS (2026 Table 1: 3.6 % and 31.9 %), so that TS, VS, crude fractions and N share one
+fresh-matter basis: slurry 2.22 g N/kg FM (0.158 kmol N/m³), silage 7.56 g N/kg FM
+(0.540 kmol N/m³). `tan` is a cited ratio times `tkn`: cattle slurry 0.55 (TAN 50–60 %
+of total N: Sommer & Husted 1995, *J. Agric. Sci.* 124:45; Webb et al. 2010, *Agric.
+Ecosyst. Environ.* 137:39), cross-checked by the measured Foulum ratio 0.49; grass silage
+0.10 (ammonia N below 10 % of total N in well-preserved silage: McDonald, Henderson &
+Heron 1991, *The Biochemistry of Silage*). The implied TKN under each feed's own
+`inert_N_I` is within 10 % of the declared value (tested). The lead's per-FM figures
+(5.1 / 5.5 g N/kg FM on the 2024 TS) are recorded beside the values.
+
+**The 7.28 g/L.** The 2026 Table 1 prints 7.28 g L⁻¹ NH4-N for grass silage with no
+footnote (footnote *i* on the same column says the silage acids are "reported in the
+source as g per kg TS ... reproduced here as reported"). It is not the 2024 values
+converted at any of the three TS figures (5.1, 5.5 or 7.56 g/kg FM) nor XP/6.25 at the
+2026 TS (5.97), and exceeds the silage's total N as g/L of fresh matter. It cannot be
+traced and is **dropped**, as the lead instructed; the assumed 0.6 g N/kg FM it had
+displaced is replaced by the derived 0.76.
+
+**Flagged for the freeze (not decided here).** The catalogue's silage TS is the Foulum
+31.9 % (2026), while AFBI's own silage was 20.1 / 25.2 % (2024); Plant A is AFBI-anchored
+for hydraulics and ammonia. Nitrogen per kg TS is basis-free, so this affects only the
+per-m³ values. Recorded in the YAML beside `ts`.
+
+**Alternatives.** Read the column as ammoniacal N because the paper says so (rejected:
+contradicted by the silage arithmetic, the digestate ammonia and the Foulum measurement);
+use the Foulum measured NH4-N (1.08 g/L) directly as the slurry `tan` (not chosen: the
+lead asked for a cited ratio on the 2024 basis; the measurement is the cross-check and
+is 12 % below the ratio's value).
+
+---
+
+## 2026-09-02 — Influent generator: stochastic structure, random-stream order, what is assumed
+
+**Decision.** `sim/influent/generator.py` implements proposal §6.1 as follows (details
+and the exact stream order in the module docstring).
+
+1. **Delivery days** per feed: `continuous`; `weekday` (listed weekdays, each skipped
+   with a probability: Plant A silage Monday–Friday with no skips, Plant B FOG
+   Monday–Friday with 5 % skips); `markov` (two-state chain with the anchor's
+   stationary zero-day fraction and lag-1 persistence: Plant B HSW 0.10 / 0.84, whose
+   mean no-delivery run of 6.9 d matches the daily file's 6.94).
+2. **Amount** on delivery days: `nonzero_median × seasonal × exp(AR(1))`, the AR(1) in
+   the log with the anchor's marginal sd and lag-1; seasonal factor `exp(A cos(2π(doy −
+   peak)/365.25))` with `A` half the log ratio of the highest to the lowest monthly
+   mean. Plant B/C statistics from the Muscatine daily file through
+   `anchor/ingest_muscatine.py`, re-derived by `tests/test_generator.py`; Plant A's from
+   the Tisocco ranges where published, assumed otherwise.
+3. **Moisture**: per-delivery total solids `ts × seasonal × exp(AR(1))`, VS/TS fixed;
+   the seasonal term is the "wetter season" of the Level-3 scenario (Plant A slurry:
+   ±10 %, driest in late summer, assumed). The Muscatine VS-% spreads (log sd HSW 0.475,
+   PS 0.32, TWAS 0.20) are attributed to the moisture AR(1) after removing an assumed
+   0.03 assay cv; true-vs-assay attribution is not identifiable from the data and is
+   recorded as a choice.
+4. **Log errors**: unrecorded deliveries (an extra batch on a day, never logged; 1 %/d
+   for trucked or loader-fed feeds, 0 for pumped metered feeds) and mis-logged masses
+   (2–3 % of entries, lognormal factor sd 0.3). All assumed.
+5. **Assays**: TS, VS, COD, TKN, TAN, alkalinity, pH of the sampled delivery with
+   relative noise (pH absolute) and turnaround lag, on the feed's schedule (Plant A
+   weekly per Tisocco §2.2.1; Muscatine weekday VS/COD per the daily file's
+   measured-day pattern), reported with unit and basis. TKN is the per-feed value.
+   Alkalinity is a bicarbonate proxy from `S_IC` and the feed's catalogue pH (a new
+   provisional `ph` field). Assay cv, lags and the feed pH values are assumed.
+6. **Influent series**: one sample per day, flow-weighted true mix, **sample-and-hold**
+   (a piecewise-constant daily input is what a batch process produces; the hold
+   treatment is exact for it and costs one restart per day). The truth `N_I` from the
+   mean true recipe.
+7. **Randomness**: one `default_rng(seed)` per run; the true-fractionation draw first
+   (so it equals `sample_true_fractionations(seed)`), then per feed in sorted order a
+   fixed block of draws (delivery uniforms always consumed whatever the model), then
+   assay noise per feed and assay in sorted order. Tested: a later stage cannot change an
+   earlier one.
+
+**What is left out of this session.** Temperature seasonality ("seasonal drift in
+composition and temperature") belongs with the plant heating model / observation model,
+not the influent; feed identity per delivery is fixed by the plant's catalogue (no
+mislabelled feed here: the Level-3 "feed mislabelled" scenario is a fault injection on
+the mapping). The 100-day plausibility table of PR #7 is replaced by a 30-day Plant C
+integration test on the generated influent (standard ADM1, pH 6.8–7.8, gas positive).
+
+**Alternatives.** Hourly deliveries (rejected: the anchor is daily; nothing finer is
+observable); linear interpolation of the daily series (rejected: a delivery is not a
+ramp; the ring-test decision keeps both treatments available); a shared AR(1) across
+feeds (rejected: no evidence of cross-feed correlation in the daily file beyond the
+seasonal term, which is shared by construction through the day of year).
+
+**Addendum (engineering review of PR #10, same day).**
+
+1. **Assays sample logged deliveries only.** An assay on an unrecorded delivery would
+   put hidden truth into the operator record (a record on a day whose log reads zero).
+   The sampling mask is now `logged > 0`; the schedule is anchored to the first eligible
+   day of the horizon (a weekly, weekdays-only schedule previously produced no samples
+   at all when day 0 fell on a weekend). Alternative: keep the sample as an intended
+   clue (rejected: the Level-3 "unrecorded delivery" scenario should be detectable from
+   the mass balance, not from a stray assay).
+2. **Solids vary, the liquor does not.** The per-delivery TS scales the particulate COD
+   and its organic N; the dissolved species per m³ (TAN, inorganic C, strong ions,
+   calcium, pH) stay at the catalogue values, so the reported TAN/TKN ratio moves with
+   the moisture by construction (slurry 0.45–0.67 at the assumed TS spread). Recorded
+   as the choice rather than scaling dissolved species with TS: dilution by rainwater
+   dilutes the liquor, a drier clamp does not concentrate it, and no anchor measures
+   both together. Revisit if a scenario needs feed TAN to track TS.
+3. **Seasonal amplitudes are bounded by the monthly-mean statistic**, not equal to it
+   (half the log ratio of the extreme monthly means over-states a true cycle by the
+   sampling noise of twelve monthly means of a 0.4–0.8 log-sd series); the test accepts
+   half that bound up to the bound plus 0.03. Moisture log sds are the assay column's
+   log sd less the assumed 0.03 assay cv in quadrature (0.32 / 0.20 / 0.47).
+4. **The horizon is not prefix-stable**: the stream blocks are `n_days` long, so seed and
+   horizon together identify a run (documented; a per-day stream layout would make the
+   generator O(feeds × days) slower for no scenario need).
+
+---
+
+## 2026-09-02 — FREEZE (by the lead): silage on the Tisocco 2024 basis; the inert COD equivalent is per feed
+
+**Decisions (the lead's answers on PR #10; the catalogue values they touch are now
+settled, the rest of the catalogue stays `provisional` until the lead says otherwise).**
+
+1. **Silage basis follows Tisocco et al. 2024 throughout.** Total solids as a percentage
+   of **fresh matter**, every composition figure **per kg TS**, and **VS = TS − ash**.
+   Every silage field in `configs/influent/feed_fractionation.yaml` is labelled with that
+   basis. The liquid-basis ("g/L") reading of the 2026 Foulum table is dropped for this
+   feed, and with it the last use of the untraced 7.28 g/L.
+2. **The inert COD equivalent is per feed, with a source.** `inert_cod_equivalent`
+   (kg COD per kg of inert VS mass) is a catalogue field, not a global constant:
+   **1.2** for lignocellulosic inerts (cattle slurry, grass silage) and **1.42** for
+   sludge-derived inerts (the Muscatine feeds, at the ADM1 biomass composition C₅H₇O₂N,
+   inside the lead's 1.4–1.5). **FOG and food waste take the sludge value** by the lead's
+   instruction, documented beside each value as an assumption rather than a measurement.
+
+**What changed in the catalogue.**
+
+| Field | Before | After |
+|---|---|---|
+| `grass_silage.ts` | 0.319 (Foulum, % FM) | **0.2265** (AFBI 2024: mean of 20.1 / 25.2 % FM) |
+| `grass_silage.vs_of_ts` | 0.877 (Foulum) | **0.815** (TS − ash: 1000 − 185 g XA per kg TS) |
+| `grass_silage.fractionation` | 0.327 / 0.148 / 0.075 / 0.25 / 0 / 0.20 | **0.328 / 0.202 / 0.081 / 0.25 / 0 / 0.139** (2024 crude fractions per kg TS; acids at acetic 1.07, butyric 1.82, propionic 1.51, lactic 1.07 kg COD/kg) |
+| `grass_silage.cod_per_vs_literature` | 1.277 | **1.274** (derived 1.275, +0.1 %) |
+| `grass_silage.tkn` / `tan` | 0.540 / 0.054 | **0.383 / 0.038** (23.7 g N per kg TS × 226.5 g TS/kg FM = 5.37 g N/kg FM; TAN ratio 0.10 unchanged) |
+| `inert_cod_equivalent` | (global 1.19) | **1.2** slurry, silage; **1.42** food waste, HSW, FOG, primary sludge, thickened WAS |
+| `cattle_slurry.ts` / `vs_of_ts` | 0.036 / 0.751 (Foulum) | **0.0715 / 0.759** (AFBI 2024) — see the flag below |
+| `cattle_slurry.tkn` / `tan` | 0.158 / 0.087 | **0.314 / 0.173** (same 61.6 g N per kg TS at the 2024 TS; = the ESM's slurry `S_IN` of 4.35–5.95 kg N/m³) |
+| `cattle_slurry.cod_per_vs_literature` | 1.337 (2026 fractions) | **1.332** (2024 fractions; derived 1.314, −1.4 %) |
+
+Derived COD/VS against its check after the freeze: slurry −1.8 %, silage +0.1 %, food
+waste +0.1 %, HSW −2.2 %, FOG −2.1 %, primary sludge +4.8 %, thickened WAS +1.6 % — all
+inside ±10 %. Declared TKN against the ADM1-implied one: −9.2 % to +12.2 %, all inside
+each entry's `tkn_tolerance` of 0.15.
+
+**FLAGGED FOR THE LEAD: the cattle-slurry basis moved too, and it was not in the
+instruction.** Applying the freeze to silage alone put grass silage on AFBI 2024
+(22.65 % TS) while cattle slurry stayed on Foulum 2026 (3.6 % TS), and Plant A's organic
+loading then fell to **1.17 kg VS m⁻³ d⁻¹**, outside the published AFBI envelope of
+1.4–2.1 that `tests/test_influent.py::test_plant_a_loading_lands_in_the_published_olr_range`
+asserts. Putting both Plant A feeds on the 2024 basis restores **1.78**, inside it. The
+freeze's stated principle is a basis rule for the AFBI plant, so it was applied to the
+plant's other feed as well; the slurry's *fractionation* is untouched (it is the lead's
+frozen one, and the two tables' crude fractions agree to a few per cent). Consequence to
+note: the slurry's feed TKN and TAN roughly double (4.40 and 2.42 g N/L), which is what
+the 2024 ESM lists as the slurry `S_IN`. If the lead prefers the slurry on the 2026
+column, revert those four fields and the OLR test's envelope needs the lead's ruling
+instead.
+
+**Alternatives.** Keep the slurry on the 2026 column and accept an OLR outside the
+published range (rejected: the catalogue would no longer reproduce the plant it is
+anchored to, and the OLR test is one of the few anchored checks Plant A has); loosen the
+OLR test (rejected: it would hide the inconsistency the basis change exposed); use a
+lignin-like 1.9 kg COD/kg for lignocellulosic inerts (superseded: the lead fixed ~1.2).

@@ -32,6 +32,7 @@ from pydantic import ValidationError
 
 from sim.adm1 import LIQUID_STATE_NAMES
 from sim.influent import (
+    COD_EQUIVALENTS_KG_COD_PER_KG,
     COD_STATES,
     FEED_FRACTIONATION,
     FRACTION_NAMES,
@@ -41,6 +42,8 @@ from sim.influent import (
     cod_loading_rate,
     constant_influent,
     extension_influent,
+    feed_cod_per_m3,
+    feed_tkn,
     implied_tkn,
     load_feed_fractionation,
     mix_feeds,
@@ -48,9 +51,11 @@ from sim.influent import (
     organic_loading_rate,
     sample_true_fractionations,
     tkn_consistent,
+    truth_inert_nitrogen,
+    truth_parameters,
 )
 from sim.influent.schema import FeedKind
-from sim.plants import load_all_plants, load_plant_a_statistics
+from sim.plants import KG_N_PER_KMOL, load_all_plants, load_plant_a_statistics
 from sim.plants.schema import FeedStream, PlantConfig
 from tests.conftest import REPO_ROOT
 
@@ -115,11 +120,33 @@ def test_every_value_is_provisional_and_marked_design(catalogue):
 
 def test_units_in_every_numeric_field_description():
     """CLAUDE.md rule 6: a unit (or an explicit '-') in every numeric field description."""
-    for model_cls in (FeedFractionation, CODFractionation):
+    from sim.influent.generator import (
+        AmountModel,
+        AssayModel,
+        AssayRecord,
+        AssaySchedule,
+        DeliveryModel,
+        LoggingModel,
+        MoistureModel,
+    )
+
+    unit = re.compile(r"kg|kmol|m3|pH units|, -|, d\b|, 1/d|own unit|in `unit`")
+    for model_cls in (
+        FeedFractionation,
+        CODFractionation,
+        AssayModel,
+        AssaySchedule,
+        DeliveryModel,
+        AmountModel,
+        MoistureModel,
+        LoggingModel,
+        AssayRecord,
+    ):
         for name, field in model_cls.model_fields.items():
-            if "float" in str(field.annotation):
+            annotation = str(field.annotation)
+            if "float" in annotation or "int" in annotation:
                 desc = field.description or ""
-                assert re.search(r"kg|kmol|m3|, -", desc), f"{model_cls.__name__}.{name}: {desc}"
+                assert unit.search(desc), f"{model_cls.__name__}.{name}: {desc}"
 
 
 def test_schema_rejections(catalogue):
@@ -208,7 +235,8 @@ def test_mixed_influent_is_flow_weighted_and_cod_consistent(catalogue, plants):
             fn(catalogue, {"fog": 0.0})
 
 
-def test_true_fractionation_moves_cod_between_classes_but_conserves_it(catalogue, plants):
+def test_true_fractionation_moves_cod_between_classes_and_changes_total_cod(catalogue, plants):
+    """VS is what a feed delivers; COD follows the (true) composition through COD/VS."""
     cfg = plants["A"]
     rates = nominal_mass_rates(cfg, catalogue)
     declared, q = mix_feeds(catalogue, rates)
@@ -216,10 +244,142 @@ def test_true_fractionation_moves_cod_between_classes_but_conserves_it(catalogue
     true, q_true = mix_feeds(catalogue, rates, truth.fractionations)
     assert q_true == q
     cod = [i for n, i in _L.items() if n in COD_STATES]
-    assert declared[cod].sum() == pytest.approx(true[cod].sum(), rel=1e-12)
     assert not np.allclose(declared[cod], true[cod], rtol=1e-3)
+    # total COD moves with the derived COD/VS, bounded by the class equivalents
+    ratio = true[cod].sum() / declared[cod].sum()
+    assert ratio != pytest.approx(1.0, rel=1e-6)
+    equivalents = [
+        e
+        for fid in rates
+        for e in catalogue.feeds[fid]
+        .fractionation.equivalents(catalogue.feeds[fid].inert_cod_equivalent)
+        .values()
+    ]
+    assert min(equivalents) / max(equivalents) < ratio < max(equivalents) / min(equivalents)
+    # and exactly: per feed, COD/m3 = TS x VS/TS x COD/VS(true) x density
+    for fid in rates:
+        spec = catalogue.feeds[fid]
+        cod_per_vs = truth[fid].cod_per_vs(spec.inert_cod_equivalent)
+        expected = spec.ts * spec.vs_of_ts * cod_per_vs * spec.density
+        assert feed_cod_per_m3(spec, truth[fid]) == pytest.approx(expected)
     other = [i for n, i in _L.items() if n not in COD_STATES]
     np.testing.assert_array_equal(declared[other], true[other])  # dissolved species untouched
+
+
+# ------------------------------------------------------- derived COD/VS (task 2)
+
+
+def test_cod_per_vs_is_derived_and_checked_against_the_literature(catalogue):
+    """COD/VS = 1 / sum(f_i / e_i); the literature value is a check within the tolerance."""
+    for fid, spec in catalogue.feeds.items():
+        f = spec.fractionation
+        e = f.equivalents(spec.inert_cod_equivalent)
+        assert e["f_xi"] == e["f_si"] == spec.inert_cod_equivalent
+        assert {k: e[k] for k in COD_EQUIVALENTS_KG_COD_PER_KG} == COD_EQUIVALENTS_KG_COD_PER_KG
+        by_hand = 1.0 / sum(getattr(f, n) / e[n] for n in FRACTION_NAMES)
+        assert spec.cod_per_vs == pytest.approx(by_hand), fid
+        gap = abs(spec.cod_per_vs - spec.cod_per_vs_literature) / spec.cod_per_vs_literature
+        assert gap <= spec.cod_per_vs_tolerance <= 0.10, (fid, gap)
+        assert sum(f.mass_shares(spec.inert_cod_equivalent).values()) == pytest.approx(1.0)
+        assert "cod_per_vs" not in FeedFractionation.model_fields  # derived, never declared
+    # the lead's targets: FOG near 2.7-2.9, HSW against the measured 2.23, primary 1.60
+    assert 2.7 <= catalogue.feeds["fog"].cod_per_vs <= 2.9
+    assert catalogue.feeds["high_strength_waste"].cod_per_vs_literature == pytest.approx(2.234)
+    assert catalogue.feeds["primary_sludge"].cod_per_vs_literature == pytest.approx(1.60)
+    assert 0.7 <= catalogue.feeds["high_strength_waste"].fractionation.f_li <= 0.75
+    # the check is enforced by the schema, not only by this test
+    fog = catalogue.feeds["fog"]
+    with pytest.raises(ValidationError, match="COD/VS derived"):
+        FeedFractionation.model_validate(fog.model_dump() | {"cod_per_vs_literature": 2.0})
+    # PR #7's FOG (lipid COD share 0.85 read as a mass share) fails the check it motivated
+    old = {"f_ch": 0.05, "f_pr": 0.05, "f_li": 0.85, "f_xi": 0.04, "f_si": 0.01, "f_vfa": 0.0}
+    with pytest.raises(ValidationError, match="COD/VS derived"):
+        FeedFractionation.model_validate(fog.model_dump() | {"fractionation": old})
+    assert CODFractionation(**old).cod_per_vs(1.42) == pytest.approx(2.47, abs=0.01)
+
+
+def test_inert_cod_equivalent_is_per_feed_with_the_frozen_values(catalogue):
+    """Lead's freeze: ~1.2 for lignocellulosic inerts, 1.4-1.5 for sludge-derived ones."""
+    lignocellulosic = {"cattle_slurry", "grass_silage"}
+    for fid, spec in catalogue.feeds.items():
+        if fid in lignocellulosic:
+            assert spec.inert_cod_equivalent == pytest.approx(1.2), fid
+        else:
+            assert 1.4 <= spec.inert_cod_equivalent <= 1.5, fid
+    # every entry names a source for it, and the two assumed ones say so
+    text = FEED_FRACTIONATION.read_text(encoding="utf-8")
+    lines = [ln for ln in text.splitlines() if "inert_cod_equivalent:" in ln]
+    assert len(lines) == len(catalogue.feeds)
+    assert all("# DESIGN" in ln and "kg COD/kg VS mass" in ln for ln in lines)
+    assert sum("LEAD'S INSTRUCTION" in ln for ln in lines) == 2  # fog, food waste
+    # the equivalent is not cosmetic: it moves the derived COD/VS
+    ps = catalogue.feeds["primary_sludge"]
+    assert ps.fractionation.cod_per_vs(1.2) < ps.cod_per_vs
+    with pytest.raises(ValueError, match="inert COD equivalent must be positive"):
+        ps.fractionation.cod_per_vs(0.0)
+
+
+def test_grass_silage_is_on_the_tisocco_2024_basis(catalogue):
+    """Lead's freeze: TS in % FM, composition per kg TS, VS = TS - ash; basis labelled."""
+    spec = catalogue.feeds["grass_silage"]
+    assert spec.ts == pytest.approx((20.1 + 25.2) / 2 / 100)  # T2024 Table 1, % FM
+    assert spec.vs_of_ts == pytest.approx((1000 - 185) / 1000)  # VS = TS - ash (XA 185)
+    # the fractionation is the 2024 per-kg-TS composition, acids at their own equivalents
+    acids = {"acetic": (25.5, 1.07), "butyric": (1.4, 160 / 88), "propionic": (0.8, 112 / 74)}
+    acid_cod = sum(m * e for m, e in acids.values()) + 106.5 * (96 / 90)  # + lactic
+    xc, xp, xl = (624 + 653) / 2, (160 + 135) / 2, (31 + 27) / 2
+    total = (xc - (25.5 + 1.4 + 0.8 + 106.5)) * 1.19 + xp * 1.42 + xl * 2.90 + acid_cod
+    assert spec.cod_per_vs_literature == pytest.approx(total / (1000 - 185), rel=0.01)
+    assert spec.fractionation.f_pr == pytest.approx(xp * 1.42 / total, abs=0.002)
+    assert spec.fractionation.f_vfa == pytest.approx(acid_cod / total, abs=0.002)
+    # the dropped liquid-basis reading is gone from the entry
+    body = FEED_FRACTIONATION.read_text(encoding="utf-8")
+    entry = body[body.index("  grass_silage:") : body.index("Plant B feeds")]
+    assert "31.9" in entry and "NOT used" in entry  # the 2026 column is named and rejected
+    assert "FRESH-MATTER basis" in entry and "TS - ash" in entry
+    assert "0.319" not in entry and "0.877" not in entry
+
+
+# --------------------------------------------- cattle slurry re-centred (task 3)
+
+
+def test_cattle_slurry_inert_share_is_centred_at_0_40_with_the_decided_spread(catalogue):
+    """Lead's answer 2: inerts 0.40, measured VFA/protein/lipid kept, kappa ~100 -> sd ~0.05."""
+    spec = catalogue.feeds["cattle_slurry"]
+    f = spec.fractionation
+    assert f.f_xi + f.f_si == pytest.approx(0.40)
+    assert (f.f_vfa, f.f_pr, f.f_li) == (0.12, 0.17, 0.13)
+    assert f.f_ch == pytest.approx(1.0 - 0.40 - 0.12 - 0.17 - 0.13)
+    assert spec.fractionation_concentration == 100.0
+    draws = [sample_true_fractionations(catalogue, ["cattle_slurry"], s) for s in range(600)]
+    inert = np.array([d["cattle_slurry"].f_xi + d["cattle_slurry"].f_si for d in draws])
+    assert inert.mean() == pytest.approx(0.40, abs=0.01)
+    assert inert.std() == pytest.approx(np.sqrt(0.4 * 0.6 / 101.0), rel=0.2)
+    lo, hi = np.percentile(inert, [2.5, 97.5])
+    assert 0.28 <= lo <= 0.33 and 0.47 <= hi <= 0.52
+    # Tisocco's fitted DQ_XC 0.69 (inert ~0.24 with these fractions) is inside the draws
+    assert inert.min() < 0.27
+
+
+# ------------------------------------------ Plant A nitrogen basis (task 4)
+
+
+def test_plant_a_nitrogen_is_on_the_2024_total_n_basis(catalogue):
+    """Tkn = Tisocco 2024 Table 1 N (g N per kg TS, read as total N) x TS; tan by a cited ratio."""
+    env = load_plant_a_statistics()["plants"]["afbi_hillsborough"]["ammonia_envelope"]
+    n_per_ts = env["feed_TAN_g_N_per_kg_TS"]  # the file's field name; total N per the decision
+    assert catalogue.feeds["cattle_slurry"].ts == pytest.approx((6.8 + 7.5) / 2 / 100)
+    for fid, ratio in (("cattle_slurry", 0.55), ("grass_silage", 0.10)):
+        spec = catalogue.feeds[fid]
+        mean_g_per_kg_ts = float(np.mean(n_per_ts[fid]))
+        tkn = mean_g_per_kg_ts * spec.ts * spec.density / 1000.0 / KG_N_PER_KMOL
+        assert spec.tkn == pytest.approx(tkn, rel=0.01), fid
+        assert spec.tan == pytest.approx(ratio * spec.tkn, rel=0.02), fid
+    # the untraced 7.28 g/L is gone from the catalogue
+    text = FEED_FRACTIONATION.read_text(encoding="utf-8")
+    assert "tan: 0.043" not in text and "DROPPED" in text
+    # the silage column equals XP / 6.25 in the 2024 table: the arithmetic behind the reading
+    assert pytest.approx(25.6) == 160 / 6.25 and pytest.approx(21.6, abs=0.3) == 135 / 6.25
 
 
 def test_plant_recipes_reproduce_the_declared_feed_flows(catalogue, plants):
@@ -270,7 +430,83 @@ def test_catalogue_nitrogen_is_consistent_under_its_declared_inert_n(catalogue, 
             assert spec.inert_N_I < bsm2.N_I
             assert not tkn_consistent(spec, bsm2), fid
     silage = catalogue.feeds["grass_silage"]
-    assert implied_tkn(silage, bsm2) * 14.007 > 10.0  # ~11 g N/L against the declared 6.6
+    # the finding in its own terms: the BSM2 inert N over-counts silage N by ~60 %
+    assert implied_tkn(silage, bsm2) > 1.5 * silage.tkn
+
+
+# ---------------------------------------- per-feed inert N in the truth (task 1)
+
+
+def test_truth_inert_nitrogen_is_the_inert_cod_weighted_mean(catalogue, plants, adm1_params):
+    """Truth N_I = sum(w_k N_I,k) / sum(w_k) with w_k the inert COD load of feed k."""
+    rates = nominal_mass_rates(plants["B"], catalogue)
+    num = den = 0.0
+    for fid, m in rates.items():
+        spec = catalogue.feeds[fid]
+        f = spec.fractionation
+        w = m / spec.density * spec.cod_per_m3 * (f.f_xi + f.f_si)
+        num += w * spec.inert_N_I
+        den += w
+    n_i = truth_inert_nitrogen(catalogue, rates)
+    assert n_i == pytest.approx(num / den)
+    values = [catalogue.feeds[f].inert_N_I for f in rates]
+    assert min(values) < n_i < max(values)
+    # a recipe's true fractionation changes the weights, not the per-feed values
+    truth = sample_true_fractionations(catalogue, rates, 11)
+    assert truth_inert_nitrogen(catalogue, rates, truth.fractionations) != pytest.approx(n_i)
+    degradable = CODFractionation(f_ch=0.5, f_pr=0.3, f_li=0.1, f_xi=0.0, f_si=0.0, f_vfa=0.1)
+    no_inert = {
+        fid: s.model_copy(update={"fractionation": degradable})
+        for fid, s in catalogue.feeds.items()
+    }
+    with pytest.raises(ValueError, match="no inert COD"):
+        truth_inert_nitrogen(no_inert, rates)
+    with pytest.raises(ValueError, match="unknown feeds"):
+        truth_inert_nitrogen(catalogue, {"cake": 1.0})
+
+
+def test_fitted_default_untouched_and_the_mismatch_is_real(catalogue, plants, adm1_params):
+    """The truth carries the per-feed N_I; the BSM2 set the fitted model keeps does not."""
+    from sim.adm1 import load_parameters
+    from sim.adm1.defaults import PARAMS_BSM2
+
+    bsm2_n_i = 0.06 / 14.0
+    before = PARAMS_BSM2.read_bytes()
+    truths = {}
+    for pid, cfg in plants.items():
+        rates = nominal_mass_rates(cfg, catalogue)
+        truth = truth_parameters(adm1_params, catalogue, rates)
+        truths[pid] = truth
+        assert pytest.approx(truth_inert_nitrogen(catalogue, rates)) == truth.stoichiometry.N_I
+        # only N_I differs
+        assert truth.stoichiometry.model_dump() | {"N_I": adm1_params.stoichiometry.N_I} == (
+            adm1_params.stoichiometry.model_dump()
+        )
+        assert truth.kinetics == adm1_params.kinetics and truth.physchem == adm1_params.physchem
+    # the fitted default is untouched: in memory, on disk, and on re-load
+    assert pytest.approx(bsm2_n_i) == adm1_params.stoichiometry.N_I
+    assert PARAMS_BSM2.read_bytes() == before
+    assert pytest.approx(bsm2_n_i) == load_parameters().stoichiometry.N_I
+    # the mismatch is real where the catalogue says so, and absent for the sludge-only plant
+    assert 0.3 * bsm2_n_i > truths["A"].stoichiometry.N_I
+    assert bsm2_n_i > truths["B"].stoichiometry.N_I
+    assert pytest.approx(bsm2_n_i) == truths["C"].stoichiometry.N_I  # both sludges are BSM2
+    # the reported (assay) TKN is the per-feed one; the fitted N_I cannot reproduce it
+    n_aa = adm1_params.stoichiometry.N_aa
+    for fid, spec in catalogue.feeds.items():
+        own = feed_tkn(spec, n_aa)
+        assert own == pytest.approx(
+            implied_tkn(spec, adm1_params.stoichiometry.model_copy(update={"N_I": spec.inert_N_I}))
+        )
+        fitted = implied_tkn(spec, adm1_params.stoichiometry)
+        if fid in {"primary_sludge", "thickened_was"}:
+            assert fitted == pytest.approx(own)
+        else:
+            assert abs(fitted - own) / own > spec.tkn_tolerance, fid
+    # the module says the gap is intentional
+    import sim.influent.nitrogen as nitrogen
+
+    assert "intentional" in (nitrogen.__doc__ or "") and "must not" in (nitrogen.__doc__ or "")
 
 
 # ------------------------------------------------------------ rule 1 hygiene

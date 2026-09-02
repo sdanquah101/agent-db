@@ -32,10 +32,21 @@ is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
   "Plant configurations A/B/C — frozen").
 - `influent/feed_fractionation.yaml` — the feed-fractionation catalogue of the influent
   generator (schema `sim/influent/schema.py`), keyed by the plants' feed ids: TS, VS/TS,
-  COD/VS, six-way COD fractionation and its Dirichlet spread, TAN/TKN, inorganic C,
-  strong ions, calcium, with sources. **Provisional** (salvaged from PR #7 for the lead's
-  review; decisions log, "Feed fractionation values are provisional"): every value is
-  `# DESIGN` and `status: provisional`. Loaded by `sim.influent.load_feed_fractionation`.
+  six-way COD fractionation and its Dirichlet spread, the per-feed inert COD equivalent
+  (1.2 lignocellulosic / 1.42 sludge-derived, lead's freeze), a literature COD/VS as a
+  *check* on the value derived from the fractionation (±10 %, enforced), pH, TAN/TKN, per-feed
+  inert N (applied by the truth model only), inorganic C, strong ions, calcium, with
+  sources. **Provisional** (decisions log, "Feed fractionation values are provisional";
+  revised on the lead's consistency answers, "Feed catalogue consistency"): every value
+  is `# DESIGN` and `status: provisional`. Loaded by `sim.influent.load_feed_fractionation`.
+- `influent/generator.yaml` — the influent generator's statistics (schema
+  `sim/influent/generator.py`): per plant and feed, the delivery-day model (continuous /
+  weekday / Markov), the lognormal AR(1) amount with its seasonal term, the moisture
+  AR(1), unrecorded-delivery and mis-log rates, the assay schedule; and the shared assay
+  noise and lag. Plant B/C values are re-derived from the Muscatine daily file by
+  `tests/test_generator.py` through `anchor/ingest_muscatine.py` (seasonal amplitudes
+  are bounded by the monthly-mean statistic rather than equal to it); assumed values
+  are marked `ASSUMED`. Loaded by `sim.influent.load_generator_config`.
 - `plant_a_statistics.yaml` — the published operating envelopes Plant A is anchored to
   (Tisocco et al. 2024, 2026), the published HRT inconsistency and the chosen 35–45 d,
   with `todo` nulls where the tables are not yet transcribed (the lead transcribes the

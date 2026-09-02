@@ -36,6 +36,23 @@ FRACTION_NAMES: tuple[str, ...] = ("f_ch", "f_pr", "f_li", "f_xi", "f_si", "f_vf
 #: Tolerance on "fractions sum to one" for a declared catalogue entry.
 FRACTION_SUM_TOL = 1e-9
 
+#: COD equivalents of the four degradable classes, kg COD per kg of the class (VS mass).
+#: Carbohydrates 1.19, proteins 1.42, lipids 2.90 are the VDI 4630 theoretical methane
+#: yields (0.415 / 0.496 / 1.014 m3 CH4 STP per kg) divided by 0.35 m3 CH4 per kg COD;
+#: VFA as acetate 1.07 (stoichiometric, CH3COOH + 2 O2). The two INERT classes are not
+#: here: their equivalent is **per feed** (``FeedFractionation.inert_cod_equivalent``,
+#: lead's freeze of 2026-09-02, "Silage basis and per-feed inert COD equivalent"),
+#: because a lignocellulosic inert and a sludge-derived inert are different materials.
+COD_EQUIVALENTS_KG_COD_PER_KG: dict[str, float] = {
+    "f_ch": 1.19,
+    "f_pr": 1.42,
+    "f_li": 2.90,
+    "f_vfa": 1.07,
+}
+
+#: The two inert COD fractions, whose equivalent is declared per feed.
+INERT_FRACTION_NAMES: tuple[str, ...] = ("f_xi", "f_si")
+
 #: Feed kinds a catalogue entry may declare: the kinds of the plant contract
 #: (:class:`sim.plants.schema.FeedStream`) plus ``food_waste``, which PR #7 carried and no
 #: frozen plant uses (tested to stay a superset of the contract's kinds).
@@ -74,6 +91,32 @@ class CODFractionation(_Frozen):
         """The six fractions in :data:`FRACTION_NAMES` order."""
         return tuple(getattr(self, n) for n in FRACTION_NAMES)
 
+    def equivalents(self, inert_cod_equivalent: float) -> dict[str, float]:
+        """Class COD equivalents with the feed's own inert value, kg COD/kg."""
+        if not inert_cod_equivalent > 0.0:
+            raise ValueError(f"inert COD equivalent must be positive, got {inert_cod_equivalent}")
+        return COD_EQUIVALENTS_KG_COD_PER_KG | dict.fromkeys(
+            INERT_FRACTION_NAMES, float(inert_cod_equivalent)
+        )
+
+    def cod_per_vs(self, inert_cod_equivalent: float) -> float:
+        """COD per kg of volatile solids implied by this fractionation, kg COD/kg VS.
+
+        With COD shares ``f_i`` and class equivalents ``e_i`` (kg COD/kg), the mass share
+        of class ``i`` is ``(f_i/e_i) / sum_j(f_j/e_j)`` and one kg of VS carries
+        ``1 / sum_j(f_j/e_j)`` kg COD. Derived, never declared (lead's decision
+        2026-09-02): the catalogue's literature value is a check, not an input. The inert
+        equivalent is the feed's own (``FeedFractionation.inert_cod_equivalent``).
+        """
+        e = self.equivalents(inert_cod_equivalent)
+        return 1.0 / sum(getattr(self, n) / e[n] for n in FRACTION_NAMES)
+
+    def mass_shares(self, inert_cod_equivalent: float) -> dict[str, float]:
+        """Mass share of each class in the volatile solids, kg/kg VS (sums to one)."""
+        e = self.equivalents(inert_cod_equivalent)
+        cod_per_vs = self.cod_per_vs(inert_cod_equivalent)
+        return {n: getattr(self, n) / e[n] * cod_per_vs for n in FRACTION_NAMES}
+
 
 class FeedFractionation(_Frozen):
     """One catalogue entry: the declared composition of a feed.
@@ -81,7 +124,10 @@ class FeedFractionation(_Frozen):
     Solids are on a wet (fresh-matter, FM) basis for ``ts`` and a dry basis for ``vs_of_ts``.
     Concentrations of dissolved species are per m3 of wet feed. ``fractionation`` is the
     *declared* (catalogue) fractionation; the hidden true fractionation of a run is a
-    seeded Dirichlet draw around it (:mod:`sim.influent.fractionation`).
+    seeded Dirichlet draw around it (:mod:`sim.influent.fractionation`). COD per VS is
+    **derived** from the fractionation (:attr:`CODFractionation.cod_per_vs`); the
+    literature or measured value is carried as ``cod_per_vs_literature`` and must agree
+    with the derived one within ``cod_per_vs_tolerance`` (validated here and tested).
     """
 
     feed_id: str = Field(description="Catalogue key; equals FeedStream.name in configs/plants")
@@ -93,7 +139,28 @@ class FeedFractionation(_Frozen):
     density: _Pos = Field(description="Bulk density of the wet feed, kg/m3")
     ts: _Frac = Field(description="Total solids, kg TS/kg wet (fresh-matter basis)")
     vs_of_ts: _Frac = Field(description="Volatile solids, kg VS/kg TS (dry basis)")
-    cod_per_vs: _Pos = Field(description="Total COD per volatile solids, kg COD/kg VS")
+    inert_cod_equivalent: _Pos = Field(
+        description=(
+            "COD equivalent of this feed's inerts (X_I, S_I), kg COD/kg VS mass; ~1.2 for "
+            "lignocellulosic inerts (slurry, silage) and 1.4-1.5 for sludge-derived inerts "
+            "(the Muscatine feeds, and by documented assumption FOG and food waste). "
+            "Lead's freeze 2026-09-02; sources per entry in the catalogue"
+        )
+    )
+    cod_per_vs_literature: _Pos = Field(
+        description=(
+            "Literature or measured total COD per volatile solids, kg COD/kg VS; a CHECK "
+            "on the value derived from the fractionation, not an input"
+        )
+    )
+    cod_per_vs_tolerance: _Frac = Field(
+        description=(
+            "Accepted relative gap between the derived COD/VS and `cod_per_vs_literature`, -"
+        )
+    )
+    ph: Annotated[float, Field(ge=0.0, le=14.0)] = Field(
+        description="pH of the wet feed as delivered, pH units (a routine assay of the generator)"
+    )
     fractionation: CODFractionation = Field(description="Declared (catalogue) COD fractionation")
     fractionation_concentration: _Pos = Field(
         description=(
@@ -132,9 +199,26 @@ class FeedFractionation(_Frozen):
             raise ValueError(f"{self.feed_id}: ammoniacal N ({self.tan}) exceeds TKN ({self.tkn})")
         return self
 
+    @model_validator(mode="after")
+    def _cod_per_vs_checks(self) -> FeedFractionation:
+        derived, lit = self.cod_per_vs, self.cod_per_vs_literature
+        gap = abs(derived - lit) / lit
+        if gap > self.cod_per_vs_tolerance:
+            raise ValueError(
+                f"{self.feed_id}: COD/VS derived from the fractionation ({derived:.3f}) "
+                f"differs from the literature value ({lit:.3f}) by {gap:.1%} "
+                f"(> {self.cod_per_vs_tolerance:.0%})"
+            )
+        return self
+
+    @property
+    def cod_per_vs(self) -> float:
+        """Total COD per volatile solids derived from the declared fractionation, kg COD/kg VS."""
+        return self.fractionation.cod_per_vs(self.inert_cod_equivalent)
+
     @property
     def cod_per_kg_wet(self) -> float:
-        """Total COD per kg of wet feed, kg COD/kg."""
+        """Total COD per kg of wet feed, kg COD/kg (declared fractionation)."""
         return self.ts * self.vs_of_ts * self.cod_per_vs
 
     @property

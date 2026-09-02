@@ -3,15 +3,14 @@
 Pure functions. A feed recipe (kg wet per day of each catalogue feed) plus a
 fractionation per feed (catalogue, or the hidden truth) gives the 26 liquid-state
 influent concentrations and the total flow. Total COD of a feed is
-``TS x VS/TS x COD/VS``; the fractionation splits it into carbohydrates, proteins,
-lipids, particulate and soluble inerts and VFA (as acetate); proteins, carbohydrates and
-lipids are fed directly (no composite ``X_xc``). Dissolved species (ammoniacal N,
-inorganic C, strong ions, calcium) are flow-weighted.
-
-COD equivalents used to build the catalogue values (documented in the YAML file, not
-used here): 1.19 kg COD/kg carbohydrate, 1.42 kg COD/kg protein, 2.90 kg COD/kg lipid
-(VDI 4630 theoretical methane yields 0.415 / 0.496 / 1.014 m3 CH4 (STP)/kg divided by
-0.35 m3 CH4/kg COD).
+``TS x VS/TS x COD/VS`` where COD/VS is **derived from the fractionation in use**
+(:attr:`sim.influent.schema.CODFractionation.cod_per_vs`, from the class COD
+equivalents :data:`~sim.influent.schema.COD_EQUIVALENTS_KG_COD_PER_KG`): the volatile
+solids are what a feed delivers, and a different true composition carries a different
+COD. The fractionation splits that COD into carbohydrates, proteins, lipids, particulate
+and soluble inerts and VFA (as acetate); proteins, carbohydrates and lipids are fed
+directly (no composite ``X_xc``). Dissolved species (ammoniacal N, inorganic C, strong
+ions, calcium) are flow-weighted.
 
 Recipes are mass rates (kg wet/d) because the plant contract reports batch feeds by
 fresh mass (silage) and pumped feeds by volume; :func:`nominal_mass_rates` converts a
@@ -55,10 +54,29 @@ def tkn_consistent(spec: FeedFractionation, stoich: StoichiometryParameters) -> 
     return abs(implied - spec.tkn) / spec.tkn <= spec.tkn_tolerance
 
 
-def feed_concentrations(spec: FeedFractionation, fractionation: CODFractionation) -> np.ndarray:
-    """The 26 ADM1 liquid concentrations of one wet feed (kg COD/m3, kmol/m3)."""
+def feed_cod_per_m3(
+    spec: FeedFractionation, fractionation: CODFractionation, ts: float | None = None
+) -> float:
+    """Total COD of one wet feed under a fractionation, kg COD/m3.
+
+    ``TS x VS/TS x COD/VS(fractionation) x density``; ``ts`` overrides the catalogue
+    total solids (the generator's per-delivery moisture), kg TS/kg wet.
+    """
+    ts_used = spec.ts if ts is None else float(ts)
+    cod_per_vs = fractionation.cod_per_vs(spec.inert_cod_equivalent)
+    return ts_used * spec.vs_of_ts * cod_per_vs * spec.density
+
+
+def feed_concentrations(
+    spec: FeedFractionation, fractionation: CODFractionation, ts: float | None = None
+) -> np.ndarray:
+    """The 26 ADM1 liquid concentrations of one wet feed (kg COD/m3, kmol/m3).
+
+    COD follows the fractionation given (declared or true); ``ts`` optionally overrides
+    the catalogue total solids. Dissolved species are the catalogue's.
+    """
     c = np.zeros(len(LIQUID_STATE_NAMES))
-    cod = spec.cod_per_m3
+    cod = feed_cod_per_m3(spec, fractionation, ts)
     c[_L["X_ch"]] = cod * fractionation.f_ch
     c[_L["X_pr"]] = cod * fractionation.f_pr
     c[_L["X_li"]] = cod * fractionation.f_li
