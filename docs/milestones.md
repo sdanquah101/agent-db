@@ -727,3 +727,67 @@ open SCADA file is pre-cleaned.
 | Schema/config/model restructuring | ≈ 20 min | — | |
 | Test updates and re-sizing | ≈ 20 min | — | 3 suite runs + a 40-seed convergence check |
 | Benchmark card and decisions entry | ≈ 20 min | — | |
+
+---
+
+### Session 2026-09-02 (seventh session, review pass) — PR #11 reviewed and merged
+
+The lead approved #11 with one change (valerate assay cv 15 % plus a 0.05 g/L floor) and
+asked for an independent review before merging.
+
+**Done**
+
+- **Valerate** at cv 0.15 with `sd_abs` 0.05 kg m⁻³; the other three speciated acids stay
+  at 8 %. Flagged: with a floor the size of the quantity, 17 % of reported values are
+  negative (565 samples, mean 0.0494, sd 0.0497, min −0.102). Left unclipped; the three
+  options and their costs are in the decisions log for the lead.
+- **Independent review** (fresh context, instructed to verify rather than trust and to try
+  to construct broken implementations that pass each test). Nine real defects, all fixed.
+- **The one that mattered: every VFA channel was 1000× too small.** `kmol/m3 × kg/kmol`
+  already gives kg/m3; the extra `/1000` had no dimensional justification. FOS/TAC was
+  therefore 1000× small, and the overload and foaming flags are thresholded on it — so
+  `condition_flags` returned all-`False` on every real run and **conditional missingness,
+  the §6.1 property this component exists to deliver, never fired**. The test that claimed
+  to check the arithmetic restated the implementation and passed under any scale error.
+- Eight more: sub-interval episode durations inflated the anchored flatline occupancies
+  2.5–5×; `scada_noise_statistics` mis-marked runs (re-measured 0.0765 % and 0.0144 %);
+  `random_gaps` was not MCAR; `ph_electrode_drift` never produced its drift-then-step
+  signature; `cod_total`/`vs` excluded the extension states, so SAO biomass — the Level-5
+  signal — was missing; a `saturated` flag could contradict its own reading; the benchmark
+  card was not actually tied to `benchmark_card_rows()`; plus a float off-by-one, an
+  unvalidated over-long horizon and two `x or Default()` traps.
+- Two found in this session's own pass first: `channels_from_two_zone` mixed liquids in
+  FOS/TAC, and `ash_trajectory` ignored the influent's declared `interpolation`.
+- `condition_flags` was O(n²) and had become the suite's bottleneck; now a binary search,
+  with a test against the definition it replaced on an irregular grid.
+- Tests 215 → **233**.
+
+**Flagged to the lead (needs a decision, not fixed)**
+
+- **The simulated FOS/TAC distribution sits well below the plant's.** With the units right,
+  a healthy simulated digester is at 0.01–0.07 against the anchor's median 0.23; at 2.5×
+  feed Plant B reaches 0.15. The 0.40 threshold is reachable under load, but it will fire
+  on far fewer simulated days than the anchor's "~8 % of days". Closing the gap is a
+  feed-catalogue or kinetics change, not a threshold change.
+- Whether below-LOQ valerate should be clipped, censored, or left negative.
+
+**Recorded, not fixed** (decisions log): `hazard_per_d` typed as a fraction; repeated
+observation faults on one sensor overwrite rather than compound; `tool_failure` cannot name
+a tool; `UnrecordedDelivery` truncates a fractional onset; a first-sample `flatlined` flag
+is reported but nothing is held.
+
+**Next**
+
+Scenario generation for gate G1: all 19 scenarios at three tiers on Plants B and C, the
+Level 2–5 Tier A subset plus the three ammonia scenarios on Plant A, hidden truth written
+only to `runs/<id>/truth/`, and an anchor-comparison report within a declared tolerance.
+That needs the run harness (`runs/<id>/truth/`, `calls.jsonl`) built first.
+
+**Resource cost (this pass)**
+
+| Item | Wall-clock | Notes |
+|---|---|---|
+| Valerate change | ≈ 10 min | |
+| Independent review (subagent) | ≈ 15 min | 53 tool calls, fresh context |
+| Applying nine findings + tests | ≈ 70 min | 4 full suite runs |
+| Docs, PR body | ≈ 20 min | |
