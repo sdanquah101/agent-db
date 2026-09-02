@@ -363,10 +363,15 @@ branch, since PR #5 was not yet merged).**
   the lead. Proposal copy at v0.3. SAO takeover at Plant A is now a test (12 plant
   tests; full suite 138).
 
+- The lead transcribed the Plant-A ammonia envelope (digestate TAN 2.3–4.3 kg N m⁻³,
+  feed TAN/TS, the paper's adapted acetoclastic K_I of 1.0 kg m⁻³) into
+  `configs/plant_a_statistics.yaml`; the SAO test now reads its midpoint. Plant A
+  hydraulics are AFBI-anchored only; Foulum is the thermophilic envelope.
+
 **Blocked / open**
 
-- Plant A's TAN/pH/VFA envelope (the lead transcribes it); until then the SAO test
-  uses a provisional feed TAN of 2.8 g N L⁻¹.
+- Plant A digestate pH (plotted only in Tisocco 2024) and hence free ammonia remain
+  untranscribed.
 
 **Next session should start on**
 

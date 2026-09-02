@@ -764,6 +764,37 @@ error realisation in the config (rejected: CLAUDE.md rule 1).
 6. **Mixing** is an ideal CSTR in the plant contract (the schema allows nothing else).
    Imperfect mixing is a fault-injection *truth variant* of the Level-6 "Imperfect
    mixing" scenario: recorded now, implemented with the fault-injection API.
-7. **Plant A's ammonia envelope** will be transcribed by the lead; the nulls in
-   `configs/plant_a_statistics.yaml` stay until then, and the SAO test's feed TAN is
-   marked provisional.
+7. **Plant A's ammonia envelope** was transcribed by the lead the same day (next
+   entry); the SAO test reads it from `configs/plant_a_statistics.yaml`.
+
+---
+
+## 2026-09-02 — Plant A ammonia envelope transcribed (by the lead); hydraulics AFBI-anchored only
+
+**Recorded.** From Tisocco et al. 2024 (doi:10.1007/s11783-024-1810-9), Section 3.2 and
+Table 1, into `configs/plant_a_statistics.yaml`: digestate total ammonia 2.3–4.3 kg N m⁻³
+(weekly samples), feed TAN and TS of the slurry and silage for data sets A and B, and the
+acetoclastic free-ammonia inhibition constant of 1.0 kg m⁻³ the paper fitted for its
+adapted community. Digestate pH is plotted only (Fig. 2) and is **not** transcribed, so
+free ammonia stays null until it is; both are marked with the reason.
+
+**Decisions.**
+
+1. **Plant A hydraulics are AFBI-anchored only.** AU Foulum (Tisocco et al. 2026,
+   doi:10.1016/j.ese.2026.100662) is thermophilic (53 °C, 1,200 m³, primary HRT 13–15 d)
+   and its accessible text carries no TAN or pH values; it is cited only as the
+   thermophilic envelope, never for Plant A's volumes, HRT or ammonia.
+2. **The SAO-takeover test reads the envelope.** `tests/test_plants.py` sets the feed
+   inorganic nitrogen to the midpoint of the transcribed range (3.3 kg N m⁻³ =
+   0.2356 kmol N m⁻³, `sim.plants.plant_a_digestate_tan`) instead of the earlier
+   provisional 2.8 g N L⁻¹. Using digestate TAN as the feed value is a proxy that errs
+   towards stronger ammonia stress (protein degradation adds nitrogen in the reactor).
+3. **The SAO constant is conservative.** Tisocco et al. 2024 fitted 1.0 kg N m⁻³
+   (0.071 kmol N m⁻³) as the free-ammonia inhibition constant of the *acetoclastic*
+   community at AFBI after adaptation. Our SAO–hydrogenotrophic constant `K_I_nh3_sao`
+   is 0.05 kmol N m⁻³, i.e. the model inhibits the ammonia-tolerant pathway *more* than
+   that paper's adapted acetoclasts. This supports the literature range of the entry
+   "`K_I_nh3_sao` anchored" and places 0.05 on its conservative side; the BSM2
+   acetoclastic constant of 0.0018 kmol N m⁻³ that the base model keeps is the
+   *unadapted* value, which is what makes the acetoclastic pathway collapse under
+   Plant A's ammonia in the truth model and gives the SAO scenario its signature.
