@@ -1,0 +1,126 @@
+# BSM2 default parameter set for standard ADM1 (Rosen & Jeppsson 2006, Tables 1-3),
+# as shipped by bsm2-python 0.0.16 (`adm1init_bsm2.py`). Units are given in the Pydantic
+# schema `sim/adm1/schema.py` (field descriptions) and repeated here for auditability.
+#
+# Where BSM2 hard-codes a catabolic product fraction inside the rate arithmetic (0.7/0.3
+# for LCFA, 0.54/0.31/0.15 for valerate, 0.8/0.2 for butyrate, 0.57/0.43 for propionate)
+# it is named explicitly here, using the ADM1 STR names (f_ac_fa, f_h2_fa, ...).
+#
+# Acid-base kinetic constants (k_A/B, 1e10 in BSM2) do not appear: this implementation
+# treats the acid-base system as algebraic (equilibrium), see docs/decisions.md.
+
+stoichiometry:
+  f_si_xc: 0.1      # -; composite -> soluble inerts
+  f_xi_xc: 0.2      # -; composite -> particulate inerts
+  f_ch_xc: 0.2      # -; composite -> carbohydrates
+  f_pr_xc: 0.2      # -; composite -> proteins
+  f_li_xc: 0.3      # -; composite -> lipids
+  f_fa_li: 0.95     # -; lipids -> LCFA (rest to sugars)
+  f_h2_su: 0.19     # -; catabolic product fractions from sugars
+  f_bu_su: 0.13
+  f_pro_su: 0.27
+  f_ac_su: 0.41
+  f_h2_aa: 0.06     # -; catabolic product fractions from amino acids
+  f_va_aa: 0.23
+  f_bu_aa: 0.26
+  f_pro_aa: 0.05
+  f_ac_aa: 0.40
+  f_h2_fa: 0.3      # -; from LCFA
+  f_ac_fa: 0.7
+  f_h2_va: 0.15     # -; from valerate
+  f_pro_va: 0.54
+  f_ac_va: 0.31
+  f_h2_bu: 0.2      # -; from butyrate
+  f_ac_bu: 0.8
+  f_h2_pro: 0.43    # -; from propionate
+  f_ac_pro: 0.57
+  Y_su: 0.10        # kg COD_X / kg COD_S
+  Y_aa: 0.08
+  Y_fa: 0.06
+  Y_c4: 0.06
+  Y_pro: 0.04
+  Y_ac: 0.05
+  Y_h2: 0.06
+  N_xc: 0.0026857142857142857   # kmol N / kg COD (= 0.0376/14)
+  N_I: 0.004285714285714286     # kmol N / kg COD (= 0.06/14)
+  N_aa: 0.007                   # kmol N / kg COD
+  N_bac: 0.005714285714285714   # kmol N / kg COD (= 0.08/14)
+  C_xc: 0.02786     # kmol C / kg COD
+  C_si: 0.03
+  C_ch: 0.0313
+  C_pr: 0.03
+  C_li: 0.022
+  C_xi: 0.03
+  C_su: 0.0313
+  C_aa: 0.03
+  C_fa: 0.0217
+  C_va: 0.024
+  C_bu: 0.025
+  C_pro: 0.0268
+  C_ac: 0.0313
+  C_bac: 0.0313
+  C_ch4: 0.0156
+
+kinetics:
+  k_dis: 0.5        # d^-1
+  k_hyd_ch: 10.0    # d^-1
+  k_hyd_pr: 10.0    # d^-1
+  k_hyd_li: 10.0    # d^-1
+  k_m_su: 30.0      # kg COD_S / kg COD_X / d
+  K_S_su: 0.5       # kg COD m^-3
+  k_m_aa: 50.0
+  K_S_aa: 0.3
+  k_m_fa: 6.0
+  K_S_fa: 0.4
+  k_m_c4: 20.0
+  K_S_c4: 0.2
+  k_m_pro: 13.0
+  K_S_pro: 0.1
+  k_m_ac: 8.0
+  K_S_ac: 0.15
+  k_m_h2: 35.0
+  K_S_h2: 7.0e-6
+  K_S_IN: 1.0e-4    # kmol N m^-3
+  K_I_h2_fa: 5.0e-6   # kg COD m^-3
+  K_I_h2_c4: 1.0e-5   # kg COD m^-3
+  K_I_h2_pro: 3.5e-6  # kg COD m^-3
+  K_I_nh3: 0.0018     # kmol N m^-3
+  pH_UL_aa: 5.5
+  pH_LL_aa: 4.0
+  pH_UL_ac: 7.0
+  pH_LL_ac: 6.0
+  pH_UL_h2: 6.0
+  pH_LL_h2: 5.0
+  k_dec_X_su: 0.02  # d^-1
+  k_dec_X_aa: 0.02
+  k_dec_X_fa: 0.02
+  k_dec_X_c4: 0.02
+  k_dec_X_pro: 0.02
+  k_dec_X_ac: 0.02
+  k_dec_X_h2: 0.02
+  eps_c4: 1.0e-6    # kg COD m^-3; regularisation of the valerate/butyrate competition term (BSM2 `eps`)
+
+physchem:
+  R: 0.083145       # bar m^3 kmol^-1 K^-1
+  T_base: 298.15    # K
+  pK_w_base: 14.0
+  pK_a_va: 4.86
+  pK_a_bu: 4.82
+  pK_a_pro: 4.88
+  pK_a_ac: 4.76
+  pK_a_co2_base: 6.35
+  pK_a_IN_base: 9.25
+  dH_K_w: 55900.0        # J mol^-1, van 't Hoff enthalpy for K_w
+  dH_K_a_co2: 7646.0     # J mol^-1
+  dH_K_a_IN: 51965.0     # J mol^-1
+  K_H_h2_base: 7.8e-4    # kmol m^-3 bar^-1 (Henry, 25 degC)
+  K_H_ch4_base: 0.0014   # kmol m^-3 bar^-1
+  K_H_co2_base: 0.035    # kmol m^-3 bar^-1
+  dH_K_H_h2: -4180.0     # J mol^-1
+  dH_K_H_ch4: -14240.0   # J mol^-1
+  dH_K_H_co2: -19410.0   # J mol^-1
+  p_h2o_base: 0.0313     # bar, water vapour pressure at T_base
+  h2o_vapour_coefficient: 5290.0   # K; p_h2o = p_h2o_base * exp(coef * (1/T_base - 1/T))
+  P_atm: 1.013           # bar
+  k_La: 200.0            # d^-1
+  k_p: 5.0e4             # m^3 d^-1 bar^-1, headspace outflow "valve" coefficient

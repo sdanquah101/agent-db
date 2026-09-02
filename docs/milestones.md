@@ -143,3 +143,93 @@ and consequences: `docs/decisions.md`, proposal v0.2.
 | Tests + lint | < 1 min | — | `pytest -q`: all green; `ruff check`, `ruff format --check`: clean |
 
 No LLM-agent compute was spent inside the benchmark.
+
+---
+
+## Milestone 2 — Truth model with extensions; three plants; influent generator (weeks 3–6)
+
+Exit criterion: reproduces published steady-state ranges; stochastic influent statistics
+match anchor. Acceptance test of the ADM1 decision (decisions log 2026-09-02): agreement
+with bsm2-python to 3 significant figures on Probe 1, Probe 2 and the BSM2 dynamic
+influent by end of week 6, else fall back to a bsm2-python fork.
+
+### Session 2026-09-02 (week 3) — standard ADM1 Petersen-matrix core
+
+**Done**
+
+- `sim/adm1/` — standard ADM1 in the BSM2 form (Rosen & Jeppsson 2006): 26 liquid + 3
+  headspace states; Petersen matrix as data (`configs/adm1/petersen_matrix.yaml`,
+  expression-valued entries evaluated by a restricted AST walker, S_IC/S_IN written out,
+  COD/C/N/charge conservation tested to < 1e-12); rates and inhibition functions as pure
+  functions (`rates.py`); algebraic pH by Brent root-find on the charge balance,
+  van 't Hoff / Henry / vapour-pressure corrections and the BSM2 gas law (`physchem.py`);
+  `simulate()` over `solve_ivp` BDF (Radau cross-check) with sample-and-hold (restart at
+  every breakpoint) or linear influent interpolation, returning a typed
+  `SimulationResult` with pH, ion speciation, partial pressures, q_gas in both the BSM2
+  and dry-STP conventions, and solver statistics. No file I/O in the model, no
+  module-level mutable state, no randomness. Pydantic schemas with units on every field;
+  BSM2 defaults, plant geometry and solver tolerances under `configs/adm1/`.
+- Oracle extended: `probe_bsm2python_dynamic.py` (BSM2 dynamic influent, 280 d at 15 min
+  from PyADM1's `digester_influent.csv`, committed gzipped with SHA-256s), Probe 1/2
+  records now carry the full final state.
+- Ring tests (`tests/test_adm1_ring.py`, 3 s.f. = relative difference ≤ 5e-4):
+
+  | Case | Quantities compared | Largest relative discrepancy vs bsm2-python |
+  |---|---|---|
+  | Probe 1, 100 d constant feed (BDF) | pH, q_gas, p_CH₄, p_CO₂, VFA, S_ac; all 29 states + 6 ions | ≈ 5e-7 (S_ac) |
+  | Probe 1 (Radau cross-check) | summary quantities | ≈ 1e-6 |
+  | Probe 2, 3× overload step (BDF) | summary; all states; pH_min, q_gas_max | 1.3e-4 (S_ac, VFA) |
+  | Dynamic influent, sample-and-hold, 280 d | daily pH (days 1–280), q_gas, S_ac; final 29 states + ions | 1.5e-4 (S_ac, day 62) |
+  | Dynamic influent, linear interpolation, first 30 d | daily pH, q_gas, S_ac | < 5e-4 |
+
+  **Acceptance met on all three cases in week 3.** No tolerance was loosened. One
+  documented exclusion: the oracle's pH at t = 0 of the dynamic case is 8.49, an artefact
+  of bsm2-python's ODE ion states initialised from the rounded R&J table (they do not
+  close the charge balance until they relax); the algebraic pH of the same state is
+  7.267, and the test asserts both facts instead of comparing that one sample.
+- Step-size collapse test on the overload probe: BDF integrates the 3× step in ≈ 260
+  accepted steps / ≈ 600 RHS evaluations, smallest step 2.4e-6 d, no failure.
+- 8 decision-log entries (state order, algebraic ions, S_h2, matrix-as-data, parameter
+  naming, solver/influent handling, oracle data and the definition of 3 s.f.).
+
+**Numbers worth knowing**
+
+- RHS cost ≈ 53 µs (pure NumPy/SciPy, of which the pH root-find ≈ 20 µs); Probe 1
+  (100 d) integrates in ≈ 0.06 s, Probe 2 in ≈ 0.1 s. The 280-day sample-and-hold case
+  restarts the integrator 26 880 times (≈ 10 steps + 1 Jacobian each) and takes
+  ≈ 150 s; the linearly interpolated variant ≈ 40 s. bsm2-python (numba) takes 62 s
+  and 17 s respectively for the same runs.
+- Sample-and-hold and linear interpolation of the same 15-minute series differ at the
+  third significant figure (final S_ac 59.95 vs 59.99 g COD m⁻³), so the influent
+  treatment is part of any future ring-test definition.
+
+**Blocked / open**
+
+- Open-dataset identification (Milestone-1 exit criterion, §8) is still not started.
+- The sample-and-hold ring test makes `pytest -q` take ≈ 3 min. Acceptable for CI; if it
+  becomes a nuisance, the candidates are an analytical Jacobian (removes ≈ 30 RHS
+  evaluations per restart) or a compiled RHS, not a shorter horizon.
+- Not done (out of scope for this session by design): SAO, ionic-strength correction,
+  precipitation sink, Plants A–C, influent generator, Weinrich R3/R4 ports.
+
+**Next session should start on**
+
+1. Domain review of the PR (matrix entries, rate forms, pH/gas conventions), then merge.
+2. Extension rows: SAO (+1 process, +1 biomass component) as the first structural
+   extension, ring-tested against QSDsan/EXPOsan equations only (no dependency); then
+   ionic strength in the speciation routine; then the precipitation sink.
+3. Anchor-dataset search (§8), still owed from Milestone 1.
+
+**Resource cost this session (rough)**
+
+| Item | Wall-clock | Disk | Notes |
+|---|---|---|---|
+| Session total | ≈ 1 h 45 min | — | one agent session; 4 vCPU container |
+| Install: bsm2-python venv (throwaway) | ≈ 1.5 min (background) | 0.7 GB | outside the repo; numba JIT warm-up on first call |
+| Oracle: dynamic influent, 3 modes | ≈ 105 s compute | 0.6 MB JSON + 2.4 MB gz influent in repo | hold 62 s, shipped 24 s, linear 17 s |
+| Oracle: Probes 1–2 re-record | ≈ 10 s | — | values unchanged to all digits vs Milestone 1 |
+| Model runs during development | ≈ 10 min compute | — | ≈ 5 full 280-day runs + profiling |
+| Test suite (`pytest -q`) | ≈ 3 min | — | dominated by the 280-day sample-and-hold ring test |
+| CI (GitHub Actions) | 3 jobs per push | — | expect ≈ 4 min per pytest job |
+
+No LLM-agent compute inside the benchmark (no workflows yet); development cost only.

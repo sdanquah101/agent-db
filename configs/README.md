@@ -5,3 +5,12 @@ tolerances, agent prompts, LLM model versions, temperature and retry policy.
 
 Nothing numerical is hard-coded in `sim/`, `tools/` or `workflows/` — it lives here and
 is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
+
+- `adm1/petersen_matrix.yaml` — standard ADM1 stoichiometry as data: 26 components with
+  units and COD/C/N/charge contents, 19 processes with expression-valued entries, and the
+  gas-transfer pairings. Loaded by `sim.adm1.load_matrix`; conservation is tested.
+- `adm1/params_bsm2.yaml` — the BSM2 default parameter set (Rosen & Jeppsson 2006), units
+  in comments and in the Pydantic schema `sim/adm1/schema.py`.
+- `adm1/plant_bsm2.yaml` — BSM2 digester volumes and temperature.
+- `adm1/solver.yaml` — `solve_ivp` method and tolerances, pH root-find bracket and
+  tolerances, negative-state clipping flag.
