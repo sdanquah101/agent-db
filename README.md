@@ -40,12 +40,12 @@ conditions, see the decisions log) and open-dataset identification (see below). 
 Milestone 2 (weeks 3–6), in progress: `sim/adm1/` implements standard ADM1 as a
 Petersen-matrix model (matrix and BSM2 parameters as data under `configs/adm1/`,
 algebraic pH, BSM2 gas phase, SciPy BDF/Radau) and is ring-tested against bsm2-python on
-Probes 1–2 and the 280-day BSM2 dynamic influent (`tests/test_adm1_ring.py`). The three
-§6.1 extensions — syntrophic acetate oxidation, Davies ionic-strength correction and
-calcite precipitation — are declared as additional rows in `configs/adm1/extensions.yaml`
-and compiled onto the base matrix by `sim/adm1/extensions.py`
-(`tests/test_adm1_extensions.py`). The three plants and the influent generator are not
-started.
+Probes 1–2 and the 280-day BSM2 dynamic influent (`tests/test_adm1_ring.py`). The §6.1
+extensions — syntrophic acetate oxidation, Davies ionic-strength correction, the
+carbonate second dissociation and calcite precipitation — are declared as additional
+rows and switches in `configs/adm1/extensions.yaml` and compiled onto the base matrix by
+`sim/adm1/extensions.py` (`tests/test_adm1_extensions.py`). The three plants and the
+influent generator are not started.
 
 Real-data anchor (proposal §8): open datasets identified, characterised and, where
 openly licensed, fetched into `anchor/raw/` by `python -m anchor.fetch` from

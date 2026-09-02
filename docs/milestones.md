@@ -257,23 +257,28 @@ The duplicate core is discarded. CLAUDE.md now carries the follow-on-session rul
   switches), `compile_extended()` (validates names, rate code, overrides; embeds the
   base matrix), `rhs_extended()`, `simulate_extended()` returning an `ExtendedResult`
   with pH, activities, ionic strength and gas quantities.
-- Extensions: SAO (X_sao, uptake + decay), ionic strength (Davies), calcite
-  precipitation (S_ca, X_caco3). Formulation and defaults in `docs/decisions.md`.
-- `tests/test_adm1_extensions.py`: 19 tests — conservation of every row (charge −2 for
-  the calcite row by convention), state layout, compile-time rejections, inert identity
-  against the Probe-1 oracle, SAO takeover (40-d HRT, high NH₃) and washout (20-d HRT),
-  Davies limits, ionic-strength pH/NH₃ shifts, calcite as a sink, all three together,
-  determinism.
-- Full suite on the combined code: 114 passed, including the dynamic-influent ring test
+- Extensions: SAO (X_sao, uptake + decay, own weaker NH₃ inhibition), ionic strength
+  (Davies, A scaled to T_op), carbonate second dissociation (own switch, default off),
+  calcite precipitation (S_ca, X_caco3, SI rate). Formulation, defaults and the lead's
+  domain answers in `docs/decisions.md`.
+- `tests/test_adm1_extensions.py`: 25 tests — conservation of every row (charge −2 for
+  the calcite row: an artefact of S_IC being uncharged in the matrix; a dynamic test
+  shows the speciated balance closes), state layout, compile-time rejections, inert
+  identity against the Probe-1 oracle for all three additive extensions, the carbonate
+  switch pinned as a small genuine change, SAO takeover (60-d HRT, 2.8 g N/L, 300 d)
+  and washout (20-d HRT), SAO NH₃ term weaker than acetoclastic, Davies limits and
+  A(T), ionic-strength pH/NH₃ shifts, calcite as a sink, all four together, determinism.
+- Full suite on the combined code: 120 passed, including the dynamic-influent ring test
   (max relative discrepancy 1.5e-4, unchanged).
 
 **Blocked / open**
 
 - No external oracle for the extended model; correctness rests on conservation,
-  inert identity and qualitative behaviour. Domain review of the SAO defaults and the
-  precipitation rate law is requested in the PR.
-- The precipitation extension changes the pH solve at zero calcium (carbonate second
-  dissociation), so its inert identity is 1e-2, not 1e-4.
+  inert identity and qualitative behaviour. `k_m_sao`, `K_I_nh3_sao` and `k_prec` remain
+  order-of-magnitude values for the external AD reviewer.
+- With μ_max 0.08 d⁻¹ SAO cannot establish at a 40-day HRT under 250 mg/L free
+  ammonia in this model; the takeover test therefore runs at 60 days. If Plant B is to
+  show SAO at its HRT, `k_m_sao` needs the reviewer's number, not this one.
 
 **Next session should start on**
 
@@ -291,7 +296,8 @@ The duplicate core is discarded. CLAUDE.md now carries the follow-on-session rul
 | Session total | ≈ 3 h | — | ≈ 1 h lost to the duplicate core and its reconciliation |
 | Duplicate core (discarded) | ≈ 1 h | — | 73 tests; not merged |
 | Extensions on the #2 core | ≈ 1 h 15 min | — | worktree on the #2 branch |
-| Full suite (`pytest -q`), combined code | ≈ 4.5 min per run, 3 runs | — | dominated by the sample-and-hold ring test |
+| Full suite (`pytest -q`), combined code | ≈ 4.5 min per run, 4 runs | — | dominated by the sample-and-hold ring test |
+| Domain-answer revision (SAO NH₃, carbonate switch, A(T)) | ≈ 40 min | — | incl. SAO takeover probes (≈ 1 min compute) |
 | CI (GitHub Actions) | 3 jobs per push on #2 and #4 | — | |
 
 No LLM-agent compute inside the benchmark; development cost only.

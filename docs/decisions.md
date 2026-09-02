@@ -419,39 +419,89 @@ switchable.
 
 1. **Syntrophic acetate oxidation (`sao`).** One biomass component `X_sao` and two
    processes: acetate uptake by SAO (`S_ac → 4 H₂ + CO₂`, yield `Y_sao`, Monod on S_ac
-   with the acetate-uptake pH and NH₃ inhibition functions, H₂ product inhibition as for
-   the C4/propionate degraders) and first-order decay to composites. Defaults
-   `Y_sao` 0.04, `k_m_sao` 2.0 d⁻¹ (μ_max = 0.08 d⁻¹, within the published 0.02–0.1
-   range for thermophilic and ammonia-stressed sludge); `K_S_sao` 0.3 kg COD m⁻³,
-   `K_I_h2_sao` 3.5e-6 kg COD m⁻³. With BSM2 defaults SAO washes out at a 20-day HRT
-   and takes over at a 40-day HRT with high free ammonia; both are tested.
+   with the acidogen pH function, the IN limitation, **its own free-ammonia inhibition**
+   `K_I_nh3_sao` and H₂ product inhibition as for the C4/propionate degraders) and
+   first-order decay to composites. Defaults `Y_sao` 0.04, `k_m_sao` 2.0 d⁻¹
+   (μ_max = 0.08 d⁻¹, the fast end of the published 9–28 d doubling times);
+   `K_S_sao` 0.4 kg COD m⁻³, `K_I_h2_sao` 3.5e-6 kg COD m⁻³, `K_I_nh3_sao` 0.05 kmol N m⁻³.
 2. **Ionic-strength correction (`ionic_strength`).** Davies activity coefficients
-   (A 0.509, b 0.3, I capped at 0.5 M) applied to the charge balance and to every
-   acid–base equilibrium; pH is reported as −log₁₀(a_H⁺); the pH inhibition functions and
-   free-ammonia inhibition see activities. I is solved by fixed-point iteration together
-   with the charge balance. No new states; the switch lives in the speciation routine.
-3. **Calcite precipitation (`precipitation`).** Components `S_ca` (kmol m⁻³, charge +2)
-   and `X_caco3` (kmol m⁻³, inert solid); carbonate speciation adds the second
-   dissociation (pK_a2 10.33 at 25 °C, van 't Hoff corrected); rate
-   `k_prec · (√SI − 1)^n` for SI > 1 with `K_sp` 10^−8.48, `n` 2, and the reverse
-   dissolution disabled by default. The row removes one carbonate from S_IC and one Ca²⁺,
-   so its charge residual is **−2 by convention**; the conservation test asserts that
-   value rather than zero for this row. COD, C and N balances close for every row.
+   (A 0.5085 at 25 °C, b 0.3, I capped at 0.5 M) applied to the charge balance and to
+   every acid–base equilibrium; pH is reported as −log₁₀(a_H⁺); the pH inhibition
+   functions and free-ammonia inhibition see activities. I is solved by fixed-point
+   iteration together with the charge balance. No new states.
+3. **Carbonate second dissociation (`carbonate`).** HCO₃⁻ ⇌ CO₃²⁻ + H⁺ (pK_a2 10.33 at
+   25 °C, a shared parameter, not temperature-corrected) in the charge balance and in
+   the exact three-way CO₂/HCO₃⁻/CO₃²⁻ split of S_IC. No new states; its own switch.
+4. **Calcite precipitation (`precipitation`).** Components `S_ca` (kmol m⁻³, charge +2)
+   and `X_caco3` (kmol m⁻³, inert solid); rate `k_prec · (√SI − 1)^n` for SI > 1 with
+   `K_sp` 10^−8.48, `n` 2, no reverse dissolution. SI uses the speciated carbonate when
+   `carbonate` is enabled, otherwise the diagnostic estimate K_a2·[HCO₃⁻]/[H⁺], which
+   is reported but takes no part in the balance.
 
-**Evidence.** Inert-identity tests (each extension enabled with zero seed / switch off
-reproduces the base Probe 1 to the stated tolerance, tightest for SAO and ionic
-strength; precipitation to 1e-2 because the carbonate speciation changes the pH solve
-even at zero calcium); qualitative tests (SAO takeover and washout, Davies limiting
-behaviour, pH and NH₃ shifts under ionic strength, calcite as a sink for HCO₃⁻ and Ca).
-No published oracle exists for the combined model; the formulations follow QSDsan's
-ADM1p extension (read as an equation reference only) and the literature cited in
-`docs/adm1_comparison.md` §6.
+**The calcite row's charge residual of −2.** The row {S_ca −1, S_IC −1, X_caco3 +1}
+does not close on charge because S_IC is an *uncharged total* in the matrix (charge
+content 0; its split into CO₂/HCO₃⁻/CO₃²⁻ is algebraic) while the species that actually
+leaves is CO₃²⁻. It is an artefact of that convention, not a loss of charge: after
+speciation the balance closes, because the carbonate removed carried −2, exactly the
++2 of the calcium removed. `tests/test_adm1_extensions.py` asserts −2 for this row in
+the matrix test and asserts a closed speciated charge balance at every output time
+while calcite is forming.
 
-**Open for domain review.** SAO kinetic defaults; whether NH₃ inhibition of SAO should
-be weaker than for acetoclastic methanogens (currently the same function); the
-precipitation rate law and default `k_prec`.
+**Evidence.** Inert-identity tests: SAO, ionic strength and calcite each enabled but
+inert reproduce the base Probe 1 to solver tolerance (1e-4 where extra states change
+the BDF step sequence, 1e-6 where the dimension is unchanged), and all three together
+reproduce the bsm2-python Probe-1 oracle to ≤ 5e-4 through the extended right-hand
+side; the carbonate switch is a genuine change (pH shifts by thousandths at digester
+pH) and is pinned as such. Qualitative tests: SAO takeover at a 60-d HRT under
+≈ 250 mg/L free ammonia and washout at 20 d, SAO retaining > 50 % of its rate where
+acetoclasts are at 50 %, Davies limits and the A(T) values, pH and NH₃ shifts under
+ionic strength, calcite as a sink for HCO₃⁻ and Ca²⁺ that lowers pH, all four together,
+determinism. No published oracle exists for the combined model; the formulations
+follow QSDsan's ADM1p extension (read as an equation reference only) and the literature
+cited in `docs/adm1_comparison.md` §6.
+
+**Still open for domain review.** The SAO defaults (`k_m_sao`, `K_I_nh3_sao`); the
+default `k_prec`; whether pK_a2 should be van 't Hoff corrected like the base
+constants.
 
 **Alternatives.** Hand-editing the base matrix per extension (rejected: this is what the
 Petersen-as-data decision was made to avoid); ions as ODE states for the activity
 correction (rejected: same reasons as the algebraic-pH decision); a full mineral
 equilibrium module (rejected for Phase 1: calcite is the only sink §6.1 asks for).
+
+---
+
+## 2026-09-02 — Domain answers on the extensions (by the lead) and their consequences
+
+**Decisions.**
+
+1. **SAO has its own, weaker free-ammonia inhibition** (`K_I_nh3_sao`), not the
+   acetoclastic function and not none. *Correction of the record:* the first draft of
+   the entry above described SAO as sharing the acetoclastic NH₃ function; the code as
+   first written had **no** NH₃ term on SAO. Both are superseded.
+2. **The calcite rate law stays SI-based** (`k (√SI − 1)^n`).
+3. **The carbonate second dissociation is its own switch, default off**, so the calcite
+   extension can be enabled without changing the base speciation. Consequence: the
+   calcite-inert identity tightens from 1e-2 to the same 1e-4 as the other extensions,
+   and the calcite rate needs a carbonate concentration when the switch is off, hence
+   the diagnostic estimate above.
+4. **Davies A is scaled to the operating temperature.** The configured 0.5085 is the
+   25 °C value; the model multiplies it by A(T)/A(25 °C) from the Debye–Hückel formula
+   A = 1.82483e6·√ρ/(εT)^{3/2} with the Malmberg & Maryott (1956) permittivity and a
+   Kell-type density polynomial (×1.017 at 35 °C, ×1.056 at 55 °C). Using the 25 °C
+   constant unscaled would understate log₁₀ γ by 5.6 % in a thermophilic digester.
+
+**Consequence of (1) for the SAO default.** With μ_max 0.08 d⁻¹ and decay 0.02 d⁻¹,
+SAO must keep ≳ 70 % of its rate at 250 mg/L free ammonia to out-grow a 60-day HRT at
+all; a constant a few times the acetoclastic 25 mg/L (e.g. 100 mg/L) makes SAO unable to
+establish in any ammonia-stressed digester in this model, contradicting the observations
+that motivate the extension (SAO dominant at TAN 3–5 g/L, HRT 40–60 d). `K_I_nh3_sao`
+is therefore 0.05 kmol N m⁻³ (50 % at ≈ 700 mg NH₃-N/L, ≈ 28× acetoclastic), flagged as
+order-of-magnitude for review together with `k_m_sao`. The takeover test runs at a
+60-day HRT for 300 days with 2.8 g N/L feed; the 40-day, 150-day case of the first
+draft is no longer reachable and was not kept with a loosened assertion.
+
+**Alternatives.** Raise `k_m_sao` instead of weakening the inhibition (rejected: μ_max is
+already at the fast end of the published range); make pK_a2 part of the base parameter
+schema (rejected: the base model does not use it; a shared extension parameter keeps the
+base schema frozen).
