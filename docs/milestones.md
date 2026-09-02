@@ -554,6 +554,6 @@ PRs #8 and #9 merged (41ffdd4). Branch `claude/milestone-2-influent-generator` f
 | Tasks 1–4 (code, YAML, tests) | ≈ 30 min | — | 3 fast runs |
 | Generator + ingest + tests | ≈ 45 min | — | generator ≈ 0.05 s per 365-day plant run |
 | Docs | ≈ 15 min | — | |
-| Full suite (`python -m pytest -q`) | see the PR | — | dominated by the sample-and-hold ring test |
+| Full suite (`python -m pytest -q`) | ≈ 2 min 44 s, 182 passed | — | dominated by the sample-and-hold ring test |
 
 No LLM-agent compute inside the benchmark; development cost only.
