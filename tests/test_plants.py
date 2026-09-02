@@ -19,7 +19,9 @@ from sim.plants import (
     Anchoring,
     declared_geometry,
     load_all_plants,
+    load_plant_a_statistics,
     load_plant_config,
+    plant_a_digestate_tan,
     sample_hidden_geometry,
     true_geometry,
 )
@@ -201,12 +203,27 @@ def test_signed_error_modes():
         HiddenActiveVolume(error_min=0.2, error_max=0.1, sign="random")
 
 
+def test_plant_a_statistics_carry_the_transcribed_envelope():
+    """The lead's transcription is present; pH and free ammonia stay null with reasons."""
+    stats = load_plant_a_statistics()
+    env = stats["plants"]["afbi_hillsborough"]["ammonia_envelope"]
+    assert env["digestate_TAN_kg_N_m3"] == {"min": 2.3, "max": 4.3}
+    assert env["digestate_pH"] is None and env["free_ammonia_kg_N_m3"] is None
+    assert env["modelled_KI_NH3_acetoclastic_kg_m3"] == 1.0
+    assert set(env["feed_TAN_g_N_per_kg_TS"]) == {"cattle_slurry", "grass_silage"}
+    assert "AFBI-anchored" in env["notes"]
+
+
 def test_sao_establishes_at_plant_a(plants, rj2006_state, probe_common):
     """The condition of the SAO scenario decision (2026-09-02): SAO takes over at Plant A.
 
-    Plant A's declared geometry and median HRT (40 d), the ADM1 STR feed with a
-    PROVISIONAL feed TAN of 2.8 g N/L (the lead transcribes the real envelope; answer 7),
-    a 0.05 kg COD/m3 SAO seed, 180 d (a scenario horizon). With the fast-end SAO
+    Plant A's declared geometry and median HRT (40 d), the ADM1 STR feed with its
+    inorganic nitrogen set to the midpoint of the AFBI digestate TAN range read from
+    configs/plant_a_statistics.yaml (2.3-4.3 kg N/m3 -> 3.3, Tisocco et al. 2024
+    Section 3.2, transcribed by the lead), a 0.05 kg COD/m3 SAO seed, 180 d (a
+    scenario horizon). Using the digestate TAN as the feed S_IN is a proxy: protein
+    degradation adds nitrogen in the reactor, so the reactor TAN comes out a little above
+    the anchor value, which errs towards stronger ammonia stress. With the fast-end SAO
     kinetics (mu_max 0.16 d^-1, answer 1) X_sao grows several-fold and removes most of
     the acetate that the ammonia-inhibited acetoclasts leave; with the earlier
     0.08 d^-1 it did not (scripts/plant_a_sao_probe.py).
@@ -232,7 +249,9 @@ def test_sao_establishes_at_plant_a(plants, rj2006_state, probe_common):
     geometry = declared_geometry(cfg)
     q = cfg.geometry.V_liq_declared / cfg.hydraulics.hrt_d.median
     u = np.array(probe_common.influent_vector(1.0))
-    u[LIQUID_STATE_NAMES.index("S_IN")] = 0.2  # kmol N/m3 = 2.8 g N/L, provisional
+    tan = plant_a_digestate_tan()
+    assert tan == pytest.approx(3.3 / 14.007, rel=1e-6)  # 0.2356 kmol N/m3
+    u[LIQUID_STATE_NAMES.index("S_IN")] = tan
     influent = Influent.constant(u, q)
     t_eval = np.array([180.0])
     base = simulate(

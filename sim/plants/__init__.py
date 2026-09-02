@@ -20,17 +20,21 @@ from sim.adm1.schema import PlantGeometry
 from sim.plants.schema import Anchoring, PlantConfig
 
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs" / "plants"
+PLANT_A_STATISTICS = CONFIG_DIR.parent / "plant_a_statistics.yaml"
 PLANT_IDS = ("A", "B", "C")
 
 __all__ = [
     "CONFIG_DIR",
+    "PLANT_A_STATISTICS",
     "PLANT_IDS",
     "Anchoring",
     "HiddenGeometry",
     "PlantConfig",
     "declared_geometry",
     "load_all_plants",
+    "load_plant_a_statistics",
     "load_plant_config",
+    "plant_a_digestate_tan",
     "sample_hidden_geometry",
     "true_geometry",
 ]
@@ -51,6 +55,33 @@ def load_plant_config(plant_id: str, config_dir: Path = CONFIG_DIR) -> PlantConf
 def load_all_plants(config_dir: Path = CONFIG_DIR) -> dict[str, PlantConfig]:
     """All three plants, keyed by id."""
     return {pid: load_plant_config(pid, config_dir) for pid in PLANT_IDS}
+
+
+def load_plant_a_statistics(path: Path = PLANT_A_STATISTICS) -> dict:
+    """The published envelopes Plant A is anchored to (``configs/plant_a_statistics.yaml``).
+
+    Free-form (it carries ``todo`` markers for untranscribed tables), so it is returned as
+    a mapping rather than a schema object.
+    """
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"{path}: expected a YAML mapping")
+    return raw
+
+
+KG_N_PER_KMOL = 14.007
+"""Molar mass of nitrogen, kg N per kmol."""
+
+
+def plant_a_digestate_tan(path: Path = PLANT_A_STATISTICS) -> float:
+    """Midpoint of the AFBI digestate total-ammonia range, kmol N/m3.
+
+    From ``ammonia_envelope.digestate_TAN_kg_N_m3`` (Tisocco et al. 2024, Section 3.2,
+    weekly samples, 2.3-4.3 kg N/m3 -> 3.3 kg N/m3 = 0.2356 kmol N/m3).
+    """
+    env = load_plant_a_statistics(path)["plants"]["afbi_hillsborough"]["ammonia_envelope"]
+    tan = env["digestate_TAN_kg_N_m3"]
+    return 0.5 * (float(tan["min"]) + float(tan["max"])) / KG_N_PER_KMOL
 
 
 @dataclass(frozen=True)

@@ -66,4 +66,4 @@ scenario_subset:
   assigned_scenarios: [ammonia_inhibition_shift, omitted_sao, compound_sao_inhibition_shift]
   note: "Reduced subset, reported separately (§7): Levels 2–5 at Tier A, plus the ammonia scenarios that run only here (answer 3): the Level-5 inhibition shift, the Level-6 omitted-SAO scenario and their Level-7 compound."
 open_questions:
-  - "Plant A's TAN / pH / VFA envelope: the lead transcribes it from the Tisocco tables (answer 7); configs/plant_a_statistics.yaml keeps nulls until then, and the SAO-takeover test uses a provisional feed TAN of 2.8 g N/L documented in the test."
+  - "Digestate pH (plotted only in Tisocco 2024 Fig. 2) and hence free ammonia are not transcribed; the TAN envelope (2.3–4.3 kg N/m3) is, and the SAO-takeover test reads its midpoint from configs/plant_a_statistics.yaml."

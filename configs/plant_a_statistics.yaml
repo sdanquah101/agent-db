@@ -22,12 +22,30 @@ plants:
       weekly: [NH4-N and pH of primary digestate, TS/VS of feeds, N/NH4-N/VFA of slurry]
     periods: ["2018-03-01 to 2018-05-31 (set A)", "2019-03-01 to 2019-07-31 (set B)"]
     known_patterns: ["weekend silage omission produces gas-rate drops", "paper notes inconsistent measurements and missing soluble VFA / alkalinity"]
+    # Transcribed by the lead on 2026-09-02 from Tisocco et al. 2024 (the anchor session
+    # could read the paper but did not transcribe these). Units as stated by the lead.
+    ammonia_envelope:
+      anchor_plant: AFBI Hillsborough primary digester
+      source: "Tisocco et al. 2024, Front. Environ. Sci. Eng. 18(4):50, doi:10.1007/s11783-024-1810-9"
+      temperature_C: 41.0            # Section 2.1, ±0.2
+      digestate_TAN_kg_N_m3: {min: 2.3, max: 4.3}   # Section 3.2, weekly samples
+      digestate_pH: null             # plotted only (Fig. 2); not transcribed
+      free_ammonia_kg_N_m3: null     # not reported; derive from TAN, pH, T if pH is filled
+      feed_TAN_g_N_per_kg_TS:        # Table 1, data sets A / B
+        cattle_slurry: [65.3, 57.8]
+        grass_silage: [25.6, 21.8]
+      feed_TS_percent_FM:
+        cattle_slurry: [6.8, 7.5]
+        grass_silage: [20.1, 25.2]
+      modelled_KI_NH3_acetoclastic_kg_m3: 1.0   # Section 3.2, adapted community
+      notes: >
+        Foulum (Tisocco et al. 2026, doi:10.1016/j.ese.2026.100662) is thermophilic
+        (53 °C, 1200 m3, primary HRT 13–15 d); no TAN or pH values found in the
+        accessible text. Plant A hydraulics are AFBI-anchored only.
     digestate:
-      NH4_N_g_L: {median: null, range: null, todo: "transcribe from Tisocco 2024 results table"}
-      pH: {median: null, range: null, todo: "transcribe from Tisocco 2024 results table"}
-      VFA_g_L: null
+      VFA_g_L: {median: null, range: null, todo: "not transcribed; the paper reports VFA of the slurry feed weekly, not of the digestate"}
     feedstock_tables:
-      todo: "TS, VS, XA, N, NH4-N, ADF/NDF/ADL of slurry and silage: transcribe from Tisocco 2024 Table (feedstock characterisation)"
+      todo: "VS, XA, total N, ADF/NDF/ADL of slurry and silage: transcribe from Tisocco 2024 Table 1 (TS and TAN are in ammonia_envelope)"
     model_skill_reported:
       todo: "daily/weekly NSE and RMSE of ADM1 and ADM1-R3 for biogas and CH4: transcribe"
   au_foulum:
