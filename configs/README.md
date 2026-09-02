@@ -30,6 +30,12 @@ is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
   and is hidden truth). B and C are re-derived from the Muscatine daily file by
   `tests/test_plants.py`. Frozen by the lead's answers of 2026-09-02 (decisions log,
   "Plant configurations A/B/C — frozen").
+- `influent/feed_fractionation.yaml` — the feed-fractionation catalogue of the influent
+  generator (schema `sim/influent/schema.py`), keyed by the plants' feed ids: TS, VS/TS,
+  COD/VS, six-way COD fractionation and its Dirichlet spread, TAN/TKN, inorganic C,
+  strong ions, calcium, with sources. **Provisional** (salvaged from PR #7 for the lead's
+  review; decisions log, "Feed fractionation values are provisional"): every value is
+  `# DESIGN` and `status: provisional`. Loaded by `sim.influent.load_feed_fractionation`.
 - `plant_a_statistics.yaml` — the published operating envelopes Plant A is anchored to
   (Tisocco et al. 2024, 2026), the published HRT inconsistency and the chosen 35–45 d,
   with `todo` nulls where the tables are not yet transcribed (the lead transcribes the
