@@ -962,3 +962,65 @@ modeller's prior carry the truth's value, removing the mismatch); a per-feed ine
 component in the state vector (rejected for Phase 1: adds states for a bookkeeping
 quantity); keep the ADM1 default in the truth too and loosen `tkn_tolerance` (rejected
 by the lead: hides a real factor-of-several nitrogen error behind a tolerance).
+
+---
+
+## 2026-09-02 — Feed catalogue consistency: COD/VS derived, slurry inert share 0.40, silage TAN basis (the lead's answers)
+
+**Context.** The salvage PR's composition read (PR #8 review comment) found that the
+provisional catalogue declares `cod_per_vs` and the fractionation independently and that
+they disagree for high-strength waste (−20 %), primary sludge (−15 %) and FOG (−12 %);
+that the cattle-slurry inert share (0.24, from Tisocco's fitted DQ_XC 69 %) sits at the
+degradable end of the BMP literature; and that the grass-silage TAN rested on an
+untraced "7.28 g/L". The lead answered all three; they are recorded here and are the
+first tasks of the influent-generator session together with the per-feed inert N
+(previous entry). The catalogue stays `provisional` until that session applies them.
+
+**Decisions (by the lead).**
+
+1. **COD/VS is derived from the fractionation, never declared.** `cod_per_vs` becomes a
+   computed quantity (the fractionation's classes at their COD equivalents: carbohydrate
+   1.19, protein 1.42, lipid 2.90 kg COD/kg, VFA as acetate 1.07; inerts at the
+   carbohydrate-like 1.19 unless the session records a better inert equivalent). The
+   literature or measured COD/VS stays in the catalogue as a **check field** with a
+   ±10 % tolerance **enforced by a test**. Consequences for the provisional entries:
+   - **FOG**: fix the mass-share / COD-share mix-up (PR #7 computed 2.75 from a *mass*
+     share of 0.85 lipid, while `f_li` 0.85 is a *COD* share, which gives 2.43); the
+     lipid COD share rises (≈ 0.93) so the derived COD/VS lands near 2.7–2.9.
+   - **High-strength waste** and **primary sludge**: adjust the splits so the derived
+     COD/VS passes the check against the measured Muscatine 2.23 (HSW; lipid COD share
+     ≈ 0.7–0.75) and the typical 1.60 (primary sludge; more lipid, less
+     carbohydrate-like inert), and **cite the adjustment** beside the value.
+2. **Cattle-slurry inert share: centre the hidden-truth Dirichlet at 0.40** (particulate
+   plus soluble inerts), with a spread covering 0.30–0.50, on BMP evidence (cattle-slurry
+   BMP ≈ 0.20–0.25 m³ CH₄ per kg VS against a theoretical ≈ 0.47 for this composition).
+   Tisocco's DQ_XC of 0.69 is a *fitted* value and sits inside that range. Arithmetic
+   for the session: keeping the measured VFA 0.12, protein 0.17 and lipid 0.13, the
+   carbohydrate share becomes 0.16; a concentration κ ≈ 100 gives sd ≈ 0.05 on the 0.40
+   share, i.e. 0.30–0.50 as ± 2 sd.
+3. **Silage TAN basis.** Tisocco 2024 Table 1 is **g N per kg TS**: 25.6 (data set A)
+   and 21.8 (data set B) for grass silage, as already transcribed in
+   `configs/plant_a_statistics.yaml` (`feed_TAN_g_N_per_kg_TS`), with 65.3 / 57.8 for
+   cattle slurry. The "7.28 g/L" that PR #7 attributed to the 2026 Table 1 and rejected
+   is to be **traced or dropped**; the catalogue's silage TAN is to be derived from the
+   2024 basis (25.6 g N/kg TS × 20.1 % TS = 5.1 g N/kg FM for set A; 21.8 × 25.2 % =
+   5.5 for set B), replacing the assumed 0.6 g N/kg FM.
+
+**Observation for the session (recorded, not decided).** On the 2024 basis the silage
+values (25.6 / 21.8 g N per kg TS) exceed the crude-protein nitrogen the 2026 table's
+XP implies (116.9 / 6.25 = 18.7 g N per kg TS), and the slurry values (65.3 / 57.8)
+exceed its 19.8 by three-fold; multiplied by the 2024 TS they give 4.44 / 4.33 g N per kg
+FM for slurry, which is what the 2024 ESM Table S2 lists as the slurry's `S_IN`
+(4.35–5.95 kg N m⁻³) and what PR #7 declined to use as ammoniacal N. The column
+therefore reads as total (Kjeldahl) N with the paper feeding it to ADM1 as `S_IN`,
+rather than as ammoniacal N alone. The session must settle which it is before deriving
+`tan` (ammoniacal, `S_IN`) and `tkn` from it; if it is total N, `tan` needs a TAN/TKN
+ratio (cattle slurry ≈ 0.5–0.6; silage lower) recorded with its source, and the
+`tkn` field becomes the transcribed number.
+
+**Alternatives.** Keep `cod_per_vs` declared and loosen the fractionation (rejected: two
+numbers for one quantity, one of them silently wrong); adopt a per-class inert
+equivalent instead of adjusting the sludge splits (not chosen; may be recorded by the
+session if the adjusted splits become implausible); keep the slurry inert share at the
+fitted 0.24 (rejected: a fitted degradability is not a measured one, and the BMP
+evidence is independent).

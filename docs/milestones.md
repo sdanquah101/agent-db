@@ -443,17 +443,32 @@ closed as superseded.
 - The 100-day plant plausibility check of #7 returns with the influent generator, once
   the recipes and the `N_I` question are settled.
 
-**Next session should start on**
+**Decided after the merge (lead, recorded in `docs/decisions.md` "Feed catalogue
+consistency").** (1) COD/VS is derived from the fractionation, the literature value
+becomes a ±10 % check field enforced by a test; FOG's mass/COD-share mix-up is fixed and
+the HSW and primary-sludge splits adjusted and cited. (2) The cattle-slurry hidden-truth
+Dirichlet is centred at inert 0.40 with spread 0.30–0.50 (κ ≈ 100). (3) Tisocco 2024
+Table 1 N is g N per kg TS (silage 25.6 / 21.8); the untraced 7.28 g/L is traced or
+dropped. The entry records that the 2024 column reads as total N (it reproduces the
+ESM's slurry `S_IN`), which the session must settle before deriving `tan`.
 
-1. Influent generator dynamics (§6.1) on `sim/influent`: delivery process from the
+**Next session (influent generator) should start on, in this order**
+
+1. `inert_N_I` in the truth model: COD-weighted mean of the fed feeds' values as a
+   hidden truth parameter; fitted model keeps the ADM1 default (decision "Per-feed inert
+   nitrogen in the truth model").
+2. Catalogue consistency (1): derived `cod_per_vs`, literature check field, ±10 % test;
+   FOG, HSW and primary-sludge adjustments cited in the YAML.
+3. Catalogue consistency (2): cattle-slurry fractionation re-centred at inert 0.40,
+   κ ≈ 100, with the BMP citation.
+4. Catalogue consistency (3): silage (and slurry) TAN/TKN from the 2024 Table 1 basis
+   once the column's meaning (ammoniacal vs total N) is settled; trace or drop 7.28 g/L.
+5. Then the generator dynamics (§6.1) on `sim/influent`: delivery process from the
    `FeedStream` schedules and `zero_days_fraction`, assay noise and lag, seasonal drift,
-   mis-logged deliveries; `anchor/ingest_muscatine.py` for the B/C statistics. In the
-   same session, implement the per-feed inert nitrogen in the truth model (COD-weighted
-   `inert_N_I` of the fed feeds as a hidden truth parameter; fitted model unchanged) and
-   settle the COD/VS-vs-fractionation consistency of the catalogue with the lead.
-3. Fault-injection API; the imperfect-mixing scenario picks up `sim/plants/mixing.py`
+   mis-logged deliveries; `anchor/ingest_muscatine.py` for the B/C statistics.
+6. Fault-injection API; the imperfect-mixing scenario picks up `sim/plants/mixing.py`
    and owns the `(β, φ, k_ex)` distribution that #7 had as a plant prior.
-4. Weinrich R3/R4 ports as fitted models.
+7. Weinrich R3/R4 ports as fitted models.
 
 **Resource cost this session (rough)**
 
