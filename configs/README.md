@@ -22,3 +22,15 @@ is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
   `precipitation` (S_ca, X_caco3, SI-based calcite rate). `shared_parameters` holds
   constants used by more than one extension (pK_a2). Loaded by
   `sim.adm1.load_extensions`; each extension is switchable independently.
+- `plants/plant_a.yaml`, `plant_b.yaml`, `plant_c.yaml` — the three virtual plants
+  (proposal §6.1) as *declared* configuration: geometry, temperature control, operating
+  envelope, feedstock catalogue with catalogue fractionations and their Dirichlet spread,
+  the priors of the hidden active-volume error and mixing structure, the truth-model
+  extensions and any ADM1 parameter overrides. Every design value carries a `# DESIGN`
+  comment with its source or "assumed" and the reason. Loaded by
+  `sim.plants.load_plant_declared`; the hidden truth is drawn by
+  `sim.plants.sample_truth(declared, seed)` and never stored here.
+- `plants/plant_a_statistics.yaml` — the Plant-A anchor: Tisocco et al. (2024, 2026)
+  operating envelopes, ADM1 feed inputs (2024 ESM Table S2) and feedstock table (2026
+  Table 1) transcribed with citations. Plant A is statistics-anchored and reported
+  outside the §7 factorial (decisions log, 2026-09-02).

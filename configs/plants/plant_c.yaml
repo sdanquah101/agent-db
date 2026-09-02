@@ -1,0 +1,122 @@
+# Plant C — sewage-sludge digester, the "easy" control (closest to ADM1's origin).
+# Proposal §6.1. DATASET-ANCHORED to the Muscatine WRRF datasets for the operating
+# envelope and the sludge VS statistics (anchor/MANIFEST.json iowa-muscatine-wrrf;
+# docs/anchor_datasets.md §3.1); geometry, temperature and the sludge COD fractionation
+# are the BSM2 defaults (configs/adm1/plant_bsm2.yaml; Rosen & Jeppsson 2006 influent as
+# in scripts/adm1_candidates/common.py INFLUENT_RJ2006), which is what the Milestone-1
+# plausibility gate was written for. `# DESIGN` marks design parameters.
+#
+# Basis conventions as in plant_a.yaml.
+
+id: C
+name: sewage-sludge digester (primary sludge + thickened WAS), mesophilic CSTR, BSM2 geometry
+version: 1
+
+anchor:
+  anchoring: dataset-anchored
+  anchor_source: >-
+    BSM2 digester (Rosen & Jeppsson 2006) for geometry, temperature and the sludge COD
+    fractionation; Muscatine WRRF daily file (Schroer & Just 2024) for the retention-time
+    envelope, the sludge VS content and the variability statistics the influent generator
+    will use.
+  in_factorial: true
+  scenario_subset: "all 19 scenarios at Tiers A, B, C (proposal §6.3, §7)"
+  caveats: >-
+    Muscatine co-digests industrial waste and FOG; only its sludge streams (V-PS, V-TWAS,
+    PS-VS, TWAS-VS) and its SRT envelope are used here. Its two digesters are 1,836 m3
+    each; the BSM2 volume (3,400 m3) is kept so that the Milestone-1 ring tests and the
+    plausibility gate apply unchanged. Gas reference conditions at Muscatine are unstated.
+
+# --- geometry ---------------------------------------------------------------------
+V_liq: 3400.0    # DESIGN  m3; BSM2 (configs/adm1/plant_bsm2.yaml)
+V_gas: 300.0     # DESIGN  m3; BSM2
+
+# --- temperature / heating --------------------------------------------------------
+temperature:
+  setpoint_C: 35.0               # DESIGN  degC; BSM2 T_op 308.15 K (Muscatine measured mean 35.3 C, LABS-raw Dig1-T)
+  tolerance_C: 1.0               # DESIGN  degC; ~2 sd of the Muscatine daily temperature (sd 0.48 C)
+  heating_time_constant_d: 2.0   # DESIGN  d; assumed
+  regime: mesophilic
+
+# --- operating envelope -----------------------------------------------------------
+envelope:
+  q_nominal: 170.0               # DESIGN  m3/d; BSM2 (HRT 20 d)
+  q_range: [81.5347721823, 232.8767123288]   # DESIGN  m3/d; V_liq / (41.7, 14.6) d
+  hrt_range_d: [14.6, 41.7]      # DESIGN  d; Muscatine LABS-raw SRT p05-p95 (mean 24.7, p50 22.2)
+  olr_range: [0.8, 3.0]          # DESIGN  kg VS/m3/d; assumed bracket around the nominal 1.5 over the SRT envelope
+
+# --- feedstock catalogue (what the operator sees) ---------------------------------
+feedstocks:
+  primary_sludge:
+    name: primary_sludge
+    description: >-
+      Primary sludge. VS 3.0 % w/w (Muscatine LABS-raw PS-VS_percent mean 3.005, sd 0.85,
+      p05-p95 1.75-4.48, n = 726; note the provider's data dictionary swaps the PS/TWAS
+      VS descriptions). Fractionation: the Rosen & Jeppsson 2006 BSM2 influent (total
+      COD 57 kg/m3: X_ch 5, X_pr 20, X_li 5, X_xc 2, X_I 25, S_I 0.02; composite split by
+      the BSM2 f_*_xc) has COD shares ch 0.095, pr 0.358, li 0.098, xi 0.445, si 0.004;
+      the primary/TWAS split of that blend is assumed (primary richer in carbohydrate and
+      lipid, TWAS richer in protein).
+    density: 1000.0              # DESIGN  kg/m3; assumed
+    ts: 0.040                    # DESIGN  kg TS/kg wet; derived: VS 3.0 % w/w (Muscatine) at an assumed VS/TS 0.75
+    vs_of_ts: 0.75               # DESIGN  kg VS/kg TS; assumed (typical primary sludge)
+    cod_per_vs: 1.60             # DESIGN  kg COD/kg VS; assumed (typical primary sludge 1.5-1.7)
+    fractionation:               # DESIGN  kg COD/kg COD; assumed split of the BSM2 blend (see description)
+      f_ch: 0.15
+      f_pr: 0.25
+      f_li: 0.15
+      f_xi: 0.40
+      f_si: 0.02
+      f_vfa: 0.03
+    fractionation_concentration: 200.0   # DESIGN  -; assumed: sludge composition is steady (sd ~0.03 on the 0.40 share)
+    tan: 0.010                   # DESIGN  kmol N/m3; BSM2 influent S_IN 0.01
+    tkn: 0.180                   # DESIGN  kmol N/m3; derived from the fractionation with the BSM2 N contents (2.5 g N/L)
+    tkn_tolerance: 0.15          # DESIGN  -
+    s_ic: 0.04                   # DESIGN  kmol C/m3; BSM2 influent S_IC
+    s_cat: 0.04                  # DESIGN  kmol/m3; BSM2 influent S_cat
+    s_an: 0.02                   # DESIGN  kmol/m3; BSM2 influent S_an
+    s_ca: 0.02                   # DESIGN  kmol/m3; assumed (~0.8 g Ca/L)
+  twas:
+    name: twas
+    description: >-
+      Thickened waste activated sludge. VS 3.09 % w/w (Muscatine LABS-raw TWAS-VS_percent
+      mean 3.091, sd 0.53, p05-p95 2.30-3.85, n = 1,046). Biomass-like: COD/VS 1.42
+      (C5H7O2N), protein-rich.
+    density: 1000.0              # DESIGN  kg/m3; assumed
+    ts: 0.0396                   # DESIGN  kg TS/kg wet; derived: VS 3.09 % w/w at an assumed VS/TS 0.78
+    vs_of_ts: 0.78               # DESIGN  kg VS/kg TS; assumed (typical WAS)
+    cod_per_vs: 1.42             # DESIGN  kg COD/kg VS; ADM1 biomass composition C5H7O2N
+    fractionation:               # DESIGN  kg COD/kg COD; assumed split of the BSM2 blend
+      f_ch: 0.05
+      f_pr: 0.45
+      f_li: 0.05
+      f_xi: 0.44
+      f_si: 0.01
+      f_vfa: 0.0
+    fractionation_concentration: 300.0   # DESIGN  -; assumed
+    tan: 0.010                   # DESIGN  kmol N/m3; BSM2 influent S_IN
+    tkn: 0.233                   # DESIGN  kmol N/m3; derived from the fractionation with the BSM2 N contents (3.3 g N/L)
+    tkn_tolerance: 0.15          # DESIGN  -
+    s_ic: 0.04                   # DESIGN  kmol C/m3; BSM2
+    s_cat: 0.04                  # DESIGN  kmol/m3; BSM2
+    s_an: 0.02                   # DESIGN  kmol/m3; BSM2
+    s_ca: 0.02                   # DESIGN  kmol/m3; assumed
+
+nominal_feed:
+  mass_rates:                    # DESIGN  kg wet/d; Q = 170 m3/d (BSM2); PS:TWAS 59:41 by volume (Muscatine LABS-raw means 62.3 : 38.5 m3/d)
+    primary_sludge: 100000.0
+    twas: 70000.0
+
+# --- hidden quantities: priors ----------------------------------------------------
+active_volume_prior:
+  magnitude_min: 0.05            # DESIGN  -; proposal §6.1
+  magnitude_max: 0.15            # DESIGN  -; proposal §6.1
+mixing_prior:
+  bypass_fraction: [0.01, 0.05]     # DESIGN  -; assumed: the "easy" plant, mildest non-ideality
+  stagnant_fraction: [0.03, 0.15]   # DESIGN  -; assumed (Manenti et al. 2018 found 5 % dead volume in a well-mixed tank; Capela et al. 2009 22 %)
+  exchange_rate: [0.5, 2.0]         # DESIGN  1/d; assumed
+
+# --- truth-model composition -------------------------------------------------------
+extensions: [sao, ionic_strength, precipitation]   # DESIGN
+parameter_overrides: {}          # BSM2 defaults: sewage sludge is what ADM1's N contents were derived for
+extension_overrides: {}

@@ -1,0 +1,127 @@
+# Plant A — agricultural co-digestion (cattle slurry + grass silage), mesophilic CSTR.
+# Proposal §6.1. STATISTICS-ANCHORED (lead's decision 2026-09-02): every anchored number
+# comes from the two Tisocco et al. papers summarised in configs/plants/plant_a_statistics.yaml
+# and docs/anchor_datasets.md §3.4; the citation is repeated beside each value. Values
+# the papers do not give are marked "assumed" with the reason. Lines marked `# DESIGN`
+# are design parameters for the lead's review (PR checklist, "Domain").
+#
+# Basis conventions: `ts` is kg TS per kg wet feed (fresh-matter basis); `vs_of_ts` is
+# kg VS per kg TS (dry basis); dissolved species per m3 of wet feed. COD equivalents used
+# to convert the published crude fractions (g/kg TS) to COD: carbohydrates 1.19, proteins
+# 1.42, lipids 2.90 kg COD/kg (VDI 4630 theoretical methane yields 0.415 / 0.496 / 1.014
+# m3 CH4 STP per kg, divided by 0.35 m3 CH4 per kg COD). Gas volumes are reported by
+# sim.adm1 with their convention (BSM2 T_op/P_atm and dry STP).
+
+id: A
+name: agricultural co-digestion of cattle slurry and grass silage, mesophilic CSTR
+version: 1
+
+anchor:
+  anchoring: statistics-anchored
+  anchor_source: >-
+    Tisocco et al. 2024 (Front. Environ. Sci. Eng. 18(4):50, AFBI Hillsborough; ESM Table
+    S2) for geometry, temperature, feed quantities, OLR/HRT envelope and the ADM1 feed
+    inputs; Tisocco et al. 2026 (Environ. Sci. Ecotechnol. 29:100662, AU Foulum; Table 1)
+    for the feedstock chemistry of cattle manure and grass silage. See
+    configs/plants/plant_a_statistics.yaml.
+  in_factorial: false            # §7: Plant A contributes no rows to the factorial
+  scenario_subset: "Levels 2-5 at Tier A only, reported separately (proposal §6.3, §7)"
+  caveats: >-
+    No open full-scale agricultural co-digestion time series exists (docs/anchor_datasets.md).
+    The operating envelope is Hillsborough's (2024 paper); the feedstock chemistry is
+    Foulum's (2026 paper, Table 1), because the 2024 paper gives its feed only as ADM1
+    inputs (ESM Table S2). The 41 C set-point is the upper end of mesophilic.
+
+# --- geometry ---------------------------------------------------------------------
+V_liq: 650.0     # DESIGN  m3; Tisocco et al. 2024 §2.1: two 650 m3 CSTRs (primary digester modelled)
+V_gas: 65.0      # DESIGN  m3; assumed: not published; 10 % of V_liq, the BSM2 ratio (300/3400 = 8.8 %) rounded
+
+# --- temperature / heating --------------------------------------------------------
+temperature:
+  setpoint_C: 41.0               # DESIGN  degC; Tisocco et al. 2024 §2.1: primary digester heated to 41 +/- 0.2 C
+  tolerance_C: 0.2               # DESIGN  degC; same source (+/- 0.2 C)
+  heating_time_constant_d: 1.0   # DESIGN  d; assumed: not published; order of magnitude for a 650 m3 heated tank
+  regime: mesophilic
+
+# --- operating envelope -----------------------------------------------------------
+envelope:
+  q_nominal: 16.5                # DESIGN  m3/d; slurry 14.5 (midpoint of 11-18, 2024 §2.1) + silage 2 t FM/d taken as 2 m3/d
+  q_range: [13.0, 23.2142857143] # DESIGN  m3/d; low = 11 m3/d slurry + 2 silage; high = V_liq / 28 d (the published HRT of 28 d, 2024 §2.1)
+  hrt_range_d: [28.0, 50.0]      # DESIGN  d; 28 d published (2024 §2.1); 50 d = V_liq / q_range[0]
+  olr_range: [1.4, 2.1]          # DESIGN  kg VS/m3/d; the two data sets of the 2024 paper (§2.1: 1.4 and 2.1)
+
+# --- feedstock catalogue (what the operator sees) ---------------------------------
+feedstocks:
+  cattle_slurry:
+    name: cattle_slurry
+    description: >-
+      Cattle slurry. TS, VS, crude fractions and NH4-N from Tisocco et al. 2026 Table 1
+      (column "Cattle manure"): TS 3.6 +/- 1.4 % FM, VS 75.1 +/- 6.8 % TS, XC 586.6,
+      XP 124.0, XL 48.5 g/kg TS, NH4-N 1.08 g/L, acetic 2.57, propionic 0.99, valeric
+      0.11 g/L, DQ_XC 69 %. Crude fractions as a share of VS: 0.773 / 0.163 / 0.064.
+    density: 1000.0              # DESIGN  kg/m3; assumed: slurry is pumped as a liquid, taken as water
+    ts: 0.036                    # DESIGN  kg TS/kg wet; 2026 Table 1 (3.6 % FM)
+    vs_of_ts: 0.751              # DESIGN  kg VS/kg TS; 2026 Table 1 (75.1 % TS)
+    cod_per_vs: 1.337            # DESIGN  kg COD/kg VS; derived: 0.773*1.19 + 0.163*1.42 + 0.064*2.90 (Table 1 fractions x VDI 4630 COD equivalents)
+    fractionation:               # DESIGN  kg COD/kg COD; raw COD shares from Table 1 are ch 0.688, pr 0.174, li 0.139
+      f_ch: 0.34                 #   carbohydrates after removing the VFA (0.12) and the non-degradable carbohydrate (0.31 x 0.688 = 0.21, from DQ_XC 69 %, Table 1)
+      f_pr: 0.17                 #   proteins, Table 1 XP
+      f_li: 0.13                 #   lipids, Table 1 XL (0.139 rounded down; balance to inerts)
+      f_xi: 0.22                 #   particulate inerts: 0.21 non-degradable carbohydrate + 0.01 (assumed) non-degradable protein/lipid
+      f_si: 0.02                 #   soluble inerts: assumed (humic-like solubles of slurry); not published
+      f_vfa: 0.12                #   VFA as acetate: Table 1 acetic + propionic + valeric = 4.5 kg COD/m3 of 36.1 kg COD/m3 total
+    fractionation_concentration: 150.0   # DESIGN  -; assumed: sd ~0.04 on the 0.34 share (Table 1 gives TS +/- 1.4 % FM, i.e. ~40 % relative spread on TS, but the fractionation of slurry is far steadier than its TS)
+    tan: 0.0771                  # DESIGN  kmol N/m3; 2026 Table 1 NH4-N 1.08 g/L (/14)
+    tkn: 0.128                   # DESIGN  kmol N/m3; derived: NH4-N + crude-protein N (XP 124 g/kg TS / 6.25 = 19.8 g N/kg TS x 36 g TS/kg = 0.714 g N/kg) = 1.79 g N/L
+    tkn_tolerance: 0.15          # DESIGN  -; accepted gap between the declared TKN and the ADM1-implied one (tests/test_plants.py)
+    s_ic: 0.05                   # DESIGN  kmol C/m3; assumed: bicarbonate of stored cattle slurry (~3 g HCO3-/L); not published
+    s_cat: 0.10                  # DESIGN  kmol/m3; assumed: Tisocco 2024 ESM Table S2 lists S_cat 0.2 mol/L "manually adjusted"; halved so the digester alkalinity lands at ~10 g CaCO3/L with the TAN below (tests)
+    s_an: 0.02                   # DESIGN  kmol/m3; assumed (Table S2: 0.015 mol/L, manually adjusted)
+    s_ca: 0.04                   # DESIGN  kmol/m3; assumed: ~1.6 g Ca/L, order of magnitude for cattle slurry; not published
+  grass_silage:
+    name: grass_silage
+    description: >-
+      Grass silage. TS, VS and crude fractions from Tisocco et al. 2026 Table 1 (column
+      "Grass silage"): TS 31.9 +/- 0.7 % FM, VS 87.7 +/- 0.4 % TS, XC 731.0, XP 116.9,
+      XL 29.0 g/kg TS, acetic 17.4 g/L, lactic 46.4 g/L, ADL 74.1 g/kg TS. Crude fractions
+      as a share of VS: 0.834 / 0.133 / 0.033. Fed 2 t FM/d Monday-Friday at Hillsborough
+      (2024 §2.1); the weekend omission is the influent generator's job.
+    density: 1000.0              # DESIGN  kg/m3; assumed: the silage is mixed into the slurry, so its volume is taken at the slurry density (bulk density in the clamp is 600-800 kg/m3)
+    ts: 0.319                    # DESIGN  kg TS/kg wet; 2026 Table 1 (31.9 % FM)
+    vs_of_ts: 0.877              # DESIGN  kg VS/kg TS; 2026 Table 1 (87.7 % TS)
+    cod_per_vs: 1.277            # DESIGN  kg COD/kg VS; derived: 0.834*1.19 + 0.133*1.42 + 0.033*2.90
+    fractionation:               # DESIGN  kg COD/kg COD; raw COD shares from Table 1 are ch 0.777, pr 0.148, li 0.075
+      f_ch: 0.327                #   carbohydrates after removing silage acids (0.20) and the non-degradable share (0.25)
+      f_pr: 0.148                #   proteins, Table 1 XP
+      f_li: 0.075                #   lipids, Table 1 XL
+      f_xi: 0.25                 #   particulate inerts: assumed from BMP: grass-silage BMP ~0.33 m3 CH4/kg VS (Amon et al. 2007, cited in the 2024 ESM) over the theoretical 0.447 = 74 % degradable
+      f_si: 0.0                  #   no soluble inerts assumed
+      f_vfa: 0.20                #   silage acids as acetate: Table 1 acetic 17.4 + lactic 46.4 g/L = 68 kg COD/m3 (Tisocco 2024 ESM Table S2 note b: "S_ac included lactic acid"), capped at 0.20 of total COD (they are counted inside XC by difference)
+    fractionation_concentration: 100.0   # DESIGN  -; assumed: ensiling quality varies between clamps (sd ~0.05 on the 0.33 share)
+    tan: 0.043                   # DESIGN  kmol N/m3; ASSUMED 0.6 g N/kg FM = 10 % of the crude-protein N. Table 1 reports NH4-N 7.28 g/L, which exceeds the crude-protein N of 5.97 g/kg FM (XP 116.9 g/kg TS / 6.25 x 319 g TS/kg) and so cannot be per kg of fresh silage; flagged for the domain reviewer
+    tkn: 0.469                   # DESIGN  kmol N/m3; derived: crude-protein N 5.97 g/kg FM + 0.6 g/kg NH4-N = 6.57 g N/kg
+    tkn_tolerance: 0.15          # DESIGN  -
+    s_ic: 0.0                    # DESIGN  kmol C/m3; assumed: silage at pH ~4 carries no bicarbonate
+    s_cat: 0.10                  # DESIGN  kmol/m3; assumed: K+ of grass silage is 2-3 % TS (~0.2 kmol/m3 FM); half taken as balanced by organic anions already in f_vfa
+    s_an: 0.05                   # DESIGN  kmol/m3; assumed
+    s_ca: 0.02                   # DESIGN  kmol/m3; assumed: ~0.8 g Ca/L; not published
+
+nominal_feed:
+  mass_rates:                    # DESIGN  kg wet/d
+    cattle_slurry: 14500.0       #   14.5 m3/d, midpoint of 11-18 m3/d (Tisocco et al. 2024 §2.1)
+    grass_silage: 2000.0         #   2 t FM/d (Tisocco et al. 2024 §2.1), weekday rate
+
+# --- hidden quantities: priors ----------------------------------------------------
+active_volume_prior:             # proposal §6.1: declared active volume with a hidden error of +/-5-15 %
+  magnitude_min: 0.05            # DESIGN  -; proposal §6.1
+  magnitude_max: 0.15            # DESIGN  -; proposal §6.1
+mixing_prior:                    # sim/plants/reactor.py structure; docs/decisions.md "Mixing model"
+  bypass_fraction: [0.02, 0.10]     # DESIGN  -; assumed: short-circuiting is reported in full-scale digesters up to 61 % of flow (Monteith & Stephenson 1978); a well-run plant is taken at 2-10 %
+  stagnant_fraction: [0.10, 0.30]   # DESIGN  -; assumed: non-effective volume 22 % (Capela et al. 2009) to 75 % (Monteith & Stephenson 1978); thick slurry with mechanical mixers taken at 10-30 %
+  exchange_rate: [0.2, 2.0]         # DESIGN  1/d; assumed: stagnant-zone turnover of 0.5-5 d
+
+# --- truth-model composition -------------------------------------------------------
+extensions: [sao, ionic_strength, precipitation]   # DESIGN  §6.1 extensions active in the truth (carbonate switch off, lead's decision)
+parameter_overrides:
+  stoichiometry.N_I: 0.001       # DESIGN  kmol N/kg COD; assumed: the BSM2 value 0.06/14 = 0.00429 is for sludge-derived inerts; lignocellulosic inerts of slurry and silage carry ~0.014 g N/g COD, which makes the ADM1-implied TKN of both feeds match the declared TKN within 10 % (tests/test_plants.py)
+extension_overrides: {}

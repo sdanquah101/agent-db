@@ -1,0 +1,180 @@
+# Plant B — food-waste digester, high nitrogen, mesophilic, with periodic overload.
+# Proposal §6.1. DATASET-ANCHORED to the Muscatine WRRF datasets (anchor/MANIFEST.json
+# id iowa-muscatine-wrrf; docs/anchor_datasets.md §3.1) with the caveats recorded in
+# docs/decisions.md ("Proposed anchor: Muscatine WRRF ..."): Muscatine is a sewage-sludge
+# plant co-digesting trucked industrial food-processing waste (HSW) and FOG, not a
+# source-separated food-waste digester. What is taken from Muscatine: the digester
+# geometry and temperature, the retention-time envelope, the HSW strength (COD, VS) and
+# the load-swing statistics. What is NOT in Muscatine and is therefore assumed from the
+# literature: the food-waste fractionation and nitrogen. Every Muscatine statistic below
+# was computed from anchor/raw/iowa-muscatine-wrrf/LABS-raw.csv (1,103 daily rows,
+# 2020-01-01 to 2023-03-31) with the unit conversions stated. `# DESIGN` marks design
+# parameters for the lead's review.
+#
+# Basis conventions as in plant_a.yaml (ts wet basis, vs dry basis, dissolved species per
+# m3 wet; COD equivalents 1.19 / 1.42 / 2.90 kg COD/kg for carbohydrate / protein / lipid).
+
+id: B
+name: food-waste digester with industrial organic waste and FOG, high nitrogen, mesophilic CSTR
+version: 1
+
+anchor:
+  anchoring: dataset-anchored
+  anchor_source: >-
+    Muscatine WRRF daily file (Schroer & Just 2024, ODC-By 1.0; anchor/MANIFEST.json
+    iowa-muscatine-wrrf) for geometry, temperature, retention-time envelope, HSW strength
+    and load-swing statistics; associated article Schroer & Just 2023 (PMC10928704) for
+    the plant description. Food-waste composition: Zhang et al. 2007 (Bioresour. Technol.
+    98:929), Fisgativa et al. 2016 (Waste Manag. 50:264), Bong et al. 2018 (J. Clean.
+    Prod. 172:1545).
+  in_factorial: true
+  scenario_subset: "all 19 scenarios at Tiers A, B, C (proposal §6.3, §7)"
+  caveats: >-
+    Muscatine's high-strength waste is industrial food-processing waste plus FOG blended
+    into sewage sludge, not source-separated food waste; its feed composition is given as
+    volumes plus HSW VS/COD only, with no COD fractionation and no nitrogen; gas volumes
+    are in cfm with unstated reference conditions; all units are US customary and were
+    converted here (gal x 0.00378541 m3, degF -> degC). Plant B therefore takes its
+    geometry, temperature, SRT envelope, HSW strength and overload statistics from
+    Muscatine and its food-waste chemistry from the literature.
+
+# --- geometry ---------------------------------------------------------------------
+V_liq: 1836.0    # DESIGN  m3; one of Muscatine's two 485,000-gal digesters (Schroer & Just 2023, PMC10928704; 485,000 x 0.00378541)
+V_gas: 162.0     # DESIGN  m3; assumed: not published; 8.8 % of V_liq, the BSM2 ratio (300/3400)
+
+# --- temperature / heating --------------------------------------------------------
+temperature:
+  setpoint_C: 36.0               # DESIGN  degC; Schroer & Just 2023: digesters at 36 C. LABS-raw Dig1-T: mean 35.29 C, sd 0.48, p05-p95 34.7-35.7 C (n = 1,098)
+  tolerance_C: 1.0               # DESIGN  degC; ~2 sd of the measured daily temperature (LABS-raw)
+  heating_time_constant_d: 2.0   # DESIGN  d; assumed: not published
+  regime: mesophilic
+
+# --- operating envelope -----------------------------------------------------------
+envelope:
+  q_nominal: 59.5789473684       # DESIGN  m3/d; the nominal recipe below (HRT 30.8 d, inside the Muscatine SRT p05-p95; LABS-raw SRT mean 24.7 d, p50 22.2 d)
+  q_range: [44.0287769784, 125.7534246575]   # DESIGN  m3/d; V_liq / (41.7, 14.6) d
+  hrt_range_d: [14.6, 41.7]      # DESIGN  d; LABS-raw SRT p05-p95 (full range 3.6-165 d; the extremes are the overload/upset scenarios' territory)
+  olr_range: [1.5, 6.0]          # DESIGN  kg VS/m3/d; assumed: Muscatine reports no OLR; bracket of the recipe (3.9) over the SRT envelope
+
+# --- feedstock catalogue (what the operator sees) ---------------------------------
+feedstocks:
+  food_waste:
+    name: food_waste
+    description: >-
+      Source-separated food waste (pre-shredded, pulped). NOT a Muscatine stream:
+      moisture 70-74 %, VS/TS 83-87 % (Zhang et al. 2007); carbohydrates 36 % VS on
+      average and highly variable (Fisgativa et al. 2016, 70-paper compilation);
+      carbohydrates 12-74 %, proteins 14-18 %, lipids 4-34 % of VS (Bong et al. 2018);
+      VS destruction ~81 % in BMP (Zhang et al. 2007), i.e. ~19 % inert.
+    density: 1000.0              # DESIGN  kg/m3; assumed (pulped food waste)
+    ts: 0.28                     # DESIGN  kg TS/kg wet; Zhang et al. 2007: moisture 70-74 %
+    vs_of_ts: 0.85               # DESIGN  kg VS/kg TS; Zhang et al. 2007: VS/TS 83-87 %
+    cod_per_vs: 1.486            # DESIGN  kg COD/kg VS; derived from assumed VS mass shares carbohydrate 0.68 / protein 0.17 / lipid 0.15 (Bong et al. 2018 ranges) x VDI 4630 COD equivalents
+    fractionation:               # DESIGN  kg COD/kg COD; raw COD shares of the VS mass shares are ch 0.545, pr 0.163, li 0.293
+      f_ch: 0.36                 #   assumed: carbohydrate after removing VFA (0.04) and the non-degradable share
+      f_pr: 0.16                 #   assumed: Bong et al. 2018 protein 14-18 % VS
+      f_li: 0.25                 #   assumed: lipid share reduced from 0.29 to leave room for the inert share
+      f_xi: 0.17                 #   assumed: ~19 % non-degradable (Zhang et al. 2007 VS destruction 81 %), split 0.17 particulate + 0.02 soluble
+      f_si: 0.02                 #   assumed
+      f_vfa: 0.04                #   assumed: food waste arrives acidified (pH 5.1, Fisgativa et al. 2016)
+    fractionation_concentration: 40.0    # DESIGN  -; assumed: food waste is the most variable feed (Fisgativa et al. 2016); sd ~0.075 on the 0.36 share
+    tan: 0.03                    # DESIGN  kmol N/m3; assumed 0.42 g N/L (partly hydrolysed proteins in stored food waste)
+    tkn: 0.493                   # DESIGN  kmol N/m3; derived: protein 0.17 kg/kg VS / 6.25 x 0.238 kg VS/kg = 6.47 g N/kg + 0.42 g/kg NH4-N = 6.9 g N/kg (C/N ~15, inside the 6-19 of Xiao et al. 2021)
+    tkn_tolerance: 0.15          # DESIGN  -
+    s_ic: 0.0                    # DESIGN  kmol C/m3; assumed: acidified feed carries no bicarbonate
+    s_cat: 0.05                  # DESIGN  kmol/m3; assumed: Na+/K+ of food waste
+    s_an: 0.03                   # DESIGN  kmol/m3; assumed
+    s_ca: 0.015                  # DESIGN  kmol/m3; assumed: ~0.6 g Ca/L
+  hsw_liquid:
+    name: hsw_liquid
+    description: >-
+      Trucked high-strength industrial organic waste as received at Muscatine (LABS-raw
+      HSW-COD_mgL, HSW-VS_percent). COD mean 137,575 mg/L (sd 96,508; p50 128,000;
+      p95 260,250; n = 632 after the provider's de-duplication), VS 6.16 % w/w (sd 3.49;
+      p95 11.7; n = 745). Delivered on 992 of 1,103 days, 0-190 m3/d (p95 106 m3/d,
+      total for two digesters). Lipid-rich (COD/VS 2.23).
+    density: 1000.0              # DESIGN  kg/m3; assumed (liquid waste)
+    ts: 0.0733                   # DESIGN  kg TS/kg wet; derived: VS 6.16 % w/w (LABS-raw mean) at an assumed VS/TS of 0.84
+    vs_of_ts: 0.84               # DESIGN  kg VS/kg TS; assumed (food-processing waste)
+    cod_per_vs: 2.234            # DESIGN  kg COD/kg VS; LABS-raw means: 137.6 kg COD/m3 / 61.6 kg VS/m3
+    fractionation:               # DESIGN  kg COD/kg COD; assumed: a COD/VS of 2.23 requires ~45 % lipid by mass
+      f_ch: 0.20
+      f_pr: 0.10
+      f_li: 0.55
+      f_xi: 0.08
+      f_si: 0.02
+      f_vfa: 0.05
+    fractionation_concentration: 30.0    # DESIGN  -; assumed: the HSW COD varies by 70 % (sd/mean, LABS-raw), its composition is not measured
+    tan: 0.01                    # DESIGN  kmol N/m3; assumed: not measured at Muscatine
+    tkn: 0.127                   # DESIGN  kmol N/m3; derived from the fractionation with the N_I override below (not measured at Muscatine)
+    tkn_tolerance: 0.15          # DESIGN  -
+    s_ic: 0.01                   # DESIGN  kmol C/m3; assumed
+    s_cat: 0.03                  # DESIGN  kmol/m3; assumed
+    s_an: 0.02                   # DESIGN  kmol/m3; assumed
+    s_ca: 0.01                   # DESIGN  kmol/m3; assumed
+  fog:
+    name: fog
+    description: >-
+      Fats, oils and grease from grease-trap collection (Muscatine FOG_gal: received on
+      764 of 1,103 days, mean 46.8 m3/d for two digesters, p95 117, max 212). Composition
+      not measured at Muscatine; assumed lipid-dominated.
+    density: 950.0               # DESIGN  kg/m3; assumed
+    ts: 0.10                     # DESIGN  kg TS/kg wet; assumed
+    vs_of_ts: 0.95               # DESIGN  kg VS/kg TS; assumed
+    cod_per_vs: 2.75             # DESIGN  kg COD/kg VS; assumed: 0.85 lipid x 2.90 + 0.15 x ~1.3
+    fractionation:               # DESIGN  kg COD/kg COD; assumed
+      f_ch: 0.05
+      f_pr: 0.05
+      f_li: 0.85
+      f_xi: 0.04
+      f_si: 0.01
+      f_vfa: 0.0
+    fractionation_concentration: 60.0    # DESIGN  -; assumed
+    tan: 0.0                     # DESIGN  kmol N/m3; assumed
+    tkn: 0.105                   # DESIGN  kmol N/m3; derived from the fractionation (with the N_I override below)
+    tkn_tolerance: 0.15          # DESIGN  -
+    s_ic: 0.0
+    s_cat: 0.005                 # DESIGN  kmol/m3; assumed
+    s_an: 0.005                  # DESIGN  kmol/m3; assumed
+    s_ca: 0.0
+  dilution_water:
+    name: dilution_water
+    description: >-
+      Process water / recirculated liquor used to bring the feed to a pumpable solids
+      content (assumed; Muscatine dilutes HSW in a 65,000-gal blend tank, Schroer & Just
+      2023). Carries no COD; the fractionation entry is a placeholder.
+    density: 1000.0
+    ts: 0.0
+    vs_of_ts: 0.0
+    cod_per_vs: 1.0
+    fractionation: {f_ch: 0.0, f_pr: 0.0, f_li: 0.0, f_xi: 1.0, f_si: 0.0, f_vfa: 0.0}
+    fractionation_concentration: 1.0
+    tan: 0.0
+    tkn: 0.0
+    tkn_tolerance: 0.0
+    s_ic: 0.005                  # DESIGN  kmol C/m3; assumed (tap-water bicarbonate)
+    s_cat: 0.005                 # DESIGN  kmol/m3; assumed
+    s_an: 0.003                  # DESIGN  kmol/m3; assumed
+    s_ca: 0.002                  # DESIGN  kmol/m3; assumed
+
+nominal_feed:
+  mass_rates:                    # DESIGN  kg wet/d; recipe gives OLR 3.9 kg VS/m3/d, 6.2 kg COD/m3/d, HRT 30.8 d, feed TS 14 % (a wet food-waste digester), digester TAN ~1.9 g N/L
+    food_waste: 26000.0
+    hsw_liquid: 12000.0          #   Muscatine HSW mean 46.8 m3/d for two digesters, i.e. ~23 m3/d per digester; half of it here, the rest of the load being source-separated food waste
+    fog: 1500.0
+    dilution_water: 20000.0
+
+# --- hidden quantities: priors ----------------------------------------------------
+active_volume_prior:
+  magnitude_min: 0.05            # DESIGN  -; proposal §6.1
+  magnitude_max: 0.15            # DESIGN  -; proposal §6.1
+mixing_prior:
+  bypass_fraction: [0.02, 0.08]     # DESIGN  -; assumed (see plant_a.yaml for the tracer-study basis)
+  stagnant_fraction: [0.05, 0.20]   # DESIGN  -; assumed: gas-mixed municipal digester, non-effective volume 5-20 %
+  exchange_rate: [0.2, 2.0]         # DESIGN  1/d; assumed
+
+# --- truth-model composition -------------------------------------------------------
+extensions: [sao, ionic_strength, precipitation]   # DESIGN  all three §6.1 extensions; SAO matters here (high free ammonia)
+parameter_overrides:
+  stoichiometry.N_I: 0.0015      # DESIGN  kmol N/kg COD; assumed: food-waste inerts (fibre) carry far less N than sludge-derived inerts (BSM2 0.00429); makes the ADM1-implied TKN of food waste match the declared value within 10 %
+extension_overrides: {}

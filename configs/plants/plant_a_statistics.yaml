@@ -1,0 +1,110 @@
+# Plant A anchor statistics: the published operating envelopes and feedstock tables of
+# Tisocco et al. (2024, 2026), the two full-scale agricultural co-digestion plants that
+# match Plant A (docs/anchor_datasets.md §3.4; docs/decisions.md "Plant A is
+# statistics-anchored for all of Phase 1"). Plant A's declared configuration
+# (plant_a.yaml) and, later, its influent generator draw on these numbers.
+#
+# Every number carries its source (paper, section/table). Nothing here is measured by
+# us; where the papers do not give a value it is not listed here (plant_a.yaml marks
+# such values "assumed"). Both papers are CC BY 4.0; neither deposits its plant data.
+#
+# Sources:
+#   T2024: Tisocco S., Weinrich S., Lyons G., Wills M., Zhan X., Crosson P. (2024).
+#          Application of a simplified ADM1 for full-scale anaerobic co-digestion of
+#          cattle slurry and grass silage: assessment of input variability. Front.
+#          Environ. Sci. Eng. 18(4):50. doi:10.1007/s11783-024-1810-9. Plant: AFBI
+#          Hillsborough (UK). Main text as summarised in docs/anchor_datasets.md §2 row 4
+#          and §3.4 (read in full on 2026-09-02); ESM read again on 2026-09-02.
+#   T2026: Tisocco S. et al. (2026). Machine learning vs. ADM1: reliable biogas
+#          prediction with minimal data requirements in full-scale plants. Environ. Sci.
+#          Ecotechnol. 29:100662. doi:10.1016/j.ese.2026.100662 (PMC12874345). Plant:
+#          AU Foulum (Denmark). Section 2.1 and Table 1 read on 2026-09-02.
+
+version: 1
+plant: A
+anchoring: statistics-anchored     # lead's decision 2026-09-02
+reported: outside the §7 factorial; Levels 2-5 at Tier A only
+
+# --- operating envelopes ---------------------------------------------------------
+plants:
+  afbi_hillsborough:               # the Plant-A reference (mesophilic, slurry + grass silage)
+    source: T2024 §2.1 (docs/anchor_datasets.md row 4)
+    reactors: "two 650 m3 CSTRs; primary heated, secondary unheated"
+    V_liq_m3: 650.0                # DESIGN  T2024 §2.1
+    T_primary_C: 41.0              # DESIGN  T2024 §2.1: 41 +/- 0.2 C
+    T_primary_tolerance_C: 0.2     # DESIGN  T2024 §2.1
+    cattle_slurry_m3_d: [11.0, 18.0]   # DESIGN  T2024 §2.1
+    grass_silage_t_FM_d: 2.0       # DESIGN  T2024 §2.1, Monday-Friday only
+    silage_feeding_days: "Mon-Fri; weekend omissions produce visible biogas drops"   # T2024 §2.1, §3
+    olr_kg_VS_m3_d: [1.4, 2.1]     # DESIGN  T2024 §2.1: data set A 1.4, data set B 2.1
+    hrt_d: 28.0                    # DESIGN  T2024 §2.1 (per reactor)
+    data_sets:
+      A: "2018-03-01 to 2018-05-31"    # T2024 §2.2
+      B: "2019-03-01 to 2019-07-31"    # T2024 §2.2
+    measurements:                  # T2024 §2.2: what was measured and how often (drives Tier A of Plant A)
+      daily: [feed inputs, biogas rate, CH4 content (in-line analyser)]
+      weekly: [NH4-N and pH of primary digestate, TS/VS of feeds, N/NH4-N/VFA of slurry]
+      missing: "soluble VFA speciation and alkalinity (T2024 §4: 'missing information')"
+  au_foulum:                       # thermophilic sister plant; feedstock chemistry only
+    source: T2026 §2.1
+    reactors: "primary 1200 m3 at 53 C; secondary 30 m3 at 48 C"
+    V_liq_m3: 1200.0               # T2026 §2.1
+    T_primary_C: 53.0              # T2026 §2.1 (thermophilic; not used for Plant A's set-point)
+    hrt_primary_d: [13.0, 15.0]    # T2026 §2.1
+    hrt_secondary_d: 30.0          # T2026 §2.1
+    olr_mean_kg_VS_m3_d: 6.1       # T2026 §2.1
+    load_pattern: "follows campus heat demand; lowest June-September"   # T2026 §2.1
+    data_sets:
+      calibration: "2023, n = 365 daily"   # T2026 §2.2
+      validation: "2024, n = 366 daily"    # T2026 §2.2
+
+# --- ADM1 feed inputs as published (T2024 ESM Table S2) --------------------------
+# Units as printed: kg/m3 of wet feed, "average values"; S_ac "included lactic acid";
+# S_cat/S_an "manually adjusted". Interpreted as mass-based (the ADM1 and ADM1-R3 rows
+# are identical and ADM1-R3 is mass-based; recorded in docs/decisions.md).
+adm1_feed_inputs_T2024_table_S2:
+  data_set_A:
+    grass_silage:  {X_ch: 106.34, X_pr: 32.48, X_li: 6.35, S_ac: 17.02, S_pro: 0.12, S_bu: 0.362, S_va: 0.0, S_h2o: 799.0, S_IN: 5.1, S_cat_mol_L: 0.2, S_an_mol_L: 0.015}
+    cattle_slurry: {X_ch: 28.4, X_pr: 7.05, X_li: 3.29, S_ac: 4.96, S_pro: 1.34, S_bu: 0.61, S_va: 0.21, S_h2o: 933.0, S_IN: 4.35, S_cat_mol_L: 0.2, S_an_mol_L: 0.015}
+  data_set_B:
+    grass_silage:  {X_ch: 139.2, X_pr: 36.12, X_li: 7.2, S_ac: 30.23, S_pro: 0.42, S_bu: 0.096, S_va: 0.0, S_h2o: 733.0, S_IN: 4.24, S_cat_mol_L: 0.27, S_an_mol_L: 0.01}
+    cattle_slurry: {X_ch: 30.79, X_pr: 8.74, X_li: 3.65, S_ac: 4.57, S_pro: 1.34, S_bu: 0.552, S_va: 0.207, S_h2o: 925.0, S_IN: 5.95, S_cat_mol_L: 0.27, S_an_mol_L: 0.01}
+  consistency_check: >-
+    Degradable organics (X_ch + X_pr + X_li + VFA) x feed rate / 650 m3 gives 1.5 kg/m3/d
+    for data set A (slurry 14.5 m3/d) and 2.0 for data set B (slurry 18 m3/d), matching
+    the published OLR of 1.4 and 2.1, so the table is per m3 of wet feed and excludes the
+    non-degradable share.
+  not_used_as_is: >-
+    S_IN of cattle slurry (4.35-5.95 kg/m3) is 4-5x the NH4-N of cattle manure in T2026
+    Table 1 (1.08 g/L); plant_a.yaml uses the T2026 value and records this.
+
+# --- feedstock characterisation (T2026 Table 1) ----------------------------------
+# Columns as printed; "n.d." = not determined. Units: TS % FM (fresh matter), VS % TS,
+# fractions g per kg TS, acids and NH4-N g/L, DQ_XC % of XC.
+feedstock_table_T2026_table_1:
+  cattle_manure: {TS_pct_FM: 3.6, TS_sd: 1.4, VS_pct_TS: 75.1, VS_sd: 6.8, XA: 249.4, XC: 586.6, XP: 124.0, XL: 48.5, NH4_N_g_L: 1.08, acetic_g_L: 2.57, propionic_g_L: 0.99, valeric_g_L: 0.11, DQ_XC_pct: 69}
+  deep_litter:   {TS_pct_FM: 30.7, TS_sd: 1.2, VS_pct_TS: 85.0, VS_sd: 0.7, XA: 150.0, XC: 699.3, XP: 123.7, XL: 27.0, NH4_N_g_L: 1.20, acetic_g_L: 1.75, butyric_g_L: 0.14, propionic_g_L: 0.27, ADF: 471.0, NDF: 641.4, ADL: 123.2}
+  maize_silage:  {TS_pct_FM: 30.1, TS_sd: 1.7, VS_pct_TS: 96.7, VS_sd: 0.2, XA: 33.4, XC: 846.1, XP: 76.0, XL: 44.5, NH4_N_g_L: 0.76, acetic_g_L: 9.98, butyric_g_L: 0.09, propionic_g_L: 0.28, valeric_g_L: 0.01, XF: 211.4, ADF: 231.8, NDF: 423.1, ADL: 26.5}
+  grass_silage:  {TS_pct_FM: 31.9, TS_sd: 0.7, VS_pct_TS: 87.7, VS_sd: 0.4, XA: 123.1, XC: 731.0, XP: 116.9, XL: 29.0, NH4_N_g_L: 7.28, acetic_g_L: 17.4, lactic_g_L: 46.4, XF: 244.4, ADF: 417.0, NDF: 662.7, ADL: 74.1}
+  meadow_grass:  {TS_pct_FM: 81.8, VS_pct_TS: 91.9, XA: 80.6, XC: 782.2, XP: 108.2, XL: 29.0, NH4_N_g_L: 11.7, acetic_g_L: 18.4, butyric_g_L: 2.4, ADL: 61.8}
+  fresh_grass:   {TS_pct_FM: 10.7, VS_pct_TS: 88.9, XA: 111.2, XC: 713.5, XP: 146.3, XL: 29.0, NH4_N_g_L: 2.50, acetic_g_L: 16.3, lactic_g_L: 45.9, XF: 267.4}
+  straw:         {TS_pct_FM: 85.0, VS_pct_TS: 94.2, XA: 57.5, XC: 884.1, XP: 42.5, XL: 15.9, NH4_N_g_L: 0.31, acetic_g_L: 0.13, ADL: 136.9}
+  animal_feed_waste: {TS_pct_FM: 32.8, TS_sd: 3.1, VS_pct_TS: 90.0, VS_sd: 0.1, XA: 100.0, XC: 731.2, XP: 117.8, XL: 51.0, NH4_N_g_L: 1.10, acetic_g_L: 9.98, butyric_g_L: 0.09, propionic_g_L: 0.28, valeric_g_L: 0.01, XF: 200.0}
+  note_on_NH4_N: >-
+    The NH4-N column of the silages and grasses (7.28-11.7 g/L) exceeds their crude-protein
+    nitrogen per kg of fresh matter (grass silage: XP 116.9 g/kg TS / 6.25 x 319 g TS/kg =
+    5.97 g N/kg FM), so it cannot be on a fresh-matter basis; plant_a.yaml assumes 10 % of
+    the crude-protein N as ammonia and flags this for the domain reviewer.
+
+# --- conversion constants used by plant_a.yaml -----------------------------------
+cod_equivalents_kg_COD_per_kg:   # VDI 4630 (2016) theoretical CH4 yields 0.415 / 0.496 / 1.014 m3 STP per kg / 0.35 m3 CH4 per kg COD
+  carbohydrate: 1.19
+  protein: 1.42
+  lipid: 2.90
+  acetic_acid: 1.07
+  lactic_acid: 1.07
+
+# --- reported model performance (for the expected forecasting skill of Plant A) ------
+model_performance:
+  T2024: "daily and weekly NSE/RMSE for ADM1 and ADM1-R3 on data sets A and B; weekly NSE of biogas 0.63 (A) and 0.19 (B) for the nutrient-concentration scenario (ESM Table S3)"
+  T2026: "ADM1, ADM1-R3, random forest and LSTM compared on 2023/2024 daily data; maize silage the most influential input feature (§3)"
