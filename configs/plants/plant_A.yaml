@@ -1,0 +1,71 @@
+# Plant A — agricultural co-digestion of cattle slurry and grass silage.
+# STATISTICS-anchored (decision 2026-09-02) to the published operating envelope of the
+# AFBI Hillsborough plant (Tisocco et al. 2024) with AU Foulum (Tisocco et al. 2026) as
+# the thermophilic sibling; the envelope numbers are in configs/plant_a_statistics.yaml
+# and docs/anchor_datasets.md §3.4. No open time series exists for this plant type.
+#
+# Design content for the lead (docs/decisions.md 2026-09-02 "Plant configurations A/B/C
+# — proposed"), in particular the SAO-establishment condition: at the paper's 28-d HRT
+# the truth model with the current SAO kinetics does not establish SAO
+# (scripts/plant_a_sao_probe.py); see `open_questions`.
+id: A
+name: Plant A (AFBI-type slurry + grass-silage co-digestion)
+domain: cattle slurry + grass silage co-digestion, mesophilic (41 C) CSTR, weekday silage feeding
+anchoring: statistics
+anchor_sources:
+  - {key: tisocco_2024, reference: "Tisocco et al. 2024, Frontiers of Environmental Science & Engineering 18: application of a simplified ADM1 to full-scale co-digestion of cattle slurry and grass silage (AFBI Hillsborough)", doi: "10.1007/s11783-024-1810-9"}
+  - {key: tisocco_2026, reference: "Tisocco et al. 2026, Environmental Science and Ecotechnology: AU Foulum thermophilic co-digestion plant", doi: "10.1016/j.ese.2026.100662"}
+geometry:
+  V_liq_declared: 650.0    # m3; the heated primary CSTR (tisocco_2024)
+  V_gas: 65.0              # m3; ASSUMPTION 10 % of V_liq (not reported)
+  units_at_plant: 2
+  note: "AFBI has a heated primary and an unheated secondary digester in series; the benchmark models the heated primary only."
+hidden_active_volume:
+  error_min: 0.05
+  error_max: 0.15
+  sign: random
+temperature:
+  setpoint_K: 314.15       # 41 C (tisocco_2024: 41 +/- 0.2 C)
+  day_sd_K: 0.2
+  p10_K: 313.9
+  p90_K: 314.4
+  source: "tisocco_2024: primary digester 41 +/- 0.2 C; percentiles taken as +/- 1.25 sd"
+hydraulics:
+  feed_flow_m3_d: {median: 16.5, p10: 13.0, p90: 20.0, unit: "m3/d", source: "tisocco_2024: slurry 11–18 m3/d plus silage 2 t FM/d taken at ~1 m3/t; median is the midpoint"}
+  hrt_d: {median: 28.0, p10: 25.0, p90: 31.0, unit: d, source: "tisocco_2024: HRT 28 d per reactor as stated; percentiles are an ASSUMPTION (+/- 10 %)"}
+  hrt_consistency_tolerance: 0.45
+  note: "The paper's own numbers disagree: 650 m3 / (13–20 m3/d) gives 32–50 d, not 28 d. The tolerance is set wide so the config carries both as published; the plant PR must decide which one the simulator honours."
+mixing:
+  model: cstr
+  n_tanks: 1
+  hidden_dead_volume_fraction: 0.0
+  note: "PROPOSAL: ideal CSTR, dead volume via the hidden active-volume error."
+feeds:
+  - name: cattle_slurry
+    kind: slurry
+    delivery: continuous
+    volume_m3_d: {median: 14.5, p10: 11.0, p90: 18.0, unit: "m3/d", source: "tisocco_2024: 11–18 m3/d; median is the midpoint"}
+    zero_days_fraction: 0.0
+    schedule: daily
+    source: tisocco_2024
+  - name: grass_silage
+    kind: silage
+    delivery: batch
+    mass_t_fm_d: {median: 2.0, p10: 2.0, p90: 2.0, unit: "t FM/d", source: "tisocco_2024: 2 t fresh matter per day, Monday to Friday"}
+    zero_days_fraction: 0.2857   # no silage on Saturday and Sunday (2/7)
+    schedule: "2 t FM/d Monday–Friday, none at weekends; the weekend omission produces the gas-rate drops the paper reports"
+    source: tisocco_2024
+truth_model:
+  extensions: [sao, ionic_strength, carbonate, precipitation]
+  note: "All four §6.1 extensions on; SAO matters here (high-ammonia domain)."
+scenario_subset:
+  factorial: false
+  levels: [2, 3, 4, 5, 6, 7]
+  tiers: [A]
+  structural_scenarios: [omitted_sao, compound_sao_inhibition_shift]
+  note: "PROPOSAL: the lead's decision of 2026-09-02 assigns the SAO Level-6 scenario (and its Level-7 compound) to Plant A, which extends the §7 subset (Levels 2–5 at Tier A) by those two structural scenarios, still reported separately outside the factorial."
+open_questions:
+  - "SAO establishment: at HRT 28 d and 41 C the truth model (mu_max 0.08 d^-1, k_dec 0.02 d^-1, K_I_nh3_sao 0.05) barely grows SAO over 400 d (X_sao 0.05 -> 0.06–0.11 kg COD/m3, < 5 % of acetate removed); at 35 d it grows 4–6x and at 45 d it removes 40–80 % of acetate (scripts/plant_a_sao_probe.py). Options: (a) k_m_sao at the literature fast end (generation 3–5 d, mu_max 0.14–0.23 d^-1); (b) run the SAO scenario at the long end of Plant A's HRT envelope (the 32–50 d implied by the paper's volumes); (c) accept a slow, partial takeover as the scenario's signature."
+  - "Which of the paper's inconsistent hydraulics the simulator honours: HRT 28 d (feed 23 m3/d) or the stated feed volumes (HRT 32–50 d)."
+  - "Plant A's TAN / pH / VFA envelope is not yet transcribed from the Tisocco tables (configs/plant_a_statistics.yaml has nulls); needed before the influent generator and the SAO scenario can be frozen."
+  - "Headspace volume assumption (10 % of V_liq)."

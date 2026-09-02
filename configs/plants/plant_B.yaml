@@ -1,0 +1,90 @@
+# Plant B — co-digestion of municipal sludge with trucked high-strength waste and FOG,
+# with load swings. DATASET-anchored to the Muscatine WRRF daily file
+# (anchor/raw/iowa-muscatine-wrrf/LABS-raw.csv, ODC-By 1.0; docs/anchor_datasets.md §3.1).
+#
+# Every statistic below was recomputed from the committed daily file (1,103 rows,
+# 2020-01-01 to 2023-03-31) and is re-checked by tests/test_plants.py. Per-unit numbers
+# are the plant totals divided by the two parallel digesters. Gallons -> m3 at
+# 0.00378541; degF -> K.
+#
+# PROPOSAL (design content for the lead, see docs/decisions.md 2026-09-02 "Plant
+# configurations A/B/C — proposed"): the proposal §6.1 called Plant B a "food-waste
+# digester, high nitrogen". The anchor decision made B Muscatine-anchored, and the SAO
+# scenario decision moved the high-ammonia domain to Plant A. B is therefore declared
+# here as what the data show — sludge + industrial organic waste + FOG co-digestion with
+# large day-to-day load swings — and makes no high-nitrogen claim.
+id: B
+name: Plant B (Muscatine-type co-digestion WRRF)
+domain: municipal sludge + high-strength waste + FOG co-digestion, mesophilic CSTR, load swings
+anchoring: dataset
+anchor_sources:
+  - {key: muscatine_daily, reference: "Schroer & Just 2024, Laboratory, operational and SCADA datasets for the Muscatine WRRF (Iowa Research Online), daily file LABS-raw.csv", doi: "10.25820/data.006715", manifest_id: iowa-muscatine-wrrf}
+  - {key: muscatine_paper, reference: "Schroer & Just 2023, plant description (PMC10928704)"}
+geometry:
+  V_liq_declared: 1836.0   # m3; one of two 485,000-gal digesters (muscatine_paper)
+  V_gas: 184.0             # m3; ASSUMPTION 10 % of V_liq (headspace not reported)
+  units_at_plant: 2
+  note: "The plant runs two parallel digesters; the benchmark models one and gives it half of the plant feed."
+hidden_active_volume:
+  error_min: 0.05          # proposal §6.1: ±5–15 %
+  error_max: 0.15
+  sign: random
+temperature:
+  setpoint_K: 308.48       # 35.33 C, digester-1 daily median (muscatine_daily, Dig1-T_degF)
+  day_sd_K: 0.48           # sd of daily means, digester 1
+  p10_K: 308.21            # 35.06 C
+  p90_K: 308.82            # 35.67 C
+  source: "muscatine_daily: Dig1-T_degF, n = 1098, converted from degF"
+hydraulics:
+  feed_flow_m3_d: {median: 94.1, p10: 48.8, p90: 145.2, unit: "m3/d", source: "muscatine_daily: (V-TWAS + V-PS + V-HSW + FOG) / 2 on days with feed", n: 1103}
+  hrt_d: {median: 19.5, p10: 12.6, p90: 37.6, unit: d, source: "V_liq_declared / feed_flow (p10 of HRT is p90 of flow)"}
+  srt_d: {median: 22.2, p10: 16.0, p90: 35.4, unit: d, source: "muscatine_daily: SRT column as reported by the plant", n: 1103}
+  hrt_consistency_tolerance: 0.05
+  note: "HRT is derived from the declared volume and the feed volumes; the plant's own SRT column is ~14 % longer, consistent with recycle or a larger effective volume — one of the things a workflow may have to discover."
+mixing:
+  model: cstr
+  n_tanks: 1
+  hidden_dead_volume_fraction: 0.0
+  note: "PROPOSAL: ideal CSTR; the dead-volume effect is carried by the hidden active-volume error. A tanks-in-series RTD is deferred until a scenario needs it."
+feeds:
+  - name: primary_sludge
+    kind: primary_sludge
+    delivery: continuous
+    volume_m3_d: {median: 30.3, p10: 18.5, p90: 42.9, unit: "m3/d", source: "muscatine_daily: V-PS_gal / 2", n: 1103}
+    zero_days_fraction: 0.0
+    schedule: daily
+    source: muscatine_daily
+  - name: thickened_was
+    kind: thickened_was
+    delivery: continuous
+    volume_m3_d: {median: 17.4, p10: 9.7, p90: 31.8, unit: "m3/d", source: "muscatine_daily: V-TWAS_gal / 2", n: 1103}
+    zero_days_fraction: 0.0
+    schedule: daily
+    source: muscatine_daily
+  - name: high_strength_waste
+    kind: hsw
+    delivery: batch
+    volume_m3_d: {median: 21.2, p10: 0.0, p90: 47.6, unit: "m3/d", source: "muscatine_daily: V-HSW_gal / 2", n: 1103}
+    zero_days_fraction: 0.10   # 111 of 1103 days without HSW
+    schedule: "trucked deliveries blended in a 65,000-gal tank; no delivery on ~10 % of days"
+    source: muscatine_daily
+  - name: fog
+    kind: fog
+    delivery: batch
+    volume_m3_d: {median: 23.5, p10: 0.0, p90: 50.2, unit: "m3/d", source: "muscatine_daily: FOG_gal / 2", n: 1103}
+    zero_days_fraction: 0.31   # 339 of 1103 days without FOG
+    schedule: "trucked; none on ~31 % of days"
+    source: muscatine_daily
+truth_model:
+  extensions: [sao, ionic_strength, carbonate, precipitation]
+  note: "All four §6.1 extensions on; which one a scenario omits from the fitted model is the scenario's business."
+scenario_subset:
+  factorial: true
+  levels: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+  tiers: [A, B, C]
+  structural_scenarios: [omitted_precipitation, omitted_ionic_strength]
+  note: "The SAO structural scenario runs on Plant A (decision 2026-09-02): Muscatine's free ammonia is an order of magnitude below the pathway-shift threshold."
+open_questions:
+  - "Proposal §6.1 text 'food-waste digester, high nitrogen' vs the dataset-anchored description here; the proposal copy needs the lead's edit."
+  - "Headspace volume (10 % of V_liq) is an assumption; the plant papers do not report it."
+  - "Whether B and C should share the digester and differ only by feed streams (this proposal) or C should be a different, smaller sludge-only plant."

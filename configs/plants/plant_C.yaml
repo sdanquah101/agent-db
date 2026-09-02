@@ -1,0 +1,67 @@
+# Plant C — sewage-sludge digester, the "easy control" closest to ADM1's origin.
+# DATASET-anchored to the same Muscatine WRRF daily file as Plant B
+# (docs/anchor_datasets.md §3.1); PROPOSAL: C is the same digester with only its
+# sewage-sludge streams (primary sludge + thickened WAS), i.e. Muscatine without the
+# trucked co-substrates. That makes C a slower-loaded, steadier plant (median HRT 38 d
+# on the sludge streams alone) — the control the proposal asks for — while every number
+# stays traceable to the dataset. Design content for the lead (docs/decisions.md
+# 2026-09-02 "Plant configurations A/B/C — proposed").
+id: C
+name: Plant C (Muscatine-type sewage-sludge digester, sludge streams only)
+domain: municipal primary sludge + thickened WAS, mesophilic CSTR, steady operation
+anchoring: dataset
+anchor_sources:
+  - {key: muscatine_daily, reference: "Schroer & Just 2024, Laboratory, operational and SCADA datasets for the Muscatine WRRF (Iowa Research Online), daily file LABS-raw.csv", doi: "10.25820/data.006715", manifest_id: iowa-muscatine-wrrf}
+  - {key: muscatine_paper, reference: "Schroer & Just 2023, plant description (PMC10928704)"}
+geometry:
+  V_liq_declared: 1836.0   # m3; one of two 485,000-gal digesters (muscatine_paper)
+  V_gas: 184.0             # m3; ASSUMPTION 10 % of V_liq (headspace not reported)
+  units_at_plant: 2
+  note: "Same physical unit as Plant B; only the feed catalogue differs."
+hidden_active_volume:
+  error_min: 0.05
+  error_max: 0.15
+  sign: random
+temperature:
+  setpoint_K: 308.48       # 35.33 C, digester-1 daily median (muscatine_daily)
+  day_sd_K: 0.48
+  p10_K: 308.21
+  p90_K: 308.82
+  source: "muscatine_daily: Dig1-T_degF, n = 1098, converted from degF"
+hydraulics:
+  feed_flow_m3_d: {median: 47.9, p10: 33.0, p90: 68.2, unit: "m3/d", source: "muscatine_daily: (V-TWAS + V-PS) / 2, percentiles of the daily sum", n: 1103}
+  hrt_d: {median: 38.3, p10: 26.9, p90: 55.6, unit: d, source: "V_liq_declared / feed_flow (sludge streams only)"}
+  hrt_consistency_tolerance: 0.05
+  note: "Sludge-only HRT; the plant as operated (with co-substrates) is Plant B."
+mixing:
+  model: cstr
+  n_tanks: 1
+  hidden_dead_volume_fraction: 0.0
+  note: "PROPOSAL: ideal CSTR, dead volume via the hidden active-volume error."
+feeds:
+  - name: primary_sludge
+    kind: primary_sludge
+    delivery: continuous
+    volume_m3_d: {median: 30.3, p10: 18.5, p90: 42.9, unit: "m3/d", source: "muscatine_daily: V-PS_gal / 2", n: 1103}
+    zero_days_fraction: 0.0
+    schedule: daily
+    source: muscatine_daily
+  - name: thickened_was
+    kind: thickened_was
+    delivery: continuous
+    volume_m3_d: {median: 17.4, p10: 9.7, p90: 31.8, unit: "m3/d", source: "muscatine_daily: V-TWAS_gal / 2", n: 1103}
+    zero_days_fraction: 0.0
+    schedule: daily
+    source: muscatine_daily
+truth_model:
+  extensions: [sao, ionic_strength, carbonate, precipitation]
+  note: "All four §6.1 extensions on."
+scenario_subset:
+  factorial: true
+  levels: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+  tiers: [A, B, C]
+  structural_scenarios: [omitted_precipitation, omitted_ionic_strength]
+  note: "No SAO structural scenario on C (decision 2026-09-02)."
+open_questions:
+  - "Sludge-only definition of C (this proposal) vs an independent sewage-sludge plant; the sludge-only HRT (38 d) is longer than typical municipal practice (15–25 d) because Muscatine sizes its digesters for the co-substrates."
+  - "Headspace volume assumption (10 % of V_liq)."
