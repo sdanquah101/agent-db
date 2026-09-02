@@ -1,0 +1,252 @@
+{
+  "schema_version": 1,
+  "generated": "2026-09-02",
+  "raw_root": "anchor/raw",
+  "datasets": [
+    {
+      "id": "iowa-muscatine-wrrf",
+      "title": "Laboratory, operational, and SCADA datasets for anaerobic co-digestion at the Muscatine, IA Water Resource Recovery Facility",
+      "landing_url": "https://iro.uiowa.edu/esploro/outputs/dataset/Laboratory-operational-and-SCADA-datasets-for/9984462455902771",
+      "doi": "10.25820/data.006715",
+      "creators": ["Schroer, Hunter W", "Just, Craig L"],
+      "publisher": "University of Iowa (Iowa Research Online), 2024",
+      "licence": {
+        "name": "Open Data Commons Attribution (ODC-By) v1.0",
+        "url": "https://opendatacommons.org/licenses/by/1.0",
+        "redistributable": true
+      },
+      "scale": "full",
+      "plant": "Municipal water resource recovery facility (5.5 MGD) co-digesting primary sludge, thickened waste activated sludge, trucked high-strength industrial organic waste and FOG in two 485,000-gallon (about 1,836 m3) continuously stirred digesters at 36 C (mesophilic).",
+      "period": "LABS-raw: 2020-01-01 to 2023-03-31 daily (1,103 rows; 2021-04-06 to 2021-06-27 removed by the providers). SCADA-raw: 2022-03-18 00:01 to 2023-02-28 20:04 at 1-minute resolution (500,400 rows).",
+      "resolution": "Daily lab/operational totals; 1-minute SCADA. Units are US customary (deg F, gallons, MGD, cubic feet per minute); reference conditions for gas volumes are not stated.",
+      "citation": "Schroer, H. W. and Just, C. L. (2024). Laboratory, operational, and SCADA datasets for anaerobic co-digestion at the Muscatine, IA Water Resource Recovery Facility. University of Iowa. https://doi.org/10.25820/data.006715. Associated article: Schroer & Just (2023) ACS ES&T Engineering, https://doi.org/10.1021/acsestengg.3c00435.",
+      "files": [
+        {
+          "filename": "README.txt",
+          "url": "https://iro.uiowa.edu/view/delivery/01IOWA_INST/12894605060002771/13894605010002771",
+          "sha256": "b137354c3ede9f432d65f8010e890eb0724deb1c60f5065b657bb8ffc5465729",
+          "size_bytes": 561,
+          "download_date": "2026-09-02",
+          "kind": "measured",
+          "description": "Provider README naming the two data files and the SCADA pre-processing applied."
+        },
+        {
+          "filename": "LABS-raw.csv",
+          "url": "https://iro.uiowa.edu/view/delivery/01IOWA_INST/12894605060002771/13894605020002771",
+          "sha256": "fb677c03240411de7555e24aef0d51314dc4a126f1f35b39865b524459c5c4e2",
+          "size_bytes": 124816,
+          "download_date": "2026-09-02",
+          "kind": "measured",
+          "description": "Daily lab and operational data, 25 columns: feed volumes (TWAS, PS, HSW, FOG), digester temperatures and pH, SRT, HSW VS and COD, alkalinity, total VFA, FOS/TAC, plant influent flow and BOD, sludge VS, daily-average biogas flow."
+        },
+        {
+          "filename": "LABS-data-dictionary.csv",
+          "url": "https://iro.uiowa.edu/view/delivery/01IOWA_INST/12894605060002771/13894605040002771",
+          "sha256": "098b671fe42aef358fa4affa8cc432a50cad9708380d648873e33488e806be53",
+          "size_bytes": 2811,
+          "download_date": "2026-09-02",
+          "kind": "measured",
+          "description": "Column names, descriptions, units, types, acceptable ranges and the provider's pre-cleaning steps for LABS-raw.csv."
+        },
+        {
+          "filename": "SCADA-raw.csv",
+          "url": "https://iro.uiowa.edu/view/delivery/01IOWA_INST/12894605060002771/13894605000002771",
+          "sha256": "8d56ac54f9a692cebd4ca6c98598411ce2aae0bd02d9631da69ed1bf53004440",
+          "size_bytes": 88817823,
+          "download_date": "2026-09-02",
+          "kind": "measured",
+          "description": "1-minute SCADA log, 27 columns: digester temperatures, sludge/HSW/RAS/WAS flows, tank levels, digester lid heights, biogas flow to burner and boiler and their sum. Rows are not in chronological order (2023 block precedes 2022)."
+        },
+        {
+          "filename": "SCADA-data-dictionary.csv",
+          "url": "https://iro.uiowa.edu/view/delivery/01IOWA_INST/12894605060002771/13894605030002771",
+          "sha256": "5757f27a48c4e856e6e6bd0c0422b44aeb3d7bf7ef63cf4cfdc0e657c1676724",
+          "size_bytes": 2374,
+          "download_date": "2026-09-02",
+          "kind": "measured",
+          "description": "Column names, descriptions, units, types and acceptable ranges for SCADA-raw.csv."
+        }
+      ]
+    },
+    {
+      "id": "zenodo-8360096-muscatine-code",
+      "title": "hunter-schroer/municipal-biogas-forecasting: Muscatine, IA WRRF Biogas Production Forecasting Models (v1.0.0)",
+      "landing_url": "https://zenodo.org/records/8360096",
+      "doi": "10.5281/zenodo.8360096",
+      "creators": ["Schroer, Hunter W"],
+      "publisher": "Zenodo, 2023-09-19",
+      "licence": {
+        "name": "MIT License (LICENSE file inside the archive; Zenodo lists 'other-open')",
+        "url": "https://opensource.org/license/mit",
+        "redistributable": true
+      },
+      "scale": "full",
+      "plant": "Same plant as iowa-muscatine-wrrf.",
+      "period": "Contains LABS-raw.csv (byte-identical to the Iowa Research Online copy), LABS-interpolated.csv and LABS-LAGGED.csv, plus notebooks and scripts for the published multiple-linear-regression, TPOT and MLP forecasting models. The SCADA CSV is not in the archive.",
+      "resolution": "Daily (lab files); code otherwise.",
+      "citation": "Schroer, H. W. (2023). hunter-schroer/municipal-biogas-forecasting: v1.0.0. Zenodo. https://doi.org/10.5281/zenodo.8360096",
+      "files": [
+        {
+          "filename": "municipal-biogas-forecasting-v1.0.0.zip",
+          "url": "https://zenodo.org/api/records/8360096/files/hunter-schroer/municipal-biogas-forecasting-v1.0.0.zip/content",
+          "sha256": "5df497eb97b473b336db48ce2a85fe79460317117a53aa8e0f91d52b97c22dfd",
+          "size_bytes": 12606527,
+          "download_date": "2026-09-02",
+          "kind": "code",
+          "description": "GitHub release archive with the published pre-processing and forecasting code and the daily lab CSVs used in Schroer & Just (2023)."
+        }
+      ]
+    },
+    {
+      "id": "mendeley-gk3f363sfg-ilri-farm-scale",
+      "title": "Process monitoring and weather datasets on farm-scale biogas digesters",
+      "landing_url": "https://data.mendeley.com/datasets/gk3f363sfg/1",
+      "doi": "10.17632/gk3f363sfg.1",
+      "creators": ["Mulat, Daniel"],
+      "publisher": "Mendeley Data, 2025-01-30 (funder statement names ILRI / CGIAR Trust Fund)",
+      "licence": {
+        "name": "CC BY 4.0",
+        "url": "http://creativecommons.org/licenses/by/4.0",
+        "redistributable": true
+      },
+      "scale": "small",
+      "plant": "Four unheated livestock-manure digesters at an ILRI 'Mazingira' site (two flexible-bag units R1/R2, two fixed-dome units R3/R4); fed about 20 kg manure plus 30 kg water per feeding event; digester temperature 23-28 C in the first rows; volumes not stated in the files.",
+      "period": "Process sheets: 2024-01-04 to 2025-01-14 (R1, R2: 306 dated rows; R3, R4: about 260 rows from 2024-03). Weather: 2024-04-21 19:00 to 2024-10-18 12:45 at 5-minute resolution (51,766 records, ATMOS 41 station).",
+      "resolution": "Irregular near-daily manual readings (date, time, manure fed, water added, cumulative gas-meter reading, air and digester temperature, pH; TS/ash/VS columns mostly empty); gas-composition sheet with unresolved spreadsheet errors; 5-minute weather.",
+      "citation": "Mulat, D. (2025). Process monitoring and weather datasets on farm-scale biogas digesters. Mendeley Data, V1. https://doi.org/10.17632/gk3f363sfg.1",
+      "files": [
+        {
+          "filename": "Farm-scale_Biodigester_Performance_dataset.zip",
+          "url": "https://data.mendeley.com/public-files/datasets/gk3f363sfg/files/128d2bbd-153d-4e99-8430-a49f9c82e03c/file_downloaded",
+          "sha256": "ee88e12be5acd05d0c1ec08bcebdfb4f72f15789c91dfddfc4f96277826adbf3",
+          "size_bytes": 12005187,
+          "download_date": "2026-09-02",
+          "kind": "measured",
+          "description": "Zip with two workbooks: 'Farm-scale Biodigester 2024_Performance.xlsx' (10 sheets: R1-R4 process logs, manure and bio-slurry characterisation, gas composition) and 'Mazingira main(z6-02152)-1729245757_weather_data.xlsx' (5-minute weather). SHA-256 matches the value published in the Mendeley Data file record."
+        }
+      ]
+    }
+  ],
+  "not_fetched": [
+    {
+      "id": "tisocco-2023-afbi-hillsborough",
+      "title": "Application of a simplified ADM1 for full-scale anaerobic co-digestion of cattle slurry and grass silage: assessment of input variability (Tisocco et al., Front. Environ. Sci. Eng. 18(4):50, 2024)",
+      "url": "https://link.springer.com/article/10.1007/s11783-024-1810-9",
+      "doi": "10.1007/s11783-024-1810-9",
+      "licence": "Article CC BY 4.0; plant data: unknown (no data-availability statement, no deposit found)",
+      "kind": "measured",
+      "scale": "full",
+      "reason": "The paper (read in full) has no data-availability statement and its electronic supplement holds model inputs and figures only. The underlying 8 months of AFBI Hillsborough data (daily biogas and CH4, weekly NH4-N and pH; 2 x 650 m3 CSTR, primary 41 C) are not deposited anywhere we could find. Anchor via published summary statistics; request data from the authors."
+    },
+    {
+      "id": "tisocco-2026-au-foulum",
+      "title": "Machine learning vs. ADM1: Reliable biogas prediction with minimal data requirements in full-scale plants (Tisocco et al., Environ. Sci. Ecotechnol. 29:100662, 2026)",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12874345/",
+      "doi": "10.1016/j.ese.2026.100662",
+      "licence": "Article CC BY 4.0; plant data: unknown (no data-availability statement, no deposit found)",
+      "kind": "measured",
+      "scale": "full",
+      "reason": "Full text and the supplement mmc1.docx were read: the supplement contains feedstock characterisation and model-performance tables only. The 2023-2024 daily data of the AU Foulum plant (1200 m3 primary CSTR, thermophilic 53 C) are not deposited. Anchor via published summary statistics; request data from the authors."
+    },
+    {
+      "id": "dittmer-2021-hohenheim",
+      "title": "Modeling and Simulation of Biogas Production in Full Scale with Time Series Analysis (Dittmer, Kruempel, Lemmer, Microorganisms 9(2):324, 2021)",
+      "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7915957/",
+      "doi": "10.3390/microorganisms9020324",
+      "licence": "Article CC BY 4.0; data: not available ('Data Availability Statement: Not applicable')",
+      "kind": "measured",
+      "scale": "full",
+      "reason": "Hourly 2018 feeding and biogas data from the Hohenheim research plant 'Unterer Lindenhof' (3 x 923 m3, 43 +/- 4 C) are described but not deposited."
+    },
+    {
+      "id": "meola-weinrich-2025-three-plants",
+      "title": "Full-scale dynamic anaerobic digestion process simulation with machine and deep learning algorithms at intra-day resolution (Meola & Weinrich, Applied Energy 390:125781, 2025)",
+      "url": "https://www.sciencedirect.com/science/article/pii/S0306261925005112",
+      "doi": "10.1016/j.apenergy.2025.125781",
+      "licence": "unknown (publisher page not readable from this environment); data statement reported as 'Data will be made available on request'",
+      "kind": "measured",
+      "scale": "full",
+      "reason": "Three full-scale intra-day datasets from the DBFZ group are used but not deposited; available on request only."
+    },
+    {
+      "id": "chiguer-2026-adm1-am2-validation",
+      "title": "aminechiguerdoc23-eng/adm1-am2-validation: biogas_dataset.csv (Chiguer, Sadik, Fail; Results in Engineering 30, 2026)",
+      "url": "https://github.com/aminechiguerdoc23-eng/adm1-am2-validation",
+      "doi": "10.1016/j.rineng.2026.111161",
+      "licence": "none ('No license has been added yet' in the README)",
+      "kind": "measured",
+      "scale": "full",
+      "reason": "No licence, so not redistributable. Plant is not identified in the README, and the CSV has several rows per calendar date with 8-decimal feed masses for ten tropical feedstocks plus diesel, humidity and rainfall columns, so provenance could not be established from the files."
+    },
+    {
+      "id": "pyadm1-bsm2-digester-influent",
+      "title": "PyADM1 example influent files (BSM2 dynamic digester influent)",
+      "url": "https://github.com/CaptainFerMag/PyADM1",
+      "doi": null,
+      "licence": "MIT",
+      "kind": "simulated",
+      "scale": "n/a",
+      "reason": "The BSM2 digester influent is simulated (Benchmark Simulation Model No. 2), not measured plant data. It is needed for the Milestone-2 ring test, not for the real-data anchor, and is cited here only to record that it was checked."
+    },
+    {
+      "id": "zenodo-15691684-sempre-bio",
+      "title": "Pilot-scale anaerobic digestion of on-farm agro-residues: Boosting biogas production and digestate quality with thermophilic post-digestion (Katti, HE Sempre-Bio)",
+      "url": "https://zenodo.org/records/15691684",
+      "doi": "10.1016/j.wmb.2025.100201",
+      "licence": "CC BY 4.0",
+      "kind": "measured",
+      "scale": "lab",
+      "reason": "Workbook read: BMP tests plus two continuous reactors fed 0.1-2.2 kg manure per day from 2023-02-13 to 2023-07-30 (under 6 months); the record's 'pilot-scale' label refers to a different scale than the benchmark plants."
+    },
+    {
+      "id": "zenodo-22232790-ecotrace-kiambu",
+      "title": "ecoTrace biogas-sensor pilot, Kiambu County, Kenya: sensor telemetry, gas composition, household survey and derivation code (ETH Zurich / ABPL)",
+      "url": "https://zenodo.org/records/22232790",
+      "doi": "10.5281/zenodo.22232790",
+      "licence": "CC BY 4.0",
+      "kind": "measured",
+      "scale": "small",
+      "reason": "Household digesters (22 devices, 2026-01-27 to 2026-07-19, 5.5 million telemetry rows, 142 MB); raw flow and composition columns are corrupted by a firmware channel swap and must be re-derived with the supplied code. Not a full-scale anchor; recorded as a Phase-3 (Ghana) candidate."
+    },
+    {
+      "id": "isenkul-2025-uasb-citrus",
+      "title": "Predicting biogas production in real scale anaerobic digester under dynamic conditions with machine learning approach (Isenkul et al., Environ. Res. Commun. 7:065016, 2025)",
+      "url": "https://iopscience.iop.org/article/10.1088/2515-7620/ade03b",
+      "doi": "10.1088/2515-7620/ade03b",
+      "licence": "Article CC BY 4.0; data 'included within the article' (summary statistics only)",
+      "kind": "measured",
+      "scale": "full",
+      "reason": "Industrial UASB on citrus-processing wastewater; 300 daily averages spread over three years; only min/max/mean/SD are published. Not a CSTR and no time series."
+    },
+    {
+      "id": "holliger-2017-two-plants",
+      "title": "Methane Production of Full-Scale Anaerobic Digestion Plants Calculated from Substrate's Biomethane Potentials Compares Well with the One Measured On-Site (Holliger et al., Front. Energy Res. 5:12, 2017)",
+      "url": "https://www.frontiersin.org/journals/energy-research/articles/10.3389/fenrg.2017.00012/full",
+      "doi": "10.3389/fenrg.2017.00012",
+      "licence": "Article CC BY",
+      "kind": "measured",
+      "scale": "full",
+      "reason": "Weekly methane production over 29 and 39 weeks at two Swiss plants, shown in figures only; below the daily-resolution requirement."
+    },
+    {
+      "id": "zenodo-leitat-lab-scale",
+      "title": "Leitat Technological Center lab-scale AD datasets (Zenodo 12805035 fishery wastewater AD-BES; Zenodo 14921811 Ghana market residues BMP and lab reactor)",
+      "url": "https://zenodo.org/records/12805035",
+      "doi": "10.5281/zenodo.12805035",
+      "licence": "CC BY 4.0",
+      "kind": "measured",
+      "scale": "lab",
+      "reason": "Laboratory reactors; not plant operation."
+    },
+    {
+      "id": "mendeley-small-and-lab-scale",
+      "title": "Mendeley Data small/lab-scale AD records: 8795jgp8cv (WAS batch/continuous database, 2017), mm2bpsgpsc (3 m3 two-stage baffled digester, weekly, 2020), r35tshpftb (small agricultural plant, 12 KB sheet, 2019), zmryw9dfpw (small-scale digester, 2021)",
+      "url": "https://data.mendeley.com/datasets/mm2bpsgpsc/1",
+      "doi": "10.17632/mm2bpsgpsc.1",
+      "licence": "CC BY 4.0 (all four)",
+      "kind": "measured",
+      "scale": "small",
+      "reason": "All are lab or small-scale (3 m3 or less) or weekly; none meets the full-scale, daily, 6-month criterion."
+    }
+  ]
+}

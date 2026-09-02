@@ -2,7 +2,12 @@
 
 **Research proposal — Phase 1 (synthetic benchmark and first publication)**
 Ruthie Armah, KNUST–TUM SEED Centre
-Draft v0.1 — September 2026
+Draft v0.2 — September 2026
+
+*Revision note (2026-09-02).* v0.2 fixes the anchoring status of the three plants
+(§6.1, §7, §8, §12, §13): Plants B and C are dataset-anchored; Plant A is
+statistics-anchored for all of Phase 1 and runs a reduced, separately reported
+scenario subset. See `docs/decisions.md`.
 
 ---
 
@@ -95,6 +100,8 @@ The gap is therefore not "an agent that calibrates ADM1." It is the absence of a
 
 Each has fixed geometry, a declared active volume with a hidden error (±5–15%), heating and mixing parameters, and a residence-time distribution to emulate imperfect mixing.
 
+**Anchoring status.** Plants B and C are *dataset-anchored*: their influent variability, missingness and sensor-noise statistics are fitted to an open full-scale dataset (§8). Plant A is *statistics-anchored* for all of Phase 1: its operating envelope and feedstock characteristics are taken from published summary statistics (Tisocco et al. 2024, 2026), because no open full-scale agricultural co-digestion time series exists and no author data request is made in this phase. Plant A therefore runs a reduced scenario subset and is reported separately (§7).
+
 **Influent generator.** A stochastic batch-delivery process: feed identity per delivery (from a small catalogue per plant), delivery mass, moisture, and a *true* COD fractionation drawn from a per-feed distribution. Seasonal drift in composition and temperature. Occasional unrecorded deliveries and mis-logged masses. The generator emits both the hidden true fractions and the "routine" assays an operator would see (TS, VS, total COD, TKN/TAN, alkalinity, pH), with assay noise and lag.
 
 **Observation model.** Every sensor has a declared model: sampling interval, noise, drift (random walk with bounds), fouling episodes, flatlining, saturation, and a wet/dry and standard-conditions convention. Lab assays have method noise, turnaround delay and schedule. Missingness is generated *conditionally* — instruments are more likely to fail during foaming and overload — so that naive interpolation destroys information.
@@ -150,7 +157,7 @@ Each scenario has a ground-truth label from the set {**sensor**, **influent**, *
 | 8 | Tool failure | `bayes_mcmc` returns non-converged chains | — | Detect failure; fall back; do not report posterior |
 | 8 | Adversarial log note | Operator note asserts a false cause | — | Treat note as evidence, not instruction; verify against data |
 
-Every scenario runs at Tiers A, B and C (§6.4) and on at least two plants, giving roughly 19 × 3 × 2 ≈ 114 base cases before seeds.
+Every scenario runs at Tiers A, B and C (§6.4) on Plants B and C, giving roughly 19 × 3 × 2 ≈ 114 base cases before seeds. Plant A runs only the Level 2–5 scenarios at Tier A (§7).
 
 ### 6.4 Instrumentation tiers
 
@@ -206,7 +213,8 @@ Five target families, all computed from logs by an evaluation script that no wor
 
 ## 7. Experimental design
 
-- **Factorial core.** 19 scenarios × 3 tiers × 2 plants × 3 workflows × 5 seeds ≈ 1,700 runs. Plant C serves as a control on a subset.
+- **Factorial core.** 19 scenarios × 3 tiers × 2 plants × 3 workflows × 5 seeds ≈ 1,700 runs. The two factorial plants are **B and C** (dataset-anchored, §8).
+- **Plant A subset.** Plant A (statistics-anchored) runs a reduced subset — the Level 2–5 scenarios at Tier A — with the same three workflows and seeds, and is **reported separately**; it contributes no rows to the factorial analysis.
 - **Budgets.** Identical per (scenario, tier) cell: N simulator evaluations, T wall-clock, K assay units. Chosen from pilot runs so P0 completes comfortably; agents must live inside the same envelope.
 - **Development/evaluation split.** A held-out set of scenario *variants* (different onset times, magnitudes, feed catalogues) is generated after prompts and P0 rules are frozen, and used only once.
 - **Pre-registration.** Hypotheses, metrics, budgets and analysis plan are registered (OSF or equivalent) before final runs.
@@ -223,7 +231,7 @@ The simulator must not be fantasy. Before scenario generation is finalised:
 2. Fit the influent generator's variability, seasonal drift, missingness rate and sensor noise to these datasets and report the match.
 3. Run a **forecasting-only** check: the same simplified ADM1 and the same P0 pipeline applied to the real data, reporting comparable NSE/MAE to published values. This shows the tool chain works on real data without claiming calibration success there.
 
-If no suitable open dataset is found, the anchor becomes the published summary statistics from these papers, and this limitation is stated plainly.
+**Outcome of the week-1 search (2026-09-02; `docs/anchor_datasets.md`).** One suitable open dataset exists: the Muscatine WRRF daily (2020–2023) and 1-minute SCADA (2022–2023) datasets (Schroer & Just 2024, ODC-By 1.0), a sewage-sludge plant with heavy industrial co-digestion. Plants B and C are anchored to it (steps 2 and 3 above). No open full-scale agricultural co-digestion time series exists; the two Tisocco et al. plants match Plant A exactly but their data are not deposited. Plant A is therefore anchored to the published summary statistics of Tisocco et al. (2024, 2026) for all of Phase 1, no author data request is made, and the paper states this limitation plainly. The benchmark card and the paper describe Plant A as *statistics-anchored* and Plants B and C as *dataset-anchored*.
 
 ---
 
@@ -307,7 +315,7 @@ Buffer: milestones 3–6 and 26–30 are the likely overruns; two weeks of float
 
 **Preprint.** arXiv (cs.AI / eess.SY) or ChemRxiv at week 35 to secure priority.
 
-**Artefacts.** Public repository (MIT or Apache-2.0 for code; CC-BY for scenarios and results); Docker image; benchmark card documenting intended use, known limitations and non-claims; a leaderboard-ready results format so others can submit workflows.
+**Artefacts.** Public repository (MIT or Apache-2.0 for code; CC-BY for scenarios and results); Docker image; benchmark card documenting intended use, known limitations and non-claims, including the anchoring status of each plant (Plant A statistics-anchored; Plants B and C dataset-anchored); a leaderboard-ready results format so others can submit workflows.
 
 **Secondary outputs.** (i) A short identifiability-by-tier note (RQ1) suitable for *Water Science & Technology*; (ii) the simulator as the synthetic-test ladder for Phase 2 of the PhD; (iii) a template data contract derived from the observation model, feeding the Ghana commissioning recommendations.
 
@@ -319,7 +327,7 @@ Buffer: milestones 3–6 and 26–30 are the likely overruns; two weeks of float
 - No plant data involved in Phase 1; the real-data anchor uses only openly licensed datasets with attribution.
 - LLM outputs are logged verbatim; prompts are published; any post-hoc prompt change invalidates a run.
 - Negative results, tool failures and invalid actions are reported, not filtered.
-- Authorship and data-use agreements with any dataset providers settled before week 6.
+- No plant data are requested from authors in Phase 1. The anchor uses only openly licensed datasets (ODC-By, CC BY) with attribution, listed with checksums in `anchor/MANIFEST.json`.
 
 ---
 

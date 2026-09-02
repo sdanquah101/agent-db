@@ -44,6 +44,11 @@ Probes 1–2 and the 280-day BSM2 dynamic influent (`tests/test_adm1_ring.py`). 
 ionic-strength and precipitation extensions, the three plants and the influent generator
 are not started.
 
+Real-data anchor (proposal §8): open datasets identified, characterised and, where
+openly licensed, fetched into `anchor/raw/` by `python -m anchor.fetch` from
+`anchor/MANIFEST.json`. See [`docs/anchor_datasets.md`](docs/anchor_datasets.md) for the
+comparison table and the anchoring recommendation, which needs domain sign-off.
+
 ## Layout
 
 ```

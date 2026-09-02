@@ -282,3 +282,94 @@ implemented as relative difference ≤ 5e-4 (`tests/test_adm1_ring.py`, `REL_TOL
 fixed relative bound is reproducible and, for leading digits above 1, stricter than the
 words. Committing the influent makes the CI test self-contained (decision-log condition
 of 2026-09-02).
+
+---
+
+## 2026-09-02 — Anchor data are manifest-driven; raw bytes are never committed unless small and redistributable
+
+**Decision.** Every real-plant file used by the anchor layer is listed in
+`anchor/MANIFEST.json` (URL, licence, SHA-256, size, download date) and fetched by
+`anchor/fetch.py`, which verifies checksums before a file is placed under its final
+name. `anchor/raw/` is git-ignored except for files under 1 MB whose licence permits
+redistribution, which are committed next to an `ATTRIBUTION.md`. Candidates that were
+examined but not fetched are recorded in the manifest's `not_fetched` list with the
+reason, so the §8 search is auditable without re-doing it.
+
+**Reason.** Reproducibility (proposal §13) requires that anyone can re-obtain the
+exact bytes; a checksum manifest is the smallest thing that guarantees that. Committing
+88 MB of SCADA data would bloat the repository, but committing the 125 KB daily file
+means the offline test suite and the forecasting-only check work on a fresh clone.
+
+**Alternatives.** Git LFS (rejected: adds tooling for one file); commit nothing and
+fetch in CI (rejected: makes the offline tests depend on the network); a DVC remote
+(rejected: no shared storage exists yet).
+
+---
+
+## 2026-09-02 — Proposed anchor: Muscatine WRRF for Plants B/C, published summary statistics for Plant A
+
+**Decision (proposed; accepted with amendments by the lead the same day — see the
+next entry).** Anchor the simulator to the Muscatine WRRF
+datasets (Schroer & Just 2024, ODC-By 1.0) for Plant C and, with stated caveats, for
+Plant B's load-swing behaviour; anchor Plant A to the published operating envelopes and
+feedstock tables of Tisocco et al. (2024, 2026) because no open full-scale agricultural
+co-digestion time series exists; use the ILRI farm-scale set (CC BY 4.0) only for
+Tier-A sampling irregularity and Phase-3 realism. Run the §8 step-3 forecasting-only
+check on the Muscatine daily file against the published MLP baseline.
+
+**Reason.** After searching the sources named in §8 plus DataCite, Zenodo, figshare,
+OSF, DBFZ DataLab and GitHub, Muscatine is the only openly licensed, full-scale,
+daily-or-finer dataset longer than six months found; it also carries a one-minute SCADA
+year, which is what the observation model needs. Both Tisocco plants are exactly Plant A
+but their data are not deposited. Evidence: `docs/anchor_datasets.md`.
+
+**Alternatives.** Use the unlicensed GitHub CSV of Chiguer et al. (rejected: no licence,
+provenance unclear); use BSM2 influent files (rejected: simulated); wait for the
+Tisocco data before fixing the influent generator (rejected: blocks Milestone 3; request
+the data in parallel instead).
+
+**Conditions.** The lead confirms or amends the Plant-B reading; the paper's §8 states
+the limitation plainly.
+
+---
+
+## 2026-09-02 — Simulated inputs are never listed as anchors
+
+**Decision.** `anchor/MANIFEST.json` may list a simulated dataset (for example the
+BSM2 digester influent) only under `not_fetched` with `kind: simulated`; the test suite
+rejects any `datasets` entry of kind `simulated`.
+
+**Reason.** Proposal §8 exists to show the simulator is "not fantasy"; anchoring to
+another simulation would be circular. The BSM2 influent is still needed for the
+Milestone-2 ring test, but that is a numerics check, not an anchor.
+
+---
+
+## 2026-09-02 — Plant A is statistics-anchored for all of Phase 1; the factorial plants are B and C
+
+**Decision (by the lead).** No author data request is made in Phase 1. Plant A
+(agricultural co-digestion) remains anchored to the published summary statistics of
+Tisocco et al. (2024, 2026) for the whole phase; Plants B and C are dataset-anchored
+to the Muscatine WRRF datasets. Consequences, applied to the proposal copy in
+`docs/proposal.md`:
+
+1. The §7 factorial's two plants are **B and C**. Plant A runs a **reduced subset —
+   Levels 2–5 at Tier A —** and is reported separately, outside the factorial
+   statistics.
+2. The benchmark card and the paper describe **A as statistics-anchored** and **B and C
+   as dataset-anchored**, in those words.
+3. The week-6 "request plant data / data-use agreement" item is removed from
+   `docs/milestones.md`; proposal §13 no longer expects data-use agreements.
+
+**Reason.** A data request has an uncertain outcome and timeline and would leave the
+influent generator for Plant A unfixable until it resolved, which blocks Milestone 3.
+Fixing Plant A's status now makes the factorial design and the paper's claims
+definite. Keeping Plant A as a separately reported subset preserves the
+agricultural-domain scenarios the review motivates without letting a
+statistics-anchored plant carry factorial weight it cannot support.
+
+**Alternatives.** Request the data in parallel and decide later (rejected: leaves the
+design open past the week-9 gate); drop Plant A entirely (rejected: loses the
+grass-silage/slurry domain where ADM1 defaults are weakest); run Plant A in the full
+factorial with a caveat (rejected: a caveat does not change what the statistics
+assume).
