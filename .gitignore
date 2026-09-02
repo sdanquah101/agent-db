@@ -17,6 +17,17 @@ htmlcov/
 # Benchmark run artefacts — never committed; contains hidden truth under runs/<id>/truth/
 runs/
 
+# Real-data anchor (proposal §8): raw downloads are reproduced by `python -m anchor.fetch`
+# from anchor/MANIFEST.json. Everything under anchor/raw/ is ignored except the few files
+# under 1 MB whose licence permits redistribution (listed explicitly below).
+anchor/raw/**
+!anchor/raw/*/
+!anchor/raw/iowa-muscatine-wrrf/ATTRIBUTION.md
+!anchor/raw/iowa-muscatine-wrrf/README.txt
+!anchor/raw/iowa-muscatine-wrrf/LABS-raw.csv
+!anchor/raw/iowa-muscatine-wrrf/LABS-data-dictionary.csv
+!anchor/raw/iowa-muscatine-wrrf/SCADA-data-dictionary.csv
+
 # Editors / OS
 .idea/
 .vscode/

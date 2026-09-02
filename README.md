@@ -37,6 +37,11 @@ Milestone 1 (proposal §9.3, weeks 1–2): repository scaffold and selection of 
 ADM1 implementation. See [`docs/adm1_comparison.md`](docs/adm1_comparison.md) for the
 candidate comparison and recommendation, which needs domain sign-off before Milestone 2.
 
+Real-data anchor (proposal §8): open datasets identified, characterised and, where
+openly licensed, fetched into `anchor/raw/` by `python -m anchor.fetch` from
+`anchor/MANIFEST.json`. See [`docs/anchor_datasets.md`](docs/anchor_datasets.md) for the
+comparison table and the anchoring recommendation, which needs domain sign-off.
+
 ## Layout
 
 ```
