@@ -26,9 +26,12 @@ class Plant(StrEnum):
     """Virtual plant configuration (proposal §6.1).
 
     Attributes:
-        A: Agricultural co-digestion (cattle slurry + grass silage), mesophilic CSTR.
-        B: Food-waste digester, high nitrogen, mesophilic, with periodic overload.
-        C: Sewage-sludge digester; closest to ADM1's origin, serves as an easy control.
+        A: Agricultural co-digestion (cattle slurry + grass silage), mesophilic CSTR, high
+            ammonia; statistics-anchored; runs the ammonia scenarios.
+        B: Municipal-sludge digester co-digesting high-strength waste and FOG, mesophilic,
+            with load swings; Muscatine-anchored (proposal v0.3, decision 2026-09-02).
+        C: Sewage-sludge digester, the same digester as B fed only its sludge streams
+            (controlled pair); closest to ADM1's origin, serves as an easy control.
     """
 
     A = "A"

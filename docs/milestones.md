@@ -344,14 +344,40 @@ PR #4 merged (07a7fae). The lead's three follow-ups were done on a branch from `
 - Plant A's TAN/pH envelope is not yet in the repository; it is needed both for the
   influent generator and for the SAO-establishment condition.
 
+**Plant configurations A/B/C — proposed in a draft PR (branch from the follow-ups
+branch, since PR #5 was not yet merged).**
+
+- `sim/plants/schema.py` (declared plant contract with units and sources; hidden
+  active-volume error as a distribution), `sim/plants/__init__.py` (loader, seeded
+  sampling of the hidden geometry, declared vs true `PlantGeometry`),
+  `configs/plants/plant_{A,B,C}.yaml`, `configs/plant_a_statistics.yaml` (Tisocco
+  envelopes as recorded; untranscribed fields null with `todo`),
+  `scripts/plant_a_sao_probe.py`, `tests/test_plants.py` (9 tests; B/C statistics
+  re-derived from the committed Muscatine file).
+- The seven design questions were answered by the lead the same day and the configs
+  are **frozen** (`docs/decisions.md`, "Plant configurations A/B/C — frozen"):
+  `k_m_sao` 4.0 (μ_max 0.16 d⁻¹, Westerholm et al. 2019), Plant A HRT 35–45 d with the
+  feed derived from it, B as Muscatine co-digestion with load swings, C as the
+  sludge-only controlled pair of B, BSM2 headspace ratio, ideal CSTR with imperfect
+  mixing as a fault-injection truth variant, and the Plant-A ammonia envelope left to
+  the lead. Proposal copy at v0.3. SAO takeover at Plant A is now a test (12 plant
+  tests; full suite 139 at the time; 141 after the engineering review below).
+
+- The lead transcribed the Plant-A ammonia envelope (digestate TAN 2.3–4.3 kg N m⁻³,
+  feed TAN/TS, the paper's adapted acetoclastic K_I of 1.0 kg m⁻³) into
+  `configs/plant_a_statistics.yaml`; the SAO test now reads its midpoint. Plant A
+  hydraulics are AFBI-anchored only; Foulum is the thermophilic envelope.
+
+**Blocked / open**
+
+- Plant A digestate pH (plotted only in Tisocco 2024) and hence free ammonia remain
+  untranscribed.
+
 **Next session should start on**
 
-1. **Plant configurations A/B/C** (`sim/plants/`, `configs/plant_*.yaml`,
-   `configs/plant_a_statistics.yaml`): geometry, temperature, HRT envelope, feed
-   definitions, which extensions each plant's truth model enables, and the SAO
-   establishment check for Plant A. This PR has design content: flag it to the lead
-   before freezing anything.
-2. Influent generator (§6.1) with `anchor/ingest_muscatine.py` for Plants B/C.
+1. Influent generator (§6.1) with `anchor/ingest_muscatine.py` for Plants B/C and the
+   Tisocco feedstock tables for Plant A.
+2. Fault-injection API, including the imperfect-mixing truth variant.
 3. Weinrich R3/R4 ports as fitted models.
 
 **Resource cost this session (rough)**

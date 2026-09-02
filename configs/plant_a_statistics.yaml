@@ -1,0 +1,60 @@
+# Plant A anchor: published operating envelopes of the two Tisocco et al. plants
+# (decision 2026-09-02: Plant A is statistics-anchored for all of Phase 1). Every number
+# here was read from the papers by the anchor session (docs/anchor_datasets.md §3.4,
+# table rows 4 and 5). Fields that the papers report but that have NOT yet been
+# transcribed into this repository are null with a `todo`; do not fill them from memory.
+version: 1
+plants:
+  afbi_hillsborough:
+    role: primary anchor (mesophilic, matches Plant A)
+    source: {reference: "Tisocco et al. 2024, Front. Environ. Sci. Eng.", doi: "10.1007/s11783-024-1810-9", licence: "CC BY 4.0", data_deposited: false}
+    reactors: {primary: {V_m3: 650, heated: true, T_C: 41.0, T_sd_C: 0.2}, secondary: {V_m3: 650, heated: false}}
+    feeds:
+      cattle_slurry: {volume_m3_d: {min: 11, max: 18}}
+      grass_silage: {mass_t_fm_d: 2.0, days: "Mon-Fri"}
+    loading: {OLR_kgVS_m3_d: [1.4, 2.1], HRT_d_per_reactor: 28}
+    published_inconsistency:
+      note: "The stated HRT of 28 d per reactor does not follow from the stated volumes: 650 m3 at the stated feed of 11–18 m3/d slurry plus 2 t FM/d silage (13–20 m3/d) gives 32–50 d. Lead's decision 2026-09-02 (plant configurations, answers 1–2): keep the Tisocco volumes, set Plant A's HRT at 35–45 d (median 40) and derive the feed rate from it (16.25 m3/d), so that SAO can establish at the literature growth rate."
+      hrt_d_from_volumes: [32, 50]
+      hrt_d_chosen: {median: 40, p10: 35, p90: 45}
+    monitoring:
+      daily: [feed inputs, biogas rate, CH4 content (in-line analyser)]
+      weekly: [NH4-N and pH of primary digestate, TS/VS of feeds, N/NH4-N/VFA of slurry]
+    periods: ["2018-03-01 to 2018-05-31 (set A)", "2019-03-01 to 2019-07-31 (set B)"]
+    known_patterns: ["weekend silage omission produces gas-rate drops", "paper notes inconsistent measurements and missing soluble VFA / alkalinity"]
+    # Transcribed by the lead on 2026-09-02 from Tisocco et al. 2024 (the anchor session
+    # could read the paper but did not transcribe these). Units as stated by the lead.
+    ammonia_envelope:
+      anchor_plant: AFBI Hillsborough primary digester
+      source: "Tisocco et al. 2024, Front. Environ. Sci. Eng. 18(4):50, doi:10.1007/s11783-024-1810-9"
+      temperature_C: 41.0            # Section 2.1, ±0.2
+      digestate_TAN_kg_N_m3: {min: 2.3, max: 4.3}   # Section 3.2, weekly samples
+      digestate_pH: null             # plotted only (Fig. 2); not transcribed
+      free_ammonia_kg_N_m3: null     # not reported; derive from TAN, pH, T if pH is filled
+      feed_TAN_g_N_per_kg_TS:        # Table 1, data sets A / B
+        cattle_slurry: [65.3, 57.8]
+        grass_silage: [25.6, 21.8]
+      feed_TS_percent_FM:
+        cattle_slurry: [6.8, 7.5]
+        grass_silage: [20.1, 25.2]
+      modelled_KI_NH3_acetoclastic_kg_m3: 1.0   # Section 3.2, adapted community
+      notes: >
+        Foulum (Tisocco et al. 2026, doi:10.1016/j.ese.2026.100662) is thermophilic
+        (53 °C, 1200 m3, primary HRT 13–15 d); no TAN or pH values found in the
+        accessible text. Plant A hydraulics are AFBI-anchored only.
+    digestate:
+      VFA_g_L: {median: null, range: null, todo: "not transcribed; the paper reports VFA of the slurry feed weekly, not of the digestate"}
+    feedstock_tables:
+      todo: "VS, XA, total N, ADF/NDF/ADL of slurry and silage: transcribe from Tisocco 2024 Table 1 (TS and TAN are in ammonia_envelope)"
+    model_skill_reported:
+      todo: "daily/weekly NSE and RMSE of ADM1 and ADM1-R3 for biogas and CH4: transcribe"
+  au_foulum:
+    role: thermophilic sibling (55 C-class scenarios, not the Plant A default)
+    source: {reference: "Tisocco et al. 2026, Environ. Sci. Ecotechnol.", doi: "10.1016/j.ese.2026.100662", licence: "CC BY 4.0", data_deposited: false}
+    reactors: {primary: {V_m3: 1200, T_C: 53.0}, secondary: {V_m3: 30, T_C: 48.0}}
+    loading: {OLR_kgVS_m3_d_mean: 6.1, HRT_d: {primary: [13, 15], secondary: 30}}
+    feeds: [cattle slurry, deep litter, maize silage, grass silage, other feedstocks]
+    load_pattern: "follows campus heat demand (seasonal)"
+    periods: ["2023 calibration (n = 365)", "2024 validation (n = 366)"]
+    feedstock_tables:
+      todo: "TS, VS, NH4-N, total N, fibre, VFA per feedstock: transcribe from supplement mmc1.docx"

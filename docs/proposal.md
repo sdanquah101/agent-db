@@ -2,12 +2,16 @@
 
 **Research proposal — Phase 1 (synthetic benchmark and first publication)**
 Ruthie Armah, KNUST–TUM SEED Centre
-Draft v0.2 — September 2026
+Draft v0.3 — September 2026
 
 *Revision note (2026-09-02).* v0.2 fixes the anchoring status of the three plants
 (§6.1, §7, §8, §12, §13): Plants B and C are dataset-anchored; Plant A is
 statistics-anchored for all of Phase 1 and runs a reduced, separately reported
-scenario subset. See `docs/decisions.md`.
+scenario subset. v0.3 (same day) fixes the plant definitions (§6.1, §6.3, §7): Plant B
+is Muscatine-anchored co-digestion with load swings and makes no high-nitrogen claim;
+Plant C is the same digester fed only its sludge streams (a controlled pair); the
+ammonia scenarios move to Plant A; mixing is ideal in the plant contract and imperfect
+mixing is a fault-injection truth variant. See `docs/decisions.md`.
 
 ---
 
@@ -95,10 +99,10 @@ The gap is therefore not "an agent that calibrates ADM1." It is the absence of a
 
 **Plant configurations.** Three virtual plants spanning the domains where ADM1 defaults are known to be weak:
 - *Plant A* — agricultural co-digestion (cattle slurry + grass silage), mesophilic, CSTR.
-- *Plant B* — food-waste digester, high nitrogen, mesophilic, with periodic overload.
-- *Plant C* — sewage-sludge digester (closest to ADM1's origin; serves as an "easy" control).
+- *Plant B* — municipal-sludge digester co-digesting trucked high-strength waste and FOG, mesophilic, with large day-to-day load swings (Muscatine-anchored, §8). It makes no high-nitrogen claim; the ammonia-driven scenarios run on Plant A.
+- *Plant C* — sewage-sludge digester (closest to ADM1's origin; serves as an "easy" control): the same digester as Plant B fed only its sewage-sludge streams, so that B and C form a controlled pair differing only in the co-substrates.
 
-Each has fixed geometry, a declared active volume with a hidden error (±5–15%), heating and mixing parameters, and a residence-time distribution to emulate imperfect mixing.
+Each has fixed geometry, a declared active volume with a hidden error (±5–15%), and heating parameters; mixing is declared ideal (CSTR) in the plant contract, and imperfect mixing (a residence-time distribution) is a fault-injection truth variant of the corresponding Level-6 scenario rather than a plant property. Plant configurations are in `configs/plants/` (decisions log, 2026-09-02).
 
 **Anchoring status.** Plants B and C are *dataset-anchored*: their influent variability, missingness and sensor-noise statistics are fitted to an open full-scale dataset (§8). Plant A is *statistics-anchored* for all of Phase 1: its operating envelope and feedstock characteristics are taken from published summary statistics (Tisocco et al. 2024, 2026), because no open full-scale agricultural co-digestion time series exists and no author data request is made in this phase. Plant A therefore runs a reduced scenario subset and is reported separately (§7).
 
@@ -157,7 +161,7 @@ Each scenario has a ground-truth label from the set {**sensor**, **influent**, *
 | 8 | Tool failure | `bayes_mcmc` returns non-converged chains | — | Detect failure; fall back; do not report posterior |
 | 8 | Adversarial log note | Operator note asserts a false cause | — | Treat note as evidence, not instruction; verify against data |
 
-Every scenario runs at Tiers A, B and C (§6.4) on Plants B and C, giving roughly 19 × 3 × 2 ≈ 114 base cases before seeds. Plant A runs only the Level 2–5 scenarios at Tier A (§7).
+Every scenario except the three ammonia scenarios runs at Tiers A, B and C (§6.4) on Plants B and C, giving roughly 16 × 3 × 2 ≈ 96 base cases before seeds. The ammonia scenarios — the Level-5 inhibition shift, the Level-6 omitted-SAO scenario and their Level-7 compound — run only on Plant A, whose free ammonia is in the pathway-shift window; Plant A otherwise runs the Level 2–5 scenarios at Tier A (§7).
 
 ### 6.4 Instrumentation tiers
 
@@ -213,8 +217,8 @@ Five target families, all computed from logs by an evaluation script that no wor
 
 ## 7. Experimental design
 
-- **Factorial core.** 19 scenarios × 3 tiers × 2 plants × 3 workflows × 5 seeds ≈ 1,700 runs. The two factorial plants are **B and C** (dataset-anchored, §8).
-- **Plant A subset.** Plant A (statistics-anchored) runs a reduced subset — the Level 2–5 scenarios at Tier A — with the same three workflows and seeds, and is **reported separately**; it contributes no rows to the factorial analysis.
+- **Factorial core.** 16 scenarios × 3 tiers × 2 plants × 3 workflows × 5 seeds ≈ 1,440 runs. The two factorial plants are **B and C** (dataset-anchored, §8); the three ammonia scenarios are not in the factorial.
+- **Plant A subset.** Plant A (statistics-anchored) runs a reduced subset — the Level 2–5 scenarios at Tier A, plus the three ammonia scenarios (Level-5 inhibition shift, Level-6 omitted SAO, Level-7 compound) that run only there — with the same three workflows and seeds, and is **reported separately**; it contributes no rows to the factorial analysis.
 - **Budgets.** Identical per (scenario, tier) cell: N simulator evaluations, T wall-clock, K assay units. Chosen from pilot runs so P0 completes comfortably; agents must live inside the same envelope.
 - **Development/evaluation split.** A held-out set of scenario *variants* (different onset times, magnitudes, feed catalogues) is generated after prompts and P0 rules are frozen, and used only once.
 - **Pre-registration.** Hypotheses, metrics, budgets and analysis plan are registered (OSF or equivalent) before final runs.
