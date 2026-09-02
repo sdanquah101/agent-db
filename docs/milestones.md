@@ -572,3 +572,84 @@ PRs #8 and #9 merged (41ffdd4). Branch `claude/milestone-2-influent-generator` f
 | Review round (M1–M3, L1–L7 of the coordinating session) | ≈ 25 min | — | 2 fast runs, 1 full run (see the PR for the count) |
 
 No LLM-agent compute inside the benchmark; development cost only.
+
+### Session 2026-09-02 (seventh session) — observation model and fault injection
+
+PR #10 merged (2204dcf), including the lead's freeze answers. Branch
+`claude/milestone-2-observation-fault-injection` from `main`.
+
+**Done**
+
+- **Observation model** (`sim/observation/`, `configs/observation/sensors.yaml`;
+  `docs/decisions.md`, "Observation model"): 20 truth channels with units and
+  conventions; the declared sensor model (schedule, fouling, bounded drift with
+  recalibration, noise, saturation, flatline, conditional missingness, lag); 15 sensors
+  and the three tier masks, with tier containment enforced by the schema. Digestate VS
+  comes from the COD states and the influent's own inert equivalent; TS adds a
+  conserved-ash tracer, so the frozen ADM1 core gains no state. One seeded stream per
+  run, consumed per sensor in sorted order.
+- **Anchored sensor values**: digester-temperature noise (0.029 K) and biogas-flow noise
+  (2.1 % relative) plus both flatline occupancies are re-derived from the Muscatine
+  1-minute SCADA file (89 MB, fetched and checksum-verified) by
+  `anchor.ingest_muscatine.scada_noise_statistics`. The FOS/TAC overload threshold (0.40)
+  is the 92nd percentile of the plant's own column, which the channel reproduces to
+  r = 0.99. Every missingness rate is ASSUMED — the SCADA file is pre-cleaned and 100 %
+  finite, so no dropout statistics exist.
+- **Fault-injection API** (`sim/faults/`): magnitude semantics for all 17 fault types
+  (unit, range, target, layer) with the benchmark-card table rendered from the same
+  table; `build_plan()` routing into six per-layer directive objects; appliers for the
+  parameter segmentation, the state corruption, the truth reactor's mixing structure and
+  the fitted model's extension list. The influent and observation layers consume their
+  directives inside `generate_influent()` and `observe()`.
+- **The fault layer has its own random stream**, so a faulted run differs from its clean
+  twin only by the fault (tested on both layers).
+- **Level-6 imperfect mixing wired in**: the parked two-zone reactor is now the truth
+  variant. It is the CSTR bit for bit at magnitude 0; at a stagnant fraction of 0.30 the
+  gas deficit is 24.7 / 41.2 / 57.9 m³ d⁻¹ at 0.6× / 1.0× / 1.4× the feed — proportional
+  to the load, the hydraulic signature the row asks for.
+- **`tests/test_plausibility.py`**: the Milestone-2 exit criterion as a test (published
+  ranges and the anchor's own biogas). It caught the FOG solids content — see below.
+- Tests: 15 observation, 11 fault, 4 plausibility; two decision entries.
+
+**Domain findings for the lead (flagged, not silently absorbed)**
+
+- **FOG solids were an order of magnitude too high.** At the assumed 10 % TS, FOG alone
+  was 5,813 of Plant B's 10,965 kg COD d⁻¹ (OLR 5.97 kg COD m⁻³ d⁻¹); the truth model
+  produced 4,395 m³ d⁻¹ of biogas against the 2,111 m³ d⁻¹ per digester the Muscatine
+  file measures, and under the generator's swings **the digester collapsed** (pH 4.50,
+  CH₄ 0.9 %, acetate 10 kg COD m⁻³ over 180 d). Set to the anchor-derived **2.0 %**: the
+  same run sits at pH 6.93, CH₄ 67 %, biogas 2,582 m³ d⁻¹ (+22 % on the measured value,
+  inside the uncertainty of the conversion). Pinned by the plausibility test.
+- **Sensor specs and the missingness rule** are the lead's to review: two values anchored,
+  everything else assumed, and no dropout statistics exist in the anchor at all.
+
+**Blocked / open**
+
+- H₂S is not modelled (no sulfur in ADM1), so §6.4's Tier-C off-gas H₂S has no truth to
+  observe; declared rather than faked.
+- Reactor temperature varies only as sensor noise: the truth model integrates at a fixed
+  set point, and the heating model that would use the plant's `day_sd_K` is not built.
+- Workflow-layer faults (`tool_failure`, `adversarial_log_note`) are routed and typed but
+  applied by the run harness, which does not exist yet.
+- The requested-assay budget of §6.4 (assays beyond the tier's schedule, at a cost) is
+  not implemented; it belongs with the tool registry.
+
+**Next session should start on**
+
+1. The run harness: `runs/<id>/truth/` and `calls.jsonl`, wiring generator → truth model
+   → observation record → scenario, with the workflow-layer faults applied.
+2. The remaining scenario YAMLs (19 of them, v0.3) with their answer keys.
+3. Weinrich R3/R4 ports as the fitted models.
+
+**Resource cost this session (rough)**
+
+| Item | Wall-clock | Disk | Notes |
+|---|---|---|---|
+| Freeze answers + merge of PR #10 | ≈ 25 min | — | 1 full suite run |
+| SCADA fetch | ≈ 4 min | 89 MB (git-ignored) | checksum-verified by `anchor.fetch` |
+| Observation model + config + tests | ≈ 55 min | — | SCADA statistics ≈ 20 s per channel |
+| Fault API + wiring + tests | ≈ 45 min | — | mixing runs ≈ 2 s each |
+| Plausibility investigation (FOG) | ≈ 20 min | — | 8 steady-state runs |
+| Docs | ≈ 15 min | — | |
+
+No LLM-agent compute inside the benchmark; development cost only.

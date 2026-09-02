@@ -47,6 +47,14 @@ is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
   `tests/test_generator.py` through `anchor/ingest_muscatine.py` (seasonal amplitudes
   are bounded by the monthly-mean statistic rather than equal to it); assumed values
   are marked `ASSUMED`. Loaded by `sim.influent.load_generator_config`.
+- `observation/sensors.yaml` — the observation model (schema `sim/observation/schema.py`):
+  15 sensors with their schedule, noise, drift, fouling, flatline, saturation, turnaround
+  and conditional missingness, the three instrumentation tiers of §6.4 as nested masks,
+  and the condition thresholds that raise the overload and foaming flags. Digester
+  temperature and biogas noise and flatline rates are re-derived from the Muscatine
+  1-minute SCADA file by `tests/test_observation.py`; the overload threshold is the 92nd
+  percentile of the plant's own FOS/TAC column; everything else is marked `ASSUMED`.
+  Loaded by `sim.observation.load_observation_config`.
 - `plant_a_statistics.yaml` — the published operating envelopes Plant A is anchored to
   (Tisocco et al. 2024, 2026), the published HRT inconsistency and the chosen 35–45 d,
   with `todo` nulls where the tables are not yet transcribed (the lead transcribes the

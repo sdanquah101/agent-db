@@ -1265,3 +1265,112 @@ published range (rejected: the catalogue would no longer reproduce the plant it 
 anchored to, and the OLR test is one of the few anchored checks Plant A has); loosen the
 OLR test (rejected: it would hide the inconsistency the basis change exposed); use a
 lignin-like 1.9 kg COD/kg for lignocellulosic inerts (superseded: the lead fixed ~1.2).
+
+---
+
+## 2026-09-02 — Observation model: channels, sensor specs, tier masks, conditional missingness
+
+**Decision.** `sim/observation/` implements proposal §6.1's observation model and §6.4's
+tiers, with `configs/observation/sensors.yaml` as the declared data.
+
+1. **Channels are hidden truth, records are not.** A *channel* is an observable quantity
+   computed from the truth trajectory (pH, gas flow in both conventions, CH₄/CO₂/H₂
+   fractions on a dry basis, partial and total alkalinity, VFA total and speciated, TAN,
+   free ammonia, COD, digestate VS and TS, and the FOS/TAC stress index), each with its
+   unit and convention. `observe()` turns channels into an `ObservationRecord` through a
+   tier mask; the condition flags that drove missingness stay with the truth.
+2. **Solids without new states.** Volatile solids come from the COD states divided by the
+   COD equivalent of their class, with the two inert states using the influent's own
+   inert equivalent (the inert-COD-weighted mean, the same construction as the truth
+   `N_I`). Ash is not an ADM1 state, so total solids add a **conserved-tracer** balance
+   integrated analytically alongside the run. The frozen ADM1 core is untouched.
+3. **Sensor model.** Schedule, then fouling (a ramped gain/offset episode), bounded
+   random-walk drift with recalibration resets, noise, saturation clipping, flatline
+   (the sensor repeats its last value), conditional missingness, and turnaround lag.
+   Every stage is declared per sensor and every quantity carries its unit and convention.
+4. **Tiers are nested masks.** §6.4 says tiers are masks on identical truth, so the
+   schema *enforces* that B contains A and C contains B, for both sensors and feed
+   assays. Tier A is the three online instruments plus the operator's feed log and the
+   generator's weekly feed TS/VS; B adds CH₄, alkalinity, VFA, TAN and COD; C adds VFA
+   speciation, off-gas H₂ and digestate solids.
+5. **Conditional missingness — the rule.** A scheduled sample is lost with probability
+   `base_rate`, multiplied while a condition flag is raised. Two flags: **overload**
+   (FOS/TAC above 0.40) and **foaming** (FOS/TAC above 0.30 *and* gas above 1.35× its
+   trailing 14-day median). Multipliers are 1.5–2 for the lab assays and 3–6 for the
+   online instruments a foaming digester actually takes out. Because the flags are
+   functions of the state, gaps coincide with the transients that identify the process,
+   which is what makes naive interpolation destructive rather than merely lossy.
+6. **One seeded stream** per run, consumed per sensor in sorted name order with a fixed
+   block per sensor drawn whether or not the sensor declares that effect, so a change to
+   one sensor cannot move another (tested).
+
+**Anchoring.** Two values are re-derived from the Muscatine 1-minute SCADA file by
+`tests/test_observation.py` through `anchor.ingest_muscatine.scada_noise_statistics`:
+digester-temperature noise (0.052 °F = **0.029 K**, robust first-difference estimate) and
+biogas-flow noise (2.35 cfm on 112.8 = **2.1 %** relative), plus both flatline
+occupancies (0.08 % and 0.01 % of the record). The overload threshold is the 92nd
+percentile of the plant's own FOS/TAC column, which our channel reproduces from its VFA
+and alkalinity to r = 0.99. **Everything else is ASSUMED and marked**, including every
+missingness rate: the provider pre-cleaned the SCADA file, so both channels are 100 %
+finite and no dropout statistics exist to fit. **Flagged for the lead.**
+
+**Not modelled, deliberately.** Off-gas H₂S (§6.4 Tier C): ADM1 has no sulfur, so there
+is no truth to observe and the channel is declared absent rather than faked. Reactor
+temperature varies only as sensor noise, because the truth model integrates at a fixed
+set point — the plant's `day_sd_K` belongs to a heating model that is not built.
+
+**Alternatives.** Sample the channels at the truth model's own output times (rejected:
+the schedule is part of the tier); model missingness as a Markov chain over instrument
+health (not chosen for Phase 1: no data to fit the transitions, and the flag-multiplier
+form is the one §6.1 describes); put the FOS/TAC stress index in the record (rejected: it
+is a function of the truth, and a workflow can compute its own from the VFA and
+alkalinity it is given).
+
+---
+
+## 2026-09-02 — Fault injection: magnitude semantics per fault type, and a layer per fault
+
+**Decision.** `sim/faults/` is the fault-injection API of §6.1. The scenario schema
+leaves the meaning of `Fault.magnitude` to the simulator; `sim/faults/schema.py` is that
+mapping — one entry per `FaultType` giving the **unit**, the admissible **range**, the
+**target** and the **layer**, and `benchmark_card_rows()` renders the benchmark card's
+table from the same table, so the card cannot drift from the code.
+
+**Six layers, each applying only its own faults.** `influent` (the generator),
+`parameter` (a truth constant that changes at the onset day, so the run is integrated in
+segments), `state` (the initial vector), `structure` (an extension the fitted model must
+lack, or the two-zone reactor), `observation` (the record only), `workflow` (the tool
+registry and the operator's notes, applied by the run harness). The layer of a fault is
+also what its truth label means in §6.3, which is why the routing is declared rather than
+inferred.
+
+**The fault layer has its own random stream.** Only the mislabelled-feed redraw needs
+randomness, and it draws from `default_rng(fault_seed)` — separate from the generator's
+and the observation model's. A faulted run therefore differs from its clean twin **only**
+by the fault: same deliveries, same mis-logs, same noise, same gaps (tested on both
+layers). Without this the paired comparison a scenario rests on would be confounded by a
+reshuffled stream.
+
+**Magnitude choices worth recording.** `feed_mislabelled` is a Dirichlet concentration
+(smaller = further from the catalogue), which reuses the generator's own spread
+machinery; `unrecorded_delivery` is a multiple of the feed's median delivery;
+`moisture_drift` is the relative change in total solids across the window;
+`imperfect_mixing` is the stagnant volume fraction, with the bypass fixed at a fifth of
+it and the exchange at 1 d⁻¹ (the mid-point of PR #7's 0.2–2 d⁻¹ band), so one number
+sizes the whole non-ideality; `ch4_analyser_flatline` and the two omission faults ignore
+their magnitude, which the table says explicitly.
+
+**The Level-6 mixing variant, wired in and measured.** `truth_mixing()` compiles
+`sim/plants/mixing.py` (parked since the salvage session) as the truth reactor. At
+magnitude 0 it reproduces the extended model bit for bit. At a stagnant fraction of 0.30
+the gas deficit against the CSTR is 24.7, 41.2 and 57.9 m³ d⁻¹ at 0.6×, 1.0× and 1.4× the
+declared feed — **proportional to the load** to within a few per cent, while the relative
+deficit stays near 6 %. That load-proportional signature is what separates a hydraulic
+fault from a kinetic one, which is what the Level-6 row asks a workflow to notice.
+
+**Alternatives.** Apply every fault inside one `run()` function (rejected: the layers
+have different owners and different test surfaces, and a fault that silently touched two
+layers would make its truth label ambiguous); let the magnitude be a typed union per
+fault (rejected: the scenario schema is frozen and a float plus a declared unit is
+auditable); size imperfect mixing with three independent numbers (rejected: a scenario
+row carries one magnitude, and the fixed ratios are recorded here).
