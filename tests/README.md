@@ -38,5 +38,20 @@ The ADM1 core (`sim/adm1/`):
   and A(T) the right values, and shift pH and NH₃; calcite is a sink for HCO₃⁻ and Ca²⁺;
   all four integrate together; determinism.
 
+The plants (`sim/plants/`, `configs/plants/`):
+
+- `test_plants.py` — each declared config loads and is self-consistent (envelope, DESIGN
+  markers, Plant A outside the factorial); `sample_truth` is seed-deterministic with the
+  active-volume error never zero and inside ±5–15 % over 300 seeds, both signs present,
+  Dirichlet fractionations centred on the catalogue; every catalogue entry conserves COD
+  and its TKN agrees with the ADM1 N contents (a wrong TKN is shown to fail); the mixing
+  structure reduces bitwise to `sim.adm1.simulate` on the BSM2 case, a non-ideal
+  structure is shown to change the answer, and the structure matches the analytical
+  two-compartment tracer solution and the fast-exchange well-mixed limit; each plant
+  runs 100 days under a sampled truth inside the Milestone-1 plausibility gate (biogas
+  reused as a methane yield per kg COD fed); Plant B shows high TAN with free ammonia at
+  the inhibition constant; nothing under `sim/plants` writes files (AST check with a
+  self-test).
+
 `conftest.py` provides the default configuration, the Rosen & Jeppsson (2006) initial
 state and the probe-definition module as fixtures.
