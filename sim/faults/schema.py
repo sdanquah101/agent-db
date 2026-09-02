@@ -151,9 +151,12 @@ FAULT_SEMANTICS: dict[FaultType, FaultSemantics] = dict(
             FaultType.RANDOM_GAPS,
             "observation",
             "- (multiplier on every sensor's base missing rate)",
-            "Scales the unconditional missing rate of every sensor; the conditional "
-            "(foaming/overload) multipliers are untouched, so this adds gaps that carry no "
-            "information about the state.",
+            "Adds gaps at a rate of (multiplier - 1) x the sensor's base rate, on top of "
+            "whatever the conditional model already drops. The added term is unconditional, "
+            "so the extra gaps are missing-completely-at-random and carry no information "
+            "about the state; scaling the base rate instead would scale the stressed rate "
+            "by the same factor and the added gaps would be as informative as the "
+            "originals, which is informative_missingness's job, not this one.",
             lo=0.0,
         ),
         # ---------------------------------------------------------- Level 2
@@ -162,8 +165,10 @@ FAULT_SEMANTICS: dict[FaultType, FaultSemantics] = dict(
             "observation",
             "pH units per day (signed; negative = reads low)",
             "Adds a deterministic ramp to the pH sensor from the onset day, on top of the "
-            "electrode's own random-walk drift. The sensor's recalibration interval still "
-            "applies, which produces the drift-then-step signature of the Level-2 row.",
+            "electrode's own random-walk drift. A calibration fault is removed by a "
+            "calibration, so the ramp is reset on the tier's recalibration cadence like the "
+            "intrinsic drift is: the reading walks away and jumps back, which is the "
+            "drift-then-step signature of the Level-2 row.",
             lo=-0.05,
             hi=0.05,
             target="ph",

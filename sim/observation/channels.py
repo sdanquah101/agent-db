@@ -19,7 +19,10 @@ Conversions used here, all from the ADM1 state definitions:
   each acid's COD is converted to moles by its own COD equivalent
   (:data:`VFA_COD_PER_KMOL`) and priced at the molar mass of acetic acid.
 * **FOS/TAC** — total VFA as acetic acid over total alkalinity as CaCO3, the ratio the
-  Muscatine plant reports; reproduced from its own VFA and alkalinity columns to r = 0.99.
+  Muscatine plant reports, on the plant's own units (kg/m3 over kg CaCO3/m3): feeding the
+  anchor's own VFA and alkalinity through this formula returns the anchor's own FOS/TAC
+  column (tested). Our *simulated* healthy digester sits well below the plant's median,
+  which is recorded in configs/observation/sensors.yaml and flagged.
 * **Solids** — volatile solids are the COD states divided by the COD equivalent of the
   class they belong to (:data:`COD_PER_VS_BY_STATE`); the inert states use the influent's
   own inert equivalent, the COD-weighted mean over the fed feeds, exactly as the truth
@@ -37,7 +40,7 @@ from types import MappingProxyType
 import numpy as np
 
 from sim.adm1.extensions import ExtendedResult
-from sim.adm1.schema import LIQUID_STATE_NAMES, Influent
+from sim.adm1.schema import LIQUID_STATE_NAMES, N_STATES, Influent
 from sim.influent.mapping import _check_rates, _feeds, feed_cod_per_m3
 from sim.influent.schema import (
     COD_EQUIVALENTS_KG_COD_PER_KG,
@@ -50,6 +53,9 @@ from sim.plants.mixing import TwoZoneResult
 __all__ = [
     "CHANNEL_UNITS",
     "COD_PER_VS_BY_STATE",
+    "EXTENSION_COD_PER_VS",
+    "EXTENSION_INORGANIC_SOLIDS",
+    "EXTENSION_NO_SOLIDS",
     "KG_CACO3_PER_KMOL_CHARGE",
     "VFA_COD_PER_KMOL",
     "TruthChannels",
@@ -127,14 +133,41 @@ CHANNEL_UNITS: Mapping[str, str] = MappingProxyType(
         "vfa_va": "kg/m3 as valeric acid",
         "tan": "kg N/m3 (total ammoniacal nitrogen, S_IN)",
         "free_ammonia": "kg N/m3 (NH3)",
-        "cod_total": "kg COD/m3 (every COD-bearing liquid state)",
+        "cod_total": "kg COD/m3 (every COD-bearing liquid state, extensions included)",
         "vs": "kg VS/m3 of digestate",
-        "ts": "kg TS/m3 of digestate (VS + ash; ash from the conserved tracer)",
+        "ts": (
+            "kg TS/m3 of digestate (VS + fed ash from the conserved tracer + inorganic "
+            "solid formed in the reactor, e.g. calcite)"
+        ),
         "fos_tac": "- (total VFA as acetic acid over total alkalinity as CaCO3)",
     }
 )
 
 KG_N_PER_KMOL = 14.007
+"""Molar mass of nitrogen, kg N/kmol (``S_IN`` is kmol N/m3; TAN is kg N/m3)."""
+
+#: kg COD per kg VS of each COD-bearing **extension** component
+#: (``configs/adm1/extensions.yaml``). The base states live in
+#: :data:`COD_PER_VS_BY_STATE`; extension components sit *after* the gas states in the
+#: state vector, so they are not covered by the liquid slice and would otherwise be
+#: silently dropped from ``cod_total`` and ``vs``. ``X_sao`` is biomass, so it takes the
+#: protein-like equivalent every other biomass state takes.
+EXTENSION_COD_PER_VS: Mapping[str, float] = MappingProxyType(
+    {"X_sao": COD_EQUIVALENTS_KG_COD_PER_KG["f_pr"]}
+)
+
+#: kg of **inorganic** solid per unit of each extension state that is one, for total
+#: solids only (it carries no COD and is not volatile). Calcite precipitated inside the
+#: reactor is real suspended solids that the feed-ash tracer cannot know about, because it
+#: is formed rather than fed. ``X_caco3`` is kmol/m3, so the factor is the molar mass.
+EXTENSION_INORGANIC_SOLIDS: Mapping[str, float] = MappingProxyType({"X_caco3": 100.09})
+
+#: Extension states that contribute neither COD nor solids, listed so that
+#: ``tests/test_observation.py`` can assert every declared extension component is
+#: classified — a new one must be placed deliberately, not forgotten. ``S_ca`` is
+#: dissolved calcium; the dissolved-solids contribution of the ions is outside the
+#: wet/dry solids convention used here (CLAUDE.md rule 6) and is declared absent.
+EXTENSION_NO_SOLIDS: frozenset[str] = frozenset({"S_ca"})
 
 
 class TruthChannels:
@@ -333,8 +366,11 @@ def channel_series(
     ds = d if effluent_derived is None else effluent_derived
     n = result.t.size
 
+    # kg COD/m3 / (kg COD/kmol) = kmol/m3, then x kg/kmol = kg/m3. There is no further
+    # factor: the anchor's own columns are mg/L (alkalinity 5,043, VFA 1,178 at the median),
+    # i.e. kg/m3 at 5.04 and 1.18, and the alkalinity term below carries no factor either.
     vfa_kmol = {acid: liquid[idx[acid]] / cod for acid, cod in VFA_COD_PER_KMOL.items()}
-    vfa_total_acetic = sum(vfa_kmol.values()) * M_ACETIC / 1000.0  # kg/m3 as acetic acid
+    vfa_total_acetic = sum(vfa_kmol.values()) * M_ACETIC  # kg/m3 as acetic acid
     anion_charge = ds["S_hco3_ion"] + sum(
         ds[f"{acid}_ion"] / cod for acid, cod in VFA_COD_PER_KMOL.items()
     )
@@ -342,8 +378,13 @@ def channel_series(
     alk_partial = KG_CACO3_PER_KMOL_CHARGE * ds["S_hco3_ion"]
 
     dry = np.maximum(d["P_gas"] - d["p_h2o"], 1e-12)
+    # extension components sit AFTER the gas states in the vector, so the liquid slice
+    # above misses them; a run with SAO on would otherwise report a COD that omits the
+    # oxidiser biomass, in the very scenario (Level 5/6 ammonia) where it is the signal
+    ext = _extension_states(result, liquid)
     cod_states = [s for s in LIQUID_STATE_NAMES if s in COD_PER_VS_BY_STATE] + ["S_I", "X_I"]
     cod_total = sum(liquid[idx[s]] for s in cod_states) + liquid[idx["S_ch4"]] + liquid[idx["S_h2"]]
+    cod_total = cod_total + sum(ext[s] for s in EXTENSION_COD_PER_VS if s in ext)
 
     series: dict[str, np.ndarray] = {
         "temperature": np.full(n, float(T_op)),
@@ -356,10 +397,10 @@ def channel_series(
         "alkalinity_total": alk_total,
         "alkalinity_partial": alk_partial,
         "vfa_total": vfa_total_acetic,
-        "vfa_ac": vfa_kmol["S_ac"] * M_ACETIC / 1000.0,
-        "vfa_pro": vfa_kmol["S_pro"] * M_PROPIONIC / 1000.0,
-        "vfa_bu": vfa_kmol["S_bu"] * M_BUTYRIC / 1000.0,
-        "vfa_va": vfa_kmol["S_va"] * M_VALERIC / 1000.0,
+        "vfa_ac": vfa_kmol["S_ac"] * M_ACETIC,
+        "vfa_pro": vfa_kmol["S_pro"] * M_PROPIONIC,
+        "vfa_bu": vfa_kmol["S_bu"] * M_BUTYRIC,
+        "vfa_va": vfa_kmol["S_va"] * M_VALERIC,
         "tan": liquid[idx["S_IN"]] * KG_N_PER_KMOL,
         "free_ammonia": d["S_nh3"] * KG_N_PER_KMOL,
         "cod_total": cod_total,
@@ -368,10 +409,30 @@ def channel_series(
     if inert_cod_equivalent is not None:
         vs = sum(liquid[idx[s]] / e for s, e in COD_PER_VS_BY_STATE.items())
         vs = vs + (liquid[idx["S_I"]] + liquid[idx["X_I"]]) / inert_cod_equivalent
+        vs = vs + sum(ext[s] / e for s, e in EXTENSION_COD_PER_VS.items() if s in ext)
         series["vs"] = vs
         if ash is not None:
-            series["ts"] = vs + np.asarray(ash, dtype=float)
+            # calcite precipitated in the reactor is inorganic suspended solids: it belongs
+            # in TS and not in VS, and the feed-ash tracer cannot know about it because it
+            # is formed here rather than fed
+            formed = sum(ext[s] * kg for s, kg in EXTENSION_INORGANIC_SOLIDS.items() if s in ext)
+            series["ts"] = vs + np.asarray(ash, dtype=float) + formed
     return TruthChannels(result.t, series)
+
+
+def _extension_states(result: ExtendedResult, liquid: np.ndarray) -> dict[str, np.ndarray]:
+    """Extension-component trajectories of a run, by name (empty when none are enabled).
+
+    Extension components are appended after the gas states in the state vector, so they
+    follow the 26 standard liquid states in an *effluent* array but sit at
+    ``N_STATES:`` in a reactor state matrix.
+    """
+    n_liquid = len(LIQUID_STATE_NAMES)
+    names = list(result.state_names[N_STATES:])
+    if not names:
+        return {}
+    rows = result.y[N_STATES:] if liquid.shape[0] <= n_liquid else liquid[n_liquid:]
+    return {name: rows[i] for i, name in enumerate(names) if i < rows.shape[0]}
 
 
 def channels_from_two_zone(

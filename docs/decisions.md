@@ -1574,3 +1574,123 @@ influent's declared `interpolation`" but interpolated it linearly regardless; on
 feed-ash series honoured the hold. Latent — the error is exactly zero whenever the output
 times are the influent's own, which is every current call — but the docstring was a claim
 the code did not keep. The flow now reads `influent.interpolation` like the feed ash does.
+
+---
+
+## 2026-09-02 — Independent review of PR #11: the VFA channels were 1000x too small
+
+**Decision.** An independent review pass (fresh context, told to verify rather than trust
+the PR's claims) found nine real defects. All are fixed on the branch. The one that
+mattered is recorded here in full because it silently disabled the property this whole
+component exists to deliver.
+
+### The defect
+
+`channel_series` computed every VFA channel as `kmol/m3 * kg/kmol / 1000`. The division
+has no dimensional justification: `S_ac` is kg COD/m3, `VFA_COD_PER_KMOL["S_ac"]` is
+64 kg COD/kmol, so the quotient is kmol/m3, and multiplying by `M_ACETIC` (60.05 kg/kmol)
+already gives kg/m3. **1 kg COD/m3 of acetate is 0.93828 kg/m3 as acetic acid**, and the
+code returned 0.00093828. The alkalinity term two lines below carries no such factor,
+which is what makes the inconsistency visible on inspection.
+
+### Why it was not merely cosmetic
+
+FOS/TAC is total VFA over total alkalinity, so it was 1000x too small too, and the
+condition flags that drive **conditional missingness** are thresholded on it:
+
+| | as coded | corrected | anchor (Muscatine Dig1) |
+|---|---|---|---|
+| alkalinity_total | 2.556 | 2.556 | median 5.04 kg CaCO3/m3 |
+| vfa_total | 5.65e-05 | 0.0565 | median 1.18 kg/m3 |
+| fos_tac | 2.21e-05 | 0.0221 | median 0.23 |
+
+At that scale `fos_tac` could never approach the 0.40 overload or 0.30 foaming thresholds
+— a digester souring to 10 kg COD/m3 of acetate reached 0.003 — so `condition_flags`
+returned all-`False` on every real run, the missingness model always used its base rate,
+the §6.1 property that "instruments fail *during* the transients" never fired, and the
+Level-4 `informative_missingness` fault was a no-op. None of it raised an error.
+
+### Why the tests did not catch it
+
+The test that claimed to check "the channel arithmetic against hand calculations"
+re-implemented the formula: `assert vfa_ac == approx(ac_kmol * M_ACETIC / 1000.0)` is
+`implementation == implementation` and passes under **any** global scale error, and
+`assert fos_tac == approx(vfa_total / alkalinity_total)` restates the implementation line
+verbatim and cannot fail at all. The other tests fed `fos_tac` in directly as a synthetic
+array, so they never exercised the real channel. The hand calculations are now **literals**
+(0.93828 kg/m3 per kg COD/m3), and a new test feeds the anchor's own VFA and alkalinity
+columns through the formula and recovers the anchor's own FOS/TAC column, then shows the
+0.40 threshold sits at the ~92nd percentile of the distribution the plant really visits.
+
+### The realism gap this exposed, FLAGGED for the lead
+
+With the units right, a **healthy simulated** digester sits at FOS/TAC 0.01–0.07 against
+the plant's median of 0.23; even at 2.5x the declared feed, Plant B reaches only 0.15. A
+converged ADM1 steady state carries far less residual VFA than a real plant, and a
+titrimetric FOS over-reads true VFA. The threshold is still reachable (VFA 1.0 kg/m3 at
+the anchor's median alkalinity crosses it, and the anchor exceeds that VFA on a third of
+its days), but **the overload flag will fire on materially fewer simulated days than the
+"~8 % of days" the anchor's own column implies.** Recorded in the config beside the
+threshold. If the lead wants the simulated distribution to match the plant's, that is a
+change to the feed catalogue or the kinetics, not to the threshold.
+
+### The other eight, all fixed
+
+1. **Sub-interval episode durations inflated the anchored flatline rates.** The mask lasts
+   `max(1, round(duration/dt))` samples, so a declared 0.4 d episode on a daily sensor
+   really lasted 1 d and the realised occupancy was 2.5x the anchor (5x for the 0.2 d gas
+   meter). Durations are now declared in whole samples, the hazards carry the anchored
+   occupancy directly, `SensorSpec` **rejects** a duration below the sampling interval, and
+   the test measures the *realised* mask instead of the declared product.
+2. **`scada_noise_statistics` marked one sample too many per flatline run** (`in_run[i-run
+   : i+2]` spans `run+2` values where the identical values are `run+1`) **and dropped a run
+   beginning at index 0** entirely (negative slice start). Re-measured: temperature
+   0.0765 % (was quoted 0.08 %), gas 0.0144 % (was quoted 0.01 %). The config now carries
+   the corrected figures. Also, a literal `NaN` parsed fine and was dropped without being
+   counted, so `missing_fraction` could read 0 for a file full of them.
+3. **`random_gaps` was not MCAR.** It scaled the base rate, which scales the stressed rate
+   by the same factor, so every added gap was `overload_multiplier` times more likely under
+   stress — exactly as informative as the originals, and indistinguishable from the
+   Level-4 fault that exists to be the informative one. It is now an additive unconditional
+   term, and a test measures the added gaps in and out of the stress window.
+4. **`ph_electrode_drift` never produced its "drift-then-step" signature.** The injected
+   ramp was applied after the intrinsic drift's recalibration reset and never reset itself,
+   so a -0.01 pH/d fault ran monotonically to -1.7 pH over 200 d. A calibration fault is
+   removed by a calibration: the ramp now resets on the tier's cadence, and the test
+   asserts the sawtooth, its bound, and that an un-recalibrated sensor keeps the old
+   behaviour.
+5. **`cod_total` and `vs` silently excluded every extension state**, because those sit
+   after the gas states and the liquid slice stops at 26. Negligible at a healthy steady
+   state (X_sao ~ 1e-7) and material in the Level-5/6 ammonia scenarios, where growing SAO
+   biomass *is* the signal. Extension components are now classified in three tables
+   (COD-bearing, inorganic solid, neither) and a test asserts every component the
+   extensions config declares appears in exactly one, so a new one cannot be forgotten.
+   Precipitated calcite now counts towards TS and not VS, at 100.09 kg/kmol.
+6. **A `saturated` flag could contradict its own reading.** A flatlined sample reports the
+   previous value but kept its own pre-hold saturation flag, so the record could tell a
+   workflow the instrument hit its range while showing a number inside it (16 occurrences
+   over 40 seeds on a stepping truth). The flag is now held with the value.
+7. **"The card and the code cannot drift apart" was not true.** `benchmark_card_rows()` was
+   rendered nowhere and the card had no fault table. The card now carries the generated
+   block between markers and a test compares it verbatim — it caught its first drift within
+   the hour, when the two fault descriptions above changed.
+8. **Smaller:** `sample_times` dropped the final sample when `horizon/interval` fell just
+   below an integer in binary floating point; `observe` silently fabricated constant
+   readings for a horizon beyond the run's last channel time (now raises); `faults or
+   Default()` discarded an empty-but-seeded directive object because both classes define
+   `__bool__` (now `is None`).
+
+### Recorded, not fixed
+
+`hazard_per_d` is typed as a fraction (`le=1`) though a hazard rate is not bounded by 1;
+repeated observation faults on one sensor overwrite rather than compound, while the three
+global scales multiply; `tool_failure` cannot name a tool other than the default;
+`UnrecordedDelivery` truncates a fractional onset day; `condition_flags` is O(n^2) and is
+most of the suite's runtime; a `flatlined` flag on the first sample is reported but nothing
+is held. None changes a result today; all are listed here so the next session can pick them
+up deliberately.
+
+**Process note.** This was a fresh-context review of a branch this session largely wrote,
+which is better than a self-review and still not an outside one. The reviewer was told to
+verify arithmetic independently and to try to construct broken implementations that pass
+each test; the three findings that mattered most came from exactly that instruction.

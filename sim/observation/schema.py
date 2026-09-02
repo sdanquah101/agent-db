@@ -87,14 +87,26 @@ class DriftModel(_Frozen):
 
 
 class EpisodeModel(_Frozen):
-    """A Bernoulli-onset, geometric-duration episode (fouling or flatlining).
+    """A Bernoulli-onset, **fixed-duration** episode (fouling or flatlining).
 
-    On each sample an episode starts with probability ``hazard_per_d * dt`` and lasts a
-    geometric number of samples with mean ``mean_duration_d / dt``.
+    On each sample an episode starts with probability ``hazard_per_d * dt`` and lasts
+    exactly ``max(1, round(mean_duration_d / dt))`` samples — a deterministic length, not a
+    geometric draw: the documented random-stream order allocates one uniform per sample for
+    onsets and none for durations, and adding a draw would move every later sensor's block
+    (:mod:`sim.observation.model`).
+
+    Realised occupancy is therefore ``hazard_per_d * dt * max(1, round(...))``, which
+    equals the intended ``hazard_per_d * mean_duration_d`` **only when the episode lasts at
+    least one sample**. A duration below the sampling interval is rounded up to one sample
+    and inflates the occupancy, so :meth:`_observable` rejects it: an episode shorter than
+    the schedule is not observable on that schedule, and declaring one silently changes the
+    anchored flatline rates it claims to reproduce.
     """
 
-    hazard_per_d: _Frac = Field(description="Probability per day that an episode starts, 1/d")
-    mean_duration_d: _Pos = Field(description="Mean episode length, d")
+    hazard_per_d: _Frac = Field(
+        description="Probability per day that an episode starts, 1/d (<= 1: it is a probability)"
+    )
+    mean_duration_d: _Pos = Field(description="Episode length, d (rounded to whole samples)")
     source: str = ""
 
 
@@ -223,6 +235,24 @@ class SensorSpec(_Frozen):
             raise ValueError(f"{self.name}: a gas channel must declare a gas_convention")
         if self.channel in ("ts", "vs") and self.solids_basis == "none":
             raise ValueError(f"{self.name}: a solids channel must declare a solids_basis")
+        return self
+
+    @model_validator(mode="after")
+    def _episodes_are_observable(self) -> SensorSpec:
+        """An episode shorter than the sampling interval is rounded up and inflates occupancy.
+
+        The mask lasts ``max(1, round(mean_duration_d / dt))`` samples, so a declared 0.4 d
+        episode on a daily sensor really lasts a full day and the realised occupancy is
+        2.5x what ``hazard_per_d * mean_duration_d`` says — silently breaking an anchored
+        flatline rate. Declare the duration in whole samples instead.
+        """
+        for field, model in (("fouling", self.fouling), ("flatline", self.flatline)):
+            if model is not None and model.mean_duration_d < self.sampling_interval_d:
+                raise ValueError(
+                    f"{self.name}: {field} mean_duration_d {model.mean_duration_d} d is below "
+                    f"the sampling interval {self.sampling_interval_d} d, so the episode would "
+                    "be rounded up to one sample and its occupancy inflated"
+                )
         return self
 
 

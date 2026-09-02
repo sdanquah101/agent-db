@@ -124,6 +124,35 @@ reported separately; Plants B and C carry the full factorial.
 structure the fitted model does not, "the right parameter value" does not exist; the
 scored quantity is whether the workflow *identified the structural mismatch* and said so.
 
+### 6.1 What every fault magnitude means
+
+Generated from `sim.faults.benchmark_card_rows()` and pinned by
+`tests/test_faults.py::test_the_benchmark_card_carries_the_generated_fault_table`, so the
+card cannot drift from the code that applies these faults. The *layer* is where the fault
+is applied, and is also what its truth label means (§6.3).
+
+<!-- BEGIN GENERATED: fault semantics -->
+| Fault | Layer | Magnitude unit | Meaning |
+|---|---|---|---|
+| `adversarial_log_note` | workflow | - (ignored; the note text is scenario content) | An operator note asserting a false cause is placed in the run's log. Neither truth nor observation changes; applied by the run harness. |
+| `ammonia_inhibition_shift` | parameter | - (multiplier on K_I_nh3 from the onset day) | The free-ammonia inhibition constant of the acetoclastic methanogens changes at the onset day, as an adapted community would; the run is integrated in two segments. A bounded update of that parameter is the correct action. |
+| `biomass_misinitialised` | state | - (multiplier on every biomass state at t = 0) | Every biomass state starts at the given multiple of the nominal initial value, so state estimation must converge before any parameter can be identified. |
+| `ch4_analyser_flatline` | observation | - (ignored; the episode length is the fault's duration_days) | The methane analyser holds its last value for the whole fault window. The magnitude is not used: the episode is defined by onset_day and duration_days. |
+| `feed_mislabelled` | influent | - (Dirichlet concentration of the mislabelled batch's true fractionation) | One feed's true COD fractionation departs from its catalogue entry for the fault window: the true fractionation is redrawn with the given concentration (smaller = further from the catalogue), while the operator's log and the catalogue still say the entry. Revising the mapping is the correct action; hydrolysis is not at fault. |
+| `gas_meter_scale` | observation | - (multiplicative scale factor) | Multiplies the gas-flow sensor's reading from the onset day; 1.08 is the +8 % scale error of the Appendix-B example. The digester is untouched, so the correct conclusion is to estimate the factor, never to move a yield parameter. |
+| `hydrolysis_regime_change` | parameter | - (multiplier on k_hyd_ch, k_hyd_pr and k_hyd_li from the onset day) | All three hydrolysis constants change at the onset day, as a change in feed particle size would do. Only hydrolysis may be updated in response. |
+| `imperfect_mixing` | structure | - (stagnant volume fraction; the bypass is a fifth of it) | The truth reactor is the two-zone structure of sim.plants.mixing with the given stagnant fraction, a bypass of one fifth of it, and the configured exchange rate; the fitted model still assumes an ideal CSTR. 0 reduces to the CSTR exactly. |
+| `informative_missingness` | observation | - (multiplier on the conditional missing multipliers) | Scales the foaming and overload multipliers of every sensor, so instruments fail *during* the transients that identify the process and naive interpolation destroys information. |
+| `moisture_drift` | influent | - (relative change in the feed's total solids over the fault window) | The feed's total solids ramp by the given fraction across the window (negative = wetter), lowering the VS delivered per tonne. The trend is in the influent, not the kinetics. |
+| `omitted_precipitation` | structure | - (ignored; as omitted_sao, for the calcite sink) | The truth model runs with the precipitation extension on and the fitted model without it; the residual appears in alkalinity and pH. |
+| `omitted_sao` | structure | - (ignored; the truth keeps the extension, the fitted model must not have it) | The truth model runs with syntrophic acetate oxidation on and the fitted model without it. No magnitude: the fault is the omission itself. |
+| `ph_electrode_drift` | observation | pH units per day (signed; negative = reads low) | Adds a deterministic ramp to the pH sensor from the onset day, on top of the electrode's own random-walk drift. A calibration fault is removed by a calibration, so the ramp is reset on the tier's recalibration cadence like the intrinsic drift is: the reading walks away and jumps back, which is the drift-then-step signature of the Level-2 row. |
+| `random_gaps` | observation | - (multiplier on every sensor's base missing rate) | Adds gaps at a rate of (multiplier - 1) x the sensor's base rate, on top of whatever the conditional model already drops. The added term is unconditional, so the extra gaps are missing-completely-at-random and carry no information about the state; scaling the base rate instead would scale the stressed rate by the same factor and the added gaps would be as informative as the originals, which is informative_missingness's job, not this one. |
+| `sensor_noise` | observation | - (multiplier on every sensor's noise cv and sd_abs) | Scales the declared measurement noise of every sensor in the tier; 1.0 is the declared instrumentation, 2.0 a plant whose instruments are twice as noisy. |
+| `tool_failure` | workflow | - (probability that the named tool returns a non-converged result) | The tool registry makes a tool fail with the given probability; the simulator and the observation record are untouched. Applied by the run harness. |
+| `unrecorded_delivery` | influent | - (multiple of the feed's median delivery that arrives unlogged) | An extra delivery of the given size arrives on the onset day and never enters the feed log, so the COD balance closes only if the analyst notices. |
+<!-- END GENERATED: fault semantics -->
+
 ## 7. Metrics — **NOT YET BUILT** (Milestone, weeks 17–20)
 
 Designed in §7: diagnosis accuracy by layer, parameter recovery where it is meaningful,

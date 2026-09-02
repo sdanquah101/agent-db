@@ -10,9 +10,10 @@
 # ODC-By 1.0, anchor/MANIFEST.json):
 #   * digester temperature: 1-minute noise sigma 0.052 degF = 0.029 K (robust estimate:
 #     1.4826 x MAD of the first difference / sqrt(2), insensitive to the real process
-#     movement underneath); stuck-value runs of >= 10 min are 0.08 % of the time.
+#     movement underneath); stuck-value runs of >= 10 min are 0.0765 % of the time.
 #   * total biogas flow: 1-minute noise sigma 2.35 cfm on a mean of 112.8 cfm = 2.1 %
-#     relative; stuck-value runs of >= 10 min are 0.01 % of the time.
+#     relative; stuck-value runs of >= 10 min are 0.0144 % of the time (both fractions
+#     re-measured after an off-by-one in the run marker was fixed; see the decisions log).
 #   * MISSINGNESS CANNOT BE ANCHORED: the provider pre-cleaned the SCADA file and the two
 #     columns are 100 % finite, so every rate below is the lead's design value.
 #
@@ -38,9 +39,19 @@ conditions:
                               # Muscatine daily file's own FOS/TAC (Dig1-FOS-TAC, n = 861)
                               # has median 0.23, p90 0.37, p95 0.44, max 0.93, so 0.40 is
                               # the ~92nd percentile: an overload flag raised on roughly
-                              # 8 % of days at a real co-digestion plant. Our channel
-                              # reproduces the plant's own column to r = 0.99 from its VFA
-                              # and alkalinity (sim.observation.channels).
+                              # 8 % of days at a real co-digestion plant. Our channel is
+                              # the same ratio on the same units (kg/m3 over kg CaCO3/m3):
+                              # feeding the plant's own VFA and alkalinity through the
+                              # channel formula returns the plant's own FOS/TAC column
+                              # (tested). NOTE this describes the ANCHOR's distribution,
+                              # not ours: a healthy simulated digester sits at FOS/TAC
+                              # 0.01-0.07 against the plant's median 0.23, because a
+                              # converged ADM1 steady state carries far less residual VFA
+                              # than a real plant and a titrimetric FOS over-reads. The
+                              # threshold is reachable under load (VFA 1.0 kg/m3 at the
+                              # anchor's median alkalinity crosses it, and the anchor
+                              # exceeds that VFA on a third of its days) but it will fire
+                              # on fewer simulated days than on the plant's. FLAGGED.
   fos_tac_foaming: 0.30       # DESIGN  -; ASSUMED: the ~78th percentile of the same column;
                               # foaming needs acidification AND a gas surge, so its FOS/TAC
                               # threshold is lower than the overload one.
@@ -88,10 +99,17 @@ sensors:
       recalibrated: false       # a digester thermocouple is not routinely recalibrated
       source: ASSUMED
     flatline:
-      hazard_per_d: 0.002       # DESIGN  1/d; ANCHORED (order of magnitude): stuck runs of
-                                # >= 10 min are 0.08 % of the SCADA record; at a mean episode
-                                # of 0.4 d this reproduces that occupancy
-      mean_duration_d: 0.4      # DESIGN  d; ANCHORED: the longest stuck run is 149 min
+      hazard_per_d: 0.00077     # DESIGN  1/d; ANCHORED: stuck runs of >= 10 min are 0.0765 %
+                                # of the SCADA record, and the mask's occupancy is
+                                # hazard x duration = 0.00077 x 1 d, so this IS that figure.
+                                # (It was 0.002 at a declared 0.4 d; an episode shorter than
+                                # the sampling interval is rounded up to one sample, so the
+                                # realised occupancy was 0.002, 2.5x the anchor. The schema
+                                # now rejects a sub-interval duration.)
+      mean_duration_d: 1.0      # DESIGN  d; the daily schedule's own resolution. The longest
+                                # stuck run in the 1-minute record is 149 min, i.e. well
+                                # under one daily sample: at this schedule a flatline is a
+                                # single held reading.
       source: "muscatine_scada: consecutive identical D1_TEMPERATURE values"
     saturation: {low: 273.15, high: 353.15}   # DESIGN  K; ASSUMED: the SCADA dictionary's
                                               # acceptable range is 85-150 degF (302-339 K)
@@ -145,9 +163,11 @@ sensors:
       recalibrated: false
       source: "no zero drift by design; scale error is a fault"
     flatline:
-      hazard_per_d: 0.0005      # DESIGN  1/d; ANCHORED (order of magnitude): stuck runs of
-                                # >= 10 min are 0.01 % of the SCADA record
-      mean_duration_d: 0.2      # DESIGN  d; ANCHORED: the longest stuck run is 72 min
+      hazard_per_d: 0.00014     # DESIGN  1/d; ANCHORED: stuck runs of >= 10 min are 0.0144 %
+                                # of the SCADA record; occupancy = 0.00014 x 1 d = that
+                                # figure exactly (was 0.0005 at 0.2 d, realised 0.0005 = 3.5x)
+      mean_duration_d: 1.0      # DESIGN  d; the daily schedule's resolution (the longest
+                                # stuck run in the 1-minute record is 72 min)
       source: "muscatine_scada: consecutive identical Biogas values"
     saturation: {low: 0.0, high: null}   # DESIGN  m3/d; a flow meter cannot read negative
     source: "noise and flatline ANCHORED to muscatine_scada"
@@ -173,9 +193,11 @@ sensors:
       recalibrated: true        # on the tier's cadence
       source: "ASSUMED (lead's default, converted from per month)"
     flatline:
-      hazard_per_d: 0.002       # DESIGN  1/d; ASSUMED: the Level-2 scenario injects a 6-day
-                                # flatline deliberately; this is the background rate
-      mean_duration_d: 0.5      # DESIGN  d; ASSUMED
+      hazard_per_d: 0.001       # DESIGN  1/d; ASSUMED: the Level-2 scenario injects a 6-day
+                                # flatline deliberately; this is the background rate. Occupancy
+                                # 0.001 x 1 d, unchanged from the 0.002 x 0.5 d it was
+                                # declared as (which the mask realised as 0.002).
+      mean_duration_d: 1.0      # DESIGN  d; ASSUMED: one held daily reading
       source: ASSUMED
     saturation: {low: 0.0, high: 1.0}    # DESIGN  fraction
     source: "ASSUMED (lead's defaults)"

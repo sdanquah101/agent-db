@@ -524,7 +524,9 @@ def generate_influent(
     truth_frac = draw_true_fractionations(catalogue, feed_ids, rng, seed)
 
     day = np.arange(n_days)
-    faults = faults or InfluentFaults()
+    # `or` would discard an empty-but-seeded directive object, because InfluentFaults
+    # defines __bool__; only None means "no faults"
+    faults = InfluentFaults() if faults is None else faults
     mislabelled = _mislabelled_fractionations(faults, catalogue, truth_frac)
     feeds_truth: dict[str, FeedTruth] = {}
     logged: dict[str, np.ndarray] = {}

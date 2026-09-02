@@ -8,9 +8,14 @@ What is tested and why it cannot pass vacuously:
 * the two anchored sensor values are re-derived from the Muscatine 1-minute SCADA file
   (temperature noise, gas-flow noise cv, both flatline rates), so the specs cannot drift
   from the data they claim to summarise;
-* the channel arithmetic is checked against hand calculations (alkalinity as CaCO3, VFA
-  as acetic acid, FOS/TAC against the plant's own ratio, VS from COD, the ash tracer
-  against its analytical solution);
+* the channel arithmetic is checked against hand calculations written down as **literals**
+  rather than restated from the implementation — alkalinity as CaCO3, VFA as acetic acid
+  (1 kg COD/m3 of acetate is 0.93828 kg/m3), the extension components' contribution to COD
+  and to solids, and the ash tracer against its analytical solution; and FOS/TAC against
+  the anchor's own VFA and alkalinity columns, with the overload threshold shown to sit
+  inside the distribution the plant really visits. A test that restates the implementation
+  passes under any global scale error, which is how a factor of 1000 lived in the VFA
+  channels until the review of 2026-09-02;
 * each sensor effect does what it says: the schedule and lag, unbiased noise of the
   declared size, drift bounded and reset at recalibration, flatline holding the previous
   value, saturation clipping, and **conditional missingness** — gaps are several times
@@ -30,7 +35,7 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from anchor.ingest_muscatine import SCADA_FILE, scada_noise_statistics
+from anchor.ingest_muscatine import DAILY_FILE, SCADA_FILE, load_daily, scada_noise_statistics
 from sim.observation import (
     CHANNEL_UNITS,
     ObservationConfig,
@@ -248,12 +253,23 @@ def test_anchored_sensor_values_are_rederived_from_the_scada_file(config):
     )
     # gas flow: a relative noise, unit-free
     assert config.sensors["gas_flow"].noise.cv == pytest.approx(gas.noise_cv, abs=0.003)
-    # flatline occupancy: hazard x mean duration reproduces the measured fraction
+    # flatline occupancy: the REALISED mask must reproduce the measured fraction, not the
+    # declared product. The mask lasts max(1, round(duration/dt)) samples, so a declared
+    # sub-interval duration is rounded up and the two diverge (a 0.4 d episode on a daily
+    # sensor realised 2.5x the anchored occupancy until the schema started rejecting it).
+    channels = _flat_channels(n_days=20_000)
+    quiet = _without_missingness(config)  # the flags are masked by ~missing; isolate them
     for name, stats in (("temperature", temp), ("gas_flow", gas)):
-        spec = config.sensors[name].flatline
-        assert spec is not None
-        occupancy = spec.hazard_per_d * spec.mean_duration_d
-        assert 0.2 * stats.flatline_fraction < occupancy < 20 * stats.flatline_fraction, name
+        spec = config.sensors[name]
+        assert spec.flatline is not None
+        assert spec.flatline.mean_duration_d >= spec.sampling_interval_d
+        declared = spec.flatline.hazard_per_d * spec.flatline.mean_duration_d
+        assert declared == pytest.approx(stats.flatline_fraction, rel=0.25), name
+        held = sum(
+            int(observe(channels, quiet, "A", seed=seed)[name].flatlined.sum()) for seed in range(5)
+        )
+        realised = held / (5 * channels.t.size)
+        assert realised == pytest.approx(declared, rel=0.30), (name, realised, declared)
     # and the file really is pre-cleaned, which is why missingness is ASSUMED
     assert temp.missing_fraction == 0.0 and gas.missing_fraction == 0.0
 
@@ -299,18 +315,123 @@ def test_channel_arithmetic_matches_hand_calculation(adm1_params, rj2006_state, 
         KG_CACO3_PER_KMOL_CHARGE * d["S_hco3_ion"][i]
     )
     assert channels["alkalinity_partial"][i] < channels["alkalinity_total"][i]
-    # VFA as acetic-acid equivalent, from the COD states
-    ac_kmol = result.y[6, i] / 64.0
-    assert channels["vfa_ac"][i] == pytest.approx(ac_kmol * M_ACETIC / 1000.0)
-    assert channels["fos_tac"][i] == pytest.approx(
-        channels["vfa_total"][i] / channels["alkalinity_total"][i]
-    )
+    # VFA as acetic-acid equivalent, against a hand calculation done ONCE, off-line, and
+    # written down as a literal: 1 kg COD/m3 of acetate is 1/64 kmol/m3 (acetic acid takes
+    # 2 O2 per molecule: C2H4O2 + 2 O2 -> 2 CO2 + 2 H2O, so 64 kg COD/kmol), and at
+    # 60.05 kg/kmol that is 0.93828 kg/m3 as acetic acid. Restating the implementation
+    # here instead would pass under any global scale error, which is how a factor of 1000
+    # survived into the branch (decisions log, "VFA channels were 1000x too small").
+    cod_per_kg_acetic = 64.0 / M_ACETIC
+    assert cod_per_kg_acetic == pytest.approx(1.0658, abs=1e-4)  # kg COD per kg acetic acid
+    ac_cod = result.y[6, i]  # S_ac, kg COD/m3
+    assert channels["vfa_ac"][i] == pytest.approx(ac_cod * 0.9382812, rel=1e-6)
+    assert channels["vfa_ac"][i] == pytest.approx(ac_cod / 1.0658, rel=1e-3)
+    # and the scale is the anchor's: the Muscatine columns are mg/L, i.e. kg/m3 at 5.04
+    # (alkalinity) and 1.18 (VFA) at the median, so a healthy digester's channels are
+    # units, not micro-units. A digester whose total VFA reads 1e-4 kg/m3 could never
+    # raise the 0.40 overload flag, which is exactly the failure this pins.
+    assert 0.5 < channels["alkalinity_total"][i] < 20.0
+    assert 1e-3 < channels["vfa_total"][i] < 10.0
     # gas conventions differ and both are reported
     assert channels["q_gas_stp_dry"][i] != channels["q_gas_operating"][i]
     assert 0.0 < channels["ch4_fraction"][i] < 1.0
     assert channels["temperature"][0] == geometry.T_op
     # solids need the influent's inert equivalent; without it they are absent
     assert "vs" not in channels and "ts" not in channels
+
+
+def test_every_extension_component_is_classified_for_cod_and_solids():
+    """A new extension component must be placed deliberately, not silently dropped.
+
+    Extension components are appended after the gas states, so the 26-state liquid slice
+    misses them: `cod_total` used to omit `X_sao` and `ts` to omit precipitated calcite.
+    Both are negligible at a healthy steady state (X_sao ~ 1e-7 kg COD/m3 at Plant B's
+    median feed) and both become the signal in the scenarios they belong to — SAO biomass
+    growing IS the Level-5 ammonia signature. This asserts that every component the
+    extensions config declares is in exactly one of the three tables, so adding one to the
+    config without deciding what it contributes fails here rather than vanishing.
+    """
+    from sim.adm1 import load_extensions
+    from sim.observation.channels import (
+        EXTENSION_COD_PER_VS,
+        EXTENSION_INORGANIC_SOLIDS,
+        EXTENSION_NO_SOLIDS,
+    )
+
+    declared = {
+        component.name: component
+        for extension in load_extensions().extensions.values()
+        for component in extension.components
+    }
+    assert {"X_sao", "S_ca", "X_caco3"} <= set(declared)
+    tables = (set(EXTENSION_COD_PER_VS), set(EXTENSION_INORGANIC_SOLIDS), set(EXTENSION_NO_SOLIDS))
+    for name in declared:
+        hits = [name in table for table in tables]
+        assert sum(hits) == 1, f"{name} is in {sum(hits)} classification tables, not exactly 1"
+    for table in tables:
+        assert table <= set(declared), sorted(table - set(declared))
+    # the classification follows the config's own declared COD content
+    for name, equivalent in EXTENSION_COD_PER_VS.items():
+        assert float(declared[name].cod) > 0.0, name
+        assert equivalent > 1.0  # kg COD per kg VS, never below unity for organic matter
+    for name in EXTENSION_INORGANIC_SOLIDS:
+        assert float(declared[name].cod) == 0.0, name
+
+
+def test_extension_biomass_and_precipitate_reach_the_solids_and_cod_channels(
+    adm1_params, rj2006_state
+):
+    """X_sao counts as COD and as VS; calcite counts as TS and not as VS."""
+    from sim.adm1 import compile_extended, load_extensions, load_matrix, load_solver_config
+    from sim.adm1.extensions import extended_state, simulate_extended
+    from sim.influent import constant_influent, load_feed_fractionation, nominal_mass_rates
+    from sim.plants import declared_geometry, load_all_plants
+
+    catalogue = load_feed_fractionation()
+    plant = load_all_plants()["C"]
+    rates = nominal_mass_rates(plant, catalogue)
+    geometry = declared_geometry(plant)
+    model = compile_extended(
+        adm1_params,
+        geometry,
+        load_matrix(),
+        load_solver_config(),
+        load_extensions(),
+        ("sao", "precipitation"),
+    )
+    sao, caco3 = 0.5, 0.02  # kg COD/m3 and kmol/m3, both far above a steady-state trace
+    result = simulate_extended(
+        y0=extended_state(model, rj2006_state, {"X_sao": sao, "X_caco3": caco3}),
+        influent=constant_influent(catalogue, rates),
+        model=model,
+        t_span=(0.0, 1e-6),  # essentially the initial state: nothing reacts
+        t_eval=np.array([0.0]),
+    )
+    ash = np.zeros(1)
+    with_ext = channel_series(result, T_op=geometry.T_op, inert_cod_equivalent=1.2, ash=ash)
+    # the same run read as if the extension states were absent
+    bare = result.y.copy()
+    bare[model.index("X_sao"), :] = 0.0
+    bare[model.index("X_caco3"), :] = 0.0
+    stripped = channel_series(
+        type(result)(
+            t=result.t,
+            y=bare,
+            state_names=result.state_names,
+            derived=result.derived,
+            success=result.success,
+            message=result.message,
+            stats=result.stats,
+        ),
+        T_op=geometry.T_op,
+        inert_cod_equivalent=1.2,
+        ash=ash,
+    )
+    assert with_ext["cod_total"][0] - stripped["cod_total"][0] == pytest.approx(sao)
+    assert with_ext["vs"][0] - stripped["vs"][0] == pytest.approx(sao / 1.42, rel=1e-9)
+    assert with_ext["ts"][0] - stripped["ts"][0] == pytest.approx(sao / 1.42 + caco3 * 100.09)
+    # calcite is inorganic: it moves TS but not VS
+    assert (with_ext["ts"][0] - with_ext["vs"][0]) == pytest.approx(caco3 * 100.09)
 
 
 def test_ash_tracer_matches_the_analytical_dilution(adm1_plant):
@@ -326,6 +447,46 @@ def test_ash_tracer_matches_the_analytical_dilution(adm1_plant):
     assert ash[-1] == pytest.approx(ash_in, rel=0.01)
     # starting at the feed value it stays there
     assert ash_trajectory(t, influent, V, ash_in, ash0=ash_in) == pytest.approx(ash_in)
+
+
+@pytest.mark.skipif(not DAILY_FILE.exists(), reason="Muscatine daily file not fetched")
+def test_fos_tac_is_on_the_anchor_s_own_scale_and_its_thresholds_are_reachable(config):
+    """The channel is kg/m3 over kg CaCO3/m3, the plant's own units — and 0.40 is attainable.
+
+    Two claims the branch made and did not test. First, that our FOS/TAC is the ratio the
+    plant reports: the anchor's `Dig1-VFA_mgL / Dig1-alk_mgL` reproduces its own
+    `Dig1-FOS-TAC` column, and our channel is that same ratio on the same units, so feeding
+    the plant's own VFA and alkalinity through the channel formula must return the plant's
+    own column. Second, that the 0.40 overload threshold is reachable at all: a VFA of
+    1.0 kg/m3 against the anchor's median alkalinity crosses it, and the anchor's own VFA
+    is above 1.0 on more than a third of its days, so the threshold describes a state the
+    plant really visits. With the VFA channel 1000x too small (as it was) neither held: a
+    souring digester at 10 kg COD/m3 of acetate reached FOS/TAC 0.003 and the flag could
+    never fire, silently disabling conditional missingness.
+    """
+    records = load_daily()
+    vfa = np.array([r.dig1_vfa_kg_m3 for r in records if r.dig1_vfa_kg_m3 is not None])
+    alk = np.array([r.dig1_alk_kg_caco3_m3 for r in records if r.dig1_alk_kg_caco3_m3 is not None])
+    assert vfa.size > 800 and alk.size > 900
+    # the plant's own units are ours: kg/m3 and kg CaCO3/m3, order unity
+    assert 1.0 < float(np.median(vfa)) < 1.5
+    assert 4.5 < float(np.median(alk)) < 5.5
+    # our channel's arithmetic on the plant's own numbers gives the plant's own column
+    ratios = np.array(
+        [
+            r.dig1_vfa_kg_m3 / r.dig1_alk_kg_caco3_m3
+            for r in records
+            if r.dig1_vfa_kg_m3 is not None and r.dig1_alk_kg_caco3_m3 is not None
+        ]
+    )
+    assert float(np.median(ratios)) == pytest.approx(0.23, abs=0.02)
+    # and the thresholds sit inside the distribution the plant actually visits
+    overload = config.conditions.fos_tac_overload
+    assert 0.05 < float((ratios > overload).mean()) < 0.15, "0.40 should be ~the 92nd percentile"
+    assert float((ratios > config.conditions.fos_tac_foaming).mean()) > 0.15
+    # a VFA the anchor exceeds on a third of its days already crosses the overload flag
+    assert 1.0 / float(np.median(alk)) < overload < 3.0 / float(np.median(alk))
+    assert float((vfa > 1.0).mean()) > 0.3
 
 
 def test_condition_flags_use_only_past_gas_history(config):
@@ -475,6 +636,31 @@ def test_flatline_holds_the_previous_value_and_saturation_clips(config):
     ok = ~clipped.missing
     assert clipped.saturated[ok].all()
     assert np.nanmax(clipped.value) <= config.sensors["temperature"].saturation.high
+
+
+def test_a_saturation_flag_never_contradicts_its_own_reading(config):
+    """A flatlined sample carries the held reading, so it must carry the held flag too.
+
+    Saturation is a statement about the number the instrument reported. When a truth that
+    steps in and out of the readable range meets a flatline episode, the pre-hold value
+    could saturate while the value actually reported (the previous one) sits inside the
+    range — the record would then tell a workflow the sensor hit its limit while showing it
+    a number that did not. Forty seeds over a stepping truth produce 16 such samples if the
+    flag is not held with the value.
+    """
+    spec = config.sensors["temperature"]
+    high = spec.saturation.high
+    base = _flat_channels(n_days=4000)
+    stepped = np.where((np.arange(base.t.size) // 7) % 2 == 0, 311.0, 400.0)
+    channels = TruthChannels(base.t, {**{k: base[k] for k in base.names}, "temperature": stepped})
+    held = contradictions = 0
+    for seed in range(40):
+        series = observe(channels, config, "A", seed=seed)["temperature"]
+        reported = ~series.missing
+        held += int((series.flatlined & reported).sum())
+        contradictions += int((series.saturated & reported & (series.value < high - 1e-9)).sum())
+    assert held > 50  # the collision the test is about really happens
+    assert contradictions == 0
 
 
 def test_missingness_is_conditional_on_the_process_state(config):

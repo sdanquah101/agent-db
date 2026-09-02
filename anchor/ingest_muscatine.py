@@ -309,11 +309,17 @@ def scada_noise_statistics(
             n_rows += 1
             raw = (row.get(column) or "").strip()
             try:
-                values.append(float(raw))
+                parsed = float(raw)
             except ValueError:
                 n_missing += 1
+                continue
+            # a literal "NaN" parses fine and would otherwise be dropped silently below,
+            # so a file full of them would still report missing_fraction 0
+            if math.isfinite(parsed):
+                values.append(parsed)
+            else:
+                n_missing += 1
     a = np.array(values, dtype=float)
-    a = a[np.isfinite(a)]
     diff = np.diff(a)
     noise_sd = float(1.4826 * np.median(np.abs(diff - np.median(diff))) / math.sqrt(2.0))
     same = np.diff(a) == 0.0
@@ -323,7 +329,11 @@ def scada_noise_statistics(
         run = run + 1 if flag else 0
         longest = max(longest, run + 1 if flag else 0)
         if run + 1 >= flatline_min_samples and flag:
-            in_run[i - run : i + 2] = True
+            # `run` consecutive equalities ending at i span the identical VALUES
+            # a[i-run+1] ... a[i+1], i.e. run+1 samples. Starting the slice at i-run would
+            # also mark the differing sample before the run (one extra per run), and a run
+            # beginning at index 0 would give a negative start and be dropped entirely.
+            in_run[max(i - run + 1, 0) : i + 2] = True
     mean = float(a.mean())
     return ScadaChannelStatistics(
         n=int(a.size),

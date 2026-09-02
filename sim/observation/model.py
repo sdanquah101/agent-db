@@ -130,7 +130,9 @@ def sample_times(interval_d: float, horizon_d: float) -> np.ndarray:
     """Sample times ``0, interval, ...`` up to and including the horizon, d."""
     if interval_d <= 0.0:
         raise ValueError("sampling interval must be positive")
-    n = int(np.floor(horizon_d / interval_d)) + 1
+    # the tolerance is not cosmetic: 0.3 / 0.1 == 2.9999999999999996 in binary floating
+    # point, which would silently drop the sample at the horizon
+    n = int(np.floor(horizon_d / interval_d + 1e-9)) + 1
     return np.arange(n, dtype=float) * interval_d
 
 
@@ -220,7 +222,15 @@ def _sensor_series(
     # injected sensor faults act on the calibration, before the instrument's own noise
     if spec.name in faults.ramps:
         onset, rate = faults.ramps[spec.name]
-        value = value + rate * np.maximum(t - onset, 0.0)
+        elapsed = np.maximum(t - onset, 0.0)
+        if spec.drift is not None and spec.drift.recalibrated:
+            # a calibration fault is removed by a calibration: the ramp accumulates only
+            # since the last recalibration after its onset, which is what produces the
+            # sawtooth "drift then step" of the Level-2 row (§6.3). Without this the ramp
+            # runs to the end of the horizon and there is no step anywhere.
+            since_recal = t - np.floor(t / recalibration_interval_d) * recalibration_interval_d
+            elapsed = np.where(t >= onset, np.minimum(elapsed, since_recal), 0.0)
+        value = value + rate * elapsed
     if spec.name in faults.scales:
         onset, factor = faults.scales[spec.name]
         value = np.where(t >= onset, value * factor, value)
@@ -246,20 +256,28 @@ def _sensor_series(
         flatlined = flatlined | ((t >= onset) & (t < end))
     for i in range(1, n):
         if flatlined[i]:
+            # a stuck sensor repeats the previous *reading*, so the saturation flag is the
+            # previous reading's too: a flag that contradicted its own value would tell a
+            # workflow the instrument hit its range when the reported number is inside it
             value[i] = value[i - 1]
+            saturated[i] = saturated[i - 1]
 
     idx = np.clip(np.searchsorted(channels.t, t, side="right") - 1, 0, channels.t.size - 1)
     missing = np.zeros(n, dtype=bool)
-    scaled = missingness.model_copy(
-        update={
-            "base_rate": min(missingness.base_rate * faults.missing_scale, 1.0),
-            "stress_multipliers": {
-                flag: m * faults.stress_scale for flag, m in missingness.stress_multipliers.items()
-            },
-        }
+    # `random_gaps` must add gaps that carry NO information about the state, so it is an
+    # additive unconditional term rather than a factor on the base rate: scaling the base
+    # rate scales the stressed rate by the same factor, so every added gap would be as
+    # informative as the originals and the Level-1 nuisance would not be MCAR. The
+    # conditional multipliers are `informative_missingness`'s to scale (fault semantics).
+    extra = missingness.base_rate * (faults.missing_scale - 1.0)
+    scaled = MissingnessModel(
+        base_rate=missingness.base_rate,
+        stress_multipliers={
+            flag: m * faults.stress_scale for flag, m in missingness.stress_multipliers.items()
+        },
     )
     for i in range(n):
-        rate = scaled.rate(flags_at(overload, foaming, int(idx[i])))
+        rate = min(scaled.rate(flags_at(overload, foaming, int(idx[i]))) + extra, 1.0)
         missing[i] = u_missing[i] < rate
     value = np.where(missing, np.nan, value)
 
@@ -316,6 +334,13 @@ def observe(
         raise KeyError(f"unknown tier {tier!r}; known tiers are {sorted(config.tiers)}")
     spec_tier: TierSpec = config.tiers[tier]
     horizon = float(channels.t[-1]) if horizon_d is None else float(horizon_d)
+    if horizon > float(channels.t[-1]) + 1e-9:
+        # np.interp clamps beyond the last channel time, so a longer horizon would
+        # silently fabricate constant readings for a run that never happened
+        raise ValueError(
+            f"horizon {horizon} d is beyond the run's last channel time "
+            f"{float(channels.t[-1])} d; there is no truth to observe there"
+        )
     requested = set(spec_tier.sensors if sensors is None else sensors)
     unknown = requested - set(spec_tier.sensors)
     if unknown:
@@ -341,7 +366,9 @@ def observe(
     )
 
     rng = np.random.default_rng(seed)
-    applied = faults or ObservationFaults()
+    # `or` would replace an empty-but-configured directive object, because
+    # ObservationFaults defines __bool__; only None means "no faults"
+    applied = ObservationFaults() if faults is None else faults
     unknown_targets = (set(applied.ramps) | set(applied.scales) | set(applied.flatlines)) - set(
         config.sensors
     )

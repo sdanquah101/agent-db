@@ -66,9 +66,17 @@ from sim.influent import (
     load_feed_fractionation,
     load_generator_config,
 )
-from sim.observation import channel_series, channels_from_two_zone, load_observation_config, observe
+from sim.observation import (
+    DriftModel,
+    NoiseModel,
+    channel_series,
+    channels_from_two_zone,
+    load_observation_config,
+    observe,
+)
 from sim.plants import declared_geometry, load_all_plants
 from sim.plants.mixing import compile_two_zone, initial_state, simulate_two_zone
+from tests.conftest import REPO_ROOT
 from tests.test_observation import _flat_channels
 
 BUDGET = Budget(simulator_evals=1000, wall_clock_min=10.0, assay_units=0)
@@ -112,6 +120,28 @@ def test_every_fault_type_has_semantics_with_a_unit_and_a_layer():
     rows = benchmark_card_rows()
     assert len(rows) == len(FaultType)
     assert all(len(r) == 4 for r in rows)
+
+
+def test_the_benchmark_card_carries_the_generated_fault_table():
+    """The module claims the card cannot drift from the code; this is what makes that true.
+
+    `sim/faults/schema.py` says "benchmark_card_rows renders the table, so the card and the
+    code cannot drift apart". Rendering it is not enough — nothing forced the rendered rows
+    into `docs/benchmark_card.md`, so the claim held only by the author's diligence. The
+    card carries the table between generated markers and this compares the two verbatim.
+    """
+    card = (REPO_ROOT / "docs" / "benchmark_card.md").read_text(encoding="utf-8")
+    start = card.index("<!-- BEGIN GENERATED: fault semantics -->")
+    end = card.index("<!-- END GENERATED: fault semantics -->")
+    block = card[start:end].splitlines()[3:]  # marker, header, separator
+    expected = [
+        f"| `{fault}` | {layer} | {unit} | {desc} |"
+        for fault, layer, unit, desc in benchmark_card_rows()
+    ]
+    assert block == expected, (
+        "docs/benchmark_card.md is out of date with sim.faults.benchmark_card_rows(); "
+        "regenerate the block between the GENERATED markers"
+    )
 
 
 def test_magnitudes_outside_the_declared_range_are_refused():
@@ -371,6 +401,86 @@ def test_observation_faults_change_the_record_without_disturbing_the_stream():
         observe(
             channels, config, "B", seed=1, faults=ObservationFaults(scales={"nope": (1.0, 2.0)})
         )
+
+
+def test_the_ph_drift_fault_is_a_sawtooth_not_a_ramp_to_infinity():
+    """§6.3 Level 2 is "drift then step-recalibration" — a calibration fault ends at calibration.
+
+    The injected ramp used to accumulate from its onset to the end of the horizon, so a
+    -0.01 pH/d fault over 200 days ended 1.7 pH units low with no step anywhere and the
+    scenario's whole signature was missing. It is now reset on the tier's cadence like the
+    electrode's intrinsic drift, so the reading walks away and jumps back.
+    """
+    config = load_observation_config()
+    channels = _flat_channels(n_days=200)
+    quiet = config.sensors["ph"].model_copy(
+        update={"noise": NoiseModel(cv=0.0, sd_abs=1e-12), "fouling": None, "drift": None}
+    )
+    # drift=None removes the random walk but also `recalibrated`; keep the flag by giving a
+    # zero-scale walk, so the ramp still sees a recalibrated instrument
+    quiet = quiet.model_copy(
+        update={"drift": DriftModel(sd_per_sqrt_d=0.0, bound=0.5, recalibrated=True)}
+    )
+    policy = config.missingness.model_copy(update={"base_rate_by_tier": dict.fromkeys("ABC", 0.0)})
+    cfg = config.model_copy(
+        update={"sensors": {**config.sensors, "ph": quiet}, "missingness": policy}
+    )
+    interval = cfg.tiers["B"].recalibration_interval_d
+    assert interval == 30.0
+    faults = ObservationFaults(ramps={"ph": (0.0, -0.01)})
+    offset = observe(channels, cfg, "B", seed=1, faults=faults)["ph"].value - 7.30
+
+    # bounded by one cadence of ramp, not by the horizon
+    assert np.abs(offset).max() == pytest.approx(0.01 * (interval - 1.0), abs=1e-6)
+    assert np.abs(offset).max() < 0.35  # 200 d of un-reset ramp would be 2.0
+    # and it really is a sawtooth: it walks down within a cycle and steps back at each
+    # recalibration boundary
+    for boundary in (30, 60, 90, 120, 150, 180):
+        assert offset[boundary - 1] == pytest.approx(-0.01 * (interval - 1.0), abs=1e-6)
+        assert offset[boundary] == pytest.approx(0.0, abs=1e-9)
+    # a sensor that is NOT recalibrated keeps the un-reset ramp
+    never = quiet.model_copy(
+        update={"drift": DriftModel(sd_per_sqrt_d=0.0, bound=0.5, recalibrated=False)}
+    )
+    cfg2 = cfg.model_copy(update={"sensors": {**cfg.sensors, "ph": never}})
+    plain = observe(channels, cfg2, "B", seed=1, faults=faults)["ph"].value - 7.30
+    assert plain[-1] == pytest.approx(-0.01 * 199.0, abs=1e-6)
+
+
+def test_random_gaps_adds_gaps_that_carry_no_information_about_the_state():
+    """Level 1 must be MCAR: the ADDED gaps must be as likely in the stress window as outside.
+
+    Scaling the base rate scales the stressed rate by the same factor, so every added gap
+    would be `overload_multiplier` times more likely under stress — as informative as the
+    originals, and indistinguishable from the Level-4 `informative_missingness` fault that
+    exists precisely to be the informative one. The added term is therefore unconditional.
+    """
+    config = load_observation_config()
+    channels = _flat_channels(n_days=8000, stress_from=4000)
+    base_rate = config.missingness.base_rate_by_tier["B"]
+    multiplier = config.missingness.stress_multipliers_by_kind["online"]["overload"]
+    faults = ObservationFaults(missing_scale=3.0)
+    added_calm = added_stress = calm_n = stress_n = 0
+    for seed in range(6):
+        clean = observe(channels, config, "B", seed=seed)["gas_flow"]
+        dirty = observe(channels, config, "B", seed=seed, faults=faults)["gas_flow"]
+        calm = clean.sample_t < 4000
+        added_calm += int(dirty.missing[calm].sum() - clean.missing[calm].sum())
+        added_stress += int(dirty.missing[~calm].sum() - clean.missing[~calm].sum())
+        calm_n += int(calm.sum())
+        stress_n += int((~calm).sum())
+    rate_calm = added_calm / calm_n
+    rate_stress = added_stress / stress_n
+    # the added rate is (scale - 1) x base, the same in both windows
+    assert rate_calm == pytest.approx(2.0 * base_rate, rel=0.15)
+    assert rate_stress / rate_calm == pytest.approx(1.0, abs=0.20), (rate_calm, rate_stress)
+    # which is a real distinction: scaling the base rate would have made it `multiplier`
+    assert multiplier > 2.0
+    # the conditional structure itself is untouched — the CLEAN gaps still cluster
+    clean_ratio = (
+        clean.missing[~calm].mean() / clean.missing[calm].mean()  # last seed is enough here
+    )
+    assert clean_ratio == pytest.approx(multiplier, rel=0.35)
 
 
 # --------------------------------------- the Level-6 imperfect-mixing truth variant
