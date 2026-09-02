@@ -294,6 +294,24 @@ def test_noise_is_unbiased_and_of_the_declared_size(config):
     assert np.abs(temp.value[ok_t] - 311.0).max() < spec.drift.bound + 5 * spec.noise.sd_abs
 
 
+def test_relative_and_absolute_noise_are_independent_draws(config):
+    """A sensor declaring both terms gets sqrt((v cv)^2 + sd_abs^2), not the correlated sum."""
+    spec = config.sensors["h2_offgas"]
+    assert spec.noise.cv > 0.0 and spec.noise.sd_abs > 0.0  # the one sensor with both
+    value = 12.0
+    channels = _flat_channels(n_days=4000)
+    quiet = spec.model_copy(
+        update={"drift": None, "saturation": None, "missingness": MissingnessModel(base_rate=0.0)}
+    )
+    cfg = config.model_copy(update={"sensors": {**config.sensors, "h2_offgas": quiet}})
+    reported = observe(channels, cfg, "C", seed=17)["h2_offgas"].value
+    independent = float(np.hypot(value * spec.noise.cv, spec.noise.sd_abs))
+    correlated = value * spec.noise.cv + spec.noise.sd_abs
+    assert reported.std() == pytest.approx(independent, rel=0.08)
+    assert reported.std() < 0.9 * correlated  # the two are far enough apart to tell
+    assert reported.mean() == pytest.approx(value, rel=0.02)
+
+
 def test_drift_is_bounded_and_reset_by_recalibration(config):
     """The pH probe's random walk stays inside its bound and jumps back at recalibration."""
     channels = _flat_channels(n_days=400)
@@ -341,18 +359,40 @@ def test_flatline_holds_the_previous_value_and_saturation_clips(config):
 
 
 def test_missingness_is_conditional_on_the_process_state(config):
-    """The §6.1 property: gaps cluster in the stress window, so interpolation loses information."""
-    channels = _flat_channels(n_days=4000, stress_from=2000)
-    record = observe(channels, config, "B", seed=5)
-    for name in ("ph", "gas_flow", "ch4_fraction"):
-        series = record[name]
-        before = series.missing[series.sample_t < 2000].mean()
-        after = series.missing[series.sample_t >= 2000].mean()
+    """The §6.1 property: gaps cluster in the stress window, so interpolation loses information.
+
+    Pooled over twelve seeds, because the ratio is a ratio of two small counts: the
+    scarcest sensor here (gas flow, base rate 1 %) loses ~480 samples before the window
+    and ~960 inside it, a standard error near 6 % on the ratio, which is what makes the
+    20 % tolerance a real bound. At five seeds the same estimator sits 1.8 sd from its
+    own expectation often enough to flake; at forty seeds it converges to 2.055 +/- 0.088
+    and 1.981 +/- 0.061 for gas flow and pH, so the implementation is unbiased and only
+    the sample size was at fault.
+    """
+    channels = _flat_channels(n_days=6000, stress_from=3000)
+    names = ("ph", "gas_flow", "ch4_fraction")
+    lost_before = dict.fromkeys(names, 0)
+    lost_after = dict.fromkeys(names, 0)
+    seen_before = seen_after = 0
+    for seed in range(12):
+        record = observe(channels, config, "B", seed=seed)
+        for name in names:
+            series = record[name]
+            calm = series.sample_t < 3000
+            lost_before[name] += int(series.missing[calm].sum())
+            lost_after[name] += int(series.missing[~calm].sum())
+            if name == "ph":
+                seen_before += int(calm.sum())
+                seen_after += int((~calm).sum())
+    for name in names:
+        before = lost_before[name] / seen_before
+        after = lost_after[name] / seen_after
         spec = config.sensors[name].missingness
         expected = spec.stress_multipliers["overload"]
+        assert lost_before[name] > 300 and lost_after[name] > 600, (name, lost_before, lost_after)
         assert after > before, name
-        assert after / before == pytest.approx(expected, rel=0.35), (name, before, after)
-        assert before == pytest.approx(spec.base_rate, rel=0.25), name
+        assert after / before == pytest.approx(expected, rel=0.20), (name, before, after)
+        assert before == pytest.approx(spec.base_rate, rel=0.15), name
     # the lab assays carry an overload multiplier but no foaming one
     assert "foaming" not in config.sensors["alkalinity"].missingness.stress_multipliers
 

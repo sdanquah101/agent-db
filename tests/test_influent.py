@@ -16,7 +16,9 @@ What is tested and why it cannot pass vacuously:
   content it declares, a deliberately wrong TKN is shown to fail, and the
   lignocellulosic entries are shown to be inconsistent under the BSM2 ``N_I`` (the
   finding that motivates the field);
-* nothing under ``sim/influent`` or ``sim/plants`` writes files (CLAUDE.md rule 1).
+* nothing under the truth-producing packages (``sim/faults``, ``sim/influent``,
+  ``sim/observation``, ``sim/plants``) writes files or names the truth path
+  (CLAUDE.md rule 1); their loaders read ``configs/`` only.
 """
 
 from __future__ import annotations
@@ -533,7 +535,7 @@ def _write_calls(path: Path) -> list[str]:
     return found
 
 
-@pytest.mark.parametrize("package", ["influent", "plants"])
+@pytest.mark.parametrize("package", ["faults", "influent", "observation", "plants"])
 def test_truth_producing_packages_never_write_files(package, tmp_path):
     bad = tmp_path / "bad.py"
     bad.write_text("from pathlib import Path\nPath('x').write_text('truth')\nopen('y', 'w')\n")

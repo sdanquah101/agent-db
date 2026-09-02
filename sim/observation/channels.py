@@ -45,6 +45,7 @@ from sim.influent.schema import (
     FeedFractionation,
     FeedFractionationCatalogue,
 )
+from sim.plants.mixing import TwoZoneResult
 
 __all__ = [
     "CHANNEL_UNITS",
@@ -243,9 +244,11 @@ def ash_trajectory(
 ) -> np.ndarray:
     """Ash concentration in the digestate, kg/m3, from the conserved-tracer balance.
 
-    ``dC/dt = (Q/V)(C_in - C)`` with the influent held between samples (the generator's
-    convention). Ash takes no part in any reaction, so this is exact for a CSTR and needs
-    no state in the truth model.
+    ``dC/dt = (Q/V)(C_in - C)``, solved exactly over each output step with the flow and
+    the feed ash held at their values at the start of the step. The flow follows the
+    influent's declared ``interpolation``, so a sample-and-hold series is held rather
+    than interpolated. Ash takes no part in any reaction, so this needs no state in the
+    truth model.
 
     Args:
         t: Output times, d (increasing).
@@ -351,7 +354,7 @@ def channel_series(
 
 
 def channels_from_two_zone(
-    result: object,
+    result: TwoZoneResult,
     *,
     T_op: float,
     inert_cod_equivalent: float | None = None,
@@ -363,13 +366,12 @@ def channels_from_two_zone(
     bypass), while the headspace and the pH probe see the active zone — which is precisely
     why imperfect mixing shows up as a load-dependent residual (§6.3, Level 6).
     """
-    active = result.active  # type: ignore[attr-defined]
     return channel_series(
-        active,
+        result.active,
         T_op=T_op,
         inert_cod_equivalent=inert_cod_equivalent,
         ash=ash,
-        effluent=result.effluent,  # type: ignore[attr-defined]
+        effluent=result.effluent,
     )
 
 

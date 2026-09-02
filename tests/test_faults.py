@@ -45,6 +45,7 @@ from sim.adm1 import (
 )
 from sim.faults import (
     FAULT_SEMANTICS,
+    FaultInjectionConfig,
     InfluentFaults,
     MislabelledFeed,
     MoistureRamp,
@@ -55,6 +56,7 @@ from sim.faults import (
     build_plan,
     declared_faults,
     fitted_extensions,
+    load_fault_config,
     parameter_segments,
     semantics_for,
     truth_mixing,
@@ -155,6 +157,44 @@ def test_faults_route_to_their_layers():
     assert plan.structure.omit_from_fitted == ("sao",)
     assert plan.workflow.tool_failure == (("bayes_mcmc", 0.3),)
     assert plan.influent.seed == 5  # scenario seed + 1: its own stream
+
+
+def test_the_influent_target_feed_can_be_named_explicitly():
+    """The default is the last feed id, which depends on the caller's order; naming wins."""
+    fault = Fault(type=FaultType.UNRECORDED_DELIVERY, onset_day=10.0, magnitude=2.0)
+    scenario = _scenario(fault, level=3, labels=(TruthLabel.INFLUENT,))
+    assert build_plan(scenario, PLANT_B_FEEDS).influent.unrecorded[0].feed_id == "fog"
+    assert (
+        build_plan(scenario, sorted(PLANT_B_FEEDS)).influent.unrecorded[0].feed_id
+        == "thickened_was"
+    )  # order-dependent by default, which is why a caller may name the feed
+    named = build_plan(scenario, PLANT_B_FEEDS, target_feed="high_strength_waste")
+    assert named.influent.unrecorded[0].feed_id == "high_strength_waste"
+    with pytest.raises(ValueError, match="not one of"):
+        build_plan(scenario, PLANT_B_FEEDS, target_feed="cattle_slurry")
+
+
+def test_the_mixing_shaping_constants_are_configuration_not_code():
+    """The bypass ratio and exchange rate are DESIGN data the lead can review."""
+    config = load_fault_config()
+    assert config.imperfect_mixing.bypass_of_stagnant == pytest.approx(0.2)
+    assert config.imperfect_mixing.exchange_per_d == pytest.approx(1.0)
+    plan = build_plan(
+        _scenario(
+            Fault(type=FaultType.IMPERFECT_MIXING, onset_day=0.0, magnitude=0.25),
+            level=6,
+            labels=(TruthLabel.STRUCTURAL,),
+        ),
+        PLANT_B_FEEDS,
+    )
+    assert truth_mixing(plan).bypass_fraction == pytest.approx(0.05)
+    # a different configuration changes the structure, so the file is load-bearing
+    other = FaultInjectionConfig.model_validate(
+        {"version": 1, "imperfect_mixing": {"bypass_of_stagnant": 0.4, "exchange_per_d": 2.0}}
+    )
+    structure = truth_mixing(plan, other)
+    assert structure.bypass_fraction == pytest.approx(0.10)
+    assert structure.exchange_rate == pytest.approx(2.0)
 
 
 # ------------------------------------------------------------------ appliers

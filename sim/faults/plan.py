@@ -36,10 +36,12 @@ import numpy as np
 
 from scenarios.schema import Fault, FaultType, Scenario
 from sim.adm1.schema import ADM1Parameters
-from sim.faults.schema import FAULT_SEMANTICS, semantics_for
+from sim.faults.defaults import load_fault_config
+from sim.faults.schema import FAULT_SEMANTICS, FaultInjectionConfig, semantics_for
 from sim.plants.mixing import MixingStructure
 
 __all__ = [
+    "FaultInjectionConfig",
     "FaultPlan",
     "InfluentFaults",
     "MislabelledFeed",
@@ -55,14 +57,6 @@ __all__ = [
     "parameter_segments",
     "truth_mixing",
 ]
-
-#: Exchange coefficient of the stagnant zone when imperfect mixing is injected, 1/d.
-#: PR #7's prior band was 0.2-2 d^-1; the mid-point is used and the scenario sizes the
-#: fault through the stagnant fraction alone (decisions log).
-MIXING_EXCHANGE_PER_D = 1.0
-
-#: Bypass as a fraction of the stagnant fraction (a fifth), so one magnitude sizes both.
-MIXING_BYPASS_OF_STAGNANT = 0.2
 
 
 def _window(fault: Fault, duration_days: float) -> tuple[float, float]:
@@ -228,7 +222,10 @@ class FaultPlan:
 
 
 def build_plan(
-    scenario: Scenario, feed_ids: Sequence[str], fault_seed: int | None = None
+    scenario: Scenario,
+    feed_ids: Sequence[str],
+    fault_seed: int | None = None,
+    target_feed: str | None = None,
 ) -> FaultPlan:
     """Route a scenario's faults into per-layer directives.
 
@@ -240,6 +237,10 @@ def build_plan(
             another feed says so in its notes and the run layer overrides.
         fault_seed: Seed of the fault layer's own stream; defaults to the scenario seed
             plus one, or 0 when the scenario carries no seed.
+        target_feed: Feed an influent fault acts on. Defaults to the last of ``feed_ids``
+            (the co-substrate of every frozen plant), which makes the default depend on
+            the order the caller passes, so a run layer that means a particular feed
+            names it here.
 
     Returns:
         The plan.
@@ -262,14 +263,16 @@ def build_plan(
     tools: list[tuple[str, float]] = []
     note = False
 
-    target_feed = feed_ids[-1] if feed_ids else None
+    if target_feed is not None and target_feed not in feed_ids:
+        raise ValueError(f"target_feed {target_feed!r} is not one of {list(feed_ids)}")
+    target = target_feed if target_feed is not None else (feed_ids[-1] if feed_ids else None)
 
     for fault in scenario.faults:
         spec = semantics_for(fault.type)
         spec.validate_magnitude(fault.magnitude)
         onset, end = _window(fault, scenario.duration_days)
 
-        if spec.layer == "influent" and target_feed is None:
+        if spec.layer == "influent" and target is None:
             raise ValueError(f"{fault.type.value} needs a feed, but the plant declares none")
 
         match fault.type:
@@ -288,7 +291,7 @@ def build_plan(
             case FaultType.FEED_MISLABELLED:
                 mislabelled.append(
                     MislabelledFeed(
-                        feed_id=str(target_feed),
+                        feed_id=str(target),
                         onset_d=onset,
                         end_d=end,
                         concentration=fault.magnitude,
@@ -297,7 +300,7 @@ def build_plan(
             case FaultType.UNRECORDED_DELIVERY:
                 unrecorded.append(
                     UnrecordedDelivery(
-                        feed_id=str(target_feed),
+                        feed_id=str(target),
                         day=int(onset),
                         multiple_of_median=fault.magnitude,
                     )
@@ -305,7 +308,7 @@ def build_plan(
             case FaultType.MOISTURE_DRIFT:
                 moisture.append(
                     MoistureRamp(
-                        feed_id=str(target_feed),
+                        feed_id=str(target),
                         onset_d=onset,
                         end_d=end,
                         relative_change=fault.magnitude,
@@ -407,21 +410,22 @@ def apply_state_faults(y0: np.ndarray, plan: FaultPlan, state_names: Sequence[st
     return y
 
 
-def truth_mixing(plan: FaultPlan) -> MixingStructure:
+def truth_mixing(plan: FaultPlan, config: FaultInjectionConfig | None = None) -> MixingStructure:
     """The truth reactor's mixing structure for this plan.
 
-    An ``imperfect_mixing`` fault sizes the stagnant zone; the bypass is
-    :data:`MIXING_BYPASS_OF_STAGNANT` of it and the exchange is
-    :data:`MIXING_EXCHANGE_PER_D`, so one magnitude sizes the whole non-ideality. With no
-    such fault this is the ideal CSTR the plant contract declares.
+    An ``imperfect_mixing`` fault sizes the stagnant zone with its magnitude; the bypass
+    and the exchange rate come from ``configs/faults/injection.yaml``, so one magnitude
+    sizes the whole non-ideality and the two shaping constants stay reviewable data. With
+    no such fault this is the ideal CSTR the plant contract declares.
     """
     phi = plan.structure.stagnant_fraction
     if phi <= 0.0:
         return MixingStructure.cstr()
+    settings = (config or load_fault_config()).imperfect_mixing
     return MixingStructure(
-        bypass_fraction=phi * MIXING_BYPASS_OF_STAGNANT,
+        bypass_fraction=phi * settings.bypass_of_stagnant,
         stagnant_fraction=phi,
-        exchange_rate=MIXING_EXCHANGE_PER_D,
+        exchange_rate=settings.exchange_per_d,
     )
 
 

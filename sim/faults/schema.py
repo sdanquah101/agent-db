@@ -35,7 +35,7 @@ its magnitude sizes the non-ideality of the truth reactor (:mod:`sim.plants.mixi
 from __future__ import annotations
 
 from types import MappingProxyType
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -43,13 +43,37 @@ from scenarios.schema import FaultType
 
 __all__ = [
     "FAULT_SEMANTICS",
+    "FaultInjectionConfig",
     "FaultLayer",
     "FaultSemantics",
+    "ImperfectMixingConfig",
     "benchmark_card_rows",
     "semantics_for",
 ]
 
 FaultLayer = Literal["influent", "parameter", "state", "structure", "observation", "workflow"]
+
+
+class ImperfectMixingConfig(BaseModel):
+    """Structure constants of the Level-6 mixing variant beyond the scenario magnitude."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    bypass_of_stagnant: Annotated[float, Field(ge=0.0, lt=1.0)] = Field(
+        description="Bypass fraction as a share of the stagnant volume fraction, -"
+    )
+    exchange_per_d: Annotated[float, Field(ge=0.0)] = Field(
+        description="Stagnant-zone exchange rate, 1/d (Q_ex / V_stagnant)"
+    )
+
+
+class FaultInjectionConfig(BaseModel):
+    """``configs/faults/injection.yaml``: constants that shape a fault beyond its magnitude."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    version: int
+    imperfect_mixing: ImperfectMixingConfig
 
 
 class FaultSemantics(BaseModel):

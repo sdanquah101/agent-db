@@ -634,6 +634,17 @@ PR #10 merged (2204dcf), including the lead's freeze answers. Branch
 - The requested-assay budget of §6.4 (assays beyond the tier's schedule, at a cost) is
   not implemented; it belongs with the tool registry.
 
+**Self-review of PR #11 (same session, at the lead's request)**
+
+Six findings, all fixed on the branch and recorded in `docs/decisions.md`: the correlated
+noise draws (real, one sensor affected), the ash tracer ignoring the hold convention
+(latent), the mixing constants hard-coded rather than configured, the implicitly ordered
+fault target, one dead helper and one untyped result. The rule-1 hygiene check now covers
+`sim/faults` and `sim/observation`. The conditional-missingness test was re-sized after a
+flake: pooled over forty seeds the estimator is 2.055 ± 0.088 and 1.981 ± 0.061 against
+an expected 2.0, so it was sample size and not bias. Stated plainly: this is a
+self-review, not an independent one.
+
 **Next session should start on**
 
 1. The run harness: `runs/<id>/truth/` and `calls.jsonl`, wiring generator → truth model

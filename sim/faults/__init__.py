@@ -11,6 +11,7 @@ observation directives by :func:`sim.observation.observe`, so each layer applies
 own. Nothing here writes files (CLAUDE.md rule 1).
 """
 
+from sim.faults.defaults import CONFIG_DIR, INJECTION, load_fault_config
 from sim.faults.plan import (
     FaultPlan,
     InfluentFaults,
@@ -31,17 +32,23 @@ from sim.faults.plan import (
 )
 from sim.faults.schema import (
     FAULT_SEMANTICS,
+    FaultInjectionConfig,
     FaultLayer,
     FaultSemantics,
+    ImperfectMixingConfig,
     benchmark_card_rows,
     semantics_for,
 )
 
 __all__ = [
+    "CONFIG_DIR",
     "FAULT_SEMANTICS",
+    "INJECTION",
+    "FaultInjectionConfig",
     "FaultLayer",
     "FaultPlan",
     "FaultSemantics",
+    "ImperfectMixingConfig",
     "InfluentFaults",
     "MislabelledFeed",
     "MoistureRamp",
@@ -56,6 +63,7 @@ __all__ = [
     "build_plan",
     "declared_faults",
     "fitted_extensions",
+    "load_fault_config",
     "parameter_segments",
     "semantics_for",
     "truth_mixing",

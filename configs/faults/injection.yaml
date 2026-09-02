@@ -1,0 +1,27 @@
+# Fault-injection constants that shape a fault beyond its scenario magnitude
+# (proposal §6.1, §6.3; schema sim/faults/schema.py::FaultInjectionConfig).
+#
+# A scenario row carries ONE magnitude per fault (scenarios/schema.py), so a fault whose
+# physical size needs more than one number takes the rest from here. These are DESIGN
+# values for the lead, not solver settings: they change what a scenario means, which is
+# why they live in configs/ rather than in code (CLAUDE.md conventions).
+#
+# STATUS: provisional, every value `# DESIGN`.
+version: 1
+
+imperfect_mixing:
+  # The Level-6 truth variant compiles sim/plants/mixing.py with the scenario's magnitude
+  # as the stagnant volume fraction; these two fix the rest of the structure so that one
+  # magnitude sizes the whole non-ideality.
+  bypass_of_stagnant: 0.2     # DESIGN  -; the bypass as a fraction of the stagnant share.
+                              # ASSUMED: PR #7's prior band was bypass 1-10 % against
+                              # stagnant 3-30 %, i.e. a bypass of roughly a fifth to a
+                              # third of the stagnant share; a fifth is the conservative end.
+                              # Tracer studies of full-scale digesters report both together
+                              # (Monteith & Stephenson 1978: up to 61 % short-circuiting at
+                              # 75 % non-effective volume; Capela et al. 2009: 22 %
+                              # non-effective volume), so a fixed ratio is a simplification
+                              # recorded in docs/decisions.md.
+  exchange_per_d: 1.0         # DESIGN  1/d; exchange between the stagnant and active zones
+                              # (Q_ex / V_stagnant). ASSUMED: the mid-point of PR #7's
+                              # 0.2-2 d^-1 prior band.

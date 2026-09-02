@@ -8,7 +8,9 @@ into the :class:`ObservationRecord` a workflow may read. Per sensor, in this ord
 2. **Fouling** — inside an episode the reading is ``gain x value + offset`` with the
    deviation ramping linearly from zero at onset to full size at the end of the episode.
 3. **Drift** — a bounded random walk added as an offset, reset at each recalibration.
-4. **Noise** — ``value (1 + cv z) + sd_abs z``.
+4. **Noise** — ``value (1 + cv z1) + sd_abs z2`` with ``z1`` and ``z2`` independent, so a
+   sensor declaring both a relative and an absolute term has total standard deviation
+   ``sqrt((value cv)^2 + sd_abs^2)`` rather than the two perfectly correlated.
 5. **Saturation** — clipped to the readable range; clipped samples are flagged.
 6. **Flatline** — inside an episode the sensor repeats its last reported value.
 7. **Missingness** — the sample is dropped with a probability that depends on the
@@ -18,9 +20,10 @@ into the :class:`ObservationRecord` a workflow may read. Per sensor, in this ord
 **Randomness.** One ``numpy.random.default_rng(seed)`` stream per run (CLAUDE.md rule 4),
 consumed per sensor in **sorted sensor-name order** and, within a sensor, in a fixed
 order: ``n`` uniforms for flatline onsets, ``n`` uniforms for fouling onsets, ``n``
-normals for the drift walk, ``n`` normals for measurement noise, ``n`` uniforms for
-missingness — every block drawn whether or not the sensor declares that effect, so adding
-a drift model to one sensor cannot change another sensor's noise (tested). The stream is
+normals for the drift walk, ``n`` normals for the relative noise, ``n`` normals for the
+absolute noise, ``n`` uniforms for missingness — every block drawn whether or not the
+sensor declares that effect, so adding a drift model to one sensor cannot change another
+sensor's noise (tested). The stream is
 independent of the influent generator's: a run gives the observation model its own seed.
 
 Nothing here writes files; :class:`ObservationRecord` goes to the run layer, which owns
@@ -35,7 +38,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from sim.faults.plan import ObservationFaults
-from sim.observation.channels import CHANNEL_UNITS, TruthChannels, condition_flags, flags_at
+from sim.observation.channels import TruthChannels, condition_flags, flags_at
 from sim.observation.schema import (
     EpisodeModel,
     ObservationConfig,
@@ -172,6 +175,7 @@ def _sensor_series(
     u_foul = rng.uniform(size=n)
     z_drift = rng.standard_normal(size=n)
     z_noise = rng.standard_normal(size=n)
+    z_noise_abs = rng.standard_normal(size=n)
     u_missing = rng.uniform(size=n)
 
     truth = np.interp(t, channels.t, channels[spec.channel])
@@ -207,9 +211,11 @@ def _sensor_series(
         onset, factor = faults.scales[spec.name]
         value = np.where(t >= onset, value * factor, value)
 
+    # the relative and absolute noise terms are INDEPENDENT draws: a sensor that declares
+    # both (the H2 cell) has total sd sqrt((v cv)^2 + sd_abs^2), not (v cv + sd_abs)
     cv = spec.noise.cv * faults.noise_scale
     sd_abs = spec.noise.sd_abs * faults.noise_scale
-    value = value * (1.0 + cv * z_noise) + sd_abs * z_noise
+    value = value * (1.0 + cv * z_noise) + sd_abs * z_noise_abs
 
     saturated = np.zeros(n, dtype=bool)
     if spec.saturation is not None:
@@ -336,8 +342,3 @@ def observe(
         if name in requested:
             out[name] = series
     return ObservationRecord(tier=tier, seed=int(seed), horizon_d=horizon, sensors=out)
-
-
-def channel_unit(channel: str) -> str:
-    """Unit and convention of a truth channel (CLAUDE.md rule 6)."""
-    return CHANNEL_UNITS[channel]

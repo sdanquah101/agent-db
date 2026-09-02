@@ -1368,6 +1368,29 @@ declared feed — **proportional to the load** to within a few per cent, while t
 deficit stays near 6 %. That load-proportional signature is what separates a hydraulic
 fault from a kinetic one, which is what the Level-6 row asks a workflow to notice.
 
+**Addendum (self-review of PR #11, same day).** Six findings, all fixed on the branch:
+(1) the observation model drew **one** normal for both the relative and the absolute noise
+term, so the one sensor declaring both (the H₂ cell) had perfectly correlated components
+and a total sd of 2.80 ppm where the independent draws give 2.06 — now two blocks, and the
+documented stream order says so; (2) `ash_trajectory` interpolated the influent flow even
+for a sample-and-hold series — latent only (the error is exactly zero when the output
+times are the influent's own, which is every current call, and 3 % on a four-times finer
+grid), now the declared convention is honoured; (3) the two constants that shape the
+imperfect-mixing structure beyond its magnitude were hard-coded in `sim/faults/plan.py`
+against the repo's convention that design values are reviewable data — moved to
+`configs/faults/injection.yaml` with sources; (4) `build_plan` picked the influent fault's
+target as the *last* of the feed ids it was handed, which silently depends on the caller's
+ordering — a `target_feed` argument now names it, and the test shows the two orderings
+disagree; (5) a dead `channel_unit` helper removed; (6) `channels_from_two_zone` typed
+against `TwoZoneResult` instead of `object`. The rule-1 hygiene check now covers
+`sim/faults` and `sim/observation` as well as `sim/influent` and `sim/plants`.
+
+*Test sizing, not a code defect.* The conditional-missingness test compared a ratio of two
+small counts (109 and 179 losses) against a 35 % tolerance and flaked once the extra noise
+draw shifted the realisation. Pooling forty seeds gives 2.055 ± 0.088 (gas flow) and
+1.981 ± 0.061 (pH) against an expected 2.0, so the estimator is unbiased; the test now
+pools twelve seeds over 6,000 days, which is what makes its 20 % bound meaningful.
+
 **Alternatives.** Apply every fault inside one `run()` function (rejected: the layers
 have different owners and different test surfaces, and a fault that silently touched two
 layers would make its truth label ambiguous); let the magnitude be a typed union per
