@@ -1,0 +1,106 @@
+{
+  "candidate": "qsdsan",
+  "source": "https://pypi.org/project/qsdsan/ (+ exposan.adm example)",
+  "version": "qsdsan 1.4.3, exposan 1.4.3",
+  "python": "3.11.15",
+  "platform": "Linux-6.18.44-fc-v22-x86_64-with-glibc2.39",
+  "licence": "UIUC/NCSA (permissive)",
+  "probes": [
+    {
+      "name": "P1_sludge_100d",
+      "ok": true,
+      "wall_s": 2.2815401430000293,
+      "wall_s_per_sim_day": 0.02281540143000029,
+      "solver": "scipy solve_ivp BDF (system DAE assembled by biosteam); pH by brenth inside RHS",
+      "solver_settings": {
+        "method": "BDF",
+        "rtol": 1e-06,
+        "atol": 1e-08,
+        "t_eval_dt_d": 0.25
+      },
+      "stats": {
+        "nfev": 552,
+        "njev": 5,
+        "nlu": 55,
+        "accepted_steps": 247,
+        "min_dt_d": 1.3258874519947046e-07,
+        "max_dt_d": 4.297732534974671
+      },
+      "final": {
+        "pH": 7.46611708094529,
+        "P_gas_bar": 1.0689392182501642,
+        "p_ch4_bar": 0.6516742811571928,
+        "p_co2_bar": 0.3609583698545565,
+        "p_h2_bar": 1.6406171253921338e-05,
+        "ch4_fraction_wet": 0.6096457778244612,
+        "ch4_fraction_dry": 0.6435341805087209,
+        "q_gas_m3_d": 2951.4128443166833,
+        "q_gas_STP_dry_m3_d": 2478.4202410545586,
+        "vfa_total_gCOD_m3": 238.00057566978853,
+        "S_ac_gCOD_m3": 197.33053485845406,
+        "S_pro_gCOD_m3": 15.788782057868454
+      },
+      "extremes": {
+        "pH_min": 7.309135631624883,
+        "vfa_max_gCOD_m3": 238.00057566978853,
+        "q_gas_max_m3_d": 3727.8793952002925
+      },
+      "gate": {
+        "pH": true,
+        "ch4_fraction_dry": true,
+        "q_gas_m3_d": true,
+        "vfa_total_gCOD_m3": true
+      },
+      "error": null,
+      "notes": []
+    },
+    {
+      "name": "P2_olr_step_x3",
+      "ok": true,
+      "wall_s": 2.7535046539999257,
+      "wall_s_per_sim_day": 0.1376752326999963,
+      "solver": "scipy solve_ivp BDF (system DAE assembled by biosteam); pH by brenth inside RHS",
+      "solver_settings": {
+        "method": "BDF",
+        "rtol": 1e-06,
+        "atol": 1e-08,
+        "t_eval_dt_d": 0.25
+      },
+      "stats": {
+        "nfev": 789,
+        "njev": 10,
+        "nlu": 80,
+        "accepted_steps": 346,
+        "min_dt_d": 1.3258874519947046e-07,
+        "max_dt_d": 0.4282387195114463
+      },
+      "final": {
+        "pH": 7.363848204228918,
+        "P_gas_bar": 1.1500406176589997,
+        "p_ch4_bar": 0.6423642013386361,
+        "p_co2_bar": 0.4513658983779719,
+        "p_h2_bar": 2.0356875230350237e-05,
+        "ch4_fraction_wet": 0.5585578382841992,
+        "ch4_fraction_dry": 0.5873041674791739,
+        "q_gas_m3_d": 7778.986997873985,
+        "q_gas_STP_dry_m3_d": 6557.935584263526,
+        "vfa_total_gCOD_m3": 6319.6717397832,
+        "S_ac_gCOD_m3": 6250.79639401656,
+        "S_pro_gCOD_m3": 28.282544013483935
+      },
+      "extremes": {
+        "pH_min": 7.261080973033953,
+        "vfa_max_gCOD_m3": 6319.6717397832,
+        "q_gas_max_m3_d": 7856.2366020071395
+      },
+      "gate": {},
+      "error": null,
+      "notes": []
+    }
+  ],
+  "notes": [
+    "numpy 1.26.4, scipy 1.17.1",
+    "First simulate() includes numba/thermosteam warm-up; a 5-day warm-up run is done first.",
+    "Also ships ADM1p (Flores-Alsina 2016 P/S/Fe extension) with ionic speciation and seven mineral precipitation processes in qsdsan.processes._adm1_p_extension."
+  ]
+}

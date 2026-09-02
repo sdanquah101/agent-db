@@ -1,0 +1,194 @@
+{
+  "candidate": "pyadm1",
+  "source": "https://github.com/CaptainFerMag/PyADM1",
+  "version": "e7f806e1984a382ce6d6c17ad595561e3e8b293d",
+  "python": "3.11.15",
+  "platform": "Linux-6.18.44-fc-v22-x86_64-with-glibc2.39",
+  "licence": "MIT",
+  "probes": [
+    {
+      "name": "P1_sludge_100d[DOP853]",
+      "ok": true,
+      "wall_s": 20.101292260000037,
+      "wall_s_per_sim_day": 0.20101292260000037,
+      "solver": "scipy solve_ivp DOP853 + Newton DAE for S_H+, S_h2 between steps",
+      "solver_settings": {
+        "method": "DOP853",
+        "rtol": "solve_ivp default 1e-3",
+        "atol": "solve_ivp default 1e-6",
+        "outer_dt_d": 0.010416666666666666
+      },
+      "stats": {
+        "outer_steps": 9600,
+        "inner_integrator_steps": 28793,
+        "nfev": 636876,
+        "min_inner_dt_d": 8.373799697736217e-05,
+        "max_inner_dt_d": 0.007961638394881732
+      },
+      "final": {
+        "pH": 7.464372118089718,
+        "P_gas_bar": 1.0690235679607216,
+        "p_ch4_bar": 0.6507814056747689,
+        "p_co2_bar": 0.36255801576825275,
+        "p_h2_bar": 1.640144270992255e-05,
+        "ch4_fraction_wet": 0.6087624493781788,
+        "ch4_fraction_dry": 0.6422042395942817,
+        "q_gas_m3_d": 2956.096471434388,
+        "q_gas_STP_dry_m3_d": 2483.8897956216874,
+        "vfa_total_gCOD_m3": 236.91738732017362,
+        "S_ac_gCOD_m3": 196.24698553724562,
+        "S_pro_gCOD_m3": 15.788706436557794
+      },
+      "extremes": {
+        "pH_min": 7.261375069342448,
+        "vfa_max_gCOD_m3": 236.91738732017362,
+        "q_gas_max_m3_d": 3115.9299697084675
+      },
+      "gate": {
+        "pH": true,
+        "ch4_fraction_dry": true,
+        "q_gas_m3_d": true,
+        "vfa_total_gCOD_m3": true
+      },
+      "error": null,
+      "notes": []
+    },
+    {
+      "name": "P2_olr_step_x3[DOP853]",
+      "ok": true,
+      "wall_s": 3.943041966999999,
+      "wall_s_per_sim_day": 0.19715209834999997,
+      "solver": "scipy solve_ivp DOP853 + Newton DAE for S_H+, S_h2 between steps",
+      "solver_settings": {
+        "method": "DOP853",
+        "rtol": "solve_ivp default 1e-3",
+        "atol": "solve_ivp default 1e-6",
+        "outer_dt_d": 0.010416666666666666
+      },
+      "stats": {
+        "outer_steps": 1920,
+        "inner_integrator_steps": 5759,
+        "nfev": 119688,
+        "min_inner_dt_d": 0.001128141813076411,
+        "max_inner_dt_d": 0.007318142650913018
+      },
+      "final": {
+        "pH": 7.364442350095794,
+        "P_gas_bar": 1.1495850698597367,
+        "p_ch4_bar": 0.6425035467584969,
+        "p_co2_bar": 0.4513934495447722,
+        "p_h2_bar": 2.0328481477636802e-05,
+        "ch4_fraction_wet": 0.5589003925015223,
+        "ch4_fraction_dry": 0.5873419610434675,
+        "q_gas_m3_d": 7750.057111377226,
+        "q_gas_STP_dry_m3_d": 6537.133006750114,
+        "vfa_total_gCOD_m3": 6179.5378096894265,
+        "S_ac_gCOD_m3": 6110.814402432152,
+        "S_pro_gCOD_m3": 28.269934228641564
+      },
+      "extremes": {
+        "pH_min": 7.250557831828069,
+        "vfa_max_gCOD_m3": 6179.5378096894265,
+        "q_gas_max_m3_d": 7891.419579294721
+      },
+      "gate": {},
+      "error": null,
+      "notes": []
+    },
+    {
+      "name": "P1_sludge_100d[BDF]",
+      "ok": true,
+      "wall_s": 23.31999206599994,
+      "wall_s_per_sim_day": 0.2331999206599994,
+      "solver": "scipy solve_ivp BDF + Newton DAE for S_H+, S_h2 between steps",
+      "solver_settings": {
+        "method": "BDF",
+        "rtol": "solve_ivp default 1e-3",
+        "atol": "solve_ivp default 1e-6",
+        "outer_dt_d": 0.010416666666666666
+      },
+      "stats": {
+        "outer_steps": 9600,
+        "inner_integrator_steps": 46953,
+        "nfev": 113106,
+        "min_inner_dt_d": 2.178406077746331e-08,
+        "max_inner_dt_d": 0.00868022545536462
+      },
+      "final": {
+        "pH": 7.464370708616597,
+        "P_gas_bar": 1.069017411191219,
+        "p_ch4_bar": 0.6507798236755162,
+        "p_co2_bar": 0.36255344100464143,
+        "p_h2_bar": 1.6401436071343746e-05,
+        "ch4_fraction_wet": 0.6087644755480123,
+        "ch4_fraction_dry": 0.6422065802515133,
+        "q_gas_m3_d": 2955.7545850577994,
+        "q_gas_STP_dry_m3_d": 2483.601736391174,
+        "vfa_total_gCOD_m3": 236.91608282217925,
+        "S_ac_gCOD_m3": 196.24567351379233,
+        "S_pro_gCOD_m3": 15.788709856469914
+      },
+      "extremes": {
+        "pH_min": 7.26148633876082,
+        "vfa_max_gCOD_m3": 236.91608282217925,
+        "q_gas_max_m3_d": 2958.2935507530747
+      },
+      "gate": {
+        "pH": true,
+        "ch4_fraction_dry": true,
+        "q_gas_m3_d": true,
+        "vfa_total_gCOD_m3": true
+      },
+      "error": null,
+      "notes": []
+    },
+    {
+      "name": "P2_olr_step_x3[BDF]",
+      "ok": true,
+      "wall_s": 5.08817671099996,
+      "wall_s_per_sim_day": 0.254408835549998,
+      "solver": "scipy solve_ivp BDF + Newton DAE for S_H+, S_h2 between steps",
+      "solver_settings": {
+        "method": "BDF",
+        "rtol": "solve_ivp default 1e-3",
+        "atol": "solve_ivp default 1e-6",
+        "outer_dt_d": 0.010416666666666666
+      },
+      "stats": {
+        "outer_steps": 1920,
+        "inner_integrator_steps": 12594,
+        "nfev": 29028,
+        "min_inner_dt_d": 1.3656303110565204e-07,
+        "max_inner_dt_d": 0.00737461231305403
+      },
+      "final": {
+        "pH": 7.364511626328914,
+        "P_gas_bar": 1.1505541769873113,
+        "p_ch4_bar": 0.6426025550375692,
+        "p_co2_bar": 0.45226354382845013,
+        "p_h2_bar": 2.033304630199832e-05,
+        "ch4_fraction_wet": 0.5585156856500257,
+        "ch4_fraction_dry": 0.5869125201553589,
+        "q_gas_m3_d": 7811.62551307024,
+        "q_gas_STP_dry_m3_d": 6589.34806243611,
+        "vfa_total_gCOD_m3": 6181.427583712267,
+        "S_ac_gCOD_m3": 6112.700986432912,
+        "S_pro_gCOD_m3": 28.271485152957638
+      },
+      "extremes": {
+        "pH_min": 7.250846712916348,
+        "vfa_max_gCOD_m3": 6181.427583712267,
+        "q_gas_max_m3_d": 7915.723475109814
+      },
+      "gate": {},
+      "error": null,
+      "notes": []
+    }
+  ],
+  "notes": [
+    "numpy 2.4.6, scipy 1.17.1, pandas 3.0.5",
+    "Script, not a package: definitions exec'd from source; main loop reproduced here.",
+    "Ships with solvermethod='DOP853' (explicit RK); BDF added here for comparison.",
+    "Ignores the influent Q column; q_ad is a module constant (set to 170 here)."
+  ]
+}
