@@ -1,0 +1,87 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ad-agentbench"
+version = "0.1.0"
+description = "An open benchmark for agent-supported calibration and discrepancy diagnosis of anaerobic-digestion process models."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Ruthie Armah" }]
+keywords = ["anaerobic digestion", "ADM1", "calibration", "benchmark", "LLM agents"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[tool.setuptools]
+packages = [
+    "anchor",
+    "eval",
+    "scenarios",
+    "sim",
+    "state",
+    "tools",
+    "workflows",
+    "workflows.p0_scripted",
+    "workflows.p1_single_agent",
+    "workflows.p2_multi_agent",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["scripts/adm1_candidates/vendor"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # import sorting
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+    "D",    # pydocstyle (public API documentation)
+    "ANN",  # flake8-annotations (type hints everywhere)
+    "RUF",
+]
+ignore = [
+    "D203",  # conflicts with D211
+    "D213",  # conflicts with D212
+    "ANN401",  # allow typing.Any where a schema genuinely permits it
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D103", "ANN201", "ANN001"]
+"scripts/*" = ["D103", "ANN201", "ANN001"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+known-first-party = ["anchor", "eval", "scenarios", "sim", "state", "tools", "workflows"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+filterwarnings = ["error::DeprecationWarning:(scenarios|sim|tools|state|eval|anchor|workflows).*"]
