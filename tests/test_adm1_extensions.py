@@ -300,10 +300,10 @@ def test_sao_takes_over_under_free_ammonia_inhibition(
 
     Feed TAN 2.8 g N/L gives ~250 mg/L free ammonia at the resulting pH: acetoclastic
     uptake is at < 10 % (BSM2 K_I_nh3 = 25 mg/L) and the reactor sours; SAO keeps ~75 %
-    of its rate (K_I_nh3_sao = 700 mg/L). Run at a 60-day HRT for 300 days: SAO's
-    maximum growth rate (0.08 d^-1) minus decay (0.02) leaves little margin over the
-    dilution rate, so takeover is slow, as observed in practice; at the BSM2 20-day HRT
-    it washes out by design (next test).
+    of its rate (K_I_nh3_sao = 700 mg/L). Run at a 60-day HRT for 300 days (the case
+    kept from the mu_max 0.08 d^-1 draft; with the 2026-09-02 fast-end kinetics,
+    mu_max 0.16 d^-1, the takeover is quicker and tests/test_plants.py checks it at
+    Plant A's 35-45 d HRT); at the BSM2 20-day HRT it washes out by design (next test).
     """
     high_n = {"S_IN": 0.2}  # kmol N/m3 (2.8 g N/L)
     q = feed[1] / 3.0
@@ -336,7 +336,7 @@ def test_sao_washes_out_at_short_srt(
     """At the BSM2 20-day HRT SAO grows a little but not enough.
 
     Below 0.01 after 60 d, yet above the pure-washout bound 0.05 exp(-(D + k_dec) t)
-    = 7.5e-4 (measured 2.4e-3).
+    = 7.5e-4 (measured 7.7e-3 with mu_max 0.16 d^-1; 2.4e-3 with the earlier 0.08).
     """
     model = _model(adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config, ("sao",))
     r = _run(model, rj2006_state, feed, 60.0, y_ext={"X_sao": 0.05})

@@ -4,24 +4,27 @@
 # the thermophilic sibling; the envelope numbers are in configs/plant_a_statistics.yaml
 # and docs/anchor_datasets.md §3.4. No open time series exists for this plant type.
 #
-# Design content for the lead (docs/decisions.md 2026-09-02 "Plant configurations A/B/C
-# — proposed"), in particular the SAO-establishment condition: at the paper's 28-d HRT
-# the truth model with the current SAO kinetics does not establish SAO
-# (scripts/plant_a_sao_probe.py); see `open_questions`.
+# Frozen by the lead's answers of 2026-09-02 (docs/decisions.md "Plant configurations
+# A/B/C — frozen"): the Tisocco volumes are kept, the HRT is set at 35–45 d (the range
+# the paper's own feed volumes imply, not its stated 28 d) and the feed rate is derived
+# from it; the SAO uptake rate is at the literature fast end so that SAO establishes
+# here (verified by tests/test_plants.py); the ammonia scenarios (Level-5 inhibition
+# shift, Level-6 omitted SAO, Level-7 compound) run on this plant only.
 id: A
 name: Plant A (AFBI-type slurry + grass-silage co-digestion)
-domain: cattle slurry + grass silage co-digestion, mesophilic (41 C) CSTR, weekday silage feeding
+domain: cattle slurry + grass silage co-digestion, mesophilic (41 C) CSTR, weekday silage feeding, high ammonia
 anchoring: statistics
 anchor_sources:
   - {key: tisocco_2024, reference: "Tisocco et al. 2024, Frontiers of Environmental Science & Engineering 18: application of a simplified ADM1 to full-scale co-digestion of cattle slurry and grass silage (AFBI Hillsborough)", doi: "10.1007/s11783-024-1810-9"}
   - {key: tisocco_2026, reference: "Tisocco et al. 2026, Environmental Science and Ecotechnology: AU Foulum thermophilic co-digestion plant", doi: "10.1016/j.ese.2026.100662"}
+  - {key: westerholm_2019, reference: "Westerholm et al. 2019, Environ. Sci. Technol. 53: growth characteristics and thermodynamics of syntrophic acetate oxidizers (generation times 3–20 d)", doi: "10.1021/acs.est.9b00288"}
 geometry:
-  V_liq_declared: 650.0    # m3; the heated primary CSTR (tisocco_2024)
-  V_gas: 65.0              # m3; ASSUMPTION 10 % of V_liq (not reported)
+  V_liq_declared: 650.0    # m3; the heated primary CSTR (tisocco_2024), kept as published
+  V_gas: 57.4              # m3; ASSUMED: BSM2 headspace ratio 300/3400 = 0.0882 x V_liq (lead's answer 5)
   units_at_plant: 2
   note: "AFBI has a heated primary and an unheated secondary digester in series; the benchmark models the heated primary only."
 hidden_active_volume:
-  error_min: 0.05
+  error_min: 0.05          # proposal §6.1: ±5–15 %
   error_max: 0.15
   sign: random
 temperature:
@@ -31,15 +34,13 @@ temperature:
   p90_K: 314.4
   source: "tisocco_2024: primary digester 41 +/- 0.2 C; percentiles taken as +/- 1.25 sd"
 hydraulics:
-  feed_flow_m3_d: {median: 16.5, p10: 13.0, p90: 20.0, unit: "m3/d", source: "tisocco_2024: slurry 11–18 m3/d plus silage 2 t FM/d taken at ~1 m3/t; median is the midpoint"}
-  hrt_d: {median: 28.0, p10: 25.0, p90: 31.0, unit: d, source: "tisocco_2024: HRT 28 d per reactor as stated; percentiles are an ASSUMPTION (+/- 10 %)"}
-  hrt_consistency_tolerance: 0.45
-  note: "The paper's own numbers disagree: 650 m3 / (13–20 m3/d) gives 32–50 d, not 28 d. The tolerance is set wide so the config carries both as published; the plant PR must decide which one the simulator honours."
+  hrt_d: {median: 40.0, p10: 35.0, p90: 45.0, unit: d, source: "lead's decision 2026-09-02 (answer 1): 35–45 d, inside the 32–50 d that tisocco_2024's volumes (650 m3 at 13–20 m3/d) imply; the paper's stated 28 d is recorded as inconsistent in plant_a_statistics.yaml"}
+  feed_flow_m3_d: {median: 16.25, p10: 14.4, p90: 18.6, unit: "m3/d", source: "derived: V_liq_declared / hrt_d (p10 of flow at the 45-d HRT, p90 at 35 d); consistent with tisocco_2024's slurry 11–18 m3/d + silage 2 t FM/d"}
+  hrt_consistency_tolerance: 0.02
+  note: "Feed rate is derived from the chosen HRT (answer 2), so volume, flow and HRT are consistent by construction."
 mixing:
   model: cstr
-  n_tanks: 1
-  hidden_dead_volume_fraction: 0.0
-  note: "PROPOSAL: ideal CSTR, dead volume via the hidden active-volume error."
+  note: "Ideal CSTR in the plant contract; imperfect mixing is a fault-injection truth variant (answer 6)."
 feeds:
   - name: cattle_slurry
     kind: slurry
@@ -62,10 +63,7 @@ scenario_subset:
   factorial: false
   levels: [2, 3, 4, 5, 6, 7]
   tiers: [A]
-  structural_scenarios: [omitted_sao, compound_sao_inhibition_shift]
-  note: "PROPOSAL: the lead's decision of 2026-09-02 assigns the SAO Level-6 scenario (and its Level-7 compound) to Plant A, which extends the §7 subset (Levels 2–5 at Tier A) by those two structural scenarios, still reported separately outside the factorial."
+  assigned_scenarios: [ammonia_inhibition_shift, omitted_sao, compound_sao_inhibition_shift]
+  note: "Reduced subset, reported separately (§7): Levels 2–5 at Tier A, plus the ammonia scenarios that run only here (answer 3): the Level-5 inhibition shift, the Level-6 omitted-SAO scenario and their Level-7 compound."
 open_questions:
-  - "SAO establishment: at HRT 28 d and 41 C the truth model (mu_max 0.08 d^-1, k_dec 0.02 d^-1, K_I_nh3_sao 0.05) barely grows SAO over 400 d (X_sao 0.05 -> 0.06–0.11 kg COD/m3, < 5 % of acetate removed); at 35 d it grows 4–6x and at 45 d it removes 40–80 % of acetate (scripts/plant_a_sao_probe.py). Options: (a) k_m_sao at the literature fast end (generation 3–5 d, mu_max 0.14–0.23 d^-1); (b) run the SAO scenario at the long end of Plant A's HRT envelope (the 32–50 d implied by the paper's volumes); (c) accept a slow, partial takeover as the scenario's signature."
-  - "Which of the paper's inconsistent hydraulics the simulator honours: HRT 28 d (feed 23 m3/d) or the stated feed volumes (HRT 32–50 d)."
-  - "Plant A's TAN / pH / VFA envelope is not yet transcribed from the Tisocco tables (configs/plant_a_statistics.yaml has nulls); needed before the influent generator and the SAO scenario can be frozen."
-  - "Headspace volume assumption (10 % of V_liq)."
+  - "Plant A's TAN / pH / VFA envelope: the lead transcribes it from the Tisocco tables (answer 7); configs/plant_a_statistics.yaml keeps nulls until then, and the SAO-takeover test uses a provisional feed TAN of 2.8 g N/L documented in the test."

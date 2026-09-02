@@ -70,9 +70,35 @@ def test_anchoring_status_follows_the_decision(plants):
     assert not plants["A"].scenario_subset.factorial
     assert plants["B"].scenario_subset.factorial and plants["C"].scenario_subset.factorial
     assert plants["A"].scenario_subset.tiers == ("A",)
-    assert "omitted_sao" in plants["A"].scenario_subset.structural_scenarios
+    ammonia = {"ammonia_inhibition_shift", "omitted_sao", "compound_sao_inhibition_shift"}
+    assert ammonia <= set(plants["A"].scenario_subset.assigned_scenarios)
     for pid in ("B", "C"):
-        assert "omitted_sao" not in plants[pid].scenario_subset.structural_scenarios
+        assert ammonia <= set(plants[pid].scenario_subset.excluded_scenarios)
+        assert plants[pid].scenario_subset.assigned_scenarios == ()
+
+
+def test_b_and_c_are_a_controlled_pair(plants):
+    """Same geometry, temperature and hidden-error distribution; only the feeds differ."""
+    b, c = plants["B"], plants["C"]
+    assert b.geometry == c.geometry.model_copy(update={"note": b.geometry.note})
+    assert b.temperature == c.temperature
+    assert b.hidden_active_volume == c.hidden_active_volume
+    assert {f.name for f in c.feeds} < {f.name for f in b.feeds}
+    for feed in c.feeds:
+        assert feed == next(f for f in b.feeds if f.name == feed.name)
+
+
+def test_headspace_is_the_bsm2_ratio(plants):
+    """Headspace volumes are assumed at the BSM2 ratio 300/3400 (answer 5), and say so."""
+    for cfg in plants.values():
+        assert cfg.geometry.V_gas == pytest.approx(
+            cfg.geometry.V_liq_declared * 300 / 3400, rel=5e-3
+        )
+        assert "ASSUMED" in (cfg.geometry.note + _config_path(cfg.id).read_text())
+
+
+def _config_path(pid: str):
+    return load_plant_config.__globals__["CONFIG_DIR"] / f"plant_{pid}.yaml"
 
 
 def test_every_dataset_anchored_number_names_its_source(plants):
@@ -173,6 +199,64 @@ def test_signed_error_modes():
     assert all(e < 0 for e in errors)
     with pytest.raises(ValueError, match="error_min"):
         HiddenActiveVolume(error_min=0.2, error_max=0.1, sign="random")
+
+
+def test_sao_establishes_at_plant_a(plants, rj2006_state, probe_common):
+    """The condition of the SAO scenario decision (2026-09-02): SAO takes over at Plant A.
+
+    Plant A's declared geometry and median HRT (40 d), the ADM1 STR feed with a
+    PROVISIONAL feed TAN of 2.8 g N/L (the lead transcribes the real envelope; answer 7),
+    a 0.05 kg COD/m3 SAO seed, 180 d (a scenario horizon). With the fast-end SAO
+    kinetics (mu_max 0.16 d^-1, answer 1) X_sao grows several-fold and removes most of
+    the acetate that the ammonia-inhibited acetoclasts leave; with the earlier
+    0.08 d^-1 it did not (scripts/plant_a_sao_probe.py).
+    """
+    from sim.adm1 import (
+        LIQUID_STATE_NAMES,
+        Influent,
+        extended_state,
+        load_matrix,
+        load_parameters,
+        load_solver_config,
+        simulate,
+        simulate_extended,
+    )
+
+    cfg = plants["A"]
+    params, matrix, solver, ext = (
+        load_parameters(),
+        load_matrix(),
+        load_solver_config(),
+        load_extensions(),
+    )
+    geometry = declared_geometry(cfg)
+    q = cfg.geometry.V_liq_declared / cfg.hydraulics.hrt_d.median
+    u = np.array(probe_common.influent_vector(1.0))
+    u[LIQUID_STATE_NAMES.index("S_IN")] = 0.2  # kmol N/m3 = 2.8 g N/L, provisional
+    influent = Influent.constant(u, q)
+    t_eval = np.array([180.0])
+    base = simulate(
+        y0=rj2006_state,
+        influent=influent,
+        params=params,
+        plant=geometry,
+        matrix=matrix,
+        solver=solver,
+        t_span=(0.0, 180.0),
+        t_eval=t_eval,
+    )
+    assert float(base.S_nh3[-1]) * 14000.0 > 150.0  # free ammonia in the shift window
+    model = compile_extended(params, geometry, matrix, solver, ext, ("sao",))
+    r = simulate_extended(
+        y0=extended_state(model, rj2006_state, {"X_sao": 0.05}),
+        influent=influent,
+        model=model,
+        t_span=(0.0, 180.0),
+        t_eval=t_eval,
+    )
+    assert r.success
+    assert float(r.state("X_sao")[-1]) > 5.0 * 0.05
+    assert float(r.state("S_ac")[-1]) < 0.1 * float(base.y[6, -1])
 
 
 def test_true_geometry_feeds_the_truth_model_and_declared_the_workflow(plants):

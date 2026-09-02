@@ -134,21 +134,15 @@ class Hydraulics(_Frozen):
 
 
 class Mixing(_Frozen):
-    """Residence-time distribution used by the truth model (proposal §6.1)."""
+    """Mixing as declared in the plant contract: always an ideal CSTR.
 
-    model: Literal["cstr", "tanks_in_series"] = Field(
-        description="'cstr' = ideal mixing; 'tanks_in_series' = n equal CSTRs"
-    )
-    n_tanks: Annotated[int, Field(ge=1)] = Field(
-        default=1, description="Tanks for the series model"
-    )
-    hidden_dead_volume_fraction: _Frac = Field(
-        default=0.0,
-        description=(
-            "Fraction of V_liq that does not exchange with the feed; 0 when the dead volume "
-            "is represented by the hidden active-volume error instead"
-        ),
-    )
+    Imperfect mixing (a residence-time distribution) is not a plant property but a
+    fault-injection *truth variant* of the Level-6 "Imperfect mixing" scenario (lead's
+    decision 2026-09-02, answer 6): recorded here, implemented with the fault-injection
+    API.
+    """
+
+    model: Literal["cstr"] = Field(description="Ideal CSTR; the only value the contract allows")
     note: str = ""
 
 
@@ -192,8 +186,15 @@ class ScenarioSubset(_Frozen):
     factorial: bool = Field(description="Contributes rows to the §7 factorial analysis")
     levels: tuple[Annotated[int, Field(ge=0, le=8)], ...]
     tiers: tuple[Literal["A", "B", "C"], ...]
-    structural_scenarios: tuple[str, ...] = Field(
-        default=(), description="Named Level-6/7 scenarios assigned to this plant"
+    assigned_scenarios: tuple[str, ...] = Field(
+        default=(),
+        description=(
+            "Named scenarios that run only on this plant (the ammonia scenarios on A) or "
+            "are excluded elsewhere; empty = every scenario of the listed levels"
+        ),
+    )
+    excluded_scenarios: tuple[str, ...] = Field(
+        default=(), description="Named scenarios of the listed levels that do not run here"
     )
     note: str = ""
 

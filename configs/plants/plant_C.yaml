@@ -1,11 +1,12 @@
 # Plant C — sewage-sludge digester, the "easy control" closest to ADM1's origin.
 # DATASET-anchored to the same Muscatine WRRF daily file as Plant B
-# (docs/anchor_datasets.md §3.1); PROPOSAL: C is the same digester with only its
-# sewage-sludge streams (primary sludge + thickened WAS), i.e. Muscatine without the
-# trucked co-substrates. That makes C a slower-loaded, steadier plant (median HRT 38 d
-# on the sludge streams alone) — the control the proposal asks for — while every number
-# stays traceable to the dataset. Design content for the lead (docs/decisions.md
-# 2026-09-02 "Plant configurations A/B/C — proposed").
+# (docs/anchor_datasets.md §3.1). Frozen by the lead's answers of 2026-09-02
+# (docs/decisions.md "Plant configurations A/B/C — frozen", answer 4): C is the same
+# digester as B with only its sewage-sludge streams (primary sludge + thickened WAS),
+# i.e. Muscatine without the trucked co-substrates. Plants B and C SHARE GEOMETRY and
+# form a CONTROLLED PAIR that differs only in the feed streams: C is the slower-loaded,
+# steadier control (median HRT 38 d on the sludge streams), and every number stays
+# traceable to the dataset.
 id: C
 name: Plant C (Muscatine-type sewage-sludge digester, sludge streams only)
 domain: municipal primary sludge + thickened WAS, mesophilic CSTR, steady operation
@@ -15,9 +16,9 @@ anchor_sources:
   - {key: muscatine_paper, reference: "Schroer & Just 2023, plant description (PMC10928704)"}
 geometry:
   V_liq_declared: 1836.0   # m3; one of two 485,000-gal digesters (muscatine_paper)
-  V_gas: 184.0             # m3; ASSUMPTION 10 % of V_liq (headspace not reported)
+  V_gas: 162.0             # m3; ASSUMED: BSM2 headspace ratio 300/3400 = 0.0882 x V_liq (answer 5)
   units_at_plant: 2
-  note: "Same physical unit as Plant B; only the feed catalogue differs."
+  note: "Same physical unit as Plant B (controlled pair); only the feed catalogue differs."
 hidden_active_volume:
   error_min: 0.05
   error_max: 0.15
@@ -35,9 +36,7 @@ hydraulics:
   note: "Sludge-only HRT; the plant as operated (with co-substrates) is Plant B."
 mixing:
   model: cstr
-  n_tanks: 1
-  hidden_dead_volume_fraction: 0.0
-  note: "PROPOSAL: ideal CSTR, dead volume via the hidden active-volume error."
+  note: "Ideal CSTR in the plant contract; imperfect mixing is a fault-injection truth variant (answer 6)."
 feeds:
   - name: primary_sludge
     kind: primary_sludge
@@ -60,8 +59,6 @@ scenario_subset:
   factorial: true
   levels: [0, 1, 2, 3, 4, 5, 6, 7, 8]
   tiers: [A, B, C]
-  structural_scenarios: [omitted_precipitation, omitted_ionic_strength]
-  note: "No SAO structural scenario on C (decision 2026-09-02)."
-open_questions:
-  - "Sludge-only definition of C (this proposal) vs an independent sewage-sludge plant; the sludge-only HRT (38 d) is longer than typical municipal practice (15–25 d) because Muscatine sizes its digesters for the co-substrates."
-  - "Headspace volume assumption (10 % of V_liq)."
+  excluded_scenarios: [ammonia_inhibition_shift, omitted_sao, compound_sao_inhibition_shift]
+  note: "The ammonia scenarios run on Plant A (answer 3)."
+open_questions: []

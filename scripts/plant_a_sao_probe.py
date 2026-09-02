@@ -1,11 +1,12 @@
 """Probe: can SAO establish at Plant A's operating envelope in the truth model?
 
-Runs the extended ADM1 (SAO enabled) at the AFBI Hillsborough envelope recorded in
-``docs/anchor_datasets.md`` (650 m3 primary CSTR, 41 C, HRT 28 d) with the ADM1 STR
-sewage-sludge probe feed and a range of feed total ammonia, seeding a small SAO
-population, and reports whether X_sao grows and what fraction of acetate it removes.
-Decision input for the plant-configuration PR (decisions log 2026-09-02, "The SAO
-Level-6 scenario runs on Plant A"); not a test.
+Runs the extended ADM1 (SAO enabled, current configured kinetics) at the AFBI
+Hillsborough geometry recorded in ``docs/anchor_datasets.md`` (650 m3 primary CSTR,
+41 C) over HRTs of 28, 35 and 45 d with the ADM1 STR sewage-sludge probe feed and a
+range of feed total ammonia, seeding a small SAO population, and reports whether X_sao
+grows and what fraction of acetate it removes. Decision input for the plant
+configurations (decisions log 2026-09-02: with mu_max 0.08 d^-1 SAO did not establish
+at 28 d, which led to the fast-end kinetics and the 35-45 d HRT); not a test.
 
 Usage: ``python scripts/plant_a_sao_probe.py`` (prints a table).
 """

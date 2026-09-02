@@ -45,11 +45,15 @@ extensions:
     components:
       - {name: X_sao, unit: kg COD m^-3, description: syntrophic acetate oxidisers, cod: 1, carbon: C_bac, nitrogen: N_bac, charge: 0}
     parameters:
-      # mu_max = Y_sao * k_m_sao = 0.08 d^-1 (doubling ~9 d): the fast end of the 9-28 d
-      # doubling times reported for SAO co-cultures (Westerholm et al. 2016), chosen so
-      # that SAO can establish at SRT >= ~25 d (Plant B) and washes out at short SRT.
+      # mu_max = Y_sao * k_m_sao = 0.16 d^-1 (doubling 4.3 d): the fast end of the 3-20 d
+      # generation times measured for SAO co-cultures (Westerholm et al. 2019, Environ.
+      # Sci. Technol. 53, doi:10.1021/acs.est.9b00288). Lead's decision 2026-09-02 (plant
+      # configurations, answer 1): raised from 2.0 (mu_max 0.08, the 9-28 d figure of the
+      # 2016 review) so that SAO establishes at Plant A's 35-45 d HRT under 180-250 mg/L
+      # free ammonia within a 180-d scenario (S_ac 10-20 -> 0.4-1.6 kg COD/m3; verified by
+      # tests/test_plants.py) while still washing out at the BSM2 20-d HRT.
       Y_sao:      {value: 0.04,   unit: kg COD_X kg COD_S^-1, description: "low syntrophic yield"}
-      k_m_sao:    {value: 2.0,    unit: kg COD_S kg COD_X^-1 d^-1, description: "4x below acetoclastic k_m_ac"}
+      k_m_sao:    {value: 4.0,    unit: kg COD_S kg COD_X^-1 d^-1, description: "half the acetoclastic k_m_ac; mu_max 0.16 d^-1 (Westerholm et al. 2019 fast end)"}
       K_S_sao:    {value: 0.4,    unit: kg COD m^-3, description: "half-saturation on acetate"}
       K_I_nh3_sao: {value: 0.05,   unit: kmol N m^-3, description: "free-ammonia inhibition (50 % at ~700 mg NH3-N/L), ~28x acetoclastic K_I_nh3; order of magnitude, for review"}
       K_I_h2_sao: {value: 3.5e-6, unit: kg COD m^-3, description: "H2 product inhibition (50 %), as propionate syntrophs"}

@@ -7,12 +7,11 @@
 # are the plant totals divided by the two parallel digesters. Gallons -> m3 at
 # 0.00378541; degF -> K.
 #
-# PROPOSAL (design content for the lead, see docs/decisions.md 2026-09-02 "Plant
-# configurations A/B/C — proposed"): the proposal §6.1 called Plant B a "food-waste
-# digester, high nitrogen". The anchor decision made B Muscatine-anchored, and the SAO
-# scenario decision moved the high-ammonia domain to Plant A. B is therefore declared
-# here as what the data show — sludge + industrial organic waste + FOG co-digestion with
-# large day-to-day load swings — and makes no high-nitrogen claim.
+# Frozen by the lead's answers of 2026-09-02 (docs/decisions.md "Plant configurations
+# A/B/C — frozen", answer 3): Plant B is Muscatine-anchored co-digestion with load
+# swings and makes no high-nitrogen claim; the ammonia scenarios run on Plant A.
+# Plants B and C share this geometry and form a CONTROLLED PAIR that differs only in the
+# feed streams (answer 4).
 id: B
 name: Plant B (Muscatine-type co-digestion WRRF)
 domain: municipal sludge + high-strength waste + FOG co-digestion, mesophilic CSTR, load swings
@@ -22,9 +21,9 @@ anchor_sources:
   - {key: muscatine_paper, reference: "Schroer & Just 2023, plant description (PMC10928704)"}
 geometry:
   V_liq_declared: 1836.0   # m3; one of two 485,000-gal digesters (muscatine_paper)
-  V_gas: 184.0             # m3; ASSUMPTION 10 % of V_liq (headspace not reported)
+  V_gas: 162.0             # m3; ASSUMED: BSM2 headspace ratio 300/3400 = 0.0882 x V_liq (answer 5)
   units_at_plant: 2
-  note: "The plant runs two parallel digesters; the benchmark models one and gives it half of the plant feed."
+  note: "The plant runs two parallel digesters; the benchmark models one and gives it half of the plant feed. Same geometry as Plant C (controlled pair)."
 hidden_active_volume:
   error_min: 0.05          # proposal §6.1: ±5–15 %
   error_max: 0.15
@@ -43,9 +42,7 @@ hydraulics:
   note: "HRT is derived from the declared volume and the feed volumes; the plant's own SRT column is ~14 % longer, consistent with recycle or a larger effective volume — one of the things a workflow may have to discover."
 mixing:
   model: cstr
-  n_tanks: 1
-  hidden_dead_volume_fraction: 0.0
-  note: "PROPOSAL: ideal CSTR; the dead-volume effect is carried by the hidden active-volume error. A tanks-in-series RTD is deferred until a scenario needs it."
+  note: "Ideal CSTR in the plant contract; imperfect mixing is a fault-injection truth variant (answer 6)."
 feeds:
   - name: primary_sludge
     kind: primary_sludge
@@ -82,9 +79,6 @@ scenario_subset:
   factorial: true
   levels: [0, 1, 2, 3, 4, 5, 6, 7, 8]
   tiers: [A, B, C]
-  structural_scenarios: [omitted_precipitation, omitted_ionic_strength]
-  note: "The SAO structural scenario runs on Plant A (decision 2026-09-02): Muscatine's free ammonia is an order of magnitude below the pathway-shift threshold."
-open_questions:
-  - "Proposal §6.1 text 'food-waste digester, high nitrogen' vs the dataset-anchored description here; the proposal copy needs the lead's edit."
-  - "Headspace volume (10 % of V_liq) is an assumption; the plant papers do not report it."
-  - "Whether B and C should share the digester and differ only by feed streams (this proposal) or C should be a different, smaller sludge-only plant."
+  excluded_scenarios: [ammonia_inhibition_shift, omitted_sao, compound_sao_inhibition_shift]
+  note: "The ammonia scenarios run on Plant A (answer 3): Muscatine's free ammonia is an order of magnitude below the pathway-shift threshold."
+open_questions: []

@@ -63,8 +63,6 @@ class HiddenGeometry:
     """Signed relative error of the true active volume, (V_true - V_declared) / V_declared."""
     V_liq_true: float
     """True active liquid volume, m3."""
-    dead_volume_fraction: float
-    """Fraction of V_liq_true that does not exchange with the feed (mixing model)."""
 
 
 def sample_hidden_geometry(cfg: PlantConfig, seed: int) -> HiddenGeometry:
@@ -86,7 +84,6 @@ def sample_hidden_geometry(cfg: PlantConfig, seed: int) -> HiddenGeometry:
         seed=seed,
         error_fraction=error,
         V_liq_true=cfg.geometry.V_liq_declared * (1.0 + error),
-        dead_volume_fraction=cfg.mixing.hidden_dead_volume_fraction,
     )
 
 

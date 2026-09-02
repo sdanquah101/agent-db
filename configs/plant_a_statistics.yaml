@@ -13,6 +13,10 @@ plants:
       cattle_slurry: {volume_m3_d: {min: 11, max: 18}}
       grass_silage: {mass_t_fm_d: 2.0, days: "Mon-Fri"}
     loading: {OLR_kgVS_m3_d: [1.4, 2.1], HRT_d_per_reactor: 28}
+    published_inconsistency:
+      note: "The stated HRT of 28 d per reactor does not follow from the stated volumes: 650 m3 at the stated feed of 11–18 m3/d slurry plus 2 t FM/d silage (13–20 m3/d) gives 32–50 d. Lead's decision 2026-09-02 (plant configurations, answers 1–2): keep the Tisocco volumes, set Plant A's HRT at 35–45 d (median 40) and derive the feed rate from it (16.25 m3/d), so that SAO can establish at the literature growth rate."
+      hrt_d_from_volumes: [32, 50]
+      hrt_d_chosen: {median: 40, p10: 35, p90: 45}
     monitoring:
       daily: [feed inputs, biogas rate, CH4 content (in-line analyser)]
       weekly: [NH4-N and pH of primary digestate, TS/VS of feeds, N/NH4-N/VFA of slurry]
