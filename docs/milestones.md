@@ -361,7 +361,7 @@ branch, since PR #5 was not yet merged).**
   sludge-only controlled pair of B, BSM2 headspace ratio, ideal CSTR with imperfect
   mixing as a fault-injection truth variant, and the Plant-A ammonia envelope left to
   the lead. Proposal copy at v0.3. SAO takeover at Plant A is now a test (12 plant
-  tests; full suite 138).
+  tests; full suite 139 at the time; 141 after the engineering review below).
 
 - The lead transcribed the Plant-A ammonia envelope (digestate TAN 2.3–4.3 kg N m⁻³,
   feed TAN/TS, the paper's adapted acetoclastic K_I of 1.0 kg m⁻³) into

@@ -740,13 +740,15 @@ error realisation in the config (rejected: CLAUDE.md rule 1).
    et al. 2019, *Environ. Sci. Technol.* 53, doi:10.1021/acs.est.9b00288). Plant A's
    HRT is set at **35–45 d (median 40)**, inside the 32–50 d that the published volumes
    imply (Tisocco et al. 2024, doi:10.1007/s11783-024-1810-9: 650 m³ at 13–20 m³ d⁻¹).
-   Verified: at Plant A's declared geometry and 40-d HRT under ≈ 200 mg L⁻¹ free
-   ammonia, a 0.05 kg COD m⁻³ SAO seed grows ≈ 9× within 180 d and removes > 95 % of
-   the acetate the inhibited acetoclasts leave (S_ac 15.5 → 0.6 kg COD m⁻³;
-   `tests/test_plants.py::test_sao_establishes_at_plant_a`, provisional feed TAN
-   2.8 g N L⁻¹ until answer 7); at the BSM2 20-d HRT SAO still washes out (X_sao
-   0.05 → 0.0077 in 60 d, `tests/test_adm1_extensions.py`). The 60-d takeover test of
-   the earlier draft is kept as is.
+   Verified (`tests/test_plants.py::test_sao_establishes_at_plant_a`, with the feed
+   inorganic nitrogen at the transcribed digestate-TAN midpoint of 3.3 kg N m⁻³, see
+   the next entry): at Plant A's declared geometry and 40-d HRT the reactor sits at
+   pH 7.48 and 235 mg L⁻¹ free ammonia, a 0.05 kg COD m⁻³ SAO seed grows 9.3× to
+   0.465 kg COD m⁻³ within 180 d and takes the acetate the inhibited acetoclasts leave
+   from 18.8 to 0.96 kg COD m⁻³ (the first draft measured 15.5 → 0.6 at a provisional
+   2.8 g N L⁻¹); at the BSM2 20-d HRT SAO still washes out (X_sao 0.05 → 0.0077 in
+   60 d, `tests/test_adm1_extensions.py`). The 60-d takeover test of the earlier draft
+   is kept as is.
 2. **Plant A hydraulics.** The Tisocco volumes are kept (650 m³); the feed rate is
    derived from the chosen HRT (16.25 m³ d⁻¹, 14.4–18.6), which is consistent with the
    published 11–18 m³ d⁻¹ slurry plus 2 t d⁻¹ silage; the published inconsistency (stated
