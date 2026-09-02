@@ -37,6 +37,15 @@ from scipy.integrate import odeint, solve_ivp
 DT_D = 1.0 / 96.0
 PAR = adm1init.DIGESTERPAR
 DIM = adm1init.DIM_D
+#: The 35 model states of the 42-vector (26 ADM1 + 6 ion + 3 gas), recorded at the end
+#: of each probe under ``stats.final_state`` so that a re-implementation can be
+#: ring-tested state by state.
+STATE35 = [
+    "S_su", "S_aa", "S_fa", "S_va", "S_bu", "S_pro", "S_ac", "S_h2", "S_ch4", "S_IC",
+    "S_IN", "S_I", "X_xc", "X_ch", "X_pr", "X_li", "X_su", "X_aa", "X_fa", "X_c4",
+    "X_pro", "X_ac", "X_h2", "X_I", "S_cat", "S_an", "S_va_ion", "S_bu_ion", "S_pro_ion",
+    "S_ac_ion", "S_hco3_ion", "S_nh3", "S_gas_h2", "S_gas_ch4", "S_gas_co2",
+]  # fmt: skip
 
 
 def influent_state(factor: float) -> np.ndarray:
@@ -131,6 +140,7 @@ def run_shipped(days: float, step_day: float | None, factor: float) -> dict:
         rows.append(summarise(t0 + DT_D, y))
     return {
         "df": pd.DataFrame(rows),
+        "y_final": [float(v) for v in y[:35]],
         "stats": {
             "outer_steps": n,
             "nst": nst,
@@ -171,7 +181,7 @@ def run_bdf(days: float, step_day: float | None, factor: float) -> dict:
         rows.extend(summarise(tt, yy) for tt, yy in zip(sol.t, sol.y.T, strict=True))
     stats.pop("steps")
     stats.pop("min_dt_d")
-    return {"df": pd.DataFrame(rows), "stats": stats}
+    return {"df": pd.DataFrame(rows), "y_final": [float(v) for v in y[:35]], "stats": stats}
 
 
 def probe(spec: dict, mode: str) -> ProbeResult:
@@ -210,7 +220,7 @@ def probe(spec: dict, mode: str) -> ProbeResult:
         wall_s_per_sim_day=sw.wall_s / spec["days"],
         solver=solver,
         solver_settings=settings,
-        stats=out["stats"],
+        stats={**out["stats"], "final_state": dict(zip(STATE35, out["y_final"], strict=True))},
         final=final,
         extremes={
             "pH_min": float(df.pH.min()),
