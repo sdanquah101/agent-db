@@ -41,7 +41,8 @@ Exit criterion: stiffness tests pass; licence cleared; anchor dataset(s) chosen.
 **Blocked / open**
 
 - **Open datasets not yet identified** (second half of the Milestone-1 exit criterion,
-  proposal §8). Not started this session.
+  proposal §8). Not started this session. → Done in the second session of 2026-09-02,
+  below.
 - ADM1F could not be built as its README describes (PETSc external downloads are
   blocked in the sandbox; the shipped makefile is incompatible with PETSc ≥ 3.15). It
   built against Ubuntu's `petsc-dev` 3.19 + `libadolc-dev` by compiling the source
@@ -77,3 +78,60 @@ Totals: ≈ 3.3 GB scratch disk (all outside the repo), no GPU, no external serv
 
 No LLM-agent compute was spent inside the benchmark (no workflows exist yet); the
 figures above are development cost only.
+
+### Session 2026-09-02 (second session) — open anchor datasets for §8
+
+**Exit criterion "open datasets identified": partially done.** Datasets are identified,
+characterised and (where openly licensed) fetched with checksums; the *choice* of anchor
+is a recommendation that still needs the lead's sign-off, and the Plant-A anchor can only
+be published summary statistics because no open full-scale agricultural co-digestion
+time series exists. Full write-up: `docs/anchor_datasets.md`.
+
+**Done**
+
+- Searched the sources named in §8 plus DataCite, Zenodo, figshare, OSF, DBFZ DataLab
+  and GitHub; 17 candidates characterised from pages/files actually read (table in
+  `docs/anchor_datasets.md`).
+- Fetched and checksummed three openly licensed datasets into `anchor/raw/`:
+  Muscatine WRRF daily + 1-minute SCADA (ODC-By 1.0; 5 files, 88.9 MB), the matching
+  MIT code archive from Zenodo (12.6 MB), and the ILRI farm-scale digester + weather
+  set from Mendeley Data (CC BY 4.0; 12 MB).
+- `anchor/MANIFEST.json` (schema `anchor/manifest.py`), `anchor/fetch.py` (reproduce
+  and verify; pure I/O), `tests/test_anchor_fetch.py` (10 tests, offline, local HTTP
+  server), `.gitignore` rules keeping only the < 1 MB ODC-By files in git with an
+  `ATTRIBUTION.md`.
+- Read both Tisocco et al. papers in full (2024 FESE; 2026 ESE + supplement): neither
+  deposits its plant data. Recorded their operating envelopes as the Plant-A summary
+  statistics.
+
+**Blocked / open**
+
+- Plant-A time series: not open. Action for the lead: request the AFBI Hillsborough
+  and AU Foulum data from the authors under a data-use agreement (proposal §13, before
+  week 6).
+- Domain sign-off on the recommendation (Muscatine for Plants B/C; summary statistics
+  for Plant A; ILRI set for Tier-A irregularity only).
+- Three pages could not be read from this environment (MDPI, IWA, ScienceDirect return
+  403); their data statements are recorded as unknown, not guessed.
+
+**Next session should start on**
+
+1. Lead decision on the anchor recommendation; record it in `docs/decisions.md`.
+2. `anchor/ingest_muscatine.py`: parse the daily and SCADA files into the unit-explicit
+   schema (°F → °C, gallons → m³, cfm → m³ d⁻¹ with an explicit "reference conditions
+   unknown" flag), then compute the §8 step-2 statistics (feed-batch variability,
+   missingness-by-event, SCADA noise and dropout) for the influent and observation
+   models.
+3. Milestone 2 `sim/adm1/` skeleton and ring test as planned above.
+
+**Resource cost this session (rough)**
+
+| Item | Wall-clock | Disk | Notes |
+|---|---|---|---|
+| Session total | ≈ 1 h 15 min | — | one agent session; most publisher/repository hosts blocked for the first ~40 min, then allow-listed |
+| Web search + page reads | ≈ 40 min | 20 MB scratch | ~45 searches; PMC, Springer, Zenodo, Mendeley, DataCite, OAI-PMH reads |
+| Downloads | ≈ 2 min | 113 MB in `anchor/raw/` (88.8 MB SCADA CSV) | all verified by SHA-256 |
+| Chromium attempt (Esploro page) | ≈ 3 min | — | failed through the proxy (TLS tunnel reset); file URLs obtained from OAI-PMH instead |
+| Tests + lint | < 1 min | — | `pytest -q`: all green; `ruff check`, `ruff format --check`: clean |
+
+No LLM-agent compute was spent inside the benchmark.

@@ -147,3 +147,62 @@ simplified to carry SAO/ionic strength/precipitation).
 
 **Not re-run now.** Probe 1 is not re-run with the BSM2 dynamic influent at this
 milestone; that case is added to the Milestone-2 ring test instead.
+
+---
+
+## 2026-09-02 — Anchor data are manifest-driven; raw bytes are never committed unless small and redistributable
+
+**Decision.** Every real-plant file used by the anchor layer is listed in
+`anchor/MANIFEST.json` (URL, licence, SHA-256, size, download date) and fetched by
+`anchor/fetch.py`, which verifies checksums before a file is placed under its final
+name. `anchor/raw/` is git-ignored except for files under 1 MB whose licence permits
+redistribution, which are committed next to an `ATTRIBUTION.md`. Candidates that were
+examined but not fetched are recorded in the manifest's `not_fetched` list with the
+reason, so the §8 search is auditable without re-doing it.
+
+**Reason.** Reproducibility (proposal §13) requires that anyone can re-obtain the
+exact bytes; a checksum manifest is the smallest thing that guarantees that. Committing
+88 MB of SCADA data would bloat the repository, but committing the 125 KB daily file
+means the offline test suite and the forecasting-only check work on a fresh clone.
+
+**Alternatives.** Git LFS (rejected: adds tooling for one file); commit nothing and
+fetch in CI (rejected: makes the offline tests depend on the network); a DVC remote
+(rejected: no shared storage exists yet).
+
+---
+
+## 2026-09-02 — Proposed anchor: Muscatine WRRF for Plants B/C, published summary statistics for Plant A (awaiting sign-off)
+
+**Decision (proposed, not yet accepted).** Anchor the simulator to the Muscatine WRRF
+datasets (Schroer & Just 2024, ODC-By 1.0) for Plant C and, with stated caveats, for
+Plant B's load-swing behaviour; anchor Plant A to the published operating envelopes and
+feedstock tables of Tisocco et al. (2024, 2026) because no open full-scale agricultural
+co-digestion time series exists; use the ILRI farm-scale set (CC BY 4.0) only for
+Tier-A sampling irregularity and Phase-3 realism. Run the §8 step-3 forecasting-only
+check on the Muscatine daily file against the published MLP baseline.
+
+**Reason.** After searching the sources named in §8 plus DataCite, Zenodo, figshare,
+OSF, DBFZ DataLab and GitHub, Muscatine is the only openly licensed, full-scale,
+daily-or-finer dataset longer than six months found; it also carries a one-minute SCADA
+year, which is what the observation model needs. Both Tisocco plants are exactly Plant A
+but their data are not deposited. Evidence: `docs/anchor_datasets.md`.
+
+**Alternatives.** Use the unlicensed GitHub CSV of Chiguer et al. (rejected: no licence,
+provenance unclear); use BSM2 influent files (rejected: simulated); wait for the
+Tisocco data before fixing the influent generator (rejected: blocks Milestone 3; request
+the data in parallel instead).
+
+**Conditions.** The lead confirms or amends the Plant-B reading; the paper's §8 states
+the limitation plainly.
+
+---
+
+## 2026-09-02 — Simulated inputs are never listed as anchors
+
+**Decision.** `anchor/MANIFEST.json` may list a simulated dataset (for example the
+BSM2 digester influent) only under `not_fetched` with `kind: simulated`; the test suite
+rejects any `datasets` entry of kind `simulated`.
+
+**Reason.** Proposal §8 exists to show the simulator is "not fantasy"; anchoring to
+another simulation would be circular. The BSM2 influent is still needed for the
+Milestone-2 ring test, but that is a numerics check, not an anchor.
