@@ -1,0 +1,261 @@
+# Feed-fractionation catalogue for the influent generator (proposal §6.1).
+#
+# STATUS: EVERY VALUE HERE IS PROVISIONAL (docs/decisions.md, "Feed fractionation values
+# are provisional pending lead review"). The frozen plant decision of 2026-09-02 (PR #6,
+# answer 7 and the FeedStream docstring) deliberately deferred COD fractionation and assay
+# statistics to the influent generator; the plant configurations carry feed identity and
+# delivery pattern only. The numbers below are carried unchanged from the superseded
+# PR #7 (branch claude/milestone-2-plants, files configs/plants/plant_{a,b,c}.yaml), with
+# that PR's sources and "assumed" notes, so that the lead can review them in one place.
+# Nothing was added or re-derived. Every numeric leaf is marked `# DESIGN`.
+#
+# Keys are the feed ids used by configs/plants/plant_{A,B,C}.yaml (FeedStream.name);
+# `kind` must equal the plant's FeedStream.kind (checked by sim.influent). Two ids are
+# renamed from PR #7 to match PR #6: hsw_liquid -> high_strength_waste, twas ->
+# thickened_was. `food_waste` is carried from PR #7's Plant B although no frozen plant
+# feeds it (Plant B is Muscatine co-digestion of sludge + HSW + FOG, answer 3).
+#
+# Basis conventions: `ts` is kg TS per kg wet feed (fresh-matter basis); `vs_of_ts` is
+# kg VS per kg TS (dry basis); dissolved species per m3 of wet feed. COD equivalents used
+# to convert the published crude fractions (g/kg TS) to COD: carbohydrates 1.19, proteins
+# 1.42, lipids 2.90 kg COD/kg (VDI 4630 theoretical methane yields 0.415 / 0.496 / 1.014
+# m3 CH4 STP per kg, divided by 0.35 m3 CH4 per kg COD). Gas volumes are reported by
+# sim.adm1 with their convention.
+#
+# `tkn_consistency_N_I` (kmol N/kg COD) is the inert nitrogen content under which the
+# declared `tkn` is consistent with the fractionation and the ADM1 N contents
+# (tests/test_influent.py). PR #7 found that the BSM2 N_I (0.06 g N/g COD, derived for
+# sludge-derived inerts) over-counts the nitrogen of lignocellulosic and food-waste
+# inerts by a factor of several (grass silage would carry 11 g N/L against the 6.6 g N/L
+# its crude protein and ammonia give) and applied lower values as a plant-level
+# parameter override (Plant A 0.001, Plant B 0.0015, Plant C the BSM2 default). The
+# frozen PlantConfig has no such override; whether and where the truth model applies a
+# per-plant N_I is for the lead to decide with the influent generator.
+#
+# Sources (as cited by PR #7):
+#   T2024: Tisocco et al. 2024, Front. Environ. Sci. Eng. 18(4):50,
+#          doi:10.1007/s11783-024-1810-9 (AFBI Hillsborough; §2.1, ESM Table S2).
+#   T2026: Tisocco et al. 2026, Environ. Sci. Ecotechnol. 29:100662,
+#          doi:10.1016/j.ese.2026.100662 (AU Foulum; Table 1).
+#   Muscatine: Schroer & Just 2024, LABS-raw.csv (anchor/MANIFEST.json iowa-muscatine-wrrf);
+#          Schroer & Just 2023 (PMC10928704).
+#   Zhang et al. 2007, Bioresour. Technol. 98:929; Fisgativa et al. 2016, Waste Manag.
+#          50:264; Bong et al. 2018, J. Clean. Prod. 172:1545 (food-waste composition).
+#   Amon et al. 2007 (grass-silage BMP, cited in the T2024 ESM); Xiao et al. 2021 (C/N).
+#   Rosen & Jeppsson 2006 (BSM2 influent, as in scripts/adm1_candidates/common.py).
+
+version: 1
+feeds:
+  # ------------------------------------------------------------------ Plant A feeds
+  cattle_slurry:
+    feed_id: cattle_slurry
+    kind: slurry
+    status: provisional
+    description: >-
+      Cattle slurry. TS, VS, crude fractions and NH4-N from Tisocco et al. 2026 Table 1
+      (column "Cattle manure"): TS 3.6 +/- 1.4 % FM, VS 75.1 +/- 6.8 % TS, XC 586.6,
+      XP 124.0, XL 48.5 g/kg TS, NH4-N 1.08 g/L, acetic 2.57, propionic 0.99, valeric
+      0.11 g/L, DQ_XC 69 %. Crude fractions as a share of VS: 0.773 / 0.163 / 0.064.
+      Not used as printed (PR #7): the T2024 ESM's S_IN of cattle slurry (4.35-5.95
+      kg/m3, 4-5x the 1.08 g NH4-N/L of the 2026 table).
+    density: 1000.0              # DESIGN  kg/m3; assumed: slurry is pumped as a liquid, taken as water
+    ts: 0.036                    # DESIGN  kg TS/kg wet; 2026 Table 1 (3.6 % FM)
+    vs_of_ts: 0.751              # DESIGN  kg VS/kg TS; 2026 Table 1 (75.1 % TS)
+    cod_per_vs: 1.337            # DESIGN  kg COD/kg VS; derived: 0.773*1.19 + 0.163*1.42 + 0.064*2.90 (Table 1 fractions x VDI 4630 COD equivalents)
+    fractionation:               # DESIGN  kg COD/kg COD; raw COD shares from Table 1 are ch 0.688, pr 0.174, li 0.139
+      f_ch: 0.34                 #   carbohydrates after removing the VFA (0.12) and the non-degradable carbohydrate (0.31 x 0.688 = 0.21, from DQ_XC 69 %, Table 1)
+      f_pr: 0.17                 #   proteins, Table 1 XP
+      f_li: 0.13                 #   lipids, Table 1 XL (0.139 rounded down; balance to inerts)
+      f_xi: 0.22                 #   particulate inerts: 0.21 non-degradable carbohydrate + 0.01 (assumed) non-degradable protein/lipid
+      f_si: 0.02                 #   soluble inerts: assumed (humic-like solubles of slurry); not published
+      f_vfa: 0.12                #   VFA as acetate: Table 1 acetic + propionic + valeric = 4.5 kg COD/m3 of 36.1 kg COD/m3 total
+    fractionation_concentration: 150.0   # DESIGN  -; assumed: sd ~0.04 on the 0.34 share (Table 1 gives TS +/- 1.4 % FM, i.e. ~40 % relative spread on TS, but the fractionation of slurry is far steadier than its TS)
+    tan: 0.0771                  # DESIGN  kmol N/m3; 2026 Table 1 NH4-N 1.08 g/L (/14)
+    tkn: 0.128                   # DESIGN  kmol N/m3; derived: NH4-N + crude-protein N (XP 124 g/kg TS / 6.25 = 19.8 g N/kg TS x 36 g TS/kg = 0.714 g N/kg) = 1.79 g N/L
+    tkn_tolerance: 0.15          # DESIGN  -; accepted gap between the declared TKN and the ADM1-implied one (tests/test_influent.py)
+    tkn_consistency_N_I: 0.001   # DESIGN  kmol N/kg COD; PR #7 Plant A override: assumed, lignocellulosic inerts of slurry and silage carry ~0.014 g N/g COD (BSM2 0.00429 is for sludge-derived inerts)
+    s_ic: 0.05                   # DESIGN  kmol C/m3; assumed: bicarbonate of stored cattle slurry (~3 g HCO3-/L); not published
+    s_cat: 0.10                  # DESIGN  kmol/m3; assumed: Tisocco 2024 ESM Table S2 lists S_cat 0.2 mol/L "manually adjusted"; halved so the digester alkalinity lands at ~10 g CaCO3/L with the TAN below (PR #7 tests)
+    s_an: 0.02                   # DESIGN  kmol/m3; assumed (Table S2: 0.015 mol/L, manually adjusted)
+    s_ca: 0.04                   # DESIGN  kmol/m3; assumed: ~1.6 g Ca/L, order of magnitude for cattle slurry; not published
+  grass_silage:
+    feed_id: grass_silage
+    kind: silage
+    status: provisional
+    description: >-
+      Grass silage. TS, VS and crude fractions from Tisocco et al. 2026 Table 1 (column
+      "Grass silage"): TS 31.9 +/- 0.7 % FM, VS 87.7 +/- 0.4 % TS, XC 731.0, XP 116.9,
+      XL 29.0 g/kg TS, acetic 17.4 g/L, lactic 46.4 g/L, ADL 74.1 g/kg TS. Crude fractions
+      as a share of VS: 0.834 / 0.133 / 0.033. Fed 2 t FM/d Monday-Friday at Hillsborough
+      (2024 §2.1); the weekend omission is the influent generator's job.
+    density: 1000.0              # DESIGN  kg/m3; assumed: the silage is mixed into the slurry, so its volume is taken at the slurry density (bulk density in the clamp is 600-800 kg/m3)
+    ts: 0.319                    # DESIGN  kg TS/kg wet; 2026 Table 1 (31.9 % FM)
+    vs_of_ts: 0.877              # DESIGN  kg VS/kg TS; 2026 Table 1 (87.7 % TS)
+    cod_per_vs: 1.277            # DESIGN  kg COD/kg VS; derived: 0.834*1.19 + 0.133*1.42 + 0.033*2.90
+    fractionation:               # DESIGN  kg COD/kg COD; raw COD shares from Table 1 are ch 0.777, pr 0.148, li 0.075
+      f_ch: 0.327                #   carbohydrates after removing silage acids (0.20) and the non-degradable share (0.25)
+      f_pr: 0.148                #   proteins, Table 1 XP
+      f_li: 0.075                #   lipids, Table 1 XL
+      f_xi: 0.25                 #   particulate inerts: assumed from BMP: grass-silage BMP ~0.33 m3 CH4/kg VS (Amon et al. 2007, cited in the 2024 ESM) over the theoretical 0.447 = 74 % degradable
+      f_si: 0.0                  #   no soluble inerts assumed
+      f_vfa: 0.20                #   silage acids as acetate: Table 1 acetic 17.4 + lactic 46.4 g/L = 68 kg COD/m3 (Tisocco 2024 ESM Table S2 note b: "S_ac included lactic acid"), capped at 0.20 of total COD (they are counted inside XC by difference)
+    fractionation_concentration: 100.0   # DESIGN  -; assumed: ensiling quality varies between clamps (sd ~0.05 on the 0.33 share)
+    tan: 0.043                   # DESIGN  kmol N/m3; ASSUMED 0.6 g N/kg FM = 10 % of the crude-protein N. Table 1 reports NH4-N 7.28 g/L, which exceeds the crude-protein N of 5.97 g/kg FM (XP 116.9 g/kg TS / 6.25 x 319 g TS/kg) and so cannot be per kg of fresh silage; flagged for the domain reviewer
+    tkn: 0.469                   # DESIGN  kmol N/m3; derived: crude-protein N 5.97 g/kg FM + 0.6 g/kg NH4-N = 6.57 g N/kg
+    tkn_tolerance: 0.15          # DESIGN  -
+    tkn_consistency_N_I: 0.001   # DESIGN  kmol N/kg COD; PR #7 Plant A override (see cattle_slurry)
+    s_ic: 0.0                    # DESIGN  kmol C/m3; assumed: silage at pH ~4 carries no bicarbonate
+    s_cat: 0.10                  # DESIGN  kmol/m3; assumed: K+ of grass silage is 2-3 % TS (~0.2 kmol/m3 FM); half taken as balanced by organic anions already in f_vfa
+    s_an: 0.05                   # DESIGN  kmol/m3; assumed
+    s_ca: 0.02                   # DESIGN  kmol/m3; assumed: ~0.8 g Ca/L; not published
+  # ------------------------------------------------------------------ Plant B feeds
+  food_waste:
+    feed_id: food_waste
+    kind: food_waste
+    status: provisional
+    description: >-
+      Source-separated food waste (pre-shredded, pulped). NOT a Muscatine stream and not
+      a feed of any frozen plant (PR #7's Plant B carried it; PR #6's Plant B does not):
+      moisture 70-74 %, VS/TS 83-87 % (Zhang et al. 2007); carbohydrates 36 % VS on
+      average and highly variable (Fisgativa et al. 2016, 70-paper compilation);
+      carbohydrates 12-74 %, proteins 14-18 %, lipids 4-34 % of VS (Bong et al. 2018);
+      VS destruction ~81 % in BMP (Zhang et al. 2007), i.e. ~19 % inert.
+    density: 1000.0              # DESIGN  kg/m3; assumed (pulped food waste)
+    ts: 0.28                     # DESIGN  kg TS/kg wet; Zhang et al. 2007: moisture 70-74 %
+    vs_of_ts: 0.85               # DESIGN  kg VS/kg TS; Zhang et al. 2007: VS/TS 83-87 %
+    cod_per_vs: 1.486            # DESIGN  kg COD/kg VS; derived from assumed VS mass shares carbohydrate 0.68 / protein 0.17 / lipid 0.15 (Bong et al. 2018 ranges) x VDI 4630 COD equivalents
+    fractionation:               # DESIGN  kg COD/kg COD; raw COD shares of the VS mass shares are ch 0.545, pr 0.163, li 0.293
+      f_ch: 0.36                 #   assumed: carbohydrate after removing VFA (0.04) and the non-degradable share
+      f_pr: 0.16                 #   assumed: Bong et al. 2018 protein 14-18 % VS
+      f_li: 0.25                 #   assumed: lipid share reduced from 0.29 to leave room for the inert share
+      f_xi: 0.17                 #   assumed: ~19 % non-degradable (Zhang et al. 2007 VS destruction 81 %), split 0.17 particulate + 0.02 soluble
+      f_si: 0.02                 #   assumed
+      f_vfa: 0.04                #   assumed: food waste arrives acidified (pH 5.1, Fisgativa et al. 2016)
+    fractionation_concentration: 40.0    # DESIGN  -; assumed: food waste is the most variable feed (Fisgativa et al. 2016); sd ~0.075 on the 0.36 share
+    tan: 0.03                    # DESIGN  kmol N/m3; assumed 0.42 g N/L (partly hydrolysed proteins in stored food waste)
+    tkn: 0.493                   # DESIGN  kmol N/m3; derived: protein 0.17 kg/kg VS / 6.25 x 0.238 kg VS/kg = 6.47 g N/kg + 0.42 g/kg NH4-N = 6.9 g N/kg (C/N ~15, inside the 6-19 of Xiao et al. 2021)
+    tkn_tolerance: 0.15          # DESIGN  -
+    tkn_consistency_N_I: 0.0015  # DESIGN  kmol N/kg COD; PR #7 Plant B override: assumed, food-waste inerts (fibre) carry far less N than sludge-derived inerts (BSM2 0.00429)
+    s_ic: 0.0                    # DESIGN  kmol C/m3; assumed: acidified feed carries no bicarbonate
+    s_cat: 0.05                  # DESIGN  kmol/m3; assumed: Na+/K+ of food waste
+    s_an: 0.03                   # DESIGN  kmol/m3; assumed
+    s_ca: 0.015                  # DESIGN  kmol/m3; assumed: ~0.6 g Ca/L
+  high_strength_waste:
+    feed_id: high_strength_waste
+    kind: hsw
+    status: provisional
+    description: >-
+      Trucked high-strength industrial organic waste as received at Muscatine (PR #7 id
+      hsw_liquid; LABS-raw HSW-COD_mgL, HSW-VS_percent). COD mean 137,575 mg/L (sd
+      96,508; p50 128,000; p95 260,250; n = 632 after the provider's de-duplication),
+      VS 6.16 % w/w (sd 3.49; p95 11.7; n = 745). Delivered on 992 of 1,103 days,
+      0-190 m3/d (p95 106 m3/d, total for two digesters). Lipid-rich (COD/VS 2.23).
+    density: 1000.0              # DESIGN  kg/m3; assumed (liquid waste)
+    ts: 0.0733                   # DESIGN  kg TS/kg wet; derived: VS 6.16 % w/w (LABS-raw mean) at an assumed VS/TS of 0.84
+    vs_of_ts: 0.84               # DESIGN  kg VS/kg TS; assumed (food-processing waste)
+    cod_per_vs: 2.234            # DESIGN  kg COD/kg VS; LABS-raw means: 137.6 kg COD/m3 / 61.6 kg VS/m3
+    fractionation:               # DESIGN  kg COD/kg COD; assumed: a COD/VS of 2.23 requires ~45 % lipid by mass
+      f_ch: 0.20
+      f_pr: 0.10
+      f_li: 0.55
+      f_xi: 0.08
+      f_si: 0.02
+      f_vfa: 0.05
+    fractionation_concentration: 30.0    # DESIGN  -; assumed: the HSW COD varies by 70 % (sd/mean, LABS-raw), its composition is not measured
+    tan: 0.01                    # DESIGN  kmol N/m3; assumed: not measured at Muscatine
+    tkn: 0.127                   # DESIGN  kmol N/m3; derived from the fractionation with the N_I override below (not measured at Muscatine)
+    tkn_tolerance: 0.15          # DESIGN  -
+    tkn_consistency_N_I: 0.0015  # DESIGN  kmol N/kg COD; PR #7 Plant B override (see food_waste)
+    s_ic: 0.01                   # DESIGN  kmol C/m3; assumed
+    s_cat: 0.03                  # DESIGN  kmol/m3; assumed
+    s_an: 0.02                   # DESIGN  kmol/m3; assumed
+    s_ca: 0.01                   # DESIGN  kmol/m3; assumed
+  fog:
+    feed_id: fog
+    kind: fog
+    status: provisional
+    description: >-
+      Fats, oils and grease from grease-trap collection (Muscatine FOG_gal: received on
+      764 of 1,103 days, mean 46.8 m3/d for two digesters, p95 117, max 212). Composition
+      not measured at Muscatine; assumed lipid-dominated.
+    density: 950.0               # DESIGN  kg/m3; assumed
+    ts: 0.10                     # DESIGN  kg TS/kg wet; assumed
+    vs_of_ts: 0.95               # DESIGN  kg VS/kg TS; assumed
+    cod_per_vs: 2.75             # DESIGN  kg COD/kg VS; assumed: 0.85 lipid x 2.90 + 0.15 x ~1.3
+    fractionation:               # DESIGN  kg COD/kg COD; assumed
+      f_ch: 0.05
+      f_pr: 0.05
+      f_li: 0.85
+      f_xi: 0.04
+      f_si: 0.01
+      f_vfa: 0.0
+    fractionation_concentration: 60.0    # DESIGN  -; assumed
+    tan: 0.0                     # DESIGN  kmol N/m3; assumed
+    tkn: 0.105                   # DESIGN  kmol N/m3; derived from the fractionation (with the N_I override below)
+    tkn_tolerance: 0.15          # DESIGN  -
+    tkn_consistency_N_I: 0.0015  # DESIGN  kmol N/kg COD; PR #7 Plant B override (see food_waste)
+    s_ic: 0.0                    # DESIGN  kmol C/m3; PR #7 value, no note
+    s_cat: 0.005                 # DESIGN  kmol/m3; assumed
+    s_an: 0.005                  # DESIGN  kmol/m3; assumed
+    s_ca: 0.0                    # DESIGN  kmol/m3; PR #7 value, no note
+  # ------------------------------------------------------------ Plant B/C sludges
+  primary_sludge:
+    feed_id: primary_sludge
+    kind: primary_sludge
+    status: provisional
+    description: >-
+      Primary sludge. VS 3.0 % w/w (Muscatine LABS-raw PS-VS_percent mean 3.005, sd 0.85,
+      p05-p95 1.75-4.48, n = 726; note the provider's data dictionary swaps the PS/TWAS
+      VS descriptions). Fractionation: the Rosen & Jeppsson 2006 BSM2 influent (total
+      COD 57 kg/m3: X_ch 5, X_pr 20, X_li 5, X_xc 2, X_I 25, S_I 0.02; composite split by
+      the BSM2 f_*_xc) has COD shares ch 0.095, pr 0.358, li 0.098, xi 0.445, si 0.004;
+      the primary/TWAS split of that blend is assumed (primary richer in carbohydrate and
+      lipid, TWAS richer in protein).
+    density: 1000.0              # DESIGN  kg/m3; assumed
+    ts: 0.040                    # DESIGN  kg TS/kg wet; derived: VS 3.0 % w/w (Muscatine) at an assumed VS/TS 0.75
+    vs_of_ts: 0.75               # DESIGN  kg VS/kg TS; assumed (typical primary sludge)
+    cod_per_vs: 1.60             # DESIGN  kg COD/kg VS; assumed (typical primary sludge 1.5-1.7)
+    fractionation:               # DESIGN  kg COD/kg COD; assumed split of the BSM2 blend (see description)
+      f_ch: 0.15
+      f_pr: 0.25
+      f_li: 0.15
+      f_xi: 0.40
+      f_si: 0.02
+      f_vfa: 0.03
+    fractionation_concentration: 200.0   # DESIGN  -; assumed: sludge composition is steady (sd ~0.03 on the 0.40 share)
+    tan: 0.010                   # DESIGN  kmol N/m3; BSM2 influent S_IN 0.01
+    tkn: 0.180                   # DESIGN  kmol N/m3; derived from the fractionation with the BSM2 N contents (2.5 g N/L)
+    tkn_tolerance: 0.15          # DESIGN  -
+    tkn_consistency_N_I: 0.004285714285714286   # DESIGN  kmol N/kg COD; BSM2 N_I (0.06/14): sewage sludge is what ADM1's N contents were derived for (PR #7 Plant C, no override)
+    s_ic: 0.04                   # DESIGN  kmol C/m3; BSM2 influent S_IC
+    s_cat: 0.04                  # DESIGN  kmol/m3; BSM2 influent S_cat
+    s_an: 0.02                   # DESIGN  kmol/m3; BSM2 influent S_an
+    s_ca: 0.02                   # DESIGN  kmol/m3; assumed (~0.8 g Ca/L)
+  thickened_was:
+    feed_id: thickened_was
+    kind: thickened_was
+    status: provisional
+    description: >-
+      Thickened waste activated sludge (PR #7 id twas). VS 3.09 % w/w (Muscatine LABS-raw
+      TWAS-VS_percent mean 3.091, sd 0.53, p05-p95 2.30-3.85, n = 1,046). Biomass-like:
+      COD/VS 1.42 (C5H7O2N), protein-rich.
+    density: 1000.0              # DESIGN  kg/m3; assumed
+    ts: 0.0396                   # DESIGN  kg TS/kg wet; derived: VS 3.09 % w/w at an assumed VS/TS 0.78
+    vs_of_ts: 0.78               # DESIGN  kg VS/kg TS; assumed (typical WAS)
+    cod_per_vs: 1.42             # DESIGN  kg COD/kg VS; ADM1 biomass composition C5H7O2N
+    fractionation:               # DESIGN  kg COD/kg COD; assumed split of the BSM2 blend
+      f_ch: 0.05
+      f_pr: 0.45
+      f_li: 0.05
+      f_xi: 0.44
+      f_si: 0.01
+      f_vfa: 0.0
+    fractionation_concentration: 300.0   # DESIGN  -; assumed
+    tan: 0.010                   # DESIGN  kmol N/m3; BSM2 influent S_IN
+    tkn: 0.233                   # DESIGN  kmol N/m3; derived from the fractionation with the BSM2 N contents (3.3 g N/L)
+    tkn_tolerance: 0.15          # DESIGN  -
+    tkn_consistency_N_I: 0.004285714285714286   # DESIGN  kmol N/kg COD; BSM2 N_I (see primary_sludge)
+    s_ic: 0.04                   # DESIGN  kmol C/m3; BSM2
+    s_cat: 0.04                  # DESIGN  kmol/m3; BSM2
+    s_an: 0.02                   # DESIGN  kmol/m3; BSM2
+    s_ca: 0.02                   # DESIGN  kmol/m3; assumed
