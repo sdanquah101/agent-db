@@ -206,6 +206,7 @@ influent by end of week 6, else fall back to a bsm2-python fork.
 **Blocked / open**
 
 - Open-dataset identification (Milestone-1 exit criterion, §8) is still not started.
+  → Done the same day by the anchor session (Milestone 1, second session, above).
 - The sample-and-hold ring test makes `pytest -q` take ≈ 3 min. Acceptable for CI; if it
   becomes a nuisance, the candidates are an analytical Jacobian (removes ≈ 30 RHS
   evaluations per restart) or a compiled RHS, not a shorter horizon.
@@ -233,3 +234,81 @@ influent by end of week 6, else fall back to a bsm2-python fork.
 | CI (GitHub Actions) | 3 jobs per push | — | expect ≈ 4 min per pytest job |
 
 No LLM-agent compute inside the benchmark (no workflows yet); development cost only.
+
+### Session 2026-09-02 (third session) — truth-model extensions on the PR #2 core
+
+**Reconciliation first.** This session initially re-implemented the ADM1 core from
+`main` because PR #2 was still open (see `docs/decisions.md`, "Duplicate ADM1 core").
+On the lead's instruction PR #2 was merged with `main`, its CI fixed (`tests/__init__.py`)
+and merged; the extension work was rebuilt on #2's core and PR #4 was repointed at it.
+The duplicate core is discarded. CLAUDE.md now carries the follow-on-session rule.
+
+**Done**
+
+- `sim/adm1/model.py`: behaviour-preserving refactor exposing `integrate()` and
+  `gas_exchange()` so an extended right-hand side reuses the influent handling and gas
+  transfer unchanged. All base tests and the full ring test (including the 280-day
+  dynamic case) pass unchanged.
+- `sim/adm1/physchem_ext.py`: extended speciation with optional Davies activity
+  correction and carbonate second dissociation; falls back to the base routine when
+  both switches are off and S_ca = 0.
+- `sim/adm1/extensions.py` + `configs/adm1/extensions.yaml`: extension declarations
+  (components, processes with expression-valued stoichiometry, parameters, speciation
+  switches), `compile_extended()` (validates names, rate code, overrides; embeds the
+  base matrix), `rhs_extended()`, `simulate_extended()` returning an `ExtendedResult`
+  with pH, activities, ionic strength and gas quantities.
+- Extensions: SAO (X_sao, uptake + decay, own weaker NH₃ inhibition), ionic strength
+  (Davies, A scaled to T_op), carbonate second dissociation (own switch, default off),
+  calcite precipitation (S_ca, X_caco3, SI rate). Formulation, defaults and the lead's
+  domain answers in `docs/decisions.md`.
+- `tests/test_adm1_extensions.py`: 28 tests — conservation of every row (charge −2 for
+  the calcite row by matrix convention, S_IC carrying charge 0 as a total; the calcium
+  balance and the 2 eq/mol alkalinity drop are tested dynamically instead), the
+  ionic-strength iteration cap raising, units on every derived quantity, state layout,
+  compile-time rejections, inert
+  identity against the Probe-1 oracle for all three additive extensions, the carbonate
+  switch pinned as a small genuine change, SAO takeover (60-d HRT, 2.8 g N/L, 300 d)
+  and washout (20-d HRT), SAO NH₃ term weaker than acetoclastic, Davies limits and
+  A(T), ionic-strength pH/NH₃ shifts, calcite as a sink, all four together, determinism.
+- Full suite on the combined code: 123 passed, including the dynamic-influent ring test
+  (max relative discrepancy 1.5e-4, unchanged).
+- Independent review round (coordinating session): ionic-strength iteration cap and
+  criterion moved to `configs/adm1/solver.yaml` (`ionic_strength_solver`, relative
+  criterion, non-convergence raises); a vacuous "charge balance closes" test replaced
+  by calcium-balance and alkalinity-drop tests; inert tolerances tightened to the
+  measured gaps (1e-5 / 1e-8 / 1e-5); washout test bounded from both sides; loader moved
+  to `defaults.py`; rate table and stoichiometric matrices read-only; units table for
+  every derived quantity; ionic strength reported whether or not the correction is
+  applied; missing extension constants raise instead of defaulting.
+
+**Blocked / open**
+
+- No external oracle for the extended model; correctness rests on conservation,
+  inert identity and qualitative behaviour. `k_m_sao`, `K_I_nh3_sao` and `k_prec` remain
+  order-of-magnitude values for the external AD reviewer.
+- With μ_max 0.08 d⁻¹ SAO cannot establish at a 40-day HRT under 250 mg/L free
+  ammonia in this model; the takeover test therefore runs at 60 days. If Plant B is to
+  show SAO at its HRT, `k_m_sao` needs the reviewer's number, not this one.
+
+**Next session should start on**
+
+1. Domain review and merge of PR #4 (extensions only).
+2. Plants A–C (`sim/plants/`): geometry, temperature, feedstock definitions;
+   `configs/plant_a_statistics.yaml` from the Tisocco et al. envelopes.
+3. Influent generator (§6.1) with `anchor/ingest_muscatine.py` feeding the Plant-B/C
+   statistics.
+4. Weinrich R3/R4 ports as fitted models.
+
+**Resource cost this session (rough)**
+
+| Item | Wall-clock | Disk | Notes |
+|---|---|---|---|
+| Session total | ≈ 3 h | — | ≈ 1 h lost to the duplicate core and its reconciliation |
+| Duplicate core (discarded) | ≈ 1 h | — | 73 tests; not merged |
+| Extensions on the #2 core | ≈ 1 h 15 min | — | worktree on the #2 branch |
+| Full suite (`pytest -q`), combined code | ≈ 4.5 min per run, 4 runs | — | dominated by the sample-and-hold ring test |
+| Domain-answer revision (SAO NH₃, carbonate switch, A(T)) | ≈ 40 min | — | incl. SAO takeover probes (≈ 1 min compute) |
+| Review round (M1, M2, L1–L5, nits) | ≈ 35 min | — | 2 fast test runs + 1 full run (≈ 4.5 min) |
+| CI (GitHub Actions) | 3 jobs per push on #2 and #4 | — | |
+
+No LLM-agent compute inside the benchmark; development cost only.

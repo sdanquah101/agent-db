@@ -35,14 +35,17 @@ Full design: [`docs/proposal.md`](docs/proposal.md). Standing engineering rules:
 
 Milestone 1 (proposal §9.3, weeks 1–2): repository scaffold and selection of the base
 ADM1 implementation ([`docs/adm1_comparison.md`](docs/adm1_comparison.md); accepted with
-conditions, see the decisions log). Open-dataset identification is still outstanding.
+conditions, see the decisions log) and open-dataset identification (see below). Done.
 
 Milestone 2 (weeks 3–6), in progress: `sim/adm1/` implements standard ADM1 as a
 Petersen-matrix model (matrix and BSM2 parameters as data under `configs/adm1/`,
 algebraic pH, BSM2 gas phase, SciPy BDF/Radau) and is ring-tested against bsm2-python on
-Probes 1–2 and the 280-day BSM2 dynamic influent (`tests/test_adm1_ring.py`). The SAO,
-ionic-strength and precipitation extensions, the three plants and the influent generator
-are not started.
+Probes 1–2 and the 280-day BSM2 dynamic influent (`tests/test_adm1_ring.py`). The §6.1
+extensions — syntrophic acetate oxidation, Davies ionic-strength correction, the
+carbonate second dissociation and calcite precipitation — are declared as additional
+rows and switches in `configs/adm1/extensions.yaml` and compiled onto the base matrix by
+`sim/adm1/extensions.py` (`tests/test_adm1_extensions.py`). The three plants and the
+influent generator are not started.
 
 Real-data anchor (proposal §8): open datasets identified, characterised and, where
 openly licensed, fetched into `anchor/raw/` by `python -m anchor.fetch` from

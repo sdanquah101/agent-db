@@ -44,6 +44,12 @@ tests/
 - Small, focused commits with descriptive messages. One concern per PR.
 - Run `pytest -q` and `ruff check .` before every push. Fix failures; do not skip tests.
 - New design decisions go in `docs/decisions.md` (date, decision, reason, alternatives).
+- **Follow-on sessions start from their predecessor.** Before starting work that
+  continues a previous session's task, confirm that the predecessor's PR is merged
+  (`gh`/GitHub: list open PRs and check `docs/milestones.md` on `main` against the
+  open PR list). If it is not merged, branch from the predecessor's branch, not from
+  `main`, and say so in the PR description. Never re-implement a component that an
+  open PR already contains (decision of 2026-09-02, "Duplicate ADM1 core").
 - Prefer boring, well-tested libraries (SciPy, NumPy, Pydantic) over clever ones.
 - Numerical tolerances and solver settings live in `configs/`, never hard-coded.
 
