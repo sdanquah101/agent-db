@@ -1,0 +1,15 @@
+# Default numerical settings for sim/adm1 (CLAUDE.md: tolerances live here, never in code).
+#
+# Tolerances match the bsm2-python oracle runs recorded in
+# scripts/adm1_candidates/results/ (solve_ivp BDF, rtol 1e-6, atol 1e-8).
+method: BDF            # scipy.integrate.solve_ivp method; Radau is the cross-check
+rtol: 1.0e-6
+atol: 1.0e-8
+max_step: .inf         # d; the model caps this at the influent breakpoint spacing anyway
+clip_negative_states_in_rates: true   # rates see max(y, 0), transport sees y (BSM2 convention)
+
+pH_solver:
+  bracket_pH: [0.0, 14.0]   # brentq bracket on the charge balance, in pH units
+  xtol_pH: 1.0e-12          # absolute tolerance in pH units
+  rtol: 8.9e-16             # brentq relative tolerance (>= 4 * machine eps)
+  maxiter: 200

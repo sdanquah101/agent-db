@@ -1,0 +1,208 @@
+# Standard ADM1 (Batstone et al. 2002) as implemented in BSM2 (Rosen & Jeppsson 2006):
+# the biochemical Petersen matrix, stored as DATA.
+#
+# `components` lists the liquid-phase state variables in canonical order, each with its
+# unit and its content of the four conserved quantities used by the conservation test
+# (tests/test_adm1_petersen.py): COD (kg COD per unit of the component), carbon and
+# nitrogen (kmol per kg COD, given as the *name* of the parameter that carries the
+# value, or a number) and charge (kmol charge per kmol; total acid species such as S_ac
+# = HAc + Ac- are counted neutral, the ion split is algebraic, see sim/adm1/physchem.py).
+#
+# `processes` lists the 19 biochemical processes in the order the rate function
+# (sim/adm1/rates.py) returns them. Each stoichiometric entry is an arithmetic
+# expression over parameter names (sim/adm1/petersen.py evaluates them with a
+# restricted AST walker; no eval). Missing entries are zero. S_IC and S_IN entries are
+# written out explicitly rather than derived from conservation, so that the conservation
+# test is a genuine check on transcription errors in both directions.
+#
+# Gas transfer (T8-T10) and the ion states are NOT rows here: gas transfer carries the
+# plant volume ratio V_liq/V_gas and is applied in sim/adm1/model.py; the ions are
+# algebraic functions of pH.
+#
+# Equation reference: ADM1 STR Tables 3.1-3.2; BSM2 MATLAB/C implementation as ported in
+# bsm2-python 0.0.16 (reac1..reac24, stoich1..stoich13); QSDsan `_adm1.tsv` was used
+# as a structural reference (equation reference only, never a dependency).
+
+version: 1
+
+components:
+  - {name: S_su,  unit: kg COD m^-3, description: monosaccharides,                 cod: 1, carbon: C_su,  nitrogen: 0,     charge: 0}
+  - {name: S_aa,  unit: kg COD m^-3, description: amino acids,                     cod: 1, carbon: C_aa,  nitrogen: N_aa,  charge: 0}
+  - {name: S_fa,  unit: kg COD m^-3, description: long-chain fatty acids (total),  cod: 1, carbon: C_fa,  nitrogen: 0,     charge: 0}
+  - {name: S_va,  unit: kg COD m^-3, description: total valerate (HVa + Va-),      cod: 1, carbon: C_va,  nitrogen: 0,     charge: 0}
+  - {name: S_bu,  unit: kg COD m^-3, description: total butyrate (HBu + Bu-),      cod: 1, carbon: C_bu,  nitrogen: 0,     charge: 0}
+  - {name: S_pro, unit: kg COD m^-3, description: total propionate (HPro + Pro-),  cod: 1, carbon: C_pro, nitrogen: 0,     charge: 0}
+  - {name: S_ac,  unit: kg COD m^-3, description: total acetate (HAc + Ac-),       cod: 1, carbon: C_ac,  nitrogen: 0,     charge: 0}
+  - {name: S_h2,  unit: kg COD m^-3, description: dissolved hydrogen,              cod: 1, carbon: 0,     nitrogen: 0,     charge: 0}
+  - {name: S_ch4, unit: kg COD m^-3, description: dissolved methane,               cod: 1, carbon: C_ch4, nitrogen: 0,     charge: 0}
+  - {name: S_IC,  unit: kmol C m^-3, description: inorganic carbon (CO2 + HCO3-),  cod: 0, carbon: 1,     nitrogen: 0,     charge: 0}
+  - {name: S_IN,  unit: kmol N m^-3, description: inorganic nitrogen (NH4+ + NH3), cod: 0, carbon: 0,     nitrogen: 1,     charge: 0}
+  - {name: S_I,   unit: kg COD m^-3, description: soluble inerts,                  cod: 1, carbon: C_si,  nitrogen: N_I,   charge: 0}
+  - {name: X_xc,  unit: kg COD m^-3, description: composites,                      cod: 1, carbon: C_xc,  nitrogen: N_xc,  charge: 0}
+  - {name: X_ch,  unit: kg COD m^-3, description: carbohydrates,                   cod: 1, carbon: C_ch,  nitrogen: 0,     charge: 0}
+  - {name: X_pr,  unit: kg COD m^-3, description: proteins,                        cod: 1, carbon: C_pr,  nitrogen: N_aa,  charge: 0}
+  - {name: X_li,  unit: kg COD m^-3, description: lipids,                          cod: 1, carbon: C_li,  nitrogen: 0,     charge: 0}
+  - {name: X_su,  unit: kg COD m^-3, description: sugar degraders,                 cod: 1, carbon: C_bac, nitrogen: N_bac, charge: 0}
+  - {name: X_aa,  unit: kg COD m^-3, description: amino-acid degraders,            cod: 1, carbon: C_bac, nitrogen: N_bac, charge: 0}
+  - {name: X_fa,  unit: kg COD m^-3, description: LCFA degraders,                  cod: 1, carbon: C_bac, nitrogen: N_bac, charge: 0}
+  - {name: X_c4,  unit: kg COD m^-3, description: valerate and butyrate degraders, cod: 1, carbon: C_bac, nitrogen: N_bac, charge: 0}
+  - {name: X_pro, unit: kg COD m^-3, description: propionate degraders,            cod: 1, carbon: C_bac, nitrogen: N_bac, charge: 0}
+  - {name: X_ac,  unit: kg COD m^-3, description: acetate degraders,               cod: 1, carbon: C_bac, nitrogen: N_bac, charge: 0}
+  - {name: X_h2,  unit: kg COD m^-3, description: hydrogen degraders,              cod: 1, carbon: C_bac, nitrogen: N_bac, charge: 0}
+  - {name: X_I,   unit: kg COD m^-3, description: particulate inerts,              cod: 1, carbon: C_xi,  nitrogen: N_I,   charge: 0}
+  - {name: S_cat, unit: kmol m^-3,   description: cations (strong base),           cod: 0, carbon: 0,     nitrogen: 0,     charge: 1}
+  - {name: S_an,  unit: kmol m^-3,   description: anions (strong acid),            cod: 0, carbon: 0,     nitrogen: 0,     charge: -1}
+
+processes:
+  - name: disintegration
+    rate: k_dis * X_xc
+    stoichiometry:
+      X_xc: "-1"
+      S_I:  "f_si_xc"
+      X_ch: "f_ch_xc"
+      X_pr: "f_pr_xc"
+      X_li: "f_li_xc"
+      X_I:  "f_xi_xc"
+      S_IC: "C_xc - f_si_xc*C_si - f_ch_xc*C_ch - f_pr_xc*C_pr - f_li_xc*C_li - f_xi_xc*C_xi"
+      S_IN: "N_xc - f_si_xc*N_I - f_pr_xc*N_aa - f_xi_xc*N_I"
+
+  - name: hydrolysis_carbohydrates
+    rate: k_hyd_ch * X_ch
+    stoichiometry:
+      X_ch: "-1"
+      S_su: "1"
+      S_IC: "C_ch - C_su"
+
+  - name: hydrolysis_proteins
+    rate: k_hyd_pr * X_pr
+    stoichiometry:
+      X_pr: "-1"
+      S_aa: "1"
+      S_IC: "C_pr - C_aa"
+
+  - name: hydrolysis_lipids
+    rate: k_hyd_li * X_li
+    stoichiometry:
+      X_li: "-1"
+      S_su: "1 - f_fa_li"
+      S_fa: "f_fa_li"
+      S_IC: "C_li - (1 - f_fa_li)*C_su - f_fa_li*C_fa"
+
+  - name: uptake_sugars
+    rate: k_m_su * S_su/(K_S_su + S_su) * X_su * I_pH_aa * I_IN_lim
+    stoichiometry:
+      S_su:  "-1"
+      S_bu:  "(1 - Y_su)*f_bu_su"
+      S_pro: "(1 - Y_su)*f_pro_su"
+      S_ac:  "(1 - Y_su)*f_ac_su"
+      S_h2:  "(1 - Y_su)*f_h2_su"
+      X_su:  "Y_su"
+      S_IC:  "C_su - (1 - Y_su)*(f_bu_su*C_bu + f_pro_su*C_pro + f_ac_su*C_ac) - Y_su*C_bac"
+      S_IN:  "-Y_su*N_bac"
+
+  - name: uptake_amino_acids
+    rate: k_m_aa * S_aa/(K_S_aa + S_aa) * X_aa * I_pH_aa * I_IN_lim
+    stoichiometry:
+      S_aa:  "-1"
+      S_va:  "(1 - Y_aa)*f_va_aa"
+      S_bu:  "(1 - Y_aa)*f_bu_aa"
+      S_pro: "(1 - Y_aa)*f_pro_aa"
+      S_ac:  "(1 - Y_aa)*f_ac_aa"
+      S_h2:  "(1 - Y_aa)*f_h2_aa"
+      X_aa:  "Y_aa"
+      S_IC:  "C_aa - (1 - Y_aa)*(f_va_aa*C_va + f_bu_aa*C_bu + f_pro_aa*C_pro + f_ac_aa*C_ac) - Y_aa*C_bac"
+      S_IN:  "N_aa - Y_aa*N_bac"
+
+  - name: uptake_lcfa
+    rate: k_m_fa * S_fa/(K_S_fa + S_fa) * X_fa * I_pH_aa * I_IN_lim * I_h2_fa
+    stoichiometry:
+      S_fa: "-1"
+      S_ac: "(1 - Y_fa)*f_ac_fa"
+      S_h2: "(1 - Y_fa)*f_h2_fa"
+      X_fa: "Y_fa"
+      S_IC: "C_fa - (1 - Y_fa)*f_ac_fa*C_ac - Y_fa*C_bac"
+      S_IN: "-Y_fa*N_bac"
+
+  - name: uptake_valerate
+    rate: k_m_c4 * S_va/(K_S_c4 + S_va) * X_c4 * S_va/(S_va + S_bu + eps_c4) * I_pH_aa * I_IN_lim * I_h2_c4
+    stoichiometry:
+      S_va:  "-1"
+      S_pro: "(1 - Y_c4)*f_pro_va"
+      S_ac:  "(1 - Y_c4)*f_ac_va"
+      S_h2:  "(1 - Y_c4)*f_h2_va"
+      X_c4:  "Y_c4"
+      S_IC:  "C_va - (1 - Y_c4)*(f_pro_va*C_pro + f_ac_va*C_ac) - Y_c4*C_bac"
+      S_IN:  "-Y_c4*N_bac"
+
+  - name: uptake_butyrate
+    rate: k_m_c4 * S_bu/(K_S_c4 + S_bu) * X_c4 * S_bu/(S_va + S_bu + eps_c4) * I_pH_aa * I_IN_lim * I_h2_c4
+    stoichiometry:
+      S_bu: "-1"
+      S_ac: "(1 - Y_c4)*f_ac_bu"
+      S_h2: "(1 - Y_c4)*f_h2_bu"
+      X_c4: "Y_c4"
+      S_IC: "C_bu - (1 - Y_c4)*f_ac_bu*C_ac - Y_c4*C_bac"
+      S_IN: "-Y_c4*N_bac"
+
+  - name: uptake_propionate
+    rate: k_m_pro * S_pro/(K_S_pro + S_pro) * X_pro * I_pH_aa * I_IN_lim * I_h2_pro
+    stoichiometry:
+      S_pro: "-1"
+      S_ac:  "(1 - Y_pro)*f_ac_pro"
+      S_h2:  "(1 - Y_pro)*f_h2_pro"
+      X_pro: "Y_pro"
+      S_IC:  "C_pro - (1 - Y_pro)*f_ac_pro*C_ac - Y_pro*C_bac"
+      S_IN:  "-Y_pro*N_bac"
+
+  - name: uptake_acetate
+    rate: k_m_ac * S_ac/(K_S_ac + S_ac) * X_ac * I_pH_ac * I_IN_lim * I_nh3
+    stoichiometry:
+      S_ac:  "-1"
+      S_ch4: "1 - Y_ac"
+      X_ac:  "Y_ac"
+      S_IC:  "C_ac - (1 - Y_ac)*C_ch4 - Y_ac*C_bac"
+      S_IN:  "-Y_ac*N_bac"
+
+  - name: uptake_hydrogen
+    rate: k_m_h2 * S_h2/(K_S_h2 + S_h2) * X_h2 * I_pH_h2 * I_IN_lim
+    stoichiometry:
+      S_h2:  "-1"
+      S_ch4: "1 - Y_h2"
+      X_h2:  "Y_h2"
+      S_IC:  "-(1 - Y_h2)*C_ch4 - Y_h2*C_bac"
+      S_IN:  "-Y_h2*N_bac"
+
+  - name: decay_X_su
+    rate: k_dec_X_su * X_su
+    stoichiometry: {X_su: "-1", X_xc: "1", S_IC: "C_bac - C_xc", S_IN: "N_bac - N_xc"}
+  - name: decay_X_aa
+    rate: k_dec_X_aa * X_aa
+    stoichiometry: {X_aa: "-1", X_xc: "1", S_IC: "C_bac - C_xc", S_IN: "N_bac - N_xc"}
+  - name: decay_X_fa
+    rate: k_dec_X_fa * X_fa
+    stoichiometry: {X_fa: "-1", X_xc: "1", S_IC: "C_bac - C_xc", S_IN: "N_bac - N_xc"}
+  - name: decay_X_c4
+    rate: k_dec_X_c4 * X_c4
+    stoichiometry: {X_c4: "-1", X_xc: "1", S_IC: "C_bac - C_xc", S_IN: "N_bac - N_xc"}
+  - name: decay_X_pro
+    rate: k_dec_X_pro * X_pro
+    stoichiometry: {X_pro: "-1", X_xc: "1", S_IC: "C_bac - C_xc", S_IN: "N_bac - N_xc"}
+  - name: decay_X_ac
+    rate: k_dec_X_ac * X_ac
+    stoichiometry: {X_ac: "-1", X_xc: "1", S_IC: "C_bac - C_xc", S_IN: "N_bac - N_xc"}
+  - name: decay_X_h2
+    rate: k_dec_X_h2 * X_h2
+    stoichiometry: {X_h2: "-1", X_xc: "1", S_IC: "C_bac - C_xc", S_IN: "N_bac - N_xc"}
+
+# Liquid-gas transfer (ADM1 STR §4.3, BSM2 procT8-procT10). Rate per unit liquid
+# volume: rho_T = k_La * (S_liq - cod_per_kmol * K_H * p_gas); the gas-phase state
+# gains rho_T * V_liq / V_gas. S_IC transfers only as free CO2 (S_IC - S_hco3).
+gas_transfer:
+  - {name: transfer_h2,  liquid: S_h2,  gas: S_gas_h2,  henry: K_H_h2,  cod_per_kmol: 16}
+  - {name: transfer_ch4, liquid: S_ch4, gas: S_gas_ch4, henry: K_H_ch4, cod_per_kmol: 64}
+  - {name: transfer_co2, liquid: S_IC,  gas: S_gas_co2, henry: K_H_co2, cod_per_kmol: 1, liquid_species: free_co2}
+
+gas_components:
+  - {name: S_gas_h2,  unit: kg COD m^-3, description: hydrogen in the headspace}
+  - {name: S_gas_ch4, unit: kg COD m^-3, description: methane in the headspace}
+  - {name: S_gas_co2, unit: kmol C m^-3, description: carbon dioxide in the headspace}

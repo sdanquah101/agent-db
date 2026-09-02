@@ -1,0 +1,4 @@
+# BSM2 anaerobic digester geometry and operating temperature (Rosen & Jeppsson 2006).
+V_liq: 3400.0   # m^3, liquid volume
+V_gas: 300.0    # m^3, headspace volume
+T_op: 308.15    # K, operating temperature (35 degC)
