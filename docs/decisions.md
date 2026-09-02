@@ -515,3 +515,146 @@ draft is no longer reachable and was not kept with a loosened assertion.
 already at the fast end of the published range); make pK_a2 part of the base parameter
 schema (rejected: the base model does not use it; a shared extension parameter keeps the
 base schema frozen).
+
+---
+
+## 2026-09-02 — `K_I_nh3_sao` anchored to a cited literature range (stays at 0.05)
+
+**Decision.** `K_I_nh3_sao` = 0.05 kmol N m⁻³ (50 % inhibition at ≈ 0.7 g NH₃-N L⁻¹)
+is kept. The literature brackets the constant between about 0.02 and 0.1 kmol N m⁻³
+(0.3–1.5 g NH₃-N L⁻¹); 0.05 lies inside, so neither the constant nor the takeover test
+moves. Lead's rule: if a later, better-documented range contradicts 0.05, the constant
+changes and the test moves, not the reverse.
+
+**Evidence (abstract-level; the modelling papers' tables could not be read from this
+environment, see below).**
+
+- Pathway shift: free ammonia of ≈ 200 mg N L⁻¹ is the threshold at which acetate
+  methanisation moves from acetoclastic methanogenesis to SAO plus hydrogenotrophic
+  methanogenesis (Hao et al. 2017, *Water Sci. Technol.* 75, doi:10.2166/wst.2017.032);
+  SAO–HM competes with acetoclasts at 200–500 mg N L⁻¹ and out-competes them above
+  500 mg N L⁻¹ (Hao et al. 2021, *Water Res.* 204, doi:10.1016/j.watres.2021.117586).
+  For SAO to be the winner at 500 mg L⁻¹ while acetoclasts are below 10 % of their rate
+  (BSM2 `K_I_nh3` 25 mg L⁻¹), SAO must retain well over half of its rate there:
+  `K_I_nh3_sao` ≳ 0.035 kmol N m⁻³.
+- Tolerance ceiling: SAO-dominated reactors ran at total ammonia up to 11 g N L⁻¹
+  before deteriorating (Westerholm et al. 2012, *Appl. Environ. Microbiol.* 78,
+  doi:10.1128/AEM.01637-12); SAO pure strains and their methanogen partners were
+  assayed at 3–7 g NH₄⁺-N L⁻¹ (Wang et al. 2015, *FEMS Microbiol. Ecol.* 91,
+  doi:10.1093/femsec/fiv130); acetate-fed ammonia-tolerant consortia thrived to
+  4.25 g NH₄⁺-N L⁻¹ (Yan et al. 2020, *Environ. Sci. Technol.* 54,
+  doi:10.1021/acs.est.0c01945); SAO bacteria were washed out at free ammonia above
+  1.5 g L⁻¹ in dry digestion (Rocamora et al. 2023, *Waste Manage.* 161,
+  doi:10.1016/j.wasman.2023.02.009). A 50 % constant above ≈ 0.1 kmol N m⁻³ (1.4 g L⁻¹)
+  would make SAO effectively immune where it is observed to fail.
+- Relative sensitivity: the half-maximal inhibitory total ammonia for hydrogenotrophic
+  methanogenesis was 18.8 g L⁻¹ against 1.74 g L⁻¹ for acetoclastic methanogenesis, an
+  eleven-fold ratio (Liu et al. 2023, *Bioresour. Technol.* 390,
+  doi:10.1016/j.biortech.2023.129919). Applied to BSM2's acetoclastic 25 mg NH₃-N L⁻¹
+  that ratio gives ≈ 0.02 kmol N m⁻³ for the SAO–HM pair, the low end of the range;
+  applied to the 0.02 kmol N m⁻³ fitted for a high-solids acetoclastic community
+  (Bai et al. 2017, *J. Environ. Sci.* 52, doi:10.1016/j.jes.2016.03.004) it gives 0.2,
+  above the washout ceiling, which is why the ceiling and not the ratio sets the top of
+  the range.
+- Growth: syntrophic acetate-oxidising co-cultures show generation times of 3–20 d,
+  with ammonium up to 0.2 M *raising* the methane rate (Westerholm et al. 2019,
+  *Environ. Sci. Technol.* 53, doi:10.1021/acs.est.9b00288). The configured μ_max of
+  0.08 d⁻¹ (doubling 8.7 d) is inside that range; the 2016 review (Westerholm et al.,
+  *Appl. Energy* 179, doi:10.1016/j.apenergy.2016.06.061) is the source of the 9–28 d
+  figure quoted in the configuration.
+
+**Not read.** The ADM1–SAO modelling papers whose parameter tables would settle this
+directly — Wett et al. 2014 (*Water Sci. Technol.* 69, doi:10.2166/wst.2014.047),
+Rivera-Salvador et al. 2014 (*Bioresour. Technol.* 167, doi:10.1016/j.biortech.2014.06.008),
+Capson-Tojo et al. 2021 (*Bioresour. Technol.* 341, doi:10.1016/j.biortech.2021.125802)
+and Yeghiazaryan et al. 2026 (*Bioresour. Technol.*, doi:10.1016/j.biortech.2026.134365)
+— sit behind hosts this environment cannot reach (IWA, Elsevier, HAL, PMC all blocked
+on 2026-09-02). Their values must be checked when access exists; a value outside
+0.02–0.1 kmol N m⁻³ changes the constant.
+
+**Alternatives.** Set the constant from the IC50 ratio alone (0.02; rejected: makes SAO
+lose at 500 mg L⁻¹, contradicting Hao 2021); make SAO immune to ammonia (rejected by the
+lead on 2026-09-02).
+
+---
+
+## 2026-09-02 — The SAO Level-6 scenario runs on Plant A, not Plant B
+
+**Decision.** The "Omitted SAO pathway" structural scenario (proposal §6.3, Level 6) and
+its Level-7 compound run on **Plant A** (agricultural co-digestion, statistics-anchored).
+Plant B (Muscatine WRRF, municipal sludge with high-strength waste) does not get an SAO
+scenario.
+
+**Reason, from the Muscatine daily file (`anchor/raw/iowa-muscatine-wrrf/LABS-raw.csv`,
+1,103 rows).**
+
+| Quantity | Value |
+|---|---|
+| Reported SRT | mean 24.7 d, median 22.2 d, p10–p90 16–35 d |
+| HRT from feed volumes (2 × 485,000 gal ÷ daily TWAS + PS + HSW + FOG) | median 19.5 d, p10–p90 12.6–37.6 d |
+| Digester pH | mean 7.25, p10–p90 7.04–7.43 |
+| Alkalinity | mean 5.0 g CaCO₃ L⁻¹ |
+| Ammonia | **not measured** (no column in the daily or SCADA files) |
+
+A municipal sludge digester at pH 7.25 and 5 g CaCO₃ L⁻¹ alkalinity carries total
+ammonia of the order 1–1.5 g N L⁻¹, hence free ammonia of ≈ 15–40 mg N L⁻¹ at 35 °C
+(pK_a 8.95): an order of magnitude below the 200 mg L⁻¹ pathway-shift threshold (Hao
+et al. 2017, 2021 above). Without that pressure acetoclasts win on affinity (the SAO
+acetate threshold is 0.4–0.45 mM, Westerholm et al. 2019), so SAO cannot be the
+dominant acetate sink at Plant B whatever its growth rate. Growth alone would already
+be marginal: at the median 19.5–22 d retention the dilution-plus-decay rate is
+0.065–0.07 d⁻¹, which only the fastest published generation times (3–10 d, μ_max
+0.07–0.23 d⁻¹) exceed, and the configured 0.08 d⁻¹ does not once any inhibition applies.
+
+Plant A (cattle slurry + grass silage, 41 °C, 28-d HRT per reactor, AFBI Hillsborough;
+Tisocco et al. 2024) is the ammonia-relevant plant: slurry/silage co-digestion runs at
+free ammonia of 150–250 mg L⁻¹ even at modest loading (Xie et al. 2017, pig manure +
+grass silage, *Int. Biodeterior. Biodegrad.* 123, doi:10.1016/j.ibiod.2017.07.005),
+inside the shift window. Plant A's own TAN and pH envelope are entered from the
+Tisocco tables when `configs/plant_a_statistics.yaml` is written.
+
+**Condition for the plant-configuration PR.** At Plant A's frozen HRT and ammonia
+envelope the truth model must actually establish SAO (a test: X_sao grows and takes
+over from a small seed within the scenario horizon). With μ_max 0.08 d⁻¹, decay
+0.02 d⁻¹ and `K_I_nh3_sao` 0.05, a 28-d HRT leaves a margin of only ≈ 0.01 d⁻¹ at
+250 mg L⁻¹ free ammonia (dilution + decay 0.056 d⁻¹ against 0.08 × 0.73 × Monod), so
+the scenario may need Plant A's upper HRT range, a longer horizon, or `k_m_sao` at the
+literature's fast end. That is design content and goes to the lead with that PR.
+
+**Alternatives.** Put SAO on Plant B with an ammonia-spiking feed event (rejected: not
+what the anchor data show; would make B's "dataset-anchored" claim false for that
+scenario); put it on Plant C (rejected: same ammonia argument as B).
+
+---
+
+## 2026-09-02 — SAO pH window, calcite simplifications and SI flag, K_sp(T), strong ions
+
+**Decisions (lead, 2026-09-02).**
+
+1. **SAO uses the hydrogenotrophic pH limits** (`pH_UL_h2` / `pH_LL_h2`), not the
+   acidogen ones: SAO only proceeds coupled to hydrogenotrophic methanogenesis, so the
+   pair is limited by the methanogen's window. Tested.
+2. **Calcite stays without a surface term and without dissolution**, and this is
+   documented rather than modelled: the rate is zero for SI < 1, and the model now
+   reports `calcite_SI` and a flag `calcite_undersaturated` (1 when SI < 1 while
+   X_caco3 > 0, i.e. wherever dissolution would occur) so that runs entering that
+   regime are visible in the derived outputs. X_caco3 leaves with the liquid (no solids
+   retention). Tested.
+3. **K_sp of calcite is temperature-dependent** through Plummer & Busenberg (1982,
+   *Geochim. Cosmochim. Acta* 46, 1011–1040):
+   log₁₀ K_sp = −171.9065 − 0.077993 T + 2839.319/T + 71.595 log₁₀ T, evaluated at
+   T_op (pK 8.480 at 25 °C, 8.543 at 35 °C, 8.709 at 55 °C). It is a cited physical
+   relation in code, like the Davies A(T), and no longer a config parameter. pK_a2 is
+   still the 25 °C value (10.33); Plummer & Busenberg give K₂(T) as well, and applying
+   it is a one-line follow-up if the reviewer wants SI fully consistent.
+4. **Strong-ion convention.** `S_cat` and `S_an` are ADM1's lumped monovalent strong
+   cations and anions (kmol charge m⁻³) and enter the ionic strength with |z| = 1, as
+   Na⁺/K⁺ and Cl⁻. Divalent strong ions (Mg²⁺, SO₄²⁻) are not represented; Ca²⁺ from
+   the calcite extension is the only divalent ion in I. A feed rich in divalent ions
+   understates I by up to a factor of two per divalent equivalent. Documented in the
+   configuration.
+
+**Alternatives.** Model dissolution as the reverse of the SI law (rejected for Phase 1:
+adds a rate constant no scenario needs; the flag makes the omission visible); keep
+K_sp as a 25 °C config constant (rejected: a 70 % error in K_sp at 55 °C for Plant A's
+thermophilic sibling would be a silent unit-like choice).

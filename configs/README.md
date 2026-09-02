@@ -19,6 +19,7 @@ is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
   `sao` (X_sao, acetate oxidation + decay, own NH₃ inhibition), `ionic_strength` (Davies
   activity correction with A scaled to T_op; no new states), `carbonate` (second
   carbonic-acid dissociation in the balance; own switch, default off) and
-  `precipitation` (S_ca, X_caco3, SI-based calcite rate). `shared_parameters` holds
-  constants used by more than one extension (pK_a2). Loaded by
-  `sim.adm1.load_extensions`; each extension is switchable independently.
+  `precipitation` (S_ca, X_caco3, SI-based calcite rate; K_sp from Plummer & Busenberg
+  1982 at T_op, in code, not a parameter). `shared_parameters` holds constants used by
+  more than one extension (pK_a2). Loaded by `sim.adm1.load_extensions`; each extension
+  is switchable independently.
