@@ -9,9 +9,11 @@ agricultural co-digestion configuration of Plant A. One excellent open dataset e
 for a sewage-sludge plant with heavy industrial co-digestion (Plant C, and a
 reasonable stand-in for Plant B's high-load episodes): the Muscatine WRRF datasets
 (ODC-By 1.0; daily 2020–2023 plus 1-minute SCADA 2022–2023). The recommendation
-(§4) is to anchor Plants B and C to Muscatine, to anchor Plant A to the published
-summary statistics of the two Tisocco et al. papers while requesting their plant data,
-and to write §8 of the paper accordingly.
+(§4) — anchor Plants B and C to Muscatine, anchor Plant A to the published summary
+statistics of the two Tisocco et al. papers, and write §8 of the paper accordingly —
+was **accepted by the lead on 2026-09-02 with amendments**: no author data request in
+Phase 1, Plant A statistics-anchored permanently for this phase and run as a reduced,
+separately reported subset (Levels 2–5, Tier A). See `docs/decisions.md`.
 
 ---
 
@@ -141,7 +143,7 @@ sub-daily-resolution but weekly (Holliger), or lab/household scale.
 
 ---
 
-## 4. Recommendation (needs domain sign-off)
+## 4. Recommendation (accepted with amendments, 2026-09-02; see `docs/decisions.md`)
 
 1. **Primary anchor: Muscatine WRRF** for Plant C (sewage sludge) and, with stated
    caveats, for Plant B's high-nitrogen/overload character (industrial organic waste and
@@ -158,17 +160,16 @@ sub-daily-resolution but weekly (Holliger), or lab/household scale.
    2023/2024 and 2026 (operating envelope, feedstock tables, weekend-feeding pattern,
    NSE/RMSE of ADM1-R3) as the quantitative target for Plant A's influent generator and
    for the expected forecasting skill. State plainly in the paper that no open
-   full-scale agricultural co-digestion time series exists. In parallel, ask the authors
-   (Teagasc/AFBI; Aarhus University) for the plant data under a data-use agreement
-   (proposal §13 asks for agreements before week 6). If obtained, it does not need to be
-   redistributed to be used for §8 step 2.
+   full-scale agricultural co-digestion time series exists. *Amended by the lead:* no
+   author data request is made in Phase 1; Plant A stays statistics-anchored for the
+   whole phase and runs a reduced subset (Levels 2–5 at Tier A) reported separately,
+   outside the §7 factorial, whose two plants are B and C.
 3. **Secondary: ILRI farm-scale set** for Tier-A sampling irregularity and for Phase 3
    realism. Do not use it for Plant A/B/C statistics.
 4. Do **not** use the Chiguer GitHub CSV (no licence, provenance unclear) or any BSM2
    influent as an anchor.
-5. The lead may prefer a stricter reading in which Plant B has no anchor at all; then
-   §8 for Plant B also falls back to published summary statistics (food-waste plants in
-   the review, Part 1) and the paper says so.
+5. The benchmark card and the paper describe Plant A as *statistics-anchored* and
+   Plants B and C as *dataset-anchored* (lead's decision).
 
 What §8 of the paper should then say: "The simulator is anchored to one open full-scale
 dataset (Muscatine WRRF; sewage sludge with industrial co-digestion) for influent

@@ -171,9 +171,10 @@ fetch in CI (rejected: makes the offline tests depend on the network); a DVC rem
 
 ---
 
-## 2026-09-02 — Proposed anchor: Muscatine WRRF for Plants B/C, published summary statistics for Plant A (awaiting sign-off)
+## 2026-09-02 — Proposed anchor: Muscatine WRRF for Plants B/C, published summary statistics for Plant A
 
-**Decision (proposed, not yet accepted).** Anchor the simulator to the Muscatine WRRF
+**Decision (proposed; accepted with amendments by the lead the same day — see the
+next entry).** Anchor the simulator to the Muscatine WRRF
 datasets (Schroer & Just 2024, ODC-By 1.0) for Plant C and, with stated caveats, for
 Plant B's load-swing behaviour; anchor Plant A to the published operating envelopes and
 feedstock tables of Tisocco et al. (2024, 2026) because no open full-scale agricultural
@@ -206,3 +207,34 @@ rejects any `datasets` entry of kind `simulated`.
 **Reason.** Proposal §8 exists to show the simulator is "not fantasy"; anchoring to
 another simulation would be circular. The BSM2 influent is still needed for the
 Milestone-2 ring test, but that is a numerics check, not an anchor.
+
+---
+
+## 2026-09-02 — Plant A is statistics-anchored for all of Phase 1; the factorial plants are B and C
+
+**Decision (by the lead).** No author data request is made in Phase 1. Plant A
+(agricultural co-digestion) remains anchored to the published summary statistics of
+Tisocco et al. (2024, 2026) for the whole phase; Plants B and C are dataset-anchored
+to the Muscatine WRRF datasets. Consequences, applied to the proposal copy in
+`docs/proposal.md`:
+
+1. The §7 factorial's two plants are **B and C**. Plant A runs a **reduced subset —
+   Levels 2–5 at Tier A —** and is reported separately, outside the factorial
+   statistics.
+2. The benchmark card and the paper describe **A as statistics-anchored** and **B and C
+   as dataset-anchored**, in those words.
+3. The week-6 "request plant data / data-use agreement" item is removed from
+   `docs/milestones.md`; proposal §13 no longer expects data-use agreements.
+
+**Reason.** A data request has an uncertain outcome and timeline and would leave the
+influent generator for Plant A unfixable until it resolved, which blocks Milestone 3.
+Fixing Plant A's status now makes the factorial design and the paper's claims
+definite. Keeping Plant A as a separately reported subset preserves the
+agricultural-domain scenarios the review motivates without letting a
+statistics-anchored plant carry factorial weight it cannot support.
+
+**Alternatives.** Request the data in parallel and decide later (rejected: leaves the
+design open past the week-9 gate); drop Plant A entirely (rejected: loses the
+grass-silage/slurry domain where ADM1 defaults are weakest); run Plant A in the full
+factorial with a caveat (rejected: a caveat does not change what the statistics
+assume).

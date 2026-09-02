@@ -81,11 +81,12 @@ figures above are development cost only.
 
 ### Session 2026-09-02 (second session) — open anchor datasets for §8
 
-**Exit criterion "open datasets identified": partially done.** Datasets are identified,
-characterised and (where openly licensed) fetched with checksums; the *choice* of anchor
-is a recommendation that still needs the lead's sign-off, and the Plant-A anchor can only
-be published summary statistics because no open full-scale agricultural co-digestion
-time series exists. Full write-up: `docs/anchor_datasets.md`.
+**Exit criterion "open datasets identified": done.** Datasets are identified,
+characterised and (where openly licensed) fetched with checksums, and the lead has fixed
+the anchor: Plants B and C dataset-anchored to Muscatine WRRF; Plant A
+statistics-anchored to Tisocco et al. (2024, 2026) for all of Phase 1, with a reduced,
+separately reported scenario subset. Full write-up: `docs/anchor_datasets.md`; decision
+and consequences: `docs/decisions.md`, proposal v0.2.
 
 **Done**
 
@@ -104,25 +105,32 @@ time series exists. Full write-up: `docs/anchor_datasets.md`.
   deposits its plant data. Recorded their operating envelopes as the Plant-A summary
   statistics.
 
+**Decided at end of session**
+
+- Anchor recommendation **accepted with amendments** by the lead: no author data
+  request in Phase 1; Plant A statistics-anchored permanently for this phase; the §7
+  factorial plants are B and C; Plant A runs Levels 2–5 at Tier A and is reported
+  separately; benchmark card and paper describe A as statistics-anchored and B/C as
+  dataset-anchored. Proposal copy bumped to v0.2. Recorded in `docs/decisions.md`.
+
 **Blocked / open**
 
-- Plant-A time series: not open. Action for the lead: request the AFBI Hillsborough
-  and AU Foulum data from the authors under a data-use agreement (proposal §13, before
-  week 6).
-- Domain sign-off on the recommendation (Muscatine for Plants B/C; summary statistics
-  for Plant A; ILRI set for Tier-A irregularity only).
 - Three pages could not be read from this environment (MDPI, IWA, ScienceDirect return
   403); their data statements are recorded as unknown, not guessed.
 
 **Next session should start on**
 
-1. Lead decision on the anchor recommendation; record it in `docs/decisions.md`.
+1. Milestone 2 truth model: `sim/adm1/` skeleton (state vector, Petersen matrix as data
+   in `configs/`, rate function, gas phase, algebraic pH) ring-tested against
+   `scripts/adm1_candidates/results/bsm2python.json` on Probes 1 and 2, then the three
+   extensions of §6.1 (ionic-strength correction, syntrophic acetate oxidation,
+   precipitation / inorganic-carbon sink).
 2. `anchor/ingest_muscatine.py`: parse the daily and SCADA files into the unit-explicit
    schema (°F → °C, gallons → m³, cfm → m³ d⁻¹ with an explicit "reference conditions
    unknown" flag), then compute the §8 step-2 statistics (feed-batch variability,
-   missingness-by-event, SCADA noise and dropout) for the influent and observation
-   models.
-3. Milestone 2 `sim/adm1/` skeleton and ring test as planned above.
+   missingness-by-event, SCADA noise and dropout) for Plants B and C.
+3. `configs/plant_a_statistics.yaml`: the Tisocco et al. operating envelopes and
+   feedstock tables as the Plant-A anchor, with citations.
 
 **Resource cost this session (rough)**
 
