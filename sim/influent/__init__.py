@@ -27,6 +27,7 @@ from sim.influent.mapping import (
     cod_loading_rate,
     constant_influent,
     extension_influent,
+    feed_cod_per_m3,
     feed_concentrations,
     implied_tkn,
     mix_feeds,
@@ -34,7 +35,9 @@ from sim.influent.mapping import (
     organic_loading_rate,
     tkn_consistent,
 )
+from sim.influent.nitrogen import feed_tkn, truth_inert_nitrogen, truth_parameters
 from sim.influent.schema import (
+    COD_EQUIVALENTS_KG_COD_PER_KG,
     FRACTION_NAMES,
     CODFractionation,
     FeedFractionation,
@@ -42,6 +45,7 @@ from sim.influent.schema import (
 )
 
 __all__ = [
+    "COD_EQUIVALENTS_KG_COD_PER_KG",
     "COD_STATES",
     "CONFIG_DIR",
     "FEED_FRACTIONATION",
@@ -53,7 +57,9 @@ __all__ = [
     "cod_loading_rate",
     "constant_influent",
     "extension_influent",
+    "feed_cod_per_m3",
     "feed_concentrations",
+    "feed_tkn",
     "implied_tkn",
     "load_feed_fractionation",
     "mix_feeds",
@@ -62,4 +68,6 @@ __all__ = [
     "sample_fractionation",
     "sample_true_fractionations",
     "tkn_consistent",
+    "truth_inert_nitrogen",
+    "truth_parameters",
 ]
