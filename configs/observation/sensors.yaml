@@ -1,0 +1,364 @@
+# Observation model: sensor specifications and instrumentation tiers (proposal §6.1, §6.4).
+# Schema: sim/observation/schema.py. Loaded by sim.observation.load_observation_config.
+#
+# STATUS: the lead's defaults of 2026-09-02 (docs/decisions.md, "Observation model defaults
+# (the lead's answers)"). Two channels remain ANCHORED to the Muscatine 1-minute SCADA file
+# and are re-derived by tests/test_observation.py; everything else is ASSUMED, as the lead
+# set it, and marked.
+#
+# WHAT THE ANCHOR GIVES (SCADA-raw.csv, 500,400 rows at 1 min, one year, two digesters;
+# ODC-By 1.0, anchor/MANIFEST.json):
+#   * digester temperature: 1-minute noise sigma 0.052 degF = 0.029 K (robust estimate:
+#     1.4826 x MAD of the first difference / sqrt(2), insensitive to the real process
+#     movement underneath); stuck-value runs of >= 10 min are 0.0765 % of the time.
+#   * total biogas flow: 1-minute noise sigma 2.35 cfm on a mean of 112.8 cfm = 2.1 %
+#     relative; stuck-value runs of >= 10 min are 0.0144 % of the time (both fractions
+#     re-measured after an off-by-one in the run marker was fixed; see the decisions log).
+#   * MISSINGNESS CANNOT BE ANCHORED: the provider pre-cleaned the SCADA file and the two
+#     columns are 100 % finite, so every rate below is the lead's design value.
+#
+# WHAT BELONGS TO THE TIER, NOT THE SENSOR (lead's decision 2026-09-02). A tier is a
+# plant's monitoring capability, so it carries: the base missing rate, the laboratory
+# turnaround, and the instrument recalibration cadence. A sensor carries only what is
+# intrinsic to the instrument (schedule, noise, drift scale, fouling, flatline,
+# saturation). Tiers remain nested masks on identical truth (§6.4).
+#
+# CONVENTIONS (CLAUDE.md rule 6). Gas volumes carry `gas_convention`: `stp_dry` is 0 degC,
+# 1 atm, water vapour removed; `operating_wet` is the BSM2 meter convention. Gas fractions
+# are mole fractions of the DRY gas. Solids carry `solids_basis`.
+#
+# NOT MODELLED, and why: H2S (no sulfur in ADM1, so the Tier-C off-gas H2S of §6.4 has no
+# truth to observe - declared rather than faked); reactor temperature varies only as
+# sensor noise, because the truth model integrates at a fixed set point.
+
+version: 2
+
+# When the condition flags that drive missingness are raised.
+conditions:
+  fos_tac_overload: 0.40      # DESIGN  -; APPROVED by the lead 2026-09-02. ANCHORED: the
+                              # Muscatine daily file's own FOS/TAC (Dig1-FOS-TAC, n = 861)
+                              # has median 0.23, p90 0.37, p95 0.44, max 0.93, so 0.40 is
+                              # the ~92nd percentile: an overload flag raised on roughly
+                              # 8 % of days at a real co-digestion plant. Our channel is
+                              # the same ratio on the same units (kg/m3 over kg CaCO3/m3):
+                              # feeding the plant's own VFA and alkalinity through the
+                              # channel formula returns the plant's own FOS/TAC column
+                              # (tested). NOTE this describes the ANCHOR's distribution,
+                              # not ours: a healthy simulated digester sits at FOS/TAC
+                              # 0.01-0.07 against the plant's median 0.23, because a
+                              # converged ADM1 steady state carries far less residual VFA
+                              # than a real plant and a titrimetric FOS over-reads. The
+                              # threshold is reachable under load (VFA 1.0 kg/m3 at the
+                              # anchor's median alkalinity crosses it, and the anchor
+                              # exceeds that VFA on a third of its days) but it will fire
+                              # on fewer simulated days than on the plant's. FLAGGED.
+  fos_tac_foaming: 0.30       # DESIGN  -; ASSUMED: the ~78th percentile of the same column;
+                              # foaming needs acidification AND a gas surge, so its FOS/TAC
+                              # threshold is lower than the overload one.
+  gas_surge_ratio: 1.35       # DESIGN  -; ASSUMED: gas rate 35 % above its own trailing
+                              # median. Not anchored: Muscatine records no foaming events.
+  gas_median_window_d: 14.0   # DESIGN  d; ASSUMED: two weeks of trailing gas history.
+  source: "fos_tac_overload APPROVED by the lead, ANCHORED to muscatine_daily Dig1-FOS-TAC; the foaming rule is ASSUMED"
+
+# Conditional missingness (proposal §6.1). Base rate by TIER, stress multipliers by
+# instrument KIND. Lead's decision 2026-09-02; every value ASSUMED (no dropout statistics
+# exist in the anchor - the SCADA file is pre-cleaned and 100 % finite).
+missingness:
+  base_rate_by_tier:
+    A: 0.08                   # DESIGN  -; ASSUMED: the constrained plant loses most
+    B: 0.04                   # DESIGN  -; ASSUMED
+    C: 0.02                   # DESIGN  -; ASSUMED: the best-instrumented plant loses least
+  stress_multipliers_by_kind:
+    online:
+      overload: 4.0           # DESIGN  -; ASSUMED: an online probe in an overloaded digester
+      foaming: 3.0            # DESIGN  -; ASSUMED
+    lab:
+      overload: 1.5           # DESIGN  -; ASSUMED: a grab sample is far less affected
+      foaming: 1.5            # DESIGN  -; ASSUMED: the lead gave one figure for lab assays,
+                              # applied to both flags (recorded in the decisions log)
+  source: "ASSUMED throughout (lead's decision 2026-09-02); the anchor carries no dropouts"
+
+sensors:
+  # ------------------------------------------------------------------ Tier A (online)
+  temperature:
+    name: temperature
+    channel: temperature
+    kind: online
+    unit: K
+    sampling_interval_d: 1.0    # DESIGN  d; daily mean of the 1-minute SCADA record
+    noise:
+      cv: 0.0
+      sd_abs: 0.03              # DESIGN  K; ANCHORED: 1-minute sigma 0.029 K from SCADA-raw.
+                                # Kept at the 1-minute value rather than divided by sqrt(1440)
+                                # for a daily mean, because a daily mean of a drifting probe
+                                # is not sqrt-n better; ASSUMED conservative.
+      source: "muscatine_scada: D1_TEMPERATURE / D2_TEMPERATURE"
+    drift:
+      sd_per_sqrt_d: 0.01       # DESIGN  K/sqrt(d); ASSUMED: a PT100 in a digester drifts slowly
+      bound: 1.0                # DESIGN  K; ASSUMED
+      recalibrated: false       # a digester thermocouple is not routinely recalibrated
+      source: ASSUMED
+    flatline:
+      hazard_per_d: 0.00077     # DESIGN  1/d; ANCHORED: stuck runs of >= 10 min are 0.0765 %
+                                # of the SCADA record, and the mask's occupancy is
+                                # hazard x duration = 0.00077 x 1 d, so this IS that figure.
+                                # (It was 0.002 at a declared 0.4 d; an episode shorter than
+                                # the sampling interval is rounded up to one sample, so the
+                                # realised occupancy was 0.002, 2.5x the anchor. The schema
+                                # now rejects a sub-interval duration.)
+      mean_duration_d: 1.0      # DESIGN  d; the daily schedule's own resolution. The longest
+                                # stuck run in the 1-minute record is 149 min, i.e. well
+                                # under one daily sample: at this schedule a flatline is a
+                                # single held reading.
+      source: "muscatine_scada: consecutive identical D1_TEMPERATURE values"
+    saturation: {low: 273.15, high: 353.15}   # DESIGN  K; ASSUMED: the SCADA dictionary's
+                                              # acceptable range is 85-150 degF (302-339 K)
+    source: "noise and flatline ANCHORED to muscatine_scada; drift ASSUMED"
+
+  ph:
+    name: ph
+    channel: pH
+    kind: online
+    unit: pH units
+    sampling_interval_d: 1.0    # DESIGN  d; §6.4 Tier A: daily pH
+    noise:
+      cv: 0.0
+      sd_abs: 0.02              # DESIGN  pH units; ASSUMED (lead's default 2026-09-02)
+      source: "ASSUMED (lead's default)"
+    drift:
+      sd_per_sqrt_d: 0.0137     # DESIGN  pH units/sqrt(d); ASSUMED (lead's default): 0.05-0.1
+                                # pH per month of electrode ageing. A random walk accumulates
+                                # sd = s sqrt(t), so s = (pH/month) / sqrt(30 d): the range
+                                # maps to 0.0091-0.0183 and this is its midpoint (0.075/month).
+                                # The sensor's OWN drift; the Level-2 scenario's deliberate
+                                # drift is injected on top (sim.faults).
+      bound: 0.5                # DESIGN  pH units; ASSUMED
+      recalibrated: true        # on the tier's cadence: monthly at B/C, quarterly at A
+      source: "ASSUMED (lead's default, converted from pH per month)"
+    fouling:
+      hazard_per_d: 0.005       # DESIGN  1/d; ASSUMED: biofilm on the probe
+      mean_duration_d: 7.0      # DESIGN  d; ASSUMED: until the next manual clean
+      gain: 1.0                 # DESIGN  -; fouling of a pH probe is an offset, not a gain
+      offset: -0.15             # DESIGN  pH units; ASSUMED: a fouled electrode reads low
+      source: ASSUMED
+    saturation: {low: 0.0, high: 14.0}   # DESIGN  pH units; the instrument's range
+    source: "ASSUMED (lead's defaults)"
+
+  gas_flow:
+    name: gas_flow
+    channel: q_gas_stp_dry
+    kind: online
+    unit: m3/d
+    gas_convention: stp_dry     # corrected volume: 0 degC, 1 atm, dry
+    sampling_interval_d: 1.0    # DESIGN  d; §6.4 Tier A: daily corrected biogas volume
+    noise:
+      cv: 0.021                 # DESIGN  -; ANCHORED: 1-minute sigma 2.35 cfm on a mean of
+                                # 112.8 cfm (Biogas column, robust first-difference estimate)
+      sd_abs: 0.0
+      source: "muscatine_scada: Biogas"
+    drift:
+      sd_per_sqrt_d: 0.0        # DESIGN  m3/d per sqrt(d); a thermal mass meter's error is a
+                                # SCALE error, injected as the Level-2 gas_meter_scale fault
+      bound: 0.0
+      recalibrated: false
+      source: "no zero drift by design; scale error is a fault"
+    flatline:
+      hazard_per_d: 0.00014     # DESIGN  1/d; ANCHORED: stuck runs of >= 10 min are 0.0144 %
+                                # of the SCADA record; occupancy = 0.00014 x 1 d = that
+                                # figure exactly (was 0.0005 at 0.2 d, realised 0.0005 = 3.5x)
+      mean_duration_d: 1.0      # DESIGN  d; the daily schedule's resolution (the longest
+                                # stuck run in the 1-minute record is 72 min)
+      source: "muscatine_scada: consecutive identical Biogas values"
+    saturation: {low: 0.0, high: null}   # DESIGN  m3/d; a flow meter cannot read negative
+    source: "noise and flatline ANCHORED to muscatine_scada"
+
+  # ------------------------------------------------------------------ Tier B adds
+  ch4_fraction:
+    name: ch4_fraction
+    channel: ch4_fraction
+    kind: online
+    unit: "- (mole fraction of dry gas)"
+    gas_convention: stp_dry
+    sampling_interval_d: 1.0    # DESIGN  d; §6.4 Tier B: continuous CH4 fraction, reported daily
+    noise:
+      cv: 0.0
+      sd_abs: 0.01              # DESIGN  mole fraction; ASSUMED (lead's default): +/- 1 %
+                                # ABSOLUTE, i.e. one percentage point of methane content,
+                                # not 1 % of the reading
+      source: "ASSUMED (lead's default)"
+    drift:
+      sd_per_sqrt_d: 0.0009     # DESIGN  fraction/sqrt(d); ASSUMED (lead's default): 0.5 %
+                                # (absolute) per month = 0.005 / sqrt(30 d)
+      bound: 0.03               # DESIGN  fraction; ASSUMED
+      recalibrated: true        # on the tier's cadence
+      source: "ASSUMED (lead's default, converted from per month)"
+    flatline:
+      hazard_per_d: 0.001       # DESIGN  1/d; ASSUMED: the Level-2 scenario injects a 6-day
+                                # flatline deliberately; this is the background rate. Occupancy
+                                # 0.001 x 1 d, unchanged from the 0.002 x 0.5 d it was
+                                # declared as (which the mask realised as 0.002).
+      mean_duration_d: 1.0      # DESIGN  d; ASSUMED: one held daily reading
+      source: ASSUMED
+    saturation: {low: 0.0, high: 1.0}    # DESIGN  fraction
+    source: "ASSUMED (lead's defaults)"
+
+  alkalinity:
+    name: alkalinity
+    channel: alkalinity_total
+    kind: lab
+    unit: kg CaCO3/m3
+    sampling_interval_d: 7.0    # DESIGN  d; §6.4 Tier B: weekly alkalinity
+    noise: {cv: 0.05, sd_abs: 0.0, source: "ASSUMED (lead's default)"}   # DESIGN  -
+    source: "ASSUMED (lead's default)"
+
+  vfa_total:
+    name: vfa_total
+    channel: vfa_total
+    kind: lab
+    unit: kg/m3 as acetic acid
+    sampling_interval_d: 7.0    # DESIGN  d; §6.4 Tier B: weekly total VFA
+    noise: {cv: 0.08, sd_abs: 0.0, source: "ASSUMED (lead's default)"}   # DESIGN  -
+    source: "ASSUMED (lead's default)"
+
+  tan:
+    name: tan
+    channel: tan
+    kind: lab
+    unit: kg N/m3
+    sampling_interval_d: 7.0    # DESIGN  d; §6.4 Tier B: weekly TAN. Tisocco 2024 §2.2.2
+                                # samples the digestate weekly for NH4-N, the Plant-A anchor
+                                # for this schedule
+    noise:
+      cv: 0.05                  # DESIGN  -; ASSUMED: gas-sensing electrode (tisocco_2024).
+                                # NOT in the lead's default list; kept at the alkalinity and
+                                # COD level and flagged in the decisions log.
+      sd_abs: 0.0
+      source: "tisocco_2024 §2.2.1 method; cv ASSUMED (not in the lead's list)"
+    source: "ASSUMED"
+
+  cod_total:
+    name: cod_total
+    channel: cod_total
+    kind: lab
+    unit: kg COD/m3
+    sampling_interval_d: 7.0    # DESIGN  d; §6.4 Tier B: weekly COD
+    noise: {cv: 0.05, sd_abs: 0.0, source: "ASSUMED (lead's default)"}   # DESIGN  -
+    source: "ASSUMED (lead's default)"
+
+  # ------------------------------------------------------------------ Tier C adds
+  vfa_ac:
+    name: vfa_ac
+    channel: vfa_ac
+    kind: lab
+    unit: kg/m3 as acetic acid
+    sampling_interval_d: 7.0    # DESIGN  d; §6.4 Tier C: VFA speciation
+    noise: {cv: 0.08, sd_abs: 0.0, source: "ASSUMED (lead's default: VFA 8 %)"}   # DESIGN  -
+    source: "ASSUMED (lead's default)"
+  vfa_pro:
+    name: vfa_pro
+    channel: vfa_pro
+    kind: lab
+    unit: kg/m3 as propionic acid
+    sampling_interval_d: 7.0
+    noise: {cv: 0.08, sd_abs: 0.0, source: "ASSUMED (lead's default: VFA 8 %)"}   # DESIGN  -
+    source: "ASSUMED (lead's default)"
+  vfa_bu:
+    name: vfa_bu
+    channel: vfa_bu
+    kind: lab
+    unit: kg/m3 as butyric acid
+    sampling_interval_d: 7.0
+    noise: {cv: 0.08, sd_abs: 0.0, source: "ASSUMED (lead's default: VFA 8 %)"}   # DESIGN  -
+    source: "ASSUMED (lead's default)"
+  vfa_va:
+    name: vfa_va
+    channel: vfa_va
+    kind: lab
+    unit: kg/m3 as valeric acid
+    sampling_interval_d: 7.0
+    noise:
+      cv: 0.15                  # DESIGN  -; ASSUMED (lead's decision 2026-09-02, answering
+                                # the flag that 8 % is optimistic here): valerate is the
+                                # scarcest of the four acids and sits at the quantification
+                                # limit of the GC method, so it carries roughly twice the
+                                # relative error of the others AND a floor.
+      sd_abs: 0.05              # DESIGN  kg/m3 as valeric acid = 0.05 g/L; ASSUMED (lead's
+                                # decision): the method's quantification floor. Below about
+                                # 0.33 kg/m3 the floor dominates the relative term. The two
+                                # terms are INDEPENDENT draws (sim.observation.model), so the
+                                # total sd is sqrt((v x 0.15)^2 + 0.05^2).
+      source: "ASSUMED (lead's decision 2026-09-02; the other three speciated acids stay at 8 %)"
+    source: "ASSUMED (lead's decision: valerate alone carries 15 % + a 0.05 g/L floor)"
+  h2_offgas:
+    name: h2_offgas
+    channel: h2_ppm
+    kind: online
+    unit: ppm by volume of dry gas
+    gas_convention: stp_dry
+    sampling_interval_d: 1.0    # DESIGN  d; §6.4 Tier C: off-gas H2
+    noise:
+      cv: 0.15                  # DESIGN  -; ASSUMED: an electrochemical H2 cell is poor
+      sd_abs: 1.0               # DESIGN  ppm; ASSUMED: its floor dominates at digester levels.
+                                # The two terms are INDEPENDENT draws (sim.observation.model).
+      source: "ASSUMED (not in the lead's list)"
+    drift:
+      sd_per_sqrt_d: 0.2        # DESIGN  ppm/sqrt(d); ASSUMED: electrochemical cells drift
+      bound: 10.0               # DESIGN  ppm; ASSUMED
+      recalibrated: true        # on the tier's cadence
+      source: ASSUMED
+    saturation: {low: 0.0, high: 1000.0}   # DESIGN  ppm; ASSUMED cell range
+    source: ASSUMED
+  digestate_vs:
+    name: digestate_vs
+    channel: vs
+    kind: lab
+    unit: kg VS/m3
+    solids_basis: wet           # per m3 of digestate
+    sampling_interval_d: 7.0    # DESIGN  d; §6.4 Tier C: richer fractionation
+    noise: {cv: 0.03, sd_abs: 0.0, source: "ASSUMED (lead's default: TS/VS 3 %)"}   # DESIGN  -
+    source: "ASSUMED (lead's default)"
+  digestate_ts:
+    name: digestate_ts
+    channel: ts
+    kind: lab
+    unit: kg TS/m3
+    solids_basis: wet
+    sampling_interval_d: 7.0
+    noise: {cv: 0.03, sd_abs: 0.0, source: "ASSUMED (lead's default: TS/VS 3 %)"}   # DESIGN  -
+    source: "ASSUMED (lead's default)"
+
+# Tiers are OBSERVATION MASKS on identical truth (§6.4); each contains the one below
+# (validated by the schema and tested). Each also carries the plant's MONITORING
+# CAPABILITY (lead's decision 2026-09-02): laboratory turnaround, recalibration cadence,
+# and - through the `missingness` block above - the base rate at which samples are lost.
+# `feed_assays` names the influent generator's assays visible at the tier.
+tiers:
+  A:
+    tier: A
+    sensors: [temperature, ph, gas_flow]
+    feed_assays: [ts, vs]
+    lab_turnaround_d: 7.0       # DESIGN  d; ASSUMED (lead's default): a constrained plant
+                                # sends samples away and waits a week
+    recalibration_interval_d: 90.0   # DESIGN  d; ASSUMED (lead's default): quarterly at Tier A
+    note: >-
+      §6.4 Tier A (constrained plant): feed mass, reactor temperature, daily pH, daily
+      corrected biogas volume, weekly feed TS/VS. Feed mass is the operator's feed log
+      (sim.influent.generator.OperatorRecord), not a sensor here.
+  B:
+    tier: B
+    sensors: [temperature, ph, gas_flow, ch4_fraction, alkalinity, vfa_total, tan, cod_total]
+    feed_assays: [ts, vs, cod, tkn, tan]
+    lab_turnaround_d: 3.0       # DESIGN  d; ASSUMED (lead's default)
+    recalibration_interval_d: 30.0   # DESIGN  d; ASSUMED (lead's default): monthly at B and C
+    note: "§6.4 Tier B: Tier A + continuous CH4 fraction, weekly alkalinity, total VFA, TAN, COD."
+  C:
+    tier: C
+    sensors: [temperature, ph, gas_flow, ch4_fraction, alkalinity, vfa_total, tan, cod_total,
+              vfa_ac, vfa_pro, vfa_bu, vfa_va, h2_offgas, digestate_vs, digestate_ts]
+    feed_assays: [ts, vs, cod, tkn, tan, alkalinity, ph]
+    lab_turnaround_d: 1.0       # DESIGN  d; ASSUMED (lead's default): an on-site laboratory
+    recalibration_interval_d: 30.0   # DESIGN  d; ASSUMED (lead's default)
+    note: >-
+      §6.4 Tier C: Tier B + VFA speciation, richer fractionation (digestate TS/VS), off-gas
+      H2. Off-gas H2S is NOT here: ADM1 has no sulfur, so there is no truth to observe;
+      periodic activity tests are a requested assay (§6.4), not a scheduled sensor.

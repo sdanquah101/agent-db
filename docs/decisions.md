@@ -1265,3 +1265,432 @@ published range (rejected: the catalogue would no longer reproduce the plant it 
 anchored to, and the OLR test is one of the few anchored checks Plant A has); loosen the
 OLR test (rejected: it would hide the inconsistency the basis change exposed); use a
 lignin-like 1.9 kg COD/kg for lignocellulosic inerts (superseded: the lead fixed ~1.2).
+
+---
+
+## 2026-09-02 — Observation model: channels, sensor specs, tier masks, conditional missingness
+
+**Decision.** `sim/observation/` implements proposal §6.1's observation model and §6.4's
+tiers, with `configs/observation/sensors.yaml` as the declared data.
+
+1. **Channels are hidden truth, records are not.** A *channel* is an observable quantity
+   computed from the truth trajectory (pH, gas flow in both conventions, CH₄/CO₂/H₂
+   fractions on a dry basis, partial and total alkalinity, VFA total and speciated, TAN,
+   free ammonia, COD, digestate VS and TS, and the FOS/TAC stress index), each with its
+   unit and convention. `observe()` turns channels into an `ObservationRecord` through a
+   tier mask; the condition flags that drove missingness stay with the truth.
+2. **Solids without new states.** Volatile solids come from the COD states divided by the
+   COD equivalent of their class, with the two inert states using the influent's own
+   inert equivalent (the inert-COD-weighted mean, the same construction as the truth
+   `N_I`). Ash is not an ADM1 state, so total solids add a **conserved-tracer** balance
+   integrated analytically alongside the run. The frozen ADM1 core is untouched.
+3. **Sensor model.** Schedule, then fouling (a ramped gain/offset episode), bounded
+   random-walk drift with recalibration resets, noise, saturation clipping, flatline
+   (the sensor repeats its last value), conditional missingness, and turnaround lag.
+   Every stage is declared per sensor and every quantity carries its unit and convention.
+4. **Tiers are nested masks.** §6.4 says tiers are masks on identical truth, so the
+   schema *enforces* that B contains A and C contains B, for both sensors and feed
+   assays. Tier A is the three online instruments plus the operator's feed log and the
+   generator's weekly feed TS/VS; B adds CH₄, alkalinity, VFA, TAN and COD; C adds VFA
+   speciation, off-gas H₂ and digestate solids.
+5. **Conditional missingness — the rule.** A scheduled sample is lost with probability
+   `base_rate`, multiplied while a condition flag is raised. Two flags: **overload**
+   (FOS/TAC above 0.40) and **foaming** (FOS/TAC above 0.30 *and* gas above 1.35× its
+   trailing 14-day median). Multipliers are 1.5–2 for the lab assays and 3–6 for the
+   online instruments a foaming digester actually takes out. Because the flags are
+   functions of the state, gaps coincide with the transients that identify the process,
+   which is what makes naive interpolation destructive rather than merely lossy.
+6. **One seeded stream** per run, consumed per sensor in sorted name order with a fixed
+   block per sensor drawn whether or not the sensor declares that effect, so a change to
+   one sensor cannot move another (tested).
+
+**Anchoring.** Two values are re-derived from the Muscatine 1-minute SCADA file by
+`tests/test_observation.py` through `anchor.ingest_muscatine.scada_noise_statistics`:
+digester-temperature noise (0.052 °F = **0.029 K**, robust first-difference estimate) and
+biogas-flow noise (2.35 cfm on 112.8 = **2.1 %** relative), plus both flatline
+occupancies (0.08 % and 0.01 % of the record). The overload threshold is the 92nd
+percentile of the plant's own FOS/TAC column, which our channel reproduces from its VFA
+and alkalinity to r = 0.99. **Everything else is ASSUMED and marked**, including every
+missingness rate: the provider pre-cleaned the SCADA file, so both channels are 100 %
+finite and no dropout statistics exist to fit. **Flagged for the lead.**
+
+**Not modelled, deliberately.** Off-gas H₂S (§6.4 Tier C): ADM1 has no sulfur, so there
+is no truth to observe and the channel is declared absent rather than faked. Reactor
+temperature varies only as sensor noise, because the truth model integrates at a fixed
+set point — the plant's `day_sd_K` belongs to a heating model that is not built.
+
+**Alternatives.** Sample the channels at the truth model's own output times (rejected:
+the schedule is part of the tier); model missingness as a Markov chain over instrument
+health (not chosen for Phase 1: no data to fit the transitions, and the flag-multiplier
+form is the one §6.1 describes); put the FOS/TAC stress index in the record (rejected: it
+is a function of the truth, and a workflow can compute its own from the VFA and
+alkalinity it is given).
+
+---
+
+## 2026-09-02 — Fault injection: magnitude semantics per fault type, and a layer per fault
+
+**Decision.** `sim/faults/` is the fault-injection API of §6.1. The scenario schema
+leaves the meaning of `Fault.magnitude` to the simulator; `sim/faults/schema.py` is that
+mapping — one entry per `FaultType` giving the **unit**, the admissible **range**, the
+**target** and the **layer**, and `benchmark_card_rows()` renders the benchmark card's
+table from the same table, so the card cannot drift from the code.
+
+**Six layers, each applying only its own faults.** `influent` (the generator),
+`parameter` (a truth constant that changes at the onset day, so the run is integrated in
+segments), `state` (the initial vector), `structure` (an extension the fitted model must
+lack, or the two-zone reactor), `observation` (the record only), `workflow` (the tool
+registry and the operator's notes, applied by the run harness). The layer of a fault is
+also what its truth label means in §6.3, which is why the routing is declared rather than
+inferred.
+
+**The fault layer has its own random stream.** Only the mislabelled-feed redraw needs
+randomness, and it draws from `default_rng(fault_seed)` — separate from the generator's
+and the observation model's. A faulted run therefore differs from its clean twin **only**
+by the fault: same deliveries, same mis-logs, same noise, same gaps (tested on both
+layers). Without this the paired comparison a scenario rests on would be confounded by a
+reshuffled stream.
+
+**Magnitude choices worth recording.** `feed_mislabelled` is a Dirichlet concentration
+(smaller = further from the catalogue), which reuses the generator's own spread
+machinery; `unrecorded_delivery` is a multiple of the feed's median delivery;
+`moisture_drift` is the relative change in total solids across the window;
+`imperfect_mixing` is the stagnant volume fraction, with the bypass fixed at a fifth of
+it and the exchange at 1 d⁻¹ (the mid-point of PR #7's 0.2–2 d⁻¹ band), so one number
+sizes the whole non-ideality; `ch4_analyser_flatline` and the two omission faults ignore
+their magnitude, which the table says explicitly.
+
+**The Level-6 mixing variant, wired in and measured.** `truth_mixing()` compiles
+`sim/plants/mixing.py` (parked since the salvage session) as the truth reactor. At
+magnitude 0 it reproduces the extended model bit for bit. At a stagnant fraction of 0.30
+the gas deficit against the CSTR is 24.7, 41.2 and 57.9 m³ d⁻¹ at 0.6×, 1.0× and 1.4× the
+declared feed — **proportional to the load** to within a few per cent, while the relative
+deficit stays near 6 %. That load-proportional signature is what separates a hydraulic
+fault from a kinetic one, which is what the Level-6 row asks a workflow to notice.
+
+**Addendum (self-review of PR #11, same day).** Six findings, all fixed on the branch:
+(1) the observation model drew **one** normal for both the relative and the absolute noise
+term, so the one sensor declaring both (the H₂ cell) had perfectly correlated components
+and a total sd of 2.80 ppm where the independent draws give 2.06 — now two blocks, and the
+documented stream order says so; (2) `ash_trajectory` interpolated the influent flow even
+for a sample-and-hold series — latent only (the error is exactly zero when the output
+times are the influent's own, which is every current call, and 3 % on a four-times finer
+grid), now the declared convention is honoured; (3) the two constants that shape the
+imperfect-mixing structure beyond its magnitude were hard-coded in `sim/faults/plan.py`
+against the repo's convention that design values are reviewable data — moved to
+`configs/faults/injection.yaml` with sources; (4) `build_plan` picked the influent fault's
+target as the *last* of the feed ids it was handed, which silently depends on the caller's
+ordering — a `target_feed` argument now names it, and the test shows the two orderings
+disagree; (5) a dead `channel_unit` helper removed; (6) `channels_from_two_zone` typed
+against `TwoZoneResult` instead of `object`. The rule-1 hygiene check now covers
+`sim/faults` and `sim/observation` as well as `sim/influent` and `sim/plants`.
+
+*Test sizing, not a code defect.* The conditional-missingness test compared a ratio of two
+small counts (109 and 179 losses) against a 35 % tolerance and flaked once the extra noise
+draw shifted the realisation. Pooling forty seeds gives 2.055 ± 0.088 (gas flow) and
+1.981 ± 0.061 (pH) against an expected 2.0, so the estimator is unbiased; the test now
+pools twelve seeds over 6,000 days, which is what makes its 20 % bound meaningful.
+
+**Alternatives.** Apply every fault inside one `run()` function (rejected: the layers
+have different owners and different test surfaces, and a fault that silently touched two
+layers would make its truth label ambiguous); let the magnitude be a typed union per
+fault (rejected: the scenario schema is frozen and a float plus a declared unit is
+auditable); size imperfect mixing with three independent numbers (rejected: a scenario
+row carries one magnitude, and the fixed ratios are recorded here).
+
+---
+
+## 2026-09-02 — FREEZE (by the lead): observation defaults, and missingness as a tier policy
+
+**Decision.** The lead's answers to the flags raised on PR #11. They supersede the
+provisional numbers in "Observation model: channels, sensor specs, tier masks, conditional
+missingness" (same day) wherever the two differ. `configs/observation/sensors.yaml` goes
+to **version 2**.
+
+### 1. Missingness is declared by tier and by instrument kind, not per sensor
+
+The lead gave the base rate *per tier* and the multipliers *per kind of instrument*, which
+is a different shape from the per-sensor block the branch had. The schema follows the
+answer rather than paraphrasing it: `MissingnessPolicy` carries
+
+| | A | B | C |
+|---|---|---|---|
+| base rate | 0.08 | 0.04 | 0.02 |
+
+with multipliers 4× (overload) and 3× (foaming) for online instruments and 1.5× for lab
+assays, and `SensorSpec` no longer carries a missingness block at all.
+
+**The reasoning behind the shape, recorded because it now constrains the code.** How often
+a scheduled sample is simply lost is a property of the *plant's monitoring capability* —
+the constrained Tier-A plant loses most — while how much worse it gets under stress is a
+property of the *instrument* — a probe in a foaming digester fails far more than a grab
+sample sent to a laboratory. Two other values are tier properties by the same argument and
+moved with it: **laboratory turnaround** (7/3/1 d at A/B/C) and the **recalibration
+cadence** (quarterly at A, monthly at B and C). `SensorSpec` therefore lost `missingness`
+and `lag_d`, `DriftModel.recalibration_interval_d` became the boolean `recalibrated`, and
+`TierSpec` gained `lab_turnaround_d` and `recalibration_interval_d`. Tiers remain **masks
+on identical truth** (§6.4): the truth is the same, only the quality of the window differs.
+
+**Interpretations made where the answer was silent, each flagged here rather than buried:**
+
+- The lead gave **one** lab figure ("1.5× lab assays"). It is applied to **both** flags,
+  not to overload alone. The earlier draft gave lab assays an overload multiplier and no
+  foaming one; a foaming digester makes grab sampling harder too, so the symmetric reading
+  is the conservative one.
+- The recalibration cadence applies to every sensor that declares `recalibrated: true` —
+  the pH probe, the CH₄ analyser and the H₂ cell. So the CH₄ analyser is now recalibrated
+  monthly at Tiers B and C and quarterly at Tier A, which the lead did not say explicitly
+  but follows from making the cadence a tier property.
+- The digester thermocouple and the gas meter declare `recalibrated: false`: neither is
+  routinely recalibrated in the field, and the gas meter's error is a *scale* error
+  injected as the Level-2 `gas_meter_scale` fault rather than a zero drift.
+
+### 2. Sensor defaults, and the two conversions they needed
+
+pH noise 0.02 (absolute); CH₄ ±1 % **absolute**, i.e. one percentage point of methane
+content, not 1 % of the reading (`sd_abs: 0.01`, `cv: 0`); laboratory cv 3 % TS/VS, 5 %
+COD, 8 % VFA, 5 % alkalinity. All marked `ASSUMED (lead's default)`.
+
+Two figures were given per month and the model is a random walk, whose sd accumulates as
+`s√t`, so `s = (per month) / √30 d`:
+
+- **pH drift 0.05–0.1 pH/month** → `sd_per_sqrt_d` 0.0091–0.0183; the **midpoint 0.0137**
+  (0.075 pH/month) is used, and the range is recorded in the file.
+- **CH₄ drift 0.5 %/month absolute** → `sd_per_sqrt_d` **0.0009** fraction/√d.
+
+Two sensors are **not** in the lead's list and keep the branch's assumptions, flagged:
+**TAN** at cv 0.05 (a gas-sensing electrode, kept at the alkalinity/COD level) and the
+**H₂ cell** at cv 0.15 with a 1.0 ppm floor. The 8 % VFA figure is applied to all four
+speciated assays as well as to total VFA; valerate sits near the quantification limit, so
+8 % is probably optimistic there and the file says so.
+
+### 3. Feed bases, FOG and the overload threshold — approved as proposed
+
+- Plant A's **cattle slurry moved onto the same Tisocco 2024 basis as the silage**
+  (approved). This went beyond the literal wording of the #10 freeze, which named silage
+  only, and was flagged as such: leaving slurry on the old basis dropped Plant A's OLR to
+  1.17 kg VS m⁻³ d⁻¹, outside the published 1.4–2.1 band, and moving it restores 1.78.
+- **FOG at 2.0 % TS** (approved), the anchor-derived value that replaced the assumed 10 %.
+  The error and its detection are recorded in the **benchmark card**, `docs/benchmark_card.md`
+  §5.1, at the lead's instruction: it is the clearest example the project has of the anchor
+  catching a plausible design value that was wrong.
+- **FOS/TAC overload threshold 0.40** (approved), the ~92nd percentile of the plant's own
+  column.
+
+### 4. Consequences in the tests
+
+`tests/test_observation.py` now checks the tier properties as *tier* properties: the base
+rates 8/4/2 %, the turnarounds 7/3/1 d and the cadences 90/30/30 d as declared; and,
+observed, that on identical truth and the tiers' shared sensors Tier A loses ~4× as many
+samples as Tier C, that the laboratory lag on a weekly assay is the tier's, and that the
+pH probe's drift is reset on the tier's cadence — with only the cadence varied, so the
+same stream and the same draws produce both walks, and the ratio of their rms offsets is
+the √3 the reset interval predicts.
+
+The conditional-missingness ratio is now **4** rather than the 2 the earlier entry's
+test-sizing note quotes, because the online overload multiplier changed. Over forty seeds
+the estimator gives 3.96 ± 0.07 (pH), 4.12 ± 0.07 (gas flow) and 3.92 ± 0.06 (CH₄), so it
+remains unbiased; pooled over the twelve seeds the test uses, the standard error is ~0.12
+and the 20 % tolerance is a ~6 sd bound.
+
+**Alternatives.** Keep the per-sensor missingness block and set every sensor's base rate
+from the tier at load time (rejected: the same number would then be written fifteen times
+and could drift); make the multipliers tier-dependent too (rejected: the lead gave one
+set, and an instrument's failure mode under foaming is not a function of how well the
+plant is instrumented); keep the recalibration interval on the sensor and let the tier
+override it (rejected: two places to look for one number).
+
+---
+
+## 2026-09-02 — Valerate assay carries 15 % plus a 0.05 g/L floor (the lead, on PR #11)
+
+**Decision.** Answering the flag that 8 % is optimistic for valerate: `vfa_va` noise
+becomes `cv: 0.15` with `sd_abs: 0.05` kg m⁻³ as valeric acid (0.05 g/L). The other three
+speciated acids stay at 8 %. Valerate is the scarcest of the four and sits at the
+quantification limit of the GC method, so it carries roughly twice the relative error of
+the others *and* an absolute floor.
+
+**Where the floor bites.** The two terms are independent draws (the total sd is
+`√((v·0.15)² + 0.05²)`), so the floor dominates below about 0.33 kg m⁻³ — which is most of
+the operating range for valerate. At a truth of 0.05 kg m⁻³ the relative term contributes
+0.0075 and the floor 0.05.
+
+**Open design item, flagged rather than decided.** With a floor of the same size as the
+quantity, **17 % of reported valerate values are negative** (measured: 565 samples over
+4,000 days, mean 0.0494, sd 0.0497, minimum −0.102). Three options, none of them free:
+
+1. **Leave it** (what the branch does). A laboratory reporting raw instrument values below
+   its limit of quantification does produce negatives, and a workflow that treats a
+   negative concentration as a measurement rather than a signal has made a real mistake
+   that the benchmark should be able to catch.
+2. **Clip at zero.** Physical, but it biases the mean upward by ~4 % at these levels, and
+   the bias is largest exactly where the acid matters least.
+3. **Censor at the limit of quantification** — report `< LOQ` rather than a number. This
+   is what a laboratory actually does, but it changes the record's *type* (a censored
+   observation is not a float), so it is a schema change and a decision for the lead.
+
+The branch takes option 1 unchanged and records the number here so the choice is visible.
+
+**Test.** `test_relative_and_absolute_noise_are_independent_draws` is now parametrised over
+the two sensors that declare both terms. The H₂ cell is the one that *discriminates*
+between the independent and the correlated form (its terms are comparable, so the
+correlated sum is 36 % larger); valerate's floor dominates, so the two forms differ by only
+12 % there and the test checks the magnitude alone — but a floor applied as a relative term
+or silently dropped still fails it.
+
+---
+
+## 2026-09-02 — Two-zone channels: a grab sample carries its own speciation
+
+**Decision.** `channels_from_two_zone` took the *concentrations* from the effluent and the
+*speciation* from the active zone, so under a bypass `alkalinity_total` (bicarbonate + VFA
+anions) described the reactor while `vfa_total` described the sample, and `fos_tac` was a
+ratio across two different liquids. `simulate_two_zone` now also returns
+`effluent_derived` — `derived_extended` on the effluent composition with the shared
+headspace's gas states — and each channel comes from where its instrument actually is:
+
+| Where | Channels |
+|---|---|
+| the shared **headspace** | every gas channel (both gas-flow conventions, CH₄/CO₂/H₂) |
+| the **probe in the reactor** | pH, free ammonia — the electrode hangs in the active zone, and free ammonia is the inhibition the biomass experiences |
+| the **grab sample** (the effluent) | alkalinity partial and total, VFA total and speciated, COD, TAN, VS/TS, FOS/TAC |
+
+`channel_series` now *raises* if given an `effluent` without an `effluent_derived`, so the
+inconsistency cannot come back by a caller forgetting an argument.
+
+**Why it mattered.** Measured at Plant C, 60 d, stagnant fraction 0.30 (bypass 0.06):
+the sampled alkalinity is 4.1 % below the reactor's, the sampled VFA 54 % above it, and
+FOS/TAC 61 % above the reactor's rather than the 54 % the hybrid gave. FOS/TAC is also
+what raises the overload and foaming flags behind the missingness model, so a Level-6
+mixing run was getting its stress flags from a quantity that was neither the sample nor
+the reactor. At bypass 0 the two are bit-identical, which the test asserts.
+
+**How it survived until now.** `channels_from_two_zone` was exported and had **no test**.
+It has one now (`test_two_zone_channels_come_from_where_the_instrument_is`), covering the
+degenerate case, the three sources under a bypass, and the raise.
+
+**Also fixed in the same pass.** `ash_trajectory` documented that the flow "follows the
+influent's declared `interpolation`" but interpolated it linearly regardless; only the
+feed-ash series honoured the hold. Latent — the error is exactly zero whenever the output
+times are the influent's own, which is every current call — but the docstring was a claim
+the code did not keep. The flow now reads `influent.interpolation` like the feed ash does.
+
+---
+
+## 2026-09-02 — Independent review of PR #11: the VFA channels were 1000x too small
+
+**Decision.** An independent review pass (fresh context, told to verify rather than trust
+the PR's claims) found nine real defects. All are fixed on the branch. The one that
+mattered is recorded here in full because it silently disabled the property this whole
+component exists to deliver.
+
+### The defect
+
+`channel_series` computed every VFA channel as `kmol/m3 * kg/kmol / 1000`. The division
+has no dimensional justification: `S_ac` is kg COD/m3, `VFA_COD_PER_KMOL["S_ac"]` is
+64 kg COD/kmol, so the quotient is kmol/m3, and multiplying by `M_ACETIC` (60.05 kg/kmol)
+already gives kg/m3. **1 kg COD/m3 of acetate is 0.93828 kg/m3 as acetic acid**, and the
+code returned 0.00093828. The alkalinity term two lines below carries no such factor,
+which is what makes the inconsistency visible on inspection.
+
+### Why it was not merely cosmetic
+
+FOS/TAC is total VFA over total alkalinity, so it was 1000x too small too, and the
+condition flags that drive **conditional missingness** are thresholded on it:
+
+| | as coded | corrected | anchor (Muscatine Dig1) |
+|---|---|---|---|
+| alkalinity_total | 2.556 | 2.556 | median 5.04 kg CaCO3/m3 |
+| vfa_total | 5.65e-05 | 0.0565 | median 1.18 kg/m3 |
+| fos_tac | 2.21e-05 | 0.0221 | median 0.23 |
+
+At that scale `fos_tac` could never approach the 0.40 overload or 0.30 foaming thresholds
+— a digester souring to 10 kg COD/m3 of acetate reached 0.003 — so `condition_flags`
+returned all-`False` on every real run, the missingness model always used its base rate,
+the §6.1 property that "instruments fail *during* the transients" never fired, and the
+Level-4 `informative_missingness` fault was a no-op. None of it raised an error.
+
+### Why the tests did not catch it
+
+The test that claimed to check "the channel arithmetic against hand calculations"
+re-implemented the formula: `assert vfa_ac == approx(ac_kmol * M_ACETIC / 1000.0)` is
+`implementation == implementation` and passes under **any** global scale error, and
+`assert fos_tac == approx(vfa_total / alkalinity_total)` restates the implementation line
+verbatim and cannot fail at all. The other tests fed `fos_tac` in directly as a synthetic
+array, so they never exercised the real channel. The hand calculations are now **literals**
+(0.93828 kg/m3 per kg COD/m3), and a new test feeds the anchor's own VFA and alkalinity
+columns through the formula and recovers the anchor's own FOS/TAC column, then shows the
+0.40 threshold sits at the ~92nd percentile of the distribution the plant really visits.
+
+### The realism gap this exposed, FLAGGED for the lead
+
+With the units right, a **healthy simulated** digester sits at FOS/TAC 0.01–0.07 against
+the plant's median of 0.23; even at 2.5x the declared feed, Plant B reaches only 0.15. A
+converged ADM1 steady state carries far less residual VFA than a real plant, and a
+titrimetric FOS over-reads true VFA. The threshold is still reachable (VFA 1.0 kg/m3 at
+the anchor's median alkalinity crosses it, and the anchor exceeds that VFA on a third of
+its days), but **the overload flag will fire on materially fewer simulated days than the
+"~8 % of days" the anchor's own column implies.** Recorded in the config beside the
+threshold. If the lead wants the simulated distribution to match the plant's, that is a
+change to the feed catalogue or the kinetics, not to the threshold.
+
+### The other eight, all fixed
+
+1. **Sub-interval episode durations inflated the anchored flatline rates.** The mask lasts
+   `max(1, round(duration/dt))` samples, so a declared 0.4 d episode on a daily sensor
+   really lasted 1 d and the realised occupancy was 2.5x the anchor (5x for the 0.2 d gas
+   meter). Durations are now declared in whole samples, the hazards carry the anchored
+   occupancy directly, `SensorSpec` **rejects** a duration below the sampling interval, and
+   the test measures the *realised* mask instead of the declared product.
+2. **`scada_noise_statistics` marked one sample too many per flatline run** (`in_run[i-run
+   : i+2]` spans `run+2` values where the identical values are `run+1`) **and dropped a run
+   beginning at index 0** entirely (negative slice start). Re-measured: temperature
+   0.0765 % (was quoted 0.08 %), gas 0.0144 % (was quoted 0.01 %). The config now carries
+   the corrected figures. Also, a literal `NaN` parsed fine and was dropped without being
+   counted, so `missing_fraction` could read 0 for a file full of them.
+3. **`random_gaps` was not MCAR.** It scaled the base rate, which scales the stressed rate
+   by the same factor, so every added gap was `overload_multiplier` times more likely under
+   stress — exactly as informative as the originals, and indistinguishable from the
+   Level-4 fault that exists to be the informative one. It is now an additive unconditional
+   term, and a test measures the added gaps in and out of the stress window.
+4. **`ph_electrode_drift` never produced its "drift-then-step" signature.** The injected
+   ramp was applied after the intrinsic drift's recalibration reset and never reset itself,
+   so a -0.01 pH/d fault ran monotonically to -1.7 pH over 200 d. A calibration fault is
+   removed by a calibration: the ramp now resets on the tier's cadence, and the test
+   asserts the sawtooth, its bound, and that an un-recalibrated sensor keeps the old
+   behaviour.
+5. **`cod_total` and `vs` silently excluded every extension state**, because those sit
+   after the gas states and the liquid slice stops at 26. Negligible at a healthy steady
+   state (X_sao ~ 1e-7) and material in the Level-5/6 ammonia scenarios, where growing SAO
+   biomass *is* the signal. Extension components are now classified in three tables
+   (COD-bearing, inorganic solid, neither) and a test asserts every component the
+   extensions config declares appears in exactly one, so a new one cannot be forgotten.
+   Precipitated calcite now counts towards TS and not VS, at 100.09 kg/kmol.
+6. **A `saturated` flag could contradict its own reading.** A flatlined sample reports the
+   previous value but kept its own pre-hold saturation flag, so the record could tell a
+   workflow the instrument hit its range while showing a number inside it (16 occurrences
+   over 40 seeds on a stepping truth). The flag is now held with the value.
+7. **"The card and the code cannot drift apart" was not true.** `benchmark_card_rows()` was
+   rendered nowhere and the card had no fault table. The card now carries the generated
+   block between markers and a test compares it verbatim — it caught its first drift within
+   the hour, when the two fault descriptions above changed.
+8. **Smaller:** `sample_times` dropped the final sample when `horizon/interval` fell just
+   below an integer in binary floating point; `observe` silently fabricated constant
+   readings for a horizon beyond the run's last channel time (now raises); `faults or
+   Default()` discarded an empty-but-seeded directive object because both classes define
+   `__bool__` (now `is None`).
+
+### Recorded, not fixed
+
+`hazard_per_d` is typed as a fraction (`le=1`) though a hazard rate is not bounded by 1;
+repeated observation faults on one sensor overwrite rather than compound, while the three
+global scales multiply; `tool_failure` cannot name a tool other than the default;
+`UnrecordedDelivery` truncates a fractional onset day; `condition_flags` is O(n^2) and is
+most of the suite's runtime; a `flatlined` flag on the first sample is reported but nothing
+is held. None changes a result today; all are listed here so the next session can pick them
+up deliberately.
+
+**Process note.** This was a fresh-context review of a branch this session largely wrote,
+which is better than a self-review and still not an outside one. The reviewer was told to
+verify arithmetic independently and to try to construct broken implementations that pass
+each test; the three findings that mattered most came from exactly that instruction.

@@ -33,16 +33,20 @@ from pydantic import BaseModel, ConfigDict, Field
 __all__ = [
     "DAILY_FILE",
     "GAL_TO_M3",
+    "SCADA_FILE",
     "AssayStatistics",
     "DailyRecord",
     "DeliveryStatistics",
+    "ScadaChannelStatistics",
     "assay_statistics",
     "delivery_statistics",
     "load_daily",
+    "scada_noise_statistics",
     "seasonal_amplitude_from_monthly_means",
 ]
 
 DAILY_FILE = Path(__file__).resolve().parent / "raw" / "iowa-muscatine-wrrf" / "LABS-raw.csv"
+SCADA_FILE = Path(__file__).resolve().parent / "raw" / "iowa-muscatine-wrrf" / "SCADA-raw.csv"
 GAL_TO_M3 = 0.00378541
 CFM_TO_M3_PER_D = 0.0283168 * 1440.0
 MG_PER_L_TO_KG_PER_M3 = 1e-3
@@ -251,4 +255,92 @@ def assay_statistics(records: Sequence[DailyRecord], field: str) -> AssayStatist
         measured_fraction_by_weekday=tuple(
             float(np.mean(measured[weekdays == d])) for d in range(7)
         ),
+    )
+
+
+@dataclass(frozen=True)
+class ScadaChannelStatistics:
+    """Sensor statistics of one 1-minute SCADA channel (the observation model's anchor).
+
+    The noise estimate is robust by construction: the first difference of a smooth signal
+    plus white noise has standard deviation ``sqrt(2) sigma``, and the MAD of that
+    difference is insensitive to the real process movement underneath and to outliers.
+    """
+
+    n: int
+    mean: float
+    """Mean of the finite samples, in the channel's own raw unit."""
+    noise_sd: float
+    """Robust 1-minute noise standard deviation, raw unit."""
+    noise_cv: float
+    """Noise standard deviation over the mean, -."""
+    flatline_fraction: float
+    """Fraction of samples inside a run of >= `flatline_min_samples` identical values, -."""
+    longest_flatline_samples: int
+    missing_fraction: float
+
+
+def scada_noise_statistics(
+    column: str, path: Path = SCADA_FILE, flatline_min_samples: int = 10
+) -> ScadaChannelStatistics:
+    """Noise, flatline and missingness of one SCADA channel, read in a single pass.
+
+    The file is ~89 MB, so it is streamed rather than loaded; only the running quantities
+    and the first differences are kept.
+
+    Args:
+        column: Column name, e.g. ``"D1_TEMPERATURE"`` or ``"Biogas"``.
+        path: The SCADA file (git-ignored; fetch with ``python -m anchor.fetch``).
+        flatline_min_samples: Run length at which a repeated value counts as a flatline.
+
+    Returns:
+        The channel's statistics.
+
+    Raises:
+        KeyError: If the column is not in the file.
+    """
+    values: list[float] = []
+    n_rows = n_missing = 0
+    with path.open(encoding="utf-8-sig", newline="") as fh:
+        reader = csv.DictReader(fh)
+        if reader.fieldnames is None or column not in reader.fieldnames:
+            raise KeyError(f"{column!r} is not a column of {path.name}")
+        for row in reader:
+            n_rows += 1
+            raw = (row.get(column) or "").strip()
+            try:
+                parsed = float(raw)
+            except ValueError:
+                n_missing += 1
+                continue
+            # a literal "NaN" parses fine and would otherwise be dropped silently below,
+            # so a file full of them would still report missing_fraction 0
+            if math.isfinite(parsed):
+                values.append(parsed)
+            else:
+                n_missing += 1
+    a = np.array(values, dtype=float)
+    diff = np.diff(a)
+    noise_sd = float(1.4826 * np.median(np.abs(diff - np.median(diff))) / math.sqrt(2.0))
+    same = np.diff(a) == 0.0
+    in_run = np.zeros(a.size, dtype=bool)
+    longest = run = 0
+    for i, flag in enumerate(same):
+        run = run + 1 if flag else 0
+        longest = max(longest, run + 1 if flag else 0)
+        if run + 1 >= flatline_min_samples and flag:
+            # `run` consecutive equalities ending at i span the identical VALUES
+            # a[i-run+1] ... a[i+1], i.e. run+1 samples. Starting the slice at i-run would
+            # also mark the differing sample before the run (one extra per run), and a run
+            # beginning at index 0 would give a negative start and be dropped entirely.
+            in_run[max(i - run + 1, 0) : i + 2] = True
+    mean = float(a.mean())
+    return ScadaChannelStatistics(
+        n=int(a.size),
+        mean=mean,
+        noise_sd=noise_sd,
+        noise_cv=noise_sd / mean if mean else float("nan"),
+        flatline_fraction=float(in_run.mean()),
+        longest_flatline_samples=int(longest),
+        missing_fraction=n_missing / n_rows if n_rows else 0.0,
     )

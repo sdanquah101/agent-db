@@ -84,7 +84,12 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from sim.adm1.schema import LIQUID_STATE_NAMES, ADM1Parameters, Influent
-from sim.influent.fractionation import TrueFractionations, draw_true_fractionations
+from sim.faults.plan import InfluentFaults
+from sim.influent.fractionation import (
+    TrueFractionations,
+    draw_true_fractionations,
+    sample_fractionation,
+)
 from sim.influent.mapping import KG_PER_TONNE, feed_cod_per_m3, feed_concentrations
 from sim.influent.nitrogen import feed_tkn, truth_inert_nitrogen
 from sim.influent.schema import CODFractionation, FeedFractionation, FeedFractionationCatalogue
@@ -483,6 +488,7 @@ def generate_influent(
     n_days: int,
     start_doy: int = 1,
     start_weekday: int = 0,
+    faults: InfluentFaults | None = None,
 ) -> GeneratedInfluent:
     """Generate one run's influent truth and operator record for a plant.
 
@@ -496,6 +502,9 @@ def generate_influent(
         n_days: Horizon, d (one influent sample per day).
         start_doy: Day of year of day 0 (seasonal phase), d.
         start_weekday: Weekday of day 0 (0 = Monday).
+        faults: Influent-layer fault directives (:mod:`sim.faults`). They are applied
+            after every draw of this run's stream and use their own stream, so a faulted
+            run differs from its clean twin **only** by the fault (tested).
 
     Returns:
         The hidden truth and the visible record.
@@ -515,6 +524,10 @@ def generate_influent(
     truth_frac = draw_true_fractionations(catalogue, feed_ids, rng, seed)
 
     day = np.arange(n_days)
+    # `or` would discard an empty-but-seeded directive object, because InfluentFaults
+    # defines __bool__; only None means "no faults"
+    faults = InfluentFaults() if faults is None else faults
+    mislabelled = _mislabelled_fractionations(faults, catalogue, truth_frac)
     feeds_truth: dict[str, FeedTruth] = {}
     logged: dict[str, np.ndarray] = {}
     # 2-6. deliveries, amounts, moisture, unrecorded deliveries, mis-logs
@@ -543,6 +556,9 @@ def generate_influent(
             day, start_doy, g.moisture.seasonal_amplitude, g.moisture.seasonal_peak_doy
         )
         ts = spec.ts * season_ts * np.exp(_ar1(z_ts, g.moisture.ts_log_sigma, g.moisture.lag1))
+        for ramp in faults.moisture:
+            if ramp.feed_id == fid:
+                ts = ts * _ramp_factor(day, ramp.onset_d, ramp.end_d, ramp.relative_change)
         ts = np.minimum(ts, 1.0)
 
         unrecorded = u_unrec < g.logging.unrecorded_probability_per_d
@@ -553,6 +569,13 @@ def generate_influent(
         true_kg = true_kg + np.where(unrecorded, extra_kg, 0.0)
         mislogged = (log_kg > 0.0) & (u_mislog < g.logging.mislog_probability)
         log_kg = np.where(mislogged, log_kg * np.exp(g.logging.mislog_log_sigma * z_mislog), log_kg)
+
+        # injected unrecorded deliveries: truth only, never the log (sim.faults)
+        for extra in faults.unrecorded:
+            if extra.feed_id == fid and 0 <= extra.day < n_days:
+                median_kg = _amount_to_kg(g.amount.nonzero_median, g.amount.unit, spec)
+                true_kg[extra.day] += median_kg * extra.multiple_of_median
+                unrecorded[extra.day] = True
 
         feeds_truth[fid] = FeedTruth(
             feed_id=fid,
@@ -574,6 +597,7 @@ def generate_influent(
         ft = feeds_truth[fid]
         sched = g.assay_schedule
         weekday = (start_weekday + day) % 7
+        windows = _mislabel_windows(faults, fid)
         eligible = (weekday < 5) if sched.weekdays_only else np.ones(n_days, dtype=bool)
         # the schedule is anchored to the first eligible day, so a horizon starting on a
         # weekend still gets its weekly samples; only *logged* deliveries are sampled
@@ -585,7 +609,8 @@ def generate_influent(
             model = config.assays[assay]
             unit, basis = ASSAY_UNITS[assay]
             for t in np.flatnonzero(sampled):
-                true_value = _true_assay(assay, spec, frac, float(ft.ts[t]), n_aa, pk_a1)
+                frac_t = _fractionation_at(frac, mislabelled.get(fid), windows, float(t))
+                true_value = _true_assay(assay, spec, frac_t, float(ft.ts[t]), n_aa, pk_a1)
                 noisy = true_value * (1.0 + model.cv * z[t]) + model.sd_abs * z[t]
                 records.append(
                     AssayRecord(
@@ -607,9 +632,11 @@ def generate_influent(
     for fid in feed_ids:
         spec = catalogue.feeds[fid]
         ft = feeds_truth[fid]
+        windows = _mislabel_windows(faults, fid)
         qk = ft.delivered_kg / spec.density
         for t in np.flatnonzero(qk > 0.0):
-            c = feed_concentrations(spec, truth_frac[fid], float(ft.ts[t]))
+            frac_t = _fractionation_at(truth_frac[fid], mislabelled.get(fid), windows, float(t))
+            c = feed_concentrations(spec, frac_t, float(ft.ts[t]))
             conc[t] += qk[t] * c
             s_ca[t] += qk[t] * spec.s_ca
         q += qk
@@ -637,6 +664,50 @@ def generate_influent(
         plant_id=plant.id, n_days=int(n_days), feed_log_kg_wet_d=logged, assays=tuple(records)
     )
     return GeneratedInfluent(truth=truth, observed=observed)
+
+
+def _ramp_factor(day: np.ndarray, onset: float, end: float, relative_change: float) -> np.ndarray:
+    """Linear ramp from 1 at ``onset`` to ``1 + relative_change`` at ``end``, held after."""
+    span = max(end - onset, 1e-9)
+    progress = np.clip((day - onset) / span, 0.0, 1.0)
+    return 1.0 + relative_change * progress
+
+
+def _mislabel_windows(faults: InfluentFaults, feed_id: str) -> tuple[tuple[float, float], ...]:
+    """The windows in which one feed's true fractionation is the mislabelled one."""
+    return tuple((m.onset_d, m.end_d) for m in faults.mislabelled if m.feed_id == feed_id)
+
+
+def _mislabelled_fractionations(
+    faults: InfluentFaults,
+    catalogue: FeedFractionationCatalogue,
+    truth: TrueFractionations,
+) -> dict[str, CODFractionation]:
+    """One redrawn fractionation per mislabelled feed, from the fault layer's own stream."""
+    if not faults.mislabelled:
+        return {}
+    rng = np.random.default_rng(faults.seed)
+    out: dict[str, CODFractionation] = {}
+    for spec in sorted(faults.mislabelled, key=lambda m: m.feed_id):
+        entry = catalogue.feeds[spec.feed_id]
+        out[spec.feed_id] = sample_fractionation(entry.fractionation, spec.concentration, rng)
+    _ = truth  # the redraw is around the catalogue, not around this run's truth
+    return out
+
+
+def _fractionation_at(
+    base: CODFractionation,
+    mislabelled: CODFractionation | None,
+    windows: tuple[tuple[float, float], ...],
+    t: float,
+) -> CODFractionation:
+    """The fractionation in force on day ``t`` for one feed."""
+    if mislabelled is None:
+        return base
+    for onset, end in windows:
+        if onset <= t < end:
+            return mislabelled
+    return base
 
 
 def _true_assay(
