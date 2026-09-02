@@ -34,9 +34,11 @@ The ADM1 core (`sim/adm1/`):
   extension, when
   inert, reproduces the base Probe-1 oracle; the carbonate switch is pinned as a small
   genuine change; SAO takes over at a 60-d HRT under high free ammonia, washes out at
-  20 d, and is inhibited less than acetoclasts; Davies coefficients have the right limits
-  and A(T) the right values, and shift pH and NH₃; calcite is a sink for HCO₃⁻ and Ca²⁺;
-  all four integrate together; determinism.
+  20 d, is inhibited less than acetoclasts, and uses the hydrogenotrophic pH window;
+  Davies coefficients have the right limits and A(T) the right values, and shift pH and
+  NH₃; calcite is a sink for HCO₃⁻ and Ca²⁺, K_sp(T) matches Plummer & Busenberg, and
+  the saturation index and under-saturation flag are reported; all four integrate
+  together; determinism.
 
 `conftest.py` provides the default configuration, the Rosen & Jeppsson (2006) initial
 state and the probe-definition module as fixtures.

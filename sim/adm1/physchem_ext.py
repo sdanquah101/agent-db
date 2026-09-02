@@ -51,7 +51,8 @@ class SpeciationOptions(NamedTuple):
     pK_a2_co2: float
     """pK of HCO3-/CO3 2- (not temperature-corrected), -."""
     pK_sp_caco3: float
-    """Calcite solubility product, -log10 of (mol/L)^2 (NaN when calcite is not enabled)."""
+    """Calcite solubility product **at the operating temperature**, -log10 of (mol/L)^2
+    (:func:`pK_sp_calcite`; NaN when calcite is not enabled)."""
 
 
 def water_permittivity(T: float) -> float:
@@ -369,15 +370,42 @@ def speciate_extended(
     )
 
 
+PLUMMER_BUSENBERG_CALCITE = (-171.9065, -0.077993, 2839.319, 71.595)
+"""Coefficients of log10 K_sp(calcite) = a + b T + c / T + d log10 T, T in K, 0-90 C
+(Plummer & Busenberg 1982, Geochim. Cosmochim. Acta 46, 1011-1040, eq. for K_c)."""
+
+
+def pK_sp_calcite(T: float) -> float:
+    """-log10 of the calcite solubility product at ``T`` (K), Plummer & Busenberg (1982).
+
+    8.480 at 25 C, 8.543 at 35 C, 8.709 at 55 C: calcite is *less* soluble when warm, so a
+    25 C constant overstates the solubility product of a thermophilic digester by ~70 %.
+    """
+    a, b, c, d = PLUMMER_BUSENBERG_CALCITE
+    return -(a + b * T + c / T + d * math.log10(T))
+
+
+def saturation_index(S_ca: float, S_co3: float, K_sp: float, gamma2: float) -> float:
+    """Calcite saturation index ``SI = a_Ca a_CO3 / K_sp`` (activities ``gamma2 * c``), -.
+
+    Concentrations in kmol/m3 = mol/L, so the ion activity product is directly comparable
+    with ``K_sp`` in (mol/L)^2. Negative inputs count as zero.
+    """
+    return max(S_ca, 0.0) * max(S_co3, 0.0) * gamma2 * gamma2 / K_sp
+
+
 def precipitation_rate(
     S_ca: float, S_co3: float, K_sp: float, gamma2: float, k_prec: float, n: float
 ) -> float:
     """Calcite precipitation rate, kmol/m3/d: ``k (SI^(1/2) - 1)^n`` for SI > 1, else 0.
 
-    ``SI = a_Ca a_CO3 / K_sp`` with activities ``gamma2 * concentration`` (Koutsoukos 1980
-    form as used by ADM1-P, Flores-Alsina et al. 2016).
+    Koutsoukos (1980) form as used by ADM1-P (Flores-Alsina et al. 2016). Kept as is by
+    the lead's decision of 2026-09-02: no surface (seed) term, no dissolution for SI < 1
+    (the rate is zero there; :func:`sim.adm1.extensions.derived_extended` reports the SI
+    and an under-saturation flag instead), no solids retention (X_caco3 leaves with the
+    liquid).
     """
-    si = max(S_ca, 0.0) * max(S_co3, 0.0) * gamma2 * gamma2 / K_sp
+    si = saturation_index(S_ca, S_co3, K_sp, gamma2)
     if si <= 1.0:
         return 0.0
     return k_prec * (math.sqrt(si) - 1.0) ** n

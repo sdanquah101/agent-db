@@ -29,8 +29,9 @@ from sim.adm1.physchem_ext import (
     davies_gamma,
     debye_huckel_A,
     equilibria,
+    pK_sp_calcite,
 )
-from sim.adm1.rates import inhibition_noncompetitive
+from sim.adm1.rates import inhibition_noncompetitive, inhibition_ph_hill
 from sim.adm1.schema import IonicStrengthSolverConfig
 from tests.conftest import CANDIDATES_DIR
 
@@ -368,6 +369,35 @@ def test_sao_ammonia_inhibition_is_separate_and_weaker(
     assert at(10.0 * kin.K_I_nh3) < at(kin.K_I_nh3)  # still inhibited, just less
 
 
+def test_sao_uses_the_hydrogenotrophic_ph_window(
+    adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config
+):
+    """SAO is pH-inhibited with pH_UL_h2 / pH_LL_h2 (its methanogenic partner's window)."""
+    model = _model(adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config, ("sao",))
+    kin = adm1_params.kinetics
+    y = dict.fromkeys(model.state_names, 0.0)
+    y.update({"S_ac": 1.0, "X_sao": 1.0, "S_IN": 0.1})
+    sp0 = ExtendedSpeciation(*([1e-7, 7.0] + [0.0] * 9 + [0.0, 1.0, 1.0]))
+    eq = equilibria(model.base.k, model.options, 1.0, 1.0)
+    rate = EXTENSION_RATES["uptake_acetate_sao"]
+
+    def at(pH: float) -> float:
+        return rate(RateContext(y, 10.0**-pH, sp0, kin, model.ext_params, eq))
+
+    # a pH just above the acidogen upper limit (uninhibited there) but inside the
+    # hydrogenotrophic window (BSM2: aa 4.0-5.5, h2 5.0-6.0), so the two differ clearly
+    low = kin.pH_UL_aa + 0.1
+    assert kin.pH_LL_h2 < low < kin.pH_UL_h2
+
+    def hill(pH: float, ul: float, ll: float) -> float:
+        return inhibition_ph_hill(10.0**-pH, ul, ll)
+
+    with_h2 = hill(low, kin.pH_UL_h2, kin.pH_LL_h2) / hill(7.5, kin.pH_UL_h2, kin.pH_LL_h2)
+    with_aa = hill(low, kin.pH_UL_aa, kin.pH_LL_aa) / hill(7.5, kin.pH_UL_aa, kin.pH_LL_aa)
+    assert at(low) / at(7.5) == pytest.approx(with_h2)
+    assert with_h2 < 0.75 < 0.95 < with_aa  # the acidogen window would leave it uninhibited
+
+
 # ------------------------------------------------------- ionic strength active
 
 
@@ -437,6 +467,48 @@ def test_precipitation_sinks_inorganic_carbon(
     assert r.state("S_ca")[-1] < ref.state("S_ca")[-1]
     assert r.final()["S_hco3_ion"] < ref.final()["S_hco3_ion"]
     assert r.final()["pH"] < ref.final()["pH"]
+
+
+def test_calcite_solubility_product_temperature_dependence(
+    adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config
+):
+    """Plummer & Busenberg (1982): pK_sp 8.480 at 25 C, rising with temperature."""
+    assert pK_sp_calcite(298.15) == pytest.approx(8.480, abs=2e-3)
+    assert pK_sp_calcite(308.15) == pytest.approx(8.543, abs=2e-3)
+    assert pK_sp_calcite(328.15) == pytest.approx(8.709, abs=2e-3)
+    temps = np.arange(273.15, 363.15, 5.0)
+    assert np.all(np.diff([pK_sp_calcite(t) for t in temps]) > 0.0)
+    model = _model(
+        adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config, ("precipitation",)
+    )
+    assert model.options.pK_sp_caco3 == pytest.approx(pK_sp_calcite(adm1_plant.T_op))
+    off = _model(adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config, ("sao",))
+    assert np.isnan(off.options.pK_sp_caco3)
+
+
+def test_saturation_index_and_undersaturation_flag(
+    rj2006_state, feed, adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config
+):
+    """SI is reported; the flag marks SI < 1 with calcite present (dissolution not modelled)."""
+    model = _model(
+        adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config, ("precipitation",)
+    )
+    ca = {"S_ca": 0.02}
+    r = _run(model, rj2006_state, feed, 10.0, y_ext=ca, u_ext=ca)
+    si = r.derived["calcite_SI"]
+    assert si[0] > 1.0 and np.all(np.isfinite(si))
+    assert np.all(si[1:] >= 1.0 - 1e-6)  # the sink stops at saturation, never below
+    assert np.all(r.derived["calcite_undersaturated"] == 0.0)
+    # calcite present, no calcium anywhere: SI = 0 < 1, so the flag is raised
+    seeded = _run(model, rj2006_state, feed, 2.0, y_ext={"X_caco3": 0.01})
+    assert np.all(seeded.derived["calcite_SI"] == 0.0)
+    assert np.all(seeded.derived["calcite_undersaturated"] == 1.0)
+    assert seeded.state("X_caco3")[-1] < 0.01  # leaves with the liquid, is not dissolved
+    # without the extension the two quantities are NaN, not zero
+    other = _model(adm1_params, adm1_plant, adm1_matrix, adm1_solver, ext_config, ("sao",))
+    r2 = _run(other, rj2006_state, feed, 1.0)
+    assert np.all(np.isnan(r2.derived["calcite_SI"]))
+    assert np.all(np.isnan(r2.derived["calcite_undersaturated"]))
 
 
 def _weak_acid_alkalinity(r, k) -> np.ndarray:

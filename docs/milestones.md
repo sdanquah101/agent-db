@@ -312,3 +312,53 @@ The duplicate core is discarded. CLAUDE.md now carries the follow-on-session rul
 | CI (GitHub Actions) | 3 jobs per push on #2 and #4 | — | |
 
 No LLM-agent compute inside the benchmark; development cost only.
+
+### Session 2026-09-02 (fourth session) — extension follow-ups before the plant configs
+
+PR #4 merged (07a7fae). The lead's three follow-ups were done on a branch from `main`:
+
+**Done**
+
+- (1) `K_I_nh3_sao` anchored to a cited literature range (0.02–0.1 kmol N m⁻³, from the
+  pathway-shift window of Hao et al. 2017/2021, the tolerance ceiling of Westerholm
+  2012 / Wang 2015 / Yan 2020 / Rocamora 2023, and the hydrogenotrophic-to-acetoclastic
+  IC50 ratio of Liu et al. 2023); 0.05 is inside, so the constant and the takeover test
+  stay. The ADM1–SAO modelling papers' tables could not be read (hosts blocked) and are
+  listed in `docs/decisions.md` as the check that would change the constant.
+- (2) SAO Level-6 scenario assigned to **Plant A**: Muscatine's SRT (mean 24.7 d,
+  median 22 d) and feed-volume HRT (median 19.5 d) were computed from the daily file;
+  it has no ammonia column, and a municipal digester at its pH and alkalinity sits an
+  order of magnitude below the free-ammonia shift threshold. Recorded with the
+  condition that the Plant-A configuration must let SAO establish (design content for
+  the plant PR).
+- (3) SAO pH inhibition uses the hydrogenotrophic limits; calcite's missing surface
+  term, dissolution and retention are documented, with `calcite_SI` and a
+  `calcite_undersaturated` flag among the derived quantities; K_sp(T) by Plummer &
+  Busenberg (1982), no longer a config constant; strong-ion (monovalent) convention
+  documented. 3 new tests (31 in the extension file).
+
+**Blocked / open**
+
+- Full texts of the four ADM1–SAO parameter papers (IWA, Elsevier, HAL, PMC) were
+  unreachable from this environment; the literature anchoring rests on abstracts.
+- Plant A's TAN/pH envelope is not yet in the repository; it is needed both for the
+  influent generator and for the SAO-establishment condition.
+
+**Next session should start on**
+
+1. **Plant configurations A/B/C** (`sim/plants/`, `configs/plant_*.yaml`,
+   `configs/plant_a_statistics.yaml`): geometry, temperature, HRT envelope, feed
+   definitions, which extensions each plant's truth model enables, and the SAO
+   establishment check for Plant A. This PR has design content: flag it to the lead
+   before freezing anything.
+2. Influent generator (§6.1) with `anchor/ingest_muscatine.py` for Plants B/C.
+3. Weinrich R3/R4 ports as fitted models.
+
+**Resource cost this session (rough)**
+
+| Item | Wall-clock | Disk | Notes |
+|---|---|---|---|
+| Literature search | ≈ 25 min | — | Consensus abstracts + web search; every full-text host blocked |
+| Code + tests + docs | ≈ 35 min | — | 2 fast test runs, 1 full run |
+
+No LLM-agent compute inside the benchmark; development cost only.
