@@ -255,7 +255,7 @@ def test_catalogue_nitrogen_is_consistent_under_its_declared_inert_n(catalogue, 
     for fid, spec in catalogue.feeds.items():
         assert sum(spec.fractionation.as_tuple()) == pytest.approx(1.0, abs=1e-9), fid
         assert 0.9 < spec.cod_per_vs < 3.0, fid  # between carbohydrate and lipid
-        own = bsm2.model_copy(update={"N_I": spec.tkn_consistency_N_I})
+        own = bsm2.model_copy(update={"N_I": spec.inert_N_I})
         assert tkn_consistent(spec, own), (fid, spec.tkn, implied_tkn(spec, own))
         # the check is not vacuous: a wrong TKN fails it
         wrong = spec.model_copy(update={"tkn": spec.tkn * 2.0})
@@ -264,10 +264,10 @@ def test_catalogue_nitrogen_is_consistent_under_its_declared_inert_n(catalogue, 
     sludge = {"primary_sludge", "thickened_was"}
     for fid, spec in catalogue.feeds.items():
         if fid in sludge:
-            assert spec.tkn_consistency_N_I == pytest.approx(bsm2.N_I)
+            assert spec.inert_N_I == pytest.approx(bsm2.N_I)
             assert tkn_consistent(spec, bsm2)
         else:
-            assert spec.tkn_consistency_N_I < bsm2.N_I
+            assert spec.inert_N_I < bsm2.N_I
             assert not tkn_consistent(spec, bsm2), fid
     silage = catalogue.feeds["grass_silage"]
     assert implied_tkn(silage, bsm2) * 14.007 > 10.0  # ~11 g N/L against the declared 6.6

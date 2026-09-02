@@ -801,6 +801,14 @@ free ammonia stays null until it is; both are marked with the reason.
    *unadapted* value, which is what makes the acetoclastic pathway collapse under
    Plant A's ammonia in the truth model and gives the SAO scenario its signature.
 
+**Addendum (salvage session, later the same day).** The lead re-sent the envelope with
+PR #8's review. It is identical, field for field, to the block already in
+`configs/plant_a_statistics.yaml` (checked by parsing both through `AmmoniaEnvelope`),
+so the file is unchanged, pH and free ammonia stay null with their stated reasons, and
+decisions 1 and 3 above are re-affirmed as the lead's. `test_sao_establishes_at_plant_a`
+reads the TAN midpoint from the file and carries no envelope literal. The "pending"
+item of the salvage session is closed.
+
 ---
 
 ## 2026-09-02 — Duplicate plant layer — salvage from PR #7 into the #6 contract
@@ -860,7 +868,7 @@ with different numbers for Plant B's feeds and C's geometry); the hidden-volume 
 (#6 has `sample_hidden_geometry`); the 100-day plausibility table and its methane-yield
 gate (needs #7's recipes and per-plant parameter overrides, neither in the contract);
 `apply_parameter_overrides` and the `parameter_overrides` field (the per-plant `N_I`
-override is recorded per feed as `tkn_consistency_N_I` instead, undecided); #7's
+override is recorded per feed as `inert_N_I`; decided the same day, see the inert-nitrogen entry); #7's
 `plant_a_statistics.yaml` (T2026 Table 1 transcription; #6's file has a `todo` for it
 and the values live in the catalogue descriptions); the `dilution_water` pseudo-feed;
 tests that duplicate #6's (config loading, hidden-volume determinism and bounds). The
@@ -905,14 +913,52 @@ lignocellulosic and food-waste inerts several-fold (grass silage: 11 g N/L impli
 against 6.6 g N/L from crude protein and ammonia) and applied per-plant overrides
 (A 0.001, B 0.0015 kmol N/kg COD) as a declared `PlantDeclared` field. The frozen
 `PlantConfig` has no override field and this PR adds none. Each catalogue entry records
-`tkn_consistency_N_I`, the inert N under which its declared TKN is consistent with the
+`inert_N_I`, the inert N under which its declared TKN is consistent with the
 ADM1 N contents (tested: every entry consistent under its own value; the five
-non-sludge entries inconsistent under BSM2's). Whether the truth model applies a
-per-plant or per-feed inert N, and whether it is visible to workflows, is design
-content for the influent-generator session and the lead.
+non-sludge entries inconsistent under BSM2's). *Decided the same day with the PR #8
+review* (entry "Per-feed inert nitrogen in the truth model"): the truth model applies
+the per-feed values, the fitted model keeps the ADM1 default, intentionally.
 
 **Alternatives.** Leave the numbers out until the lead supplies them (rejected: the
 mapping and the sampler need a catalogue to be tested against, and #7's sourced values
 are better than placeholders); merge them into `configs/plants` (rejected: the frozen
 contract keeps fractionation out of the plant files); mark them frozen because they
 carry citations (rejected: most of the inert/soluble/ion values are explicitly assumed).
+
+---
+
+## 2026-09-02 — Per-feed inert nitrogen in the truth model; the fitted model keeps the ADM1 default (intentional mismatch)
+
+**Decision (by the lead, with PR #8's review).** The truth model applies the per-feed
+inert nitrogen content `inert_N_I` of `configs/influent/feed_fractionation.yaml`
+(kmol N per kg COD of `X_I`/`S_I`: 0.001 for cattle slurry and grass silage, 0.0015 for
+food waste, high-strength waste and FOG, the BSM2 0.06/14 = 0.00429 for primary sludge
+and thickened WAS, all provisional with the rest of the catalogue). The fitted model
+(standard ADM1) keeps the ADM1 default `N_I` for every plant. The gap is **deliberate**:
+a small, real structural mismatch of exactly the kind the benchmark exists to expose
+(proposal §6.1, "the fitted model is structurally wrong by design"). Nobody should
+later "fix" it by aligning the two values; a scenario that wants them aligned says so.
+
+**Reason.** ADM1's default is a sewage-sludge value (Batstone et al. 2002); the inerts
+of lignocellulosic feeds and food waste carry much less nitrogen, and the truth model
+should be as realistic as the data allow. With the default, the ADM1-implied TKN of
+grass silage is 11 g N/L against the 6.6 g N/L its crude protein and ammonia give
+(tested in `tests/test_influent.py`: every catalogue entry is consistent under its own
+value, the five non-sludge entries inconsistent under the default). PR #7 had reached
+the same numbers but applied them as a plant-level parameter override visible to
+workflows; that field is not in the frozen contract and is not added.
+
+**Implementation (influent-generator session, not this PR).** ADM1 carries one `N_I`
+per reactor, so "per feed" means: the truth model's `N_I` is the COD-weighted mean of
+the `inert_N_I` of the feeds actually fed (recomputed when the recipe changes, i.e. a
+plant-level truth parameter derived from the catalogue, never a workflow-visible
+config), and the TKN the influent generator reports as a "routine assay" is the one
+implied by the per-feed values. The fitted model's parameter file stays the BSM2 set.
+Which quantities a workflow may see (feed TKN yes; the truth `N_I` no) follows CLAUDE.md
+rule 1 as for any other hidden truth.
+
+**Alternatives.** Per-plant override visible to workflows (PR #7; rejected: makes the
+modeller's prior carry the truth's value, removing the mismatch); a per-feed inert
+component in the state vector (rejected for Phase 1: adds states for a bookkeeping
+quantity); keep the ADM1 default in the truth too and loosen `tkn_tolerance` (rejected
+by the lead: hides a real factor-of-several nitrogen error behind a tolerance).

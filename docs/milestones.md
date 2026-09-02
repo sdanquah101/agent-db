@@ -411,7 +411,7 @@ closed as superseded.
   their sources and "assumed" notes verbatim, every value `# DESIGN` and
   `status: provisional` (decisions log, "Feed fractionation values are provisional").
   The plant-level `N_I` override #7 used is recorded per feed as
-  `tkn_consistency_N_I`, not applied anywhere.
+  `inert_N_I`, not applied anywhere.
 - `sim/plants/mixing.py` (parked): the two-zone imperfect-mixing structure from #7's
   `reactor.py`, compiled on a `PlantGeometry` (true volume from `true_geometry`); the
   Level-6 truth variant for the fault-injection API, not part of the plant contract.
@@ -425,24 +425,32 @@ closed as superseded.
 
 **Blocked / open**
 
-- **Pending: Plant A ammonia envelope from the lead** (a corrected transcription from
-  Tisocco et al. 2024). It had not arrived when the PR was opened. When it does:
-  apply it to `configs/plant_a_statistics.yaml` (typed by `AmmoniaEnvelope`);
-  `test_sao_establishes_at_plant_a` already reads the TAN midpoint from that file via
-  `plant_a_digestate_tan()` and carries no envelope literal (its remaining constants
-  are the 150 mg/L pathway-shift threshold, the SAO seed and the takeover ratios).
+- ~~Pending: Plant A ammonia envelope from the lead~~ **Resolved with the PR #8
+  review**: the lead's envelope is identical to the block PR #6 committed
+  (`configs/plant_a_statistics.yaml` unchanged; addendum in `docs/decisions.md`).
+  `test_sao_establishes_at_plant_a` reads the TAN midpoint from the file and carries
+  no envelope literal.
 - The catalogue values are provisional; the influent generator cannot be frozen until
-  the lead reviews them, and the inert-N question (per-plant `N_I` override or not) is
-  open.
+  the lead reviews them. A first read against Tisocco 2026 Table 1 and the sludge/FOG
+  literature is posted on PR #8: the fractionations and the declared COD/VS are not
+  mutually consistent for high-strength waste (−20 %), primary sludge (−15 %) and FOG
+  (−12 %), and the cattle-slurry inert share (0.24) is at the degradable end of the
+  literature; to settle at the freeze.
+- **Inert nitrogen decided** (lead, `docs/decisions.md` "Per-feed inert nitrogen in the
+  truth model"): the truth model applies the per-feed `inert_N_I`, the fitted model keeps
+  the ADM1 default, an intentional structural mismatch. Implementation belongs to the
+  influent-generator session.
 - The 100-day plant plausibility check of #7 returns with the influent generator, once
   the recipes and the `N_I` question are settled.
 
 **Next session should start on**
 
-1. Apply the lead's Plant A ammonia envelope if it has arrived (above).
-2. Influent generator dynamics (§6.1) on `sim/influent`: delivery process from the
+1. Influent generator dynamics (§6.1) on `sim/influent`: delivery process from the
    `FeedStream` schedules and `zero_days_fraction`, assay noise and lag, seasonal drift,
-   mis-logged deliveries; `anchor/ingest_muscatine.py` for the B/C statistics.
+   mis-logged deliveries; `anchor/ingest_muscatine.py` for the B/C statistics. In the
+   same session, implement the per-feed inert nitrogen in the truth model (COD-weighted
+   `inert_N_I` of the fed feeds as a hidden truth parameter; fitted model unchanged) and
+   settle the COD/VS-vs-fractionation consistency of the catalogue with the lead.
 3. Fault-injection API; the imperfect-mixing scenario picks up `sim/plants/mixing.py`
    and owns the `(β, φ, k_ex)` distribution that #7 had as a plant prior.
 4. Weinrich R3/R4 ports as fitted models.
@@ -453,6 +461,7 @@ closed as superseded.
 |---|---|---|---|
 | Reading #6, #7, decisions, proposal | ≈ 15 min | — | |
 | Code + tests + docs | ≈ 40 min | — | 2 fast runs of the new tests (≈ 2 s), 1 full run |
+| Review round (envelope check, inert-N decision, composition read) | ≈ 20 min | — | 1 fast run, 1 full run |
 | Full suite (`pytest -q`) | ≈ 2 min 40 s, 162 passed | — | dominated by the sample-and-hold ring test, as before |
 
 No LLM-agent compute inside the benchmark; development cost only.

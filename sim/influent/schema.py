@@ -109,13 +109,13 @@ class FeedFractionation(_Frozen):
             "and the ADM1 N contents (validated in tests), -"
         )
     )
-    tkn_consistency_N_I: _NonNeg = Field(
+    inert_N_I: _NonNeg = Field(
         description=(
-            "Inert N content, kmol N/kg COD, under which the declared `tkn` is consistent "
-            "with the fractionation (BSM2 N_I 0.00429 for sludge-derived inerts; PR #7 "
-            "applied lower values to lignocellulosic and food-waste inerts as a plant-level "
-            "parameter override). Whether and where the truth model applies it is not "
-            "decided here"
+            "N content of this feed's inerts (X_I, S_I), kmol N/kg COD; the value under "
+            "which the declared `tkn` is consistent with the fractionation (BSM2 N_I "
+            "0.00429 for sludge-derived inerts, less for lignocellulosic and food-waste "
+            "inerts). Applied by the truth model; the fitted model keeps the ADM1 default "
+            "(lead's decision 2026-09-02, an intentional structural mismatch)"
         )
     )
     s_ic: _NonNeg = Field(description="Inorganic carbon of the wet feed, kmol C/m3")

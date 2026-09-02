@@ -22,15 +22,16 @@
 # m3 CH4 STP per kg, divided by 0.35 m3 CH4 per kg COD). Gas volumes are reported by
 # sim.adm1 with their convention.
 #
-# `tkn_consistency_N_I` (kmol N/kg COD) is the inert nitrogen content under which the
-# declared `tkn` is consistent with the fractionation and the ADM1 N contents
-# (tests/test_influent.py). PR #7 found that the BSM2 N_I (0.06 g N/g COD, derived for
-# sludge-derived inerts) over-counts the nitrogen of lignocellulosic and food-waste
-# inerts by a factor of several (grass silage would carry 11 g N/L against the 6.6 g N/L
-# its crude protein and ammonia give) and applied lower values as a plant-level
-# parameter override (Plant A 0.001, Plant B 0.0015, Plant C the BSM2 default). The
-# frozen PlantConfig has no such override; whether and where the truth model applies a
-# per-plant N_I is for the lead to decide with the influent generator.
+# `inert_N_I` (kmol N/kg COD) is the nitrogen content of this feed's inerts (X_I, S_I),
+# the value under which the declared `tkn` is consistent with the fractionation and the
+# ADM1 N contents (tests/test_influent.py). PR #7 found that the BSM2 N_I (0.06 g N/g COD,
+# derived for sludge-derived inerts) over-counts the nitrogen of lignocellulosic and
+# food-waste inerts by a factor of several (grass silage would carry 11 g N/L against the
+# 6.6 g N/L its crude protein and ammonia give). Lead's decision 2026-09-02
+# (docs/decisions.md, "Per-feed inert nitrogen in the truth model"): the TRUTH model
+# applies these per-feed values; the FITTED model keeps the ADM1 default. That gap is a
+# deliberate structural mismatch of the kind the benchmark exists to expose; do not
+# "fix" it by aligning the two. Implementation is the influent-generator session's.
 #
 # Sources (as cited by PR #7):
 #   T2024: Tisocco et al. 2024, Front. Environ. Sci. Eng. 18(4):50,
@@ -73,7 +74,7 @@ feeds:
     tan: 0.0771                  # DESIGN  kmol N/m3; 2026 Table 1 NH4-N 1.08 g/L (/14)
     tkn: 0.128                   # DESIGN  kmol N/m3; derived: NH4-N + crude-protein N (XP 124 g/kg TS / 6.25 = 19.8 g N/kg TS x 36 g TS/kg = 0.714 g N/kg) = 1.79 g N/L
     tkn_tolerance: 0.15          # DESIGN  -; accepted gap between the declared TKN and the ADM1-implied one (tests/test_influent.py)
-    tkn_consistency_N_I: 0.001   # DESIGN  kmol N/kg COD; PR #7 Plant A override: assumed, lignocellulosic inerts of slurry and silage carry ~0.014 g N/g COD (BSM2 0.00429 is for sludge-derived inerts)
+    inert_N_I: 0.001   # DESIGN  kmol N/kg COD; PR #7 Plant A override: assumed, lignocellulosic inerts of slurry and silage carry ~0.014 g N/g COD (BSM2 0.00429 is for sludge-derived inerts)
     s_ic: 0.05                   # DESIGN  kmol C/m3; assumed: bicarbonate of stored cattle slurry (~3 g HCO3-/L); not published
     s_cat: 0.10                  # DESIGN  kmol/m3; assumed: Tisocco 2024 ESM Table S2 lists S_cat 0.2 mol/L "manually adjusted"; halved so the digester alkalinity lands at ~10 g CaCO3/L with the TAN below (PR #7 tests)
     s_an: 0.02                   # DESIGN  kmol/m3; assumed (Table S2: 0.015 mol/L, manually adjusted)
@@ -103,7 +104,7 @@ feeds:
     tan: 0.043                   # DESIGN  kmol N/m3; ASSUMED 0.6 g N/kg FM = 10 % of the crude-protein N. Table 1 reports NH4-N 7.28 g/L, which exceeds the crude-protein N of 5.97 g/kg FM (XP 116.9 g/kg TS / 6.25 x 319 g TS/kg) and so cannot be per kg of fresh silage; flagged for the domain reviewer
     tkn: 0.469                   # DESIGN  kmol N/m3; derived: crude-protein N 5.97 g/kg FM + 0.6 g/kg NH4-N = 6.57 g N/kg
     tkn_tolerance: 0.15          # DESIGN  -
-    tkn_consistency_N_I: 0.001   # DESIGN  kmol N/kg COD; PR #7 Plant A override (see cattle_slurry)
+    inert_N_I: 0.001   # DESIGN  kmol N/kg COD; PR #7 Plant A override (see cattle_slurry)
     s_ic: 0.0                    # DESIGN  kmol C/m3; assumed: silage at pH ~4 carries no bicarbonate
     s_cat: 0.10                  # DESIGN  kmol/m3; assumed: K+ of grass silage is 2-3 % TS (~0.2 kmol/m3 FM); half taken as balanced by organic anions already in f_vfa
     s_an: 0.05                   # DESIGN  kmol/m3; assumed
@@ -135,7 +136,7 @@ feeds:
     tan: 0.03                    # DESIGN  kmol N/m3; assumed 0.42 g N/L (partly hydrolysed proteins in stored food waste)
     tkn: 0.493                   # DESIGN  kmol N/m3; derived: protein 0.17 kg/kg VS / 6.25 x 0.238 kg VS/kg = 6.47 g N/kg + 0.42 g/kg NH4-N = 6.9 g N/kg (C/N ~15, inside the 6-19 of Xiao et al. 2021)
     tkn_tolerance: 0.15          # DESIGN  -
-    tkn_consistency_N_I: 0.0015  # DESIGN  kmol N/kg COD; PR #7 Plant B override: assumed, food-waste inerts (fibre) carry far less N than sludge-derived inerts (BSM2 0.00429)
+    inert_N_I: 0.0015  # DESIGN  kmol N/kg COD; PR #7 Plant B override: assumed, food-waste inerts (fibre) carry far less N than sludge-derived inerts (BSM2 0.00429)
     s_ic: 0.0                    # DESIGN  kmol C/m3; assumed: acidified feed carries no bicarbonate
     s_cat: 0.05                  # DESIGN  kmol/m3; assumed: Na+/K+ of food waste
     s_an: 0.03                   # DESIGN  kmol/m3; assumed
@@ -165,7 +166,7 @@ feeds:
     tan: 0.01                    # DESIGN  kmol N/m3; assumed: not measured at Muscatine
     tkn: 0.127                   # DESIGN  kmol N/m3; derived from the fractionation with the N_I override below (not measured at Muscatine)
     tkn_tolerance: 0.15          # DESIGN  -
-    tkn_consistency_N_I: 0.0015  # DESIGN  kmol N/kg COD; PR #7 Plant B override (see food_waste)
+    inert_N_I: 0.0015  # DESIGN  kmol N/kg COD; PR #7 Plant B override (see food_waste)
     s_ic: 0.01                   # DESIGN  kmol C/m3; assumed
     s_cat: 0.03                  # DESIGN  kmol/m3; assumed
     s_an: 0.02                   # DESIGN  kmol/m3; assumed
@@ -193,7 +194,7 @@ feeds:
     tan: 0.0                     # DESIGN  kmol N/m3; assumed
     tkn: 0.105                   # DESIGN  kmol N/m3; derived from the fractionation (with the N_I override below)
     tkn_tolerance: 0.15          # DESIGN  -
-    tkn_consistency_N_I: 0.0015  # DESIGN  kmol N/kg COD; PR #7 Plant B override (see food_waste)
+    inert_N_I: 0.0015  # DESIGN  kmol N/kg COD; PR #7 Plant B override (see food_waste)
     s_ic: 0.0                    # DESIGN  kmol C/m3; PR #7 value, no note
     s_cat: 0.005                 # DESIGN  kmol/m3; assumed
     s_an: 0.005                  # DESIGN  kmol/m3; assumed
@@ -226,7 +227,7 @@ feeds:
     tan: 0.010                   # DESIGN  kmol N/m3; BSM2 influent S_IN 0.01
     tkn: 0.180                   # DESIGN  kmol N/m3; derived from the fractionation with the BSM2 N contents (2.5 g N/L)
     tkn_tolerance: 0.15          # DESIGN  -
-    tkn_consistency_N_I: 0.004285714285714286   # DESIGN  kmol N/kg COD; BSM2 N_I (0.06/14): sewage sludge is what ADM1's N contents were derived for (PR #7 Plant C, no override)
+    inert_N_I: 0.004285714285714286   # DESIGN  kmol N/kg COD; BSM2 N_I (0.06/14): sewage sludge is what ADM1's N contents were derived for (PR #7 Plant C, no override)
     s_ic: 0.04                   # DESIGN  kmol C/m3; BSM2 influent S_IC
     s_cat: 0.04                  # DESIGN  kmol/m3; BSM2 influent S_cat
     s_an: 0.02                   # DESIGN  kmol/m3; BSM2 influent S_an
@@ -254,7 +255,7 @@ feeds:
     tan: 0.010                   # DESIGN  kmol N/m3; BSM2 influent S_IN
     tkn: 0.233                   # DESIGN  kmol N/m3; derived from the fractionation with the BSM2 N contents (3.3 g N/L)
     tkn_tolerance: 0.15          # DESIGN  -
-    tkn_consistency_N_I: 0.004285714285714286   # DESIGN  kmol N/kg COD; BSM2 N_I (see primary_sludge)
+    inert_N_I: 0.004285714285714286   # DESIGN  kmol N/kg COD; BSM2 N_I (see primary_sludge)
     s_ic: 0.04                   # DESIGN  kmol C/m3; BSM2
     s_cat: 0.04                  # DESIGN  kmol/m3; BSM2
     s_an: 0.02                   # DESIGN  kmol/m3; BSM2
