@@ -4,9 +4,11 @@ Adds to :mod:`sim.adm1.physchem`, without changing it:
 
 * **Ionic-strength correction** (Davies activity coefficients on every acid-base
   constant, fixed-point iteration on the ionic strength);
-* **Carbonate speciation** (second carbonic-acid dissociation, needed by the
-  calcite-precipitation extension) and a divalent calcium term in the charge balance;
-* the **calcite saturation-index rate**.
+* **Carbonate speciation** (second carbonic-acid dissociation in the charge balance and
+  the inorganic-carbon split) and a divalent calcium term in the charge balance;
+* the **calcite saturation-index rate**, which needs a carbonate concentration: the
+  speciated one when the carbonate switch is on, otherwise a *diagnostic* estimate
+  ``K_a2 [HCO3-] / [H+]`` that is reported but takes no part in the balance.
 
 When every option is off and there is no calcium, :func:`speciate_extended` delegates
 to the base functions, so the standard model's numbers are reproduced exactly.
@@ -29,6 +31,9 @@ from sim.adm1.physchem import (
 )
 from sim.adm1.schema import PHSolverConfig
 
+T_REF_DAVIES = 298.15
+"""Reference temperature, K, at which the configured Debye-Hueckel A applies."""
+
 
 class SpeciationOptions(NamedTuple):
     """Switches and constants of the extended speciation."""
@@ -36,9 +41,9 @@ class SpeciationOptions(NamedTuple):
     ionic_strength: bool
     """Apply Davies activity coefficients (fixed-point iteration on I)."""
     carbonate: bool
-    """Include HCO3- -> CO3 2- + H+ (needed for calcite)."""
+    """Include HCO3- -> CO3 2- + H+ in the charge balance and the S_IC split."""
     davies_A: float
-    """Debye-Hueckel A, kg^0.5 mol^-0.5."""
+    """Debye-Hueckel A **at the operating temperature**, kg^0.5 mol^-0.5."""
     davies_b: float
     """Davies linear coefficient, -."""
     I_max: float
@@ -46,10 +51,51 @@ class SpeciationOptions(NamedTuple):
     pK_a2_co2: float
     """pK of HCO3-/CO3 2- (not temperature-corrected), -."""
     pK_sp_caco3: float
-    """Calcite solubility product, -log10 of (mol/L)^2."""
+    """Calcite solubility product, -log10 of (mol/L)^2 (NaN when calcite is not enabled)."""
 
 
-OPTIONS_OFF = SpeciationOptions(False, False, 0.0, 0.0, 0.5, 10.33, 8.48)
+OPTIONS_OFF = SpeciationOptions(False, False, 0.0, 0.0, 0.5, 10.33, math.nan)
+
+
+def water_permittivity(T: float) -> float:
+    """Relative permittivity of liquid water at ``T`` (K), Malmberg & Maryott (1956) fit.
+
+    Valid 0-100 C; 78.30 at 25 C, 74.83 at 35 C, 68.34 at 55 C.
+    """
+    t = T - 273.15
+    return 87.740 - 0.40008 * t + 9.398e-4 * t * t - 1.410e-6 * t * t * t
+
+
+def water_density(T: float) -> float:
+    """Density of liquid water at ``T`` (K), kg/L, polynomial after Kell (1975).
+
+    The form quoted in McCutcheon, Martin & Barnwell (1993); 0.99705 at 25 C,
+    0.98572 at 55 C.
+    """
+    t = T - 273.15
+    return 1.0 - (t + 288.9414) / (508929.2 * (t + 68.12963)) * (t - 3.9863) ** 2
+
+
+def debye_huckel_A(T: float) -> float:
+    """Debye-Hueckel ``A`` (log10 form), kg^0.5 mol^-0.5, of water at ``T`` (K).
+
+    ``A = 1.82483e6 sqrt(rho) / (eps T)^1.5`` (Robinson & Stokes; the form PHREEQC uses),
+    with :func:`water_permittivity` and :func:`water_density`. Gives 0.511 at 25 C
+    (tabulated values are 0.509-0.512 depending on the permittivity source), 0.520 at
+    35 C and 0.539 at 55 C. The configured constant is scaled by the *ratio*
+    ``A(T)/A(25 C)`` (:func:`davies_A_at`), so its 25 C value is what the config says and
+    only the temperature trend comes from this formula.
+    """
+    return 1.82483e6 * math.sqrt(water_density(T)) / (water_permittivity(T) * T) ** 1.5
+
+
+def davies_A_at(A_ref: float, T: float) -> float:
+    """Scale a Debye-Hueckel ``A`` given at 25 C to the operating temperature ``T`` (K).
+
+    Using the 25 C constant unscaled would understate ``log10 gamma`` by ≈ 1.7 % at 35 C
+    and ≈ 5.6 % at 55 C (thermophilic digesters).
+    """
+    return A_ref * debye_huckel_A(T) / debye_huckel_A(T_REF_DAVIES)
 
 
 class Equilibria(NamedTuple):
@@ -79,6 +125,9 @@ class ExtendedSpeciation(NamedTuple):
     S_ac_ion: float
     S_hco3_ion: float
     S_co3_ion: float
+    """CO3 2-, kmol/m3. With the carbonate switch on this is the speciated fraction of
+    S_IC (in the charge balance and the S_IC split); with it off it is the diagnostic
+    estimate ``K_a2 [HCO3-] / [H+]`` used only by the calcite rate."""
     S_co2: float
     S_nh3: float
     S_nh4_ion: float
@@ -102,8 +151,9 @@ def equilibria(
 
     ``HA -> H+ + A-``: ``K / (gamma_H gamma_A) = K / gamma1^2``. ``NH4+ -> NH3 + H+``:
     the two monovalent coefficients cancel. ``HCO3- -> CO3 2- + H+``:
-    ``K2 gamma1 / (gamma1 gamma2) = K2 / gamma2``. ``K_sp`` stays thermodynamic; the
-    activity product is formed with ``gamma2^2`` in :func:`precipitation_rate`.
+    ``K2 gamma1 / (gamma1 gamma2) = K2 / gamma2`` (always computed; whether it enters the
+    charge balance is ``opts.carbonate``). ``K_sp`` stays thermodynamic; the activity
+    product is formed with ``gamma2^2`` in :func:`precipitation_rate`.
     """
     g11 = gamma1 * gamma1
     return Equilibria(
@@ -114,7 +164,7 @@ def equilibria(
         K_a_ac=k.K_a_ac / g11,
         K_a_co2=k.K_a_co2 / g11,
         K_a_IN=k.K_a_IN,
-        K_a2_co2=(10.0**-opts.pK_a2_co2) / gamma2 if opts.carbonate else 0.0,
+        K_a2_co2=(10.0**-opts.pK_a2_co2) / gamma2,
         K_sp_caco3=10.0**-opts.pK_sp_caco3,
     )
 
@@ -131,12 +181,23 @@ class _Totals(NamedTuple):
     ca: float
 
 
-def _ions(S_h: float, tot: _Totals, eq: Equilibria) -> tuple[float, ...]:
-    """Ionised species at ``S_h``: hco3, co3, nh3, va-, bu-, pro-, ac- (in state units)."""
-    hco3_tot = tot.ic * eq.K_a_co2 / (eq.K_a_co2 + S_h)
-    co3 = eq.K_a2_co2 * hco3_tot / S_h if eq.K_a2_co2 > 0.0 else 0.0
+def _ions(S_h: float, tot: _Totals, eq: Equilibria, carbonate: bool) -> tuple[float, ...]:
+    """Ionised species at ``S_h``: hco3, co3, nh3, va-, bu-, pro-, ac- (in state units).
+
+    With ``carbonate`` the inorganic carbon is split three ways (CO2 / HCO3- / CO3 2-)
+    with the exact denominator ``[H+]^2 + K1 [H+] + K1 K2``; without it the base two-way
+    split is used and ``co3`` is zero *in the balance* (the diagnostic estimate is added
+    by the caller).
+    """
+    if carbonate:
+        d = S_h * S_h + eq.K_a_co2 * S_h + eq.K_a_co2 * eq.K_a2_co2
+        hco3 = tot.ic * eq.K_a_co2 * S_h / d
+        co3 = tot.ic * eq.K_a_co2 * eq.K_a2_co2 / d
+    else:
+        hco3 = tot.ic * eq.K_a_co2 / (eq.K_a_co2 + S_h)
+        co3 = 0.0
     return (
-        hco3_tot - co3,
+        hco3,
         co3,
         tot.inn * eq.K_a_IN / (eq.K_a_IN + S_h),
         tot.va * eq.K_a_va / (eq.K_a_va + S_h),
@@ -146,9 +207,9 @@ def _ions(S_h: float, tot: _Totals, eq: Equilibria) -> tuple[float, ...]:
     )
 
 
-def _residual(pH: float, tot: _Totals, eq: Equilibria) -> float:
+def _residual(pH: float, tot: _Totals, eq: Equilibria, carbonate: bool) -> float:
     S_h = 10.0**-pH
-    hco3, co3, nh3, va, bu, pro, ac = _ions(S_h, tot, eq)
+    hco3, co3, nh3, va, bu, pro, ac = _ions(S_h, tot, eq, carbonate)
     return (
         tot.cat
         + 2.0 * tot.ca
@@ -198,7 +259,7 @@ def speciate_extended(
     Returns:
         The speciation. With all options off and no calcium this is the base model's
         speciation (delegated to :mod:`sim.adm1.physchem`), so the standard ADM1 numbers
-        are reproduced bit for bit.
+        are reproduced bit for bit; ``S_co3_ion`` is then the diagnostic estimate.
     """
     if not opts.ionic_strength and not opts.carbonate and S_ca == 0.0:
         S_h = physchem.solve_pH(S_va, S_bu, S_pro, S_ac, S_IC, S_IN, S_cat, S_an, k, cfg)
@@ -211,7 +272,7 @@ def speciate_extended(
             S_pro_ion=sp.S_pro_ion,
             S_ac_ion=sp.S_ac_ion,
             S_hco3_ion=sp.S_hco3_ion,
-            S_co3_ion=0.0,
+            S_co3_ion=(10.0**-opts.pK_a2_co2) * sp.S_hco3_ion / S_h,
             S_co2=sp.S_co2,
             S_nh3=sp.S_nh3,
             S_nh4_ion=sp.S_nh4_ion,
@@ -224,19 +285,26 @@ def speciate_extended(
     gamma1 = gamma2 = 1.0
     ionic = 0.0
     lo, hi = cfg.bracket_pH
+    carb = opts.carbonate
     for _ in range(8 if opts.ionic_strength else 1):
         eq = equilibria(k, opts, gamma1, gamma2)
-        f_lo, f_hi = _residual(lo, tot, eq), _residual(hi, tot, eq)
+        f_lo, f_hi = _residual(lo, tot, eq, carb), _residual(hi, tot, eq, carb)
         if f_lo * f_hi > 0.0:
             raise ValueError(
                 f"charge balance has no root in pH bracket [{lo}, {hi}]: "
                 f"residual({lo})={f_lo:.3e}, residual({hi})={f_hi:.3e}"
             )
         pH_c = brentq(
-            _residual, lo, hi, args=(tot, eq), xtol=cfg.xtol_pH, rtol=cfg.rtol, maxiter=cfg.maxiter
+            _residual,
+            lo,
+            hi,
+            args=(tot, eq, carb),
+            xtol=cfg.xtol_pH,
+            rtol=cfg.rtol,
+            maxiter=cfg.maxiter,
         )
         S_h = 10.0**-pH_c
-        hco3, co3, nh3, va, bu, pro, ac = _ions(S_h, tot, eq)
+        hco3, co3, nh3, va, bu, pro, ac = _ions(S_h, tot, eq, carb)
         if not opts.ionic_strength:
             break
         ionic_new = min(
@@ -263,6 +331,9 @@ def speciate_extended(
         ionic = ionic_new
         if converged:
             break
+    S_co2 = S_IC - hco3 - co3
+    if not carb:
+        co3 = eq.K_a2_co2 * hco3 / S_h  # diagnostic only (not in the balance or S_co2)
     return ExtendedSpeciation(
         S_h=S_h,
         pH=-math.log10(S_h * gamma1),
@@ -272,7 +343,7 @@ def speciate_extended(
         S_ac_ion=ac,
         S_hco3_ion=hco3,
         S_co3_ion=co3,
-        S_co2=S_IC - hco3 - co3,
+        S_co2=S_co2,
         S_nh3=nh3,
         S_nh4_ion=S_IN - nh3,
         ionic_strength=ionic,

@@ -13,7 +13,12 @@
 # generation and are flagged for the external AD reviewer (proposal §9.4). The hidden
 # per-scenario truth values are drawn by the scenario generator, never here.
 
-version: 1
+version: 2
+
+# Constants used by more than one extension. Always loaded; overridable like any
+# extension parameter.
+shared_parameters:
+  pK_a2_co2: {value: 10.33, unit: "-", description: "HCO3- / CO3 2- at 25 C (Stumm & Morgan; not T-corrected, ~10.25 at 35 C)"}
 
 extensions:
 
@@ -23,9 +28,18 @@ extensions:
   # when acetoclastic methanogens are inhibited (Schnuerer & Nordberg 2008; Westerholm
   # et al. 2016). On a COD basis 1 kg COD acetate -> 1 kg COD H2 (CO2 carries no COD);
   # carbon closes on S_IC, nitrogen on S_IN through the biomass yield. Kinetics: Monod on
-  # acetate with the standard pH_aa / IN inhibitions, NO free-ammonia inhibition (SAO
-  # organisms are ammonia-tolerant), and H2 product inhibition as for the other
-  # syntrophs, so SAO only runs while hydrogenotrophs keep H2 low.
+  # acetate with the standard pH_aa / IN inhibitions, a SEPARATE, WEAKER free-ammonia
+  # inhibition (lead's decision 2026-09-02: SAO organisms are ammonia-tolerant but not
+  # immune), and H2 product inhibition as for the other syntrophs, so SAO only runs
+  # while hydrogenotrophs keep H2 low.
+  #
+  # K_I_nh3_sao = 0.05 kmol N/m3 (50 % at ~700 mg NH3-N/L, ~28x the BSM2 acetoclastic
+  # K_I_nh3 of 25 mg/L). Chosen so that the model reproduces SAO dominance where it is
+  # observed (TAN 3-5 g/L, free ammonia 200-400 mg/L, HRT 40-60 d; Schnuerer & Nordberg
+  # 2008, Westerholm et al. 2016): with mu_max 0.08 d^-1 and decay 0.02 d^-1 SAO must keep
+  # >~ 70 % of its rate at 250 mg/L free ammonia to out-grow a 60-d HRT at all. A tighter
+  # constant (e.g. 4x acetoclastic, 100 mg/L) makes SAO unable to establish in any
+  # ammonia-stressed digester in this model. Order of magnitude; for review.
   sao:
     description: syntrophic acetate oxidation as a separate pathway and biomass
     components:
@@ -37,11 +51,12 @@ extensions:
       Y_sao:      {value: 0.04,   unit: kg COD_X kg COD_S^-1, description: "low syntrophic yield"}
       k_m_sao:    {value: 2.0,    unit: kg COD_S kg COD_X^-1 d^-1, description: "4x below acetoclastic k_m_ac"}
       K_S_sao:    {value: 0.4,    unit: kg COD m^-3, description: "half-saturation on acetate"}
+      K_I_nh3_sao: {value: 0.05,   unit: kmol N m^-3, description: "free-ammonia inhibition (50 % at ~700 mg NH3-N/L), ~28x acetoclastic K_I_nh3; order of magnitude, for review"}
       K_I_h2_sao: {value: 3.5e-6, unit: kg COD m^-3, description: "H2 product inhibition (50 %), as propionate syntrophs"}
       k_dec_X_sao: {value: 0.02,  unit: d^-1, description: "decay, as other biomass"}
     processes:
       - name: uptake_acetate_sao
-        rate: k_m_sao * S_ac/(K_S_sao + S_ac) * X_sao * I_pH_aa * I_IN_lim * I_h2_sao
+        rate: k_m_sao * S_ac/(K_S_sao + S_ac) * X_sao * I_pH_aa * I_IN_lim * I_nh3_sao * I_h2_sao
         stoichiometry:
           S_ac:  "-1"
           S_h2:  "1 - Y_sao"
@@ -60,33 +75,54 @@ extensions:
   # ADM1 assumes an ideal solution; at the ionic strengths of manure and food-waste
   # digesters (0.1-0.5 M) this shifts pH and free ammonia by amounts that matter for
   # inhibition (Batstone et al. 2012; Flores-Alsina et al. 2016). No new components.
+  #
+  # davies_A is the 25 C value; the model scales it to T_op with the Debye-Hueckel
+  # formula A = 1.82483e6 sqrt(rho) / (eps T)^1.5 (sim/adm1/physchem_ext.py): x1.017 at
+  # 35 C, x1.056 at 55 C. Using the 25 C constant unscaled would understate log10(gamma)
+  # by 5.6 % in a thermophilic digester.
   ionic_strength:
     description: Davies activity correction of all acid-base equilibria
     speciation: {ionic_strength: true}
     parameters:
-      davies_A: {value: 0.5085, unit: "kg^0.5 mol^-0.5", description: "Debye-Hueckel A at 25 C (Stumm & Morgan)"}
+      davies_A: {value: 0.5085, unit: "kg^0.5 mol^-0.5", description: "Debye-Hueckel A at 25 C (Stumm & Morgan); scaled to T_op by the model"}
       davies_b: {value: 0.3,    unit: "-", description: "Davies linear term"}
       I_max:    {value: 0.5,    unit: mol L^-1, description: "cap on I: Davies is unreliable above ~0.5 M"}
 
   # ---------------------------------------------------------------------------------
+  # Carbonate second dissociation, HCO3- -> CO3 2- + H+, in the charge balance and the
+  # inorganic-carbon split (CO2 / HCO3- / CO3 2- with the exact three-species
+  # denominator). Standard ADM1 stops at bicarbonate; at digester pH the carbonate
+  # fraction is ~0.1 % of bicarbonate, so this is a small but genuine model change
+  # (pH shifts by a few thousandths). Its own switch, default off, so that the calcite
+  # extension can be enabled without changing the base speciation (lead's decision
+  # 2026-09-02): without it, the calcite rate uses the DIAGNOSTIC carbonate
+  # K_a2 [HCO3-] / [H+], which is reported but takes no part in the balance. No new
+  # components; pK_a2_co2 is a shared parameter.
+  carbonate:
+    description: second carbonic-acid dissociation in the charge balance and S_IC split
+    speciation: {carbonate: true}
+
+  # ---------------------------------------------------------------------------------
   # Precipitation / inorganic-carbon sink: calcite (CaCO3), the simplest of the
   # Flores-Alsina et al. (2016) minerals, with saturation-index kinetics (Koutsoukos 1980
-  # form used by ADM1-P). Adds dissolved calcium (charge +2, in the charge balance) and
-  # a mineral state; carbonate is speciated from bicarbonate with pK_a2. Removes
-  # inorganic carbon and alkalinity, so a fitted model without it sees an unattributable
-  # alkalinity/pH residual (Level-6 scenario "Omitted precipitation").
+  # form used by ADM1-P; kept as is, lead's decision 2026-09-02). Adds dissolved calcium
+  # (charge +2, in the charge balance) and a mineral state; carbonate for the saturation
+  # index comes from the `carbonate` extension when enabled, else from the diagnostic
+  # estimate. Removes inorganic carbon and alkalinity, so a fitted model without it sees
+  # an unattributable alkalinity/pH residual (Level-6 scenario "Omitted precipitation").
   #
-  # Charge convention: S_IC is counted neutral (its ion split is algebraic), so the
-  # precipitation row has a charge residual of -2 by construction (Ca2+ leaves with the
-  # carbonate that S_IC carried as a neutral total); the conservation test asserts that.
+  # Charge convention: the row {S_ca: -1, S_IC: -1, X_caco3: +1} has a charge residual
+  # of -2. This is an artefact of S_IC being an UNCHARGED TOTAL in the matrix (charge 0;
+  # its split into CO2 / HCO3- / CO3 2- is algebraic), while the species that actually
+  # leaves is CO3 2-. The balance closes after speciation: the carbonate removed carried
+  # -2, matching the +2 of the calcium removed, so the solution's charge balance is
+  # unchanged by precipitation. The conservation test asserts -2 for this row.
   precipitation:
     description: calcite precipitation as an inorganic-carbon and alkalinity sink
-    speciation: {carbonate: true}
     components:
       - {name: S_ca,    unit: kmol m^-3, description: dissolved calcium,       cod: 0, carbon: 0, nitrogen: 0, charge: 2}
       - {name: X_caco3, unit: kmol m^-3, description: calcium carbonate solid, cod: 0, carbon: 1, nitrogen: 0, charge: 0}
     parameters:
-      pK_a2_co2: {value: 10.33, unit: "-", description: "HCO3- / CO3 2- at 25 C (not T-corrected)"}
       pK_sp_caco3: {value: 8.48, unit: "-", description: "calcite solubility product at 25 C (Stumm & Morgan)"}
       k_prec_caco3: {value: 1.0, unit: kmol m^-3 d^-1, description: "kinetic constant (order of magnitude; ADM1-P uses 1e0-1e2)"}
       n_prec_caco3: {value: 2.0, unit: "-", description: "exponent on (SI^(1/2) - 1)"}

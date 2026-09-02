@@ -15,6 +15,7 @@ code" convention.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -84,6 +85,8 @@ class ExtensionsConfig(_Frozen):
     """The parsed extensions file."""
 
     version: int
+    shared_parameters: dict[str, ExtensionParameter] = Field(default_factory=dict)
+    """Constants used by more than one extension (always loaded, overridable)."""
     extensions: dict[str, ExtensionSpec]
 
 
@@ -117,12 +120,18 @@ RateFunction = Callable[[RateContext], float]
 
 
 def _rate_uptake_acetate_sao(c: RateContext) -> float:
+    """SAO acetate uptake: Monod, pH (acidogen form), IN limitation, own NH3 and H2 terms.
+
+    Free-ammonia inhibition uses the SAO-specific ``K_I_nh3_sao`` (weaker than the
+    acetoclastic ``K_I_nh3``), not the acetoclastic function.
+    """
     return (
         c.ext["k_m_sao"]
         * monod(c.y["S_ac"], c.ext["K_S_sao"])
         * c.y["X_sao"]
         * inhibition_ph_hill(c.S_h, c.kin.pH_UL_aa, c.kin.pH_LL_aa)
         * limitation_secondary_substrate(c.y["S_IN"], c.kin.K_S_IN)
+        * inhibition_noncompetitive(c.sp.S_nh3, c.ext["K_I_nh3_sao"])
         * inhibition_noncompetitive(c.y["S_h2"], c.ext["K_I_h2_sao"])
     )
 
@@ -230,6 +239,10 @@ def compile_extended(
     components = list(matrix.components)
     processes: list[Process] = []
     ext_params: dict[str, float] = {}
+    for pname, par in config.shared_parameters.items():
+        if pname in ns:
+            raise ValueError(f"shared parameter {pname!r} redefines a base parameter")
+        ext_params[pname] = par.value
     ionic = carbonate = False
     for name in enabled:
         spec = config.extensions[name]
@@ -265,14 +278,17 @@ def compile_extended(
                 raise ValueError(f"process {proc.name!r} references unknown component {comp!r}")
             nu[col[comp], j] = evaluate_expression(expr, full_ns)
 
+    if "pK_a2_co2" not in ext_params:
+        raise ValueError("extensions config must declare the shared parameter 'pK_a2_co2'")
     options = physchem_ext.SpeciationOptions(
         ionic_strength=ionic,
         carbonate=carbonate,
-        davies_A=ext_params.get("davies_A", 0.0),
-        davies_b=ext_params.get("davies_b", 0.0),
-        I_max=ext_params.get("I_max", 0.5),
-        pK_a2_co2=ext_params.get("pK_a2_co2", 10.33),
-        pK_sp_caco3=ext_params.get("pK_sp_caco3", 8.48),
+        # the configured A is the 25 C value; scale it to the operating temperature
+        davies_A=physchem_ext.davies_A_at(ext_params["davies_A"], plant.T_op) if ionic else 0.0,
+        davies_b=ext_params["davies_b"] if ionic else 0.0,
+        I_max=ext_params["I_max"] if ionic else 0.5,
+        pK_a2_co2=ext_params["pK_a2_co2"],
+        pK_sp_caco3=ext_params.get("pK_sp_caco3", math.nan),
     )
     ext_names = tuple(c.name for c in components[N_LIQUID:])
     return ExtendedModel(
@@ -290,8 +306,11 @@ def compile_extended(
 def conservation_residuals(model: ExtendedModel) -> dict[str, np.ndarray]:
     """Per-process COD, C, N and charge residuals of the extended matrix.
 
-    Same convention as :func:`sim.adm1.petersen.conservation_residuals`; the calcite
-    row is expected to show a charge residual of -2 (see ``extensions.yaml``).
+    Same convention as :func:`sim.adm1.petersen.conservation_residuals`. The calcite row
+    shows a charge residual of -2: S_IC is an uncharged *total* in the matrix (its split
+    into CO2 / HCO3- / CO3 2- is algebraic), so removing one CO3 2- with one Ca2+ counts
+    as +2 leaving and 0 leaving. The balance closes after speciation: the carbonate that
+    left carried -2, which is exactly the +2 of the calcium. See ``extensions.yaml``.
     """
     ns = {**model.base.params.namespace(), **model.ext_params}
     cod = np.array([c.cod for c in model.components])
