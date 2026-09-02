@@ -273,6 +273,15 @@ class TwoZoneResult:
     effluent: np.ndarray
     """``(n_liquid, n_times)`` effluent liquid concentrations after the bypass:
     ``(1 - beta) c_active + beta c_influent``; units as the states."""
+    effluent_derived: Mapping[str, np.ndarray]
+    """Speciation of the **effluent**, from :func:`~sim.adm1.extensions.derived_extended`
+    on the effluent composition.
+
+    A grab sample of digestate is the effluent, so its alkalinity, VFA anions and pH are
+    the effluent's, not the active zone's — with a bypass the two differ, and mixing them
+    would make FOS/TAC a ratio of two different liquids (:func:`channels_from_two_zone`).
+    The gas entries of this dict are computed from the active zone's gas states, because
+    the headspace is shared; use :attr:`active` for anything gas."""
     success: bool
     message: str
 
@@ -368,12 +377,17 @@ def simulate_two_zone(
         effluent = (1.0 - beta) * liq + beta * u_full
     else:
         effluent = liq
+    # the effluent's own speciation: its liquid and extension states with the shared
+    # headspace's gas states, so pH and the anions are the sampled liquid's (beta = 0
+    # makes this identical to the active zone's, and the test asserts that)
+    y_eff = np.concatenate((effluent[:N_LIQUID], y_main[_GAS_SLICE], effluent[N_LIQUID:]), axis=0)
     return TwoZoneResult(
         t=traj.t,
         y=traj.y,
         state_names=model.state_names,
         active=active,
         effluent=effluent,
+        effluent_derived=derived_extended(y_eff, model.main),
         success=traj.success,
         message=traj.message,
     )

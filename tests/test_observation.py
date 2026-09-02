@@ -399,22 +399,39 @@ def test_noise_is_unbiased_and_of_the_declared_size(config):
     assert np.abs(temp.value[ok_t] - 311.0).max() < spec.drift.bound + 5 * spec.noise.sd_abs
 
 
-def test_relative_and_absolute_noise_are_independent_draws(config):
-    """A sensor declaring both terms gets sqrt((v cv)^2 + sd_abs^2), not the correlated sum."""
-    spec = config.sensors["h2_offgas"]
-    assert spec.noise.cv > 0.0 and spec.noise.sd_abs > 0.0  # the one sensor with both
-    value = 12.0
+@pytest.mark.parametrize(
+    ("name", "value", "discriminating"),
+    [
+        ("h2_offgas", 12.0, True),  # 1.8 ppm relative against a 1.0 ppm floor: comparable terms
+        ("vfa_va", 0.05, False),  # the lead's 0.05 g/L floor dominates at valerate levels
+    ],
+)
+def test_relative_and_absolute_noise_are_independent_draws(config, name, value, discriminating):
+    """A sensor declaring both terms gets sqrt((v cv)^2 + sd_abs^2), not the correlated sum.
+
+    Two sensors declare both a relative and an absolute term. The H2 cell is the one that
+    *discriminates* between the two forms — its terms are comparable, so the correlated sum
+    is 36 % larger than the independent one. Valerate's floor dominates at its own
+    concentration (0.0075 relative against 0.05 absolute), so the two forms differ by only
+    12 % there and the test checks the magnitude alone; it is included because the floor is
+    exactly what the lead added, and a floor silently applied as a *relative* term or
+    dropped entirely would fail here.
+    """
+    spec = config.sensors[name]
+    assert spec.noise.cv > 0.0 and spec.noise.sd_abs > 0.0
     channels = _flat_channels(n_days=4000)
+    assert channels[spec.channel][0] == value  # the synthetic truth this expectation assumes
     quiet = spec.model_copy(update={"drift": None, "saturation": None})
     cfg = _without_missingness(config).model_copy(
-        update={"sensors": {**config.sensors, "h2_offgas": quiet}}
+        update={"sensors": {**config.sensors, name: quiet}}
     )
-    reported = observe(channels, cfg, "C", seed=17)["h2_offgas"].value
+    reported = observe(channels, cfg, "C", seed=17)[name].value
     independent = float(np.hypot(value * spec.noise.cv, spec.noise.sd_abs))
     correlated = value * spec.noise.cv + spec.noise.sd_abs
     assert reported.std() == pytest.approx(independent, rel=0.08)
-    assert reported.std() < 0.9 * correlated  # the two are far enough apart to tell
-    assert reported.mean() == pytest.approx(value, rel=0.02)
+    if discriminating:
+        assert reported.std() < 0.9 * correlated  # the two are far enough apart to tell
+    assert reported.mean() == pytest.approx(value, abs=0.15 * independent)
 
 
 def test_drift_is_bounded_and_reset_by_recalibration(config):

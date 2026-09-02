@@ -66,7 +66,7 @@ from sim.influent import (
     load_feed_fractionation,
     load_generator_config,
 )
-from sim.observation import load_observation_config, observe
+from sim.observation import channel_series, channels_from_two_zone, load_observation_config, observe
 from sim.plants import declared_geometry, load_all_plants
 from sim.plants.mixing import compile_two_zone, initial_state, simulate_two_zone
 from tests.test_observation import _flat_channels
@@ -462,6 +462,48 @@ def test_imperfect_mixing_is_the_cstr_at_magnitude_zero():
         t_eval=np.array([30.0]),
     )
     np.testing.assert_allclose(result.y[:, -1], reference.y[:, -1], rtol=1e-10)
+
+
+def test_two_zone_channels_come_from_where_the_instrument_is():
+    """A grab sample is the effluent — including its alkalinity, so FOS/TAC is one liquid.
+
+    Three places disagree under a bypass and each channel must come from its own:
+    the shared headspace (gas), the probe in the reactor (pH, free ammonia) and the grab
+    sample (alkalinity, VFA, COD, TAN, solids). Taking VFA from the sample while taking
+    alkalinity from the reactor — which is what happens if the effluent's speciation is not
+    computed — leaves FOS/TAC a ratio across two different liquids, and FOS/TAC is what
+    raises the overload and foaming flags behind the missingness model.
+    """
+    T_op = load_all_plants()["C"].temperature.setpoint_K
+    # magnitude 0: no bypass, so sample and reactor are the same liquid, exactly
+    ideal, structure = _mixing_run(0.0, 1.0, days=30.0)
+    assert structure.bypass_fraction == 0.0
+    same = channels_from_two_zone(ideal, T_op=T_op)
+    reactor_only = channel_series(ideal.active, T_op=T_op)
+    for name in same.names:
+        np.testing.assert_allclose(same[name], reactor_only[name], rtol=1e-12, err_msg=name)
+
+    # with a bypass the sampled channels move and the reactor's channels do not
+    result, structure = _mixing_run(0.30, 1.0, days=60.0)
+    assert structure.bypass_fraction > 0.0
+    sampled = channels_from_two_zone(result, T_op=T_op)
+    reactor = channel_series(result.active, T_op=T_op)
+    # the probe and the headspace are in the reactor: identical
+    for name in ("pH", "free_ammonia", "q_gas_stp_dry", "ch4_fraction", "temperature"):
+        np.testing.assert_allclose(sampled[name], reactor[name], rtol=1e-12, err_msg=name)
+    # the grab sample is the effluent: alkalinity moves with it, not with the reactor
+    assert sampled["alkalinity_total"][-1] != pytest.approx(reactor["alkalinity_total"][-1])
+    assert sampled["vfa_total"][-1] > reactor["vfa_total"][-1]  # bypassed feed carries acetate
+    # and FOS/TAC is the ratio of the two SAMPLED quantities, not a mixture of liquids
+    assert sampled["fos_tac"][-1] == pytest.approx(
+        sampled["vfa_total"][-1] / sampled["alkalinity_total"][-1]
+    )
+    hybrid = sampled["vfa_total"][-1] / reactor["alkalinity_total"][-1]
+    assert sampled["fos_tac"][-1] != pytest.approx(hybrid, rel=1e-3)  # the two really differ
+
+    # the contract is enforced, not merely honoured by this one caller
+    with pytest.raises(ValueError, match="effluent needs effluent_derived"):
+        channel_series(result.active, T_op=T_op, effluent=result.effluent)
 
 
 def test_imperfect_mixing_gives_a_load_dependent_residual():

@@ -261,17 +261,22 @@ def ash_trajectory(
         Ash concentration at each time in ``t``, kg/m3.
     """
     t = np.asarray(t, dtype=float)
-    q_at = (
-        np.interp(t, influent.t, influent.q)
-        if influent.t.size > 1
-        else np.full(t.size, influent.q[0])
-    )
+    if influent.t.size > 1:
+        idx = np.clip(np.searchsorted(influent.t, t, side="right") - 1, 0, influent.t.size - 1)
+        # the flow follows the influent's own convention, exactly as the truth model reads it
+        q_at = (
+            influent.q[idx]
+            if influent.interpolation == "hold"
+            else np.interp(t, influent.t, influent.q)
+        )
+    else:
+        idx = np.zeros(t.size, dtype=int)
+        q_at = np.full(t.size, influent.q[0])
     if np.ndim(ash_in) == 0:
         c_in_at = np.full(t.size, float(ash_in))
     else:
         c_in = np.asarray(ash_in, dtype=float)
-        idx = np.clip(np.searchsorted(influent.t, t, side="right") - 1, 0, c_in.size - 1)
-        c_in_at = c_in[idx]
+        c_in_at = c_in[np.clip(idx, 0, c_in.size - 1)]
     out = np.empty(t.size)
     c = float(ash0)
     out[0] = c
@@ -291,6 +296,7 @@ def channel_series(
     inert_cod_equivalent: float | None = None,
     ash: np.ndarray | None = None,
     effluent: np.ndarray | None = None,
+    effluent_derived: Mapping[str, np.ndarray] | None = None,
 ) -> TruthChannels:
     """Every observable channel of one truth trajectory.
 
@@ -303,22 +309,37 @@ def channel_series(
             omitted without it.
         effluent: ``(n_liquid, n_times)`` effluent concentrations to measure instead of
             the reactor's own liquid states (the two-zone reactor's bypassed effluent).
+        effluent_derived: The **effluent's** speciation, required whenever ``effluent`` is
+            given. The sampled channels (alkalinity, VFA anions) must come from the same
+            liquid as the sampled concentrations, or FOS/TAC would be a ratio of two
+            different liquids. The probe channels (pH, free ammonia) and every gas channel
+            stay the reactor's, because that is where the probe and the headspace are.
 
     Returns:
         The channels, on ``result.t``.
+
+    Raises:
+        ValueError: If ``effluent`` is given without ``effluent_derived``.
     """
+    if effluent is not None and effluent_derived is None:
+        raise ValueError(
+            "effluent needs effluent_derived: alkalinity and the VFA anions must come from "
+            "the sampled liquid, not from the reactor's"
+        )
     liquid = result.y[: len(LIQUID_STATE_NAMES)] if effluent is None else np.asarray(effluent)
     idx = {name: i for i, name in enumerate(LIQUID_STATE_NAMES)}
     d = result.derived
+    #: speciation of the liquid that is *sampled* (the effluent, when there is a bypass)
+    ds = d if effluent_derived is None else effluent_derived
     n = result.t.size
 
     vfa_kmol = {acid: liquid[idx[acid]] / cod for acid, cod in VFA_COD_PER_KMOL.items()}
     vfa_total_acetic = sum(vfa_kmol.values()) * M_ACETIC / 1000.0  # kg/m3 as acetic acid
-    anion_charge = d["S_hco3_ion"] + sum(
-        d[f"{acid}_ion"] / cod for acid, cod in VFA_COD_PER_KMOL.items()
+    anion_charge = ds["S_hco3_ion"] + sum(
+        ds[f"{acid}_ion"] / cod for acid, cod in VFA_COD_PER_KMOL.items()
     )
     alk_total = KG_CACO3_PER_KMOL_CHARGE * anion_charge
-    alk_partial = KG_CACO3_PER_KMOL_CHARGE * d["S_hco3_ion"]
+    alk_partial = KG_CACO3_PER_KMOL_CHARGE * ds["S_hco3_ion"]
 
     dry = np.maximum(d["P_gas"] - d["p_h2o"], 1e-12)
     cod_states = [s for s in LIQUID_STATE_NAMES if s in COD_PER_VS_BY_STATE] + ["S_I", "X_I"]
@@ -360,11 +381,22 @@ def channels_from_two_zone(
     inert_cod_equivalent: float | None = None,
     ash: np.ndarray | None = None,
 ) -> TruthChannels:
-    """Channels of a two-zone run: the active zone's gas and speciation, the bypassed effluent.
+    """Channels of a two-zone run, each from where its instrument actually is.
 
-    A sample drawn from the digester is the effluent (what leaves the reactor after the
-    bypass), while the headspace and the pH probe see the active zone — which is precisely
-    why imperfect mixing shows up as a load-dependent residual (§6.3, Level 6).
+    Three different places, and the point of the Level-6 scenario is that they disagree:
+
+    * **the headspace** — every gas channel, from the active zone, because the two zones
+      share one headspace;
+    * **the probe in the reactor** — pH and free ammonia, from the active zone, because
+      that is where the electrode hangs and what the biomass experiences;
+    * **the grab sample** — alkalinity, VFA (total and speciated), COD, TAN and the solids,
+      from the effluent *and from the effluent's own speciation*, so that FOS/TAC is a
+      ratio taken on one liquid rather than across two.
+
+    That last point is not cosmetic: with a bypass the effluent's acetate can be well above
+    the active zone's, so alkalinity taken from the reactor while VFA is taken from the
+    sample would misstate FOS/TAC — the quantity that also raises the overload and foaming
+    flags behind the missingness model.
     """
     return channel_series(
         result.active,
@@ -372,6 +404,7 @@ def channels_from_two_zone(
         inert_cod_equivalent=inert_cod_equivalent,
         ash=ash,
         effluent=result.effluent,
+        effluent_derived=result.effluent_derived,
     )
 
 

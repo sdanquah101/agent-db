@@ -254,8 +254,19 @@ sensors:
     kind: lab
     unit: kg/m3 as valeric acid
     sampling_interval_d: 7.0
-    noise: {cv: 0.08, sd_abs: 0.0, source: "ASSUMED (lead's default: VFA 8 %)"}   # DESIGN  -
-    source: "ASSUMED (lead's default; valerate sits at the quantification limit, so 8 % may be optimistic - flagged)"
+    noise:
+      cv: 0.15                  # DESIGN  -; ASSUMED (lead's decision 2026-09-02, answering
+                                # the flag that 8 % is optimistic here): valerate is the
+                                # scarcest of the four acids and sits at the quantification
+                                # limit of the GC method, so it carries roughly twice the
+                                # relative error of the others AND a floor.
+      sd_abs: 0.05              # DESIGN  kg/m3 as valeric acid = 0.05 g/L; ASSUMED (lead's
+                                # decision): the method's quantification floor. Below about
+                                # 0.33 kg/m3 the floor dominates the relative term. The two
+                                # terms are INDEPENDENT draws (sim.observation.model), so the
+                                # total sd is sqrt((v x 0.15)^2 + 0.05^2).
+      source: "ASSUMED (lead's decision 2026-09-02; the other three speciated acids stay at 8 %)"
+    source: "ASSUMED (lead's decision: valerate alone carries 15 % + a 0.05 g/L floor)"
   h2_offgas:
     name: h2_offgas
     channel: h2_ppm

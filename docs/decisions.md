@@ -1499,3 +1499,78 @@ and could drift); make the multipliers tier-dependent too (rejected: the lead ga
 set, and an instrument's failure mode under foaming is not a function of how well the
 plant is instrumented); keep the recalibration interval on the sensor and let the tier
 override it (rejected: two places to look for one number).
+
+---
+
+## 2026-09-02 — Valerate assay carries 15 % plus a 0.05 g/L floor (the lead, on PR #11)
+
+**Decision.** Answering the flag that 8 % is optimistic for valerate: `vfa_va` noise
+becomes `cv: 0.15` with `sd_abs: 0.05` kg m⁻³ as valeric acid (0.05 g/L). The other three
+speciated acids stay at 8 %. Valerate is the scarcest of the four and sits at the
+quantification limit of the GC method, so it carries roughly twice the relative error of
+the others *and* an absolute floor.
+
+**Where the floor bites.** The two terms are independent draws (the total sd is
+`√((v·0.15)² + 0.05²)`), so the floor dominates below about 0.33 kg m⁻³ — which is most of
+the operating range for valerate. At a truth of 0.05 kg m⁻³ the relative term contributes
+0.0075 and the floor 0.05.
+
+**Open design item, flagged rather than decided.** With a floor of the same size as the
+quantity, **17 % of reported valerate values are negative** (measured: 565 samples over
+4,000 days, mean 0.0494, sd 0.0497, minimum −0.102). Three options, none of them free:
+
+1. **Leave it** (what the branch does). A laboratory reporting raw instrument values below
+   its limit of quantification does produce negatives, and a workflow that treats a
+   negative concentration as a measurement rather than a signal has made a real mistake
+   that the benchmark should be able to catch.
+2. **Clip at zero.** Physical, but it biases the mean upward by ~4 % at these levels, and
+   the bias is largest exactly where the acid matters least.
+3. **Censor at the limit of quantification** — report `< LOQ` rather than a number. This
+   is what a laboratory actually does, but it changes the record's *type* (a censored
+   observation is not a float), so it is a schema change and a decision for the lead.
+
+The branch takes option 1 unchanged and records the number here so the choice is visible.
+
+**Test.** `test_relative_and_absolute_noise_are_independent_draws` is now parametrised over
+the two sensors that declare both terms. The H₂ cell is the one that *discriminates*
+between the independent and the correlated form (its terms are comparable, so the
+correlated sum is 36 % larger); valerate's floor dominates, so the two forms differ by only
+12 % there and the test checks the magnitude alone — but a floor applied as a relative term
+or silently dropped still fails it.
+
+---
+
+## 2026-09-02 — Two-zone channels: a grab sample carries its own speciation
+
+**Decision.** `channels_from_two_zone` took the *concentrations* from the effluent and the
+*speciation* from the active zone, so under a bypass `alkalinity_total` (bicarbonate + VFA
+anions) described the reactor while `vfa_total` described the sample, and `fos_tac` was a
+ratio across two different liquids. `simulate_two_zone` now also returns
+`effluent_derived` — `derived_extended` on the effluent composition with the shared
+headspace's gas states — and each channel comes from where its instrument actually is:
+
+| Where | Channels |
+|---|---|
+| the shared **headspace** | every gas channel (both gas-flow conventions, CH₄/CO₂/H₂) |
+| the **probe in the reactor** | pH, free ammonia — the electrode hangs in the active zone, and free ammonia is the inhibition the biomass experiences |
+| the **grab sample** (the effluent) | alkalinity partial and total, VFA total and speciated, COD, TAN, VS/TS, FOS/TAC |
+
+`channel_series` now *raises* if given an `effluent` without an `effluent_derived`, so the
+inconsistency cannot come back by a caller forgetting an argument.
+
+**Why it mattered.** Measured at Plant C, 60 d, stagnant fraction 0.30 (bypass 0.06):
+the sampled alkalinity is 4.1 % below the reactor's, the sampled VFA 54 % above it, and
+FOS/TAC 61 % above the reactor's rather than the 54 % the hybrid gave. FOS/TAC is also
+what raises the overload and foaming flags behind the missingness model, so a Level-6
+mixing run was getting its stress flags from a quantity that was neither the sample nor
+the reactor. At bypass 0 the two are bit-identical, which the test asserts.
+
+**How it survived until now.** `channels_from_two_zone` was exported and had **no test**.
+It has one now (`test_two_zone_channels_come_from_where_the_instrument_is`), covering the
+degenerate case, the three sources under a bypass, and the raise.
+
+**Also fixed in the same pass.** `ash_trajectory` documented that the flow "follows the
+influent's declared `interpolation`" but interpolated it linearly regardless; only the
+feed-ash series honoured the hold. Latent — the error is exactly zero whenever the output
+times are the influent's own, which is every current call — but the docstring was a claim
+the code did not keep. The flow now reads `influent.interpolation` like the feed ash does.
