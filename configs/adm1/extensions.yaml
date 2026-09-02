@@ -56,7 +56,7 @@ extensions:
       k_dec_X_sao: {value: 0.02,  unit: d^-1, description: "decay, as other biomass"}
     processes:
       - name: uptake_acetate_sao
-        rate: k_m_sao * S_ac/(K_S_sao + S_ac) * X_sao * I_pH_aa * I_IN_lim * I_nh3_sao * I_h2_sao
+        rate: k_m_sao * S_ac/(K_S_sao + S_ac) * X_sao * I_pH_h2 * I_IN_lim * I_nh3_sao * I_h2_sao
         stoichiometry:
           S_ac:  "-1"
           S_h2:  "1 - Y_sao"
@@ -75,6 +75,12 @@ extensions:
   # ADM1 assumes an ideal solution; at the ionic strengths of manure and food-waste
   # digesters (0.1-0.5 M) this shifts pH and free ammonia by amounts that matter for
   # inhibition (Batstone et al. 2012; Flores-Alsina et al. 2016). No new components.
+  #
+  # Strong-ion convention (documented, lead's decision 2026-09-02): S_cat and S_an are
+  # the standard ADM1 lumped monovalent strong cations / anions (kmol charge m^-3) and
+  # enter I with z = 1, i.e. as Na+/K+ and Cl-. Divalent strong ions (Mg2+, SO4 2-) are
+  # not represented; a feed rich in them understates I by up to a factor of ~2 per
+  # divalent equivalent. Ca2+ from the calcite extension is the only divalent ion in I.
   #
   # davies_A is the 25 C value; the model scales it to T_op with the Debye-Hueckel
   # formula A = 1.82483e6 sqrt(rho) / (eps T)^1.5 (sim/adm1/physchem_ext.py): x1.017 at
@@ -111,6 +117,17 @@ extensions:
   # estimate. Removes inorganic carbon and alkalinity, so a fitted model without it sees
   # an unattributable alkalinity/pH residual (Level-6 scenario "Omitted precipitation").
   #
+  # Deliberate simplifications (lead's decision 2026-09-02), documented rather than
+  # modelled: (1) no surface / seed term: the rate does not depend on the calcite
+  # already present; (2) no dissolution: the rate is zero for SI < 1, and the model
+  # reports `calcite_SI` and the flag `calcite_undersaturated` (1 when SI < 1 while
+  # X_caco3 > 0, i.e. where dissolution would occur) so that runs which enter that
+  # regime are visible; (3) no solids retention: X_caco3 leaves with the liquid at the
+  # HRT. K_sp is temperature-dependent through Plummer & Busenberg (1982),
+  # log10 K_sp = -171.9065 - 0.077993 T + 2839.319/T + 71.595 log10 T (pK 8.480 at 25 C,
+  # 8.543 at 35 C, 8.709 at 55 C), evaluated at T_op in sim/adm1/physchem_ext.py; it is
+  # therefore not a config parameter. pK_a2 (shared) is still the 25 C value.
+  #
   # Charge convention: the row {S_ca: -1, S_IC: -1, X_caco3: +1} has a charge residual
   # of -2. This is a MATRIX CONVENTION, not a tested property: S_IC carries charge 0 as
   # an uncharged total (its split into CO2 / HCO3- / CO3 2- is algebraic), while the
@@ -123,7 +140,6 @@ extensions:
       - {name: S_ca,    unit: kmol m^-3, description: dissolved calcium,       cod: 0, carbon: 0, nitrogen: 0, charge: 2}
       - {name: X_caco3, unit: kmol m^-3, description: calcium carbonate solid, cod: 0, carbon: 1, nitrogen: 0, charge: 0}
     parameters:
-      pK_sp_caco3: {value: 8.48, unit: "-", description: "calcite solubility product at 25 C (Stumm & Morgan)"}
       k_prec_caco3: {value: 1.0, unit: kmol m^-3 d^-1, description: "kinetic constant (order of magnitude; ADM1-P uses 1e0-1e2)"}
       n_prec_caco3: {value: 2.0, unit: "-", description: "exponent on (SI^(1/2) - 1)"}
     processes:

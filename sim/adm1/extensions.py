@@ -72,6 +72,11 @@ DERIVED_UNITS: Mapping[str, str] = MappingProxyType(
         "q_gas": "m3/d at T_op normalised to P_atm (BSM2 convention)",
         "q_gas_stp_dry": "m3/d at 0 C and 1 atm, water vapour removed",
         "q_ch4_stp": "m3 CH4/d at 0 C and 1 atm, wet-gas fraction basis",
+        "calcite_SI": "- (a_Ca a_CO3 / K_sp at T_op; NaN unless the calcite extension is on)",
+        "calcite_undersaturated": (
+            "flag, 1 when SI < 1 while X_caco3 > 0: dissolution would occur but is not "
+            "modelled (0 otherwise; NaN unless the calcite extension is on)"
+        ),
     }
 )
 """Units of every entry of :attr:`ExtendedResult.derived` (CLAUDE.md rule 6)."""
@@ -137,16 +142,18 @@ RateFunction = Callable[[RateContext], float]
 
 
 def _rate_uptake_acetate_sao(c: RateContext) -> float:
-    """SAO acetate uptake: Monod, pH (acidogen form), IN limitation, own NH3 and H2 terms.
+    """SAO acetate uptake: Monod, pH, IN limitation, own NH3 and H2 terms.
 
-    Free-ammonia inhibition uses the SAO-specific ``K_I_nh3_sao`` (weaker than the
-    acetoclastic ``K_I_nh3``), not the acetoclastic function.
+    pH inhibition uses the **hydrogenotrophic** limits (``pH_UL_h2`` / ``pH_LL_h2``): SAO
+    only runs coupled to hydrogenotrophic methanogenesis, so the pair shares the
+    methanogen's pH window (lead's decision 2026-09-02). Free-ammonia inhibition uses the
+    SAO-specific ``K_I_nh3_sao`` (weaker than the acetoclastic ``K_I_nh3``).
     """
     return (
         c.ext["k_m_sao"]
         * monod(c.y["S_ac"], c.ext["K_S_sao"])
         * c.y["X_sao"]
-        * inhibition_ph_hill(c.S_h, c.kin.pH_UL_aa, c.kin.pH_LL_aa)
+        * inhibition_ph_hill(c.S_h, c.kin.pH_UL_h2, c.kin.pH_LL_h2)
         * limitation_secondary_substrate(c.y["S_IN"], c.kin.K_S_IN)
         * inhibition_noncompetitive(c.sp.S_nh3, c.ext["K_I_nh3_sao"])
         * inhibition_noncompetitive(c.y["S_h2"], c.ext["K_I_h2_sao"])
@@ -300,8 +307,6 @@ def compile_extended(
     if "pK_a2_co2" not in ext_params:
         raise ValueError("extensions config must declare the shared parameter 'pK_a2_co2'")
     calcite = any(p.name == "precipitation_caco3" for p in processes)
-    if calcite and "pK_sp_caco3" not in ext_params:
-        raise ValueError("the calcite extension must declare 'pK_sp_caco3'")
     if ionic and not {"davies_A", "davies_b", "I_max"} <= ext_params.keys():
         raise ValueError("the ionic-strength extension must declare davies_A, davies_b and I_max")
     nu.setflags(write=False)
@@ -314,7 +319,8 @@ def compile_extended(
         davies_b=ext_params["davies_b"] if ionic else nan,
         I_max=ext_params["I_max"] if ionic else nan,
         pK_a2_co2=ext_params["pK_a2_co2"],
-        pK_sp_caco3=ext_params["pK_sp_caco3"] if calcite else nan,
+        # Plummer & Busenberg (1982) at T_op; not a config constant (lead's decision)
+        pK_sp_caco3=physchem_ext.pK_sp_calcite(plant.T_op) if calcite else nan,
     )
     ext_names = tuple(c.name for c in components[N_LIQUID:])
     return ExtendedModel(
@@ -460,8 +466,15 @@ def derived_extended(y: np.ndarray, model: ExtendedModel) -> dict[str, np.ndarra
     yr = np.maximum(y, 0.0) if base.solver.clip_negative_states_in_rates else y
     names = tuple(DERIVED_UNITS)
     n = y.shape[1]
-    out = {name: np.empty(n) for name in names}
+    out = {name: np.full(n, np.nan) for name in names}
     g_h2, g_ch4, g_co2 = (_IDX[n_] for n_ in ("S_gas_h2", "S_gas_ch4", "S_gas_co2"))
+    calcite = "X_caco3" in model.state_names
+    if calcite:
+        i_ca, i_x, K_sp = (
+            model.index("S_ca"),
+            model.index("X_caco3"),
+            10.0**-model.options.pK_sp_caco3,
+        )
     for j in range(n):
         col = yr[:, j]
         sp = _speciation(col, model)
@@ -474,6 +487,10 @@ def derived_extended(y: np.ndarray, model: ExtendedModel) -> dict[str, np.ndarra
             gas.q_gas, gas.P_gas, gas.p_h2o, plant.T_op
         )
         out["q_ch4_stp"][j] = gas.q_gas * (273.15 / plant.T_op) * (gas.p_ch4 / gas.P_gas)
+        if calcite:
+            si = physchem_ext.saturation_index(col[i_ca], sp.S_co3_ion, K_sp, sp.gamma2)
+            out["calcite_SI"][j] = si
+            out["calcite_undersaturated"][j] = float(si < 1.0 and col[i_x] > 0.0)
     return out
 
 
