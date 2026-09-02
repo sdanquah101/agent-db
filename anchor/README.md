@@ -10,10 +10,15 @@ anchor/
                   + every candidate that was examined and deliberately not fetched
   manifest.py     Pydantic schema for MANIFEST.json
   fetch.py        reproduces the download and verifies checksums (pure I/O)
-  ingest_muscatine.py  the daily file as unit-explicit records (gallons -> m3, degF -> K,
-                  cfm -> m3/d with a "reference conditions unknown" flag) and the §8
-                  step-2 delivery / assay statistics the influent generator declares
+  ingest_muscatine.py  the daily file and the 1-minute SCADA file as unit-explicit
+                  records (gallons -> m3, degF -> K, cfm -> m3/d with a "reference
+                  conditions unknown" flag), the §8 step-2 delivery / assay statistics the
+                  influent generator declares, and the sensor-noise, flatline and dropout
+                  statistics the observation model declares
   raw/<id>/       the bytes; large files are git-ignored, small ones committed
+  derived/        small derived artefacts of a git-ignored raw file, committed with their
+                  attribution and the parent's SHA-256 (the 60-day SCADA window and the
+                  sensor statistics of `scripts/muscatine_scada_observation.py`)
 ```
 
 Reproduce or verify the download from the repository root:

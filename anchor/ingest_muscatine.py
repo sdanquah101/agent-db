@@ -1,4 +1,4 @@
-"""Ingest the Muscatine WRRF daily file into unit-explicit records and §8 step-2 statistics.
+"""Ingest the Muscatine WRRF files into unit-explicit records and §8 step-2 statistics.
 
 The daily file (``anchor/raw/iowa-muscatine-wrrf/LABS-raw.csv``, ODC-By 1.0; see
 ``anchor/MANIFEST.json``) reports volumes in gallons, temperatures in degrees Fahrenheit,
@@ -8,24 +8,40 @@ the field name (CLAUDE.md rule 6). The biogas column carries an explicit
 "reference conditions unknown" flag: the data dictionary states neither temperature nor
 pressure for the cubic feet.
 
-The statistics computed here are the ones the influent generator's Plant B/C blocks
+The daily statistics computed here are the ones the influent generator's Plant B/C blocks
 declare (``configs/influent/generator.yaml``): delivery-day fractions, weekday patterns,
 lognormal parameters of the delivered volume on delivery days, lag-1 autocorrelations,
 seasonal amplitudes from monthly means, and the spread and persistence of the feed
 assays. ``tests/test_generator.py`` re-derives the configuration from this module so the
 config cannot drift from the data it claims to summarise.
 
-Pure functions over the parsed rows; the only I/O is :func:`load_daily`.
+The **one-minute SCADA file** (``SCADA-raw.csv``, 500,400 rows, 2022-03-18 to
+2023-02-28, 88.8 MB and therefore git-ignored) carries what the *observation model*
+needs (proposal §6.1): the high-frequency scatter of the digester-temperature and
+biogas-flow sensors, how often those channels flatline or sit at an instrument limit,
+and the rate and length of the dropouts in the record.
+:func:`load_scada`, :func:`sensor_noise_statistics` and :func:`dropout_statistics`
+compute them; ``scripts/muscatine_scada_observation.py`` writes them to
+``anchor/derived/muscatine-scada-sensor-statistics.json`` together with a committed
+60-day extract (``anchor/derived/muscatine-scada-window.csv.gz``), and
+``tests/test_observe.py`` re-derives the extract's statistics offline (decisions log,
+2026-09-02, "SCADA statistics: a committed window plus a recorded full-year JSON").
+
+Pure functions over the parsed rows; the only I/O is :func:`load_daily` and
+:func:`load_scada`.
 """
 
 from __future__ import annotations
 
 import csv
 import datetime as dt
+import gzip
 import math
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TextIO
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
@@ -33,19 +49,32 @@ from pydantic import BaseModel, ConfigDict, Field
 __all__ = [
     "DAILY_FILE",
     "GAL_TO_M3",
+    "SCADA_FILE",
+    "SCADA_WINDOW_FILE",
     "AssayStatistics",
     "DailyRecord",
     "DeliveryStatistics",
+    "DropoutStatistics",
+    "ScadaSeries",
+    "SensorNoiseStatistics",
     "assay_statistics",
     "delivery_statistics",
+    "dropout_statistics",
     "load_daily",
+    "load_scada",
     "seasonal_amplitude_from_monthly_means",
+    "sensor_noise_statistics",
 ]
 
-DAILY_FILE = Path(__file__).resolve().parent / "raw" / "iowa-muscatine-wrrf" / "LABS-raw.csv"
+_RAW_DIR = Path(__file__).resolve().parent / "raw" / "iowa-muscatine-wrrf"
+DAILY_FILE = _RAW_DIR / "LABS-raw.csv"
+SCADA_FILE = _RAW_DIR / "SCADA-raw.csv"
+SCADA_WINDOW_FILE = Path(__file__).resolve().parent / "derived" / "muscatine-scada-window.csv.gz"
 GAL_TO_M3 = 0.00378541
 CFM_TO_M3_PER_D = 0.0283168 * 1440.0
 MG_PER_L_TO_KG_PER_M3 = 1e-3
+DEGF_TO_K_STEP = 5.0 / 9.0
+"""Kelvin per degree Fahrenheit — the factor for *differences* and standard deviations."""
 
 
 class DailyRecord(BaseModel):
@@ -251,4 +280,258 @@ def assay_statistics(records: Sequence[DailyRecord], field: str) -> AssayStatist
         measured_fraction_by_weekday=tuple(
             float(np.mean(measured[weekdays == d])) for d in range(7)
         ),
+    )
+
+
+# ------------------------------------------------------- the 1-minute SCADA file
+
+
+DEGF_TO_K_OFFSET = 273.15 - 32.0 * DEGF_TO_K_STEP
+"""Kelvin at 0 degrees Fahrenheit: ``K = F * DEGF_TO_K_STEP + DEGF_TO_K_OFFSET``."""
+
+
+@dataclass(frozen=True)
+class ScadaColumn:
+    """How one SCADA column is converted to SI and what its instrument limits are."""
+
+    name: str
+    """Name of the converted series (carries its unit, CLAUDE.md rule 6)."""
+    scale: float
+    offset: float
+    unit: str
+    limits_raw: tuple[float, float]
+    """The "acceptable values" of the provider's data dictionary, in the file's unit."""
+
+    def convert(self, values: np.ndarray) -> np.ndarray:
+        """Convert a raw column to :attr:`unit`."""
+        return values * self.scale + self.offset
+
+    @property
+    def limits(self) -> tuple[float, float]:
+        """The instrument limits in :attr:`unit`."""
+        low, high = self.limits_raw
+        return low * self.scale + self.offset, high * self.scale + self.offset
+
+
+#: SCADA columns the observation model is anchored to (``SCADA-data-dictionary.csv``).
+SCADA_COLUMNS: dict[str, ScadaColumn] = {
+    "D1_TEMPERATURE": ScadaColumn("dig1_T_K", DEGF_TO_K_STEP, DEGF_TO_K_OFFSET, "K", (85.0, 150.0)),
+    "D2_TEMPERATURE": ScadaColumn("dig2_T_K", DEGF_TO_K_STEP, DEGF_TO_K_OFFSET, "K", (85.0, 150.0)),
+    "Biogas": ScadaColumn(
+        "biogas_m3_d",
+        CFM_TO_M3_PER_D,
+        0.0,
+        "m3/d (reference conditions unknown)",
+        (0.0, 1120.0),
+    ),
+}
+
+
+@dataclass(frozen=True)
+class ScadaSeries:
+    """The SCADA log as sorted minute-resolution series in SI units.
+
+    The file is **not** in chronological order (the 2023 block precedes 2022) and has
+    whole rows missing where the providers deleted assumed power surges, so ``minute``
+    is the sorted time index and is not contiguous.
+    """
+
+    start: dt.datetime
+    """Timestamp of the first row (local plant time, as recorded)."""
+    minute: np.ndarray
+    """Minutes since ``start``, strictly increasing, with gaps where rows are absent."""
+    columns: dict[str, np.ndarray]
+    """Converted series keyed by the name in :data:`SCADA_COLUMNS`."""
+    units: dict[str, str]
+    """Unit of every entry of :attr:`columns` (CLAUDE.md rule 6)."""
+    limits: dict[str, tuple[float, float]]
+    """Instrument limits from the provider's data dictionary, in the converted unit."""
+
+    @property
+    def span_d(self) -> float:
+        """Time from the first to the last row, d."""
+        return float(self.minute[-1] - self.minute[0]) / 1440.0
+
+
+@contextmanager
+def _open_text(path: Path) -> Iterator[TextIO]:
+    """Open a plain or gzipped CSV as text."""
+    if path.suffix == ".gz":
+        with gzip.open(path, "rt", encoding="utf-8-sig", newline="") as fh:
+            yield fh
+    else:
+        with path.open(encoding="utf-8-sig", newline="") as fh:
+            yield fh
+
+
+def load_scada(path: Path = SCADA_FILE) -> ScadaSeries:
+    """Parse the 1-minute SCADA file (or the committed window extract) into SI series.
+
+    Only the columns of :data:`SCADA_COLUMNS` that the file carries are returned;
+    temperatures become kelvin and the biogas flow m3/d at the meter's own, unstated
+    reference conditions (the unit string says so).
+
+    Args:
+        path: ``SCADA-raw.csv`` or a ``.csv.gz`` extract with the same column names.
+
+    Returns:
+        The sorted series.
+
+    Raises:
+        ValueError: If the file carries none of the known columns.
+    """
+    with _open_text(path) as fh:
+        reader = csv.reader(fh)
+        header = next(reader)
+        rows = list(reader)
+    index = {name: i for i, name in enumerate(header)}
+    present = [c for c in SCADA_COLUMNS if c in index]
+    if not present:
+        raise ValueError(f"{path}: none of {sorted(SCADA_COLUMNS)} is present")
+    stamps = np.array(
+        [dt.datetime.strptime(r[index["Timestamp"]], "%Y-%m-%d %H:%M:%S") for r in rows]
+    )
+    order = np.argsort(stamps, kind="stable")
+    stamps = stamps[order]
+    start = stamps[0]
+    minute = np.array([(s - start).total_seconds() / 60.0 for s in stamps])
+    columns: dict[str, np.ndarray] = {}
+    units: dict[str, str] = {}
+    limits: dict[str, tuple[float, float]] = {}
+    for column in present:
+        spec = SCADA_COLUMNS[column]
+        col = index[column]
+        raw = np.array(
+            [math.nan if _float(r[col]) is None else float(r[col]) for r in rows], dtype=float
+        )
+        columns[spec.name] = spec.convert(raw[order])
+        units[spec.name] = spec.unit
+        limits[spec.name] = spec.limits
+    return ScadaSeries(start=start, minute=minute, columns=columns, units=units, limits=limits)
+
+
+@dataclass(frozen=True)
+class SensorNoiseStatistics:
+    """High-frequency behaviour of one SCADA channel (the observation model's anchor)."""
+
+    channel: str
+    unit: str
+    n_samples: int
+    median: float
+    """Median of the channel over the record, in ``unit``."""
+    robust_sd: float
+    """Measurement noise, in ``unit``: ``1.4826 MAD(diff) / sqrt(2)`` over consecutive
+    one-minute samples. The robust scale of the one-minute differences rejects the real
+    process excursions that inflate the plain sd, and dividing by sqrt(2) turns the
+    difference of two independent readings back into one reading's sd."""
+    relative_sd: float
+    """``robust_sd / median``, -."""
+    resolution: float
+    """Smallest non-zero step between consecutive samples, in ``unit`` (the recorded
+    quantisation of the channel)."""
+    repeat_fraction: float
+    """Fraction of consecutive one-minute pairs with an identical value, -."""
+    flatline_episodes_per_d: float
+    """Rate of runs of identical values at least ``min_run_min`` long, 1/d."""
+    flatline_mean_duration_min: float
+    """Mean length of those runs, min."""
+    at_lower_limit_fraction: float
+    """Fraction of samples at or below the instrument's lower limit, -."""
+    at_upper_limit_fraction: float
+    """Fraction of samples at or above the instrument's upper limit, -."""
+
+
+def _runs_of_true(flags: np.ndarray) -> np.ndarray:
+    """Lengths of the maximal runs of ``True`` in a boolean array."""
+    runs: list[int] = []
+    current = 0
+    for flag in flags:
+        if flag:
+            current += 1
+        elif current:
+            runs.append(current)
+            current = 0
+    if current:
+        runs.append(current)
+    return np.array(runs, dtype=float)
+
+
+def sensor_noise_statistics(
+    series: ScadaSeries, channel: str, min_run_min: int = 10
+) -> SensorNoiseStatistics:
+    """Noise, quantisation, flatlining and limit-hitting of one SCADA channel.
+
+    Only consecutive samples one minute apart enter the difference statistics, so the
+    record's dropouts do not masquerade as noise.
+
+    Args:
+        series: The parsed SCADA series.
+        channel: Key of :attr:`ScadaSeries.columns`.
+        min_run_min: Shortest run of identical values counted as a flatline episode, min.
+
+    Returns:
+        The statistics of that channel.
+    """
+    values = series.columns[channel]
+    finite = np.isfinite(values)
+    adjacent = (np.diff(series.minute) == 1.0) & finite[:-1] & finite[1:]
+    steps = np.diff(values)[adjacent]
+    mad = float(np.median(np.abs(steps - np.median(steps))))
+    non_zero = np.abs(steps[steps != 0.0])
+    same = steps == 0.0
+    runs = _runs_of_true(same) + 1.0  # a run of k equal differences is k+1 equal samples
+    long_runs = runs[runs >= min_run_min]
+    low, high = series.limits[channel]
+    good = values[finite]
+    return SensorNoiseStatistics(
+        channel=channel,
+        unit=series.units[channel],
+        n_samples=int(good.size),
+        median=float(np.median(good)),
+        robust_sd=1.4826 * mad / math.sqrt(2.0),
+        relative_sd=1.4826 * mad / math.sqrt(2.0) / float(np.median(good)),
+        resolution=float(non_zero.min()) if non_zero.size else 0.0,
+        repeat_fraction=float(same.mean()),
+        flatline_episodes_per_d=float(long_runs.size) / series.span_d,
+        flatline_mean_duration_min=float(long_runs.mean()) if long_runs.size else 0.0,
+        at_lower_limit_fraction=float(np.mean(good <= low)),
+        at_upper_limit_fraction=float(np.mean(good >= high)),
+    )
+
+
+@dataclass(frozen=True)
+class DropoutStatistics:
+    """Gaps in the SCADA record: how often the log loses samples and for how long.
+
+    The providers deleted 485 rows "assumed to be power surges" (``README.txt``), so
+    these are the dropouts of the *published* record; the plant's own logger may have
+    lost more. The observation model uses them as the base missingness of a continuously
+    logged channel and says so in ``configs/observe/observation.yaml``.
+    """
+
+    n_rows: int
+    span_d: float
+    n_gaps: int
+    gaps_per_d: float
+    missing_minute_fraction: float
+    """Missing minutes divided by the minutes the record spans, -."""
+    median_gap_min: float
+    p90_gap_min: float
+    max_gap_min: float
+
+
+def dropout_statistics(series: ScadaSeries) -> DropoutStatistics:
+    """Rate and length distribution of the gaps between consecutive SCADA rows."""
+    steps = np.diff(series.minute)
+    gaps = steps[steps > 1.0] - 1.0
+    span_min = float(series.minute[-1] - series.minute[0]) + 1.0
+    return DropoutStatistics(
+        n_rows=int(series.minute.size),
+        span_d=series.span_d,
+        n_gaps=int(gaps.size),
+        gaps_per_d=float(gaps.size) / series.span_d,
+        missing_minute_fraction=float(gaps.sum()) / span_min,
+        median_gap_min=float(np.median(gaps)) if gaps.size else 0.0,
+        p90_gap_min=float(np.percentile(gaps, 90)) if gaps.size else 0.0,
+        max_gap_min=float(gaps.max()) if gaps.size else 0.0,
     )

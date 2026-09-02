@@ -1,0 +1,161 @@
+{
+  "full_record": {
+    "dropouts": {
+      "gaps_per_d": 0.05462353483747701,
+      "max_gap_min": 421.0,
+      "median_gap_min": 2.0,
+      "missing_minute_fraction": 0.0009662915964574632,
+      "n_gaps": 19,
+      "n_rows": 500400,
+      "p90_gap_min": 9.799999999999997,
+      "span_d": 347.8354166666667
+    },
+    "sensors": {
+      "biogas_m3_d": {
+        "at_lower_limit_fraction": 0.007388089528377298,
+        "at_upper_limit_fraction": 0.0,
+        "channel": "biogas_m3_d",
+        "flatline_episodes_per_d": 0.002874922886183001,
+        "flatline_mean_duration_min": 72.0,
+        "median": 4780.693136698215,
+        "n_samples": 500400,
+        "relative_sd": 0.020041613051676822,
+        "repeat_fraction": 0.003915024581318198,
+        "resolution": 3.629081092526576e-06,
+        "robust_sd": 95.81280196451276,
+        "unit": "m3/d (reference conditions unknown)"
+      },
+      "dig1_T_K": {
+        "at_lower_limit_fraction": 0.0006594724220623502,
+        "at_upper_limit_fraction": 0.0,
+        "channel": "dig1_T_K",
+        "flatline_episodes_per_d": 0.017249537317098003,
+        "flatline_mean_duration_min": 63.833333333333336,
+        "median": 308.73333333333335,
+        "n_samples": 500400,
+        "relative_sd": 9.432416628760318e-05,
+        "repeat_fraction": 0.11613773532115593,
+        "resolution": 0.005555555555531555,
+        "robust_sd": 0.02912101427185936,
+        "unit": "K"
+      },
+      "dig2_T_K": {
+        "at_lower_limit_fraction": 0.0007194244604316547,
+        "at_upper_limit_fraction": 0.0,
+        "channel": "dig2_T_K",
+        "flatline_episodes_per_d": 0.022999383089464007,
+        "flatline_mean_duration_min": 52.125,
+        "median": 308.7444444444444,
+        "n_samples": 500400,
+        "relative_sd": 7.54566173957613e-05,
+        "repeat_fraction": 0.11048403213557696,
+        "resolution": 0.005555555555531555,
+        "robust_sd": 0.02329681141751132,
+        "unit": "K"
+      }
+    }
+  },
+  "schema_version": 1,
+  "source": {
+    "citation": "Schroer, H. W. and Just, C. L. (2024). Laboratory, operational, and SCADA datasets for anaerobic co-digestion at the Muscatine, IA Water Resource Recovery Facility. University of Iowa. https://doi.org/10.25820/data.006715",
+    "columns": {
+      "Biogas": {
+        "limits_raw": [
+          0.0,
+          1120.0
+        ],
+        "name": "biogas_m3_d",
+        "offset": 0.0,
+        "scale": 40.776192,
+        "unit": "m3/d (reference conditions unknown)"
+      },
+      "D1_TEMPERATURE": {
+        "limits_raw": [
+          85.0,
+          150.0
+        ],
+        "name": "dig1_T_K",
+        "offset": 255.3722222222222,
+        "scale": 0.5555555555555556,
+        "unit": "K"
+      },
+      "D2_TEMPERATURE": {
+        "limits_raw": [
+          85.0,
+          150.0
+        ],
+        "name": "dig2_T_K",
+        "offset": 255.3722222222222,
+        "scale": 0.5555555555555556,
+        "unit": "K"
+      }
+    },
+    "dataset": "iowa-muscatine-wrrf",
+    "file": "SCADA-raw.csv",
+    "licence": "Open Data Commons Attribution (ODC-By) v1.0",
+    "sha256": "8d56ac54f9a692cebd4ca6c98598411ce2aae0bd02d9631da69ed1bf53004440",
+    "span_d": 347.8354166666667,
+    "start": "2022-03-18 00:01:00"
+  },
+  "window": {
+    "days": 60,
+    "dropouts": {
+      "gaps_per_d": 0.18333545527147305,
+      "max_gap_min": 421.0,
+      "median_gap_min": 4.0,
+      "missing_minute_fraction": 0.005405092592592592,
+      "n_gaps": 11,
+      "n_rows": 85933,
+      "p90_gap_min": 13.0,
+      "span_d": 59.99930555555556
+    },
+    "file": "anchor/derived/muscatine-scada-window.csv.gz",
+    "note": "The first 60 days of the record; the biogas column is rounded to 1e-3 cfm before conversion. Committed so the noise, quantisation and flatline statistics can be re-derived offline; the dropout statistics are NOT representative over 60 days (18 of the record's 19 gaps fall in the first 90 days) and the configuration uses the full-record values.",
+    "sensors": {
+      "biogas_m3_d": {
+        "at_lower_limit_fraction": 0.0067028964425773566,
+        "at_upper_limit_fraction": 0.0,
+        "channel": "biogas_m3_d",
+        "flatline_episodes_per_d": 0.0,
+        "flatline_mean_duration_min": 0.0,
+        "median": 4821.254613504,
+        "n_samples": 85933,
+        "relative_sd": 0.025136722993535424,
+        "repeat_fraction": 0.002001838898523062,
+        "resolution": 0.08155238399922382,
+        "robust_sd": 121.19054170095475,
+        "unit": "m3/d (reference conditions unknown)"
+      },
+      "dig1_T_K": {
+        "at_lower_limit_fraction": 0.0,
+        "at_upper_limit_fraction": 0.0,
+        "channel": "dig1_T_K",
+        "flatline_episodes_per_d": 0.0,
+        "flatline_mean_duration_min": 0.0,
+        "median": 308.66666666666663,
+        "n_samples": 85933,
+        "relative_sd": 9.434453867773011e-05,
+        "repeat_fraction": 0.11266163103315836,
+        "resolution": 0.005555555555531555,
+        "robust_sd": 0.02912101427185936,
+        "unit": "K"
+      },
+      "dig2_T_K": {
+        "at_lower_limit_fraction": 0.00126843005597384,
+        "at_upper_limit_fraction": 0.0,
+        "channel": "dig2_T_K",
+        "flatline_episodes_per_d": 0.03333371914026782,
+        "flatline_mean_duration_min": 49.5,
+        "median": 308.77777777777777,
+        "n_samples": 85933,
+        "relative_sd": 9.43105895814085e-05,
+        "repeat_fraction": 0.10209378382467615,
+        "resolution": 0.005555555555531555,
+        "robust_sd": 0.02912101427185936,
+        "unit": "K"
+      }
+    },
+    "sha256": "1c04fdf16f27fb0b8a78be7e71e3717e6d9d82087e6a010cf1716a2e650584a2",
+    "start": "2022-03-18 00:01:00"
+  }
+}
