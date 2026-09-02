@@ -62,17 +62,18 @@ solids:
 # Conditional missingness (§6.1): instruments fail during foaming and overload, so a gap
 # is evidence and interpolating over it destroys information.
 stress:
-  vfa_coupling: 1.5     # DESIGN: log-hazard per doubling of total VFA above the run median
-  gas_coupling: 1.0     # DESIGN: log-hazard per doubling of |gas-rate deviation|
-  max_probability: 0.9  # DESIGN: even a failed instrument occasionally records
+  vfa_coupling: 0.8     # DESIGN: log-hazard per doubling of total VFA above the run median
+  gas_coupling: 0.5     # DESIGN: log-hazard per doubling of |gas-rate deviation|
+  max_probability: 0.5  # DESIGN: even a failed instrument records about half the time
   vfa_quantity: vfa_total
   gas_quantity: biogas_volume
   source: >-
     DESIGN, ASSUMED. The functional form (doublings away from the run's own median, so no
     plant-specific threshold is needed) is a modelling choice; the two couplings set how
     strongly missingness is informative. At the couplings above, a channel of sensitivity
-    1.0 with a 1 % base rate loses ~3 % of samples when VFA double and ~8 % when they
-    quadruple with the gas rate halved. Reviewed by the lead before the freeze; the
+    1.0 with a 1 % base rate loses ~2 % of samples when VFA double and ~8 % when they
+    quadruple with the gas rate halved; over an ordinary 60-day Plant C run the hazard
+    stays inside x7 of its base. To be reviewed by the lead before the freeze; the
     Level-4 scenario multiplies the sensitivity (scenarios/, fault informative_missingness).
 
 instruments:
@@ -531,6 +532,11 @@ channels:
       extension (a truth-model change, not an observation one) or dropping H2S from the
       Tier-C list of §6.4.
     interval_d: 0.0416666667
+    standard_conditions:
+      name: "dry biogas (water vapour removed)"
+      temperature_K: 273.15
+      pressure_bar: 1.013
+      moisture: dry
     description: "Off-gas hydrogen sulfide (§6.4 Tier C) -- declared, not implemented."
     source: "proposal §6.4"
   activity_ac:

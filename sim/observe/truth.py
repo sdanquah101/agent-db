@@ -182,7 +182,7 @@ def reactor_ash(
     truth: InfluentTruth,
     V_liq: float,
     t_out: np.ndarray,
-    initial: float = 0.0,
+    initial: float | None = None,
 ) -> np.ndarray:
     """Reactor ash at arbitrary output times, kg/m3, from a generated influent.
 
@@ -195,7 +195,10 @@ def reactor_ash(
         truth: The generated influent truth (hidden).
         V_liq: Reactor liquid volume, m3 (the *true* one for the truth model).
         t_out: Output times, d.
-        initial: Reactor ash at the first influent sample, kg/m3.
+        initial: Reactor ash at the first influent sample, kg/m3. ``None`` (the default)
+            starts the reactor at the first day's influent ash, i.e. a reactor already at
+            steady state in this one respect, which is what a run that starts from a
+            steady digester wants; a scenario that wants a different inventory says so.
 
     Returns:
         Ash concentration at each time of ``t_out``, kg/m3.
@@ -203,7 +206,8 @@ def reactor_ash(
     t_in = np.asarray(truth.influent.t, dtype=float)
     q = np.asarray(truth.influent.q, dtype=float)
     u = influent_ash(catalogue, truth)
-    at_breaks = ash_concentration(t_in, u, q, V_liq, initial)
+    start = float(u[0]) if initial is None else float(initial)
+    at_breaks = ash_concentration(t_in, u, q, V_liq, start)
     t_out = np.asarray(t_out, dtype=float)
     k = np.clip(np.searchsorted(t_in, t_out, side="right") - 1, 0, t_in.size - 1)
     return u[k] + (at_breaks[k] - u[k]) * np.exp(-q[k] * (t_out - t_in[k]) / V_liq)

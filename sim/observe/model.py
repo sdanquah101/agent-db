@@ -284,11 +284,16 @@ def _apply_faults(
     values: np.ndarray,
     t: np.ndarray,
     faults: Sequence[SensorFault],
-) -> tuple[np.ndarray, np.ndarray, float]:
-    """Apply the value-changing sensor faults; return values, the flatline mask and noise gain."""
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Apply the value-changing sensor faults.
+
+    Returns:
+        The faulted values, the mask of injected flatline samples, and the per-sample
+        multiplier on the instrument's noise scale (one where no noise fault is active).
+    """
     out = np.array(values, dtype=float, copy=True)
     flatline = np.zeros(t.size, dtype=bool)
-    noise_gain = 1.0
+    noise_gain = np.ones(t.size)
     for fault in faults:
         mask = fault.active(t)
         if fault.effect is SensorEffect.SCALE:
@@ -300,8 +305,8 @@ def _apply_faults(
         elif fault.effect is SensorEffect.FLATLINE:
             flatline |= mask
             out = np.where(mask, out * fault.magnitude, out)
-        elif fault.effect is SensorEffect.NOISE and mask.any():
-            noise_gain *= fault.magnitude
+        elif fault.effect is SensorEffect.NOISE:
+            noise_gain = np.where(mask, noise_gain * fault.magnitude, noise_gain)
     return out, flatline, noise_gain
 
 
@@ -313,14 +318,11 @@ def _missing_probability(
     t: np.ndarray,
 ) -> np.ndarray:
     """The conditional per-sample missing probability of one channel."""
-    sensitivity = instrument.missingness.stress_sensitivity
     base = instrument.missingness.base_probability
+    sensitivity = np.full(t.size, instrument.missingness.stress_sensitivity)
     for fault in faults:
-        mask = fault.active(t)
-        if not mask.any():
-            continue
         if fault.effect is SensorEffect.STRESS_COUPLING:
-            sensitivity = sensitivity * fault.magnitude
+            sensitivity = np.where(fault.active(t), sensitivity * fault.magnitude, sensitivity)
     p = base * np.exp(sensitivity * stress)
     for fault in faults:
         if fault.effect is SensorEffect.GAP:
@@ -373,7 +375,7 @@ def observe(
     probabilities: dict[str, np.ndarray] = {}
     saturations: dict[str, np.ndarray] = {}
     episodes: list[Episode] = []
-    applied: list[SensorFault] = []
+    applied: set[SensorFault] = set()  # SensorFault is frozen and hashable
 
     for spec in config.channels_for_tier(tier):
         if spec.kind is ChannelKind.LOG:
@@ -391,7 +393,7 @@ def observe(
         assert spec.truth_quantity is not None  # channels_for_tier drops the unavailable
         values = truth.at(spec.truth_quantity, t)
         channel_faults = _faults_for(spec.name, faults)
-        applied.extend(channel_faults)
+        applied.update(channel_faults)  # a channel=None fault acts on many channels, once here
 
         fouled = _episodes(
             draws["fouling"], t, instrument.fouling.onset_per_d, instrument.fouling.mean_duration_d
@@ -487,7 +489,7 @@ def observe(
         stress_t=truth.t,
         episodes=tuple(episodes),
         saturated=saturations,
-        faults=tuple(applied),
+        faults=tuple(sorted(applied, key=lambda f: (f.label, f.channel or "", f.onset_d))),
     )
     return Observation(truth=hidden, observed=observed)
 
