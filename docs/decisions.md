@@ -147,3 +147,138 @@ simplified to carry SAO/ionic strength/precipitation).
 
 **Not re-run now.** Probe 1 is not re-run with the BSM2 dynamic influent at this
 milestone; that case is added to the Milestone-2 ring test instead.
+
+---
+
+## 2026-09-02 — ADM1 state vector: 26 liquid states + 3 headspace states, ions algebraic
+
+**Decision.** The `sim/adm1` state vector is the canonical Rosen & Jeppsson (2006) order
+of the 26 liquid states (`S_su … X_I, S_cat, S_an`) followed by `S_gas_h2, S_gas_ch4,
+S_gas_co2` (29 states). The six ion states (`S_va⁻ … S_nh3`) are **not** states; they are
+algebraic functions of pH. Influent flow `Q` is an input, not a state. The order is
+fixed in `sim/adm1/schema.py` (`STATE_NAMES`) and the Petersen-matrix file must list
+its components in the same order (validated on load).
+
+**Reason.** The liquid order matches every reference implementation (bsm2-python,
+PyADM1, QSDsan) and the candidate harness, so ring tests compare positionally without
+a mapping. Keeping Q out of the state avoids the BSM2 42-vector's dummy slots.
+
+**Alternatives.** bsm2-python's 42-vector with Q, T and dummies (rejected: not a model
+state); QSDsan's component ordering (rejected: differs from the BSM2 report).
+
+---
+
+## 2026-09-02 — Acid–base system is algebraic; pH by bracketed root-find
+
+**Decision.** pH is obtained at every right-hand-side evaluation by solving the charge
+balance `S_cat + NH4⁺ + H⁺ − HCO3⁻ − Ac⁻/64 − Pro⁻/112 − Bu⁻/160 − Va⁻/208 − S_an − OH⁻ = 0`
+with SciPy's Brent method in pH units over the bracket in `configs/adm1/solver.yaml`
+(default [0, 14], `xtol` 1e-12 pH). Ion fractions follow from the same root. The residual
+is monotone in pH, so the root is unique; an absent sign change raises rather than
+returning a guess.
+
+**Reason.** The BSM2 "ODE implementation" integrates the ions with acid–base kinetic
+constants of 1e10 m³ kmol⁻¹ d⁻¹, which adds six stiff states and makes the reported pH
+depend on the initial ion values: bsm2-python reports pH 8.49 at t = 0 from the
+four-decimal R&J table before the ions relax (the ring test documents this artefact).
+The algebraic form has no such states, is what the DAE variants of R&J 2006 and QSDsan
+use, and is equivalent at equilibrium (tested against the BSM2 quadratic in φ). The
+tight tolerance is needed so that finite-difference Jacobians stay smooth.
+
+**Alternatives.** Ions as ODE states (bsm2-python; rejected as above); Newton iteration
+on S_H⁺ with a warm start (PyADM1; rejected: needs carried state and is not bracketed).
+
+---
+
+## 2026-09-02 — S_h2 is an ODE state
+
+**Decision.** Dissolved hydrogen is integrated, not solved algebraically.
+
+**Reason.** Both oracle implementations (bsm2-python, QSDsan by default) do this and BDF
+handles the stiffness (Probe 2 needs ≈ 260 steps for 20 d). The R&J "DAE2" variant
+(algebraic S_h2) would need a nested Newton solve inside the pH solve.
+
+**Alternatives.** Algebraic S_h2 (PyADM1); rejected for complexity, revisit only if a
+stiffness problem appears in the extended model.
+
+---
+
+## 2026-09-02 — Petersen matrix is data; rates are code; expressions are walked, not eval'd
+
+**Decision.** `configs/adm1/petersen_matrix.yaml` holds the 26 components (with unit and
+COD, C, N, charge content) and the 19 biochemical processes, each stoichiometric entry
+an arithmetic expression over parameter names (`"(1 - Y_su)*f_bu_su"`). The S_IC and
+S_IN entries are written out explicitly rather than derived from conservation, so
+`tests/test_adm1_petersen.py` is a genuine check of transcription in both directions
+(all four balances close to < 1e-12 with BSM2 defaults). Expressions are evaluated by a
+restricted AST walker (`sim/adm1/petersen.py`: numbers, names, `+ − * /`, unary sign);
+no `eval`. Rate expressions live in `sim/adm1/rates.py` as pure functions in the same
+process order (checked on compile); the `rate:` strings in the YAML are documentation.
+Gas transfer is a separate block (it carries the plant volume ratio, not stoichiometry).
+
+**Reason.** This is the structure the Milestone-1 comparison chose so that SAO, ionic
+strength and precipitation become added rows and components rather than hand edits
+(`docs/adm1_comparison.md` §6). Explicit S_IC/S_IN entries and a conservation test are
+what catch transcription errors; deriving them would make the test tautological.
+
+**Alternatives.** QSDsan's TSV with `?` placeholders solved by conservation (rejected:
+tautological test); numeric matrix (rejected: not auditable, parameters baked in);
+`eval` of expressions (rejected: code execution from a data file).
+
+---
+
+## 2026-09-02 — Parameter schema names the fractions BSM2 hard-codes
+
+**Decision.** `ADM1Parameters` (stoichiometry / kinetics / physchem groups, Pydantic,
+frozen, `extra="forbid"`, units in every field description) names the catabolic product
+fractions that BSM2 hard-codes in its arithmetic (`f_ac_fa` 0.7, `f_h2_fa` 0.3,
+`f_pro_va` 0.54, `f_ac_va` 0.31, `f_h2_va` 0.15, `f_ac_bu` 0.8, `f_h2_bu` 0.2,
+`f_ac_pro` 0.57, `f_h2_pro` 0.43) using the ADM1 STR names, and validates that every
+product-fraction group sums to one. Van 't Hoff enthalpies and the water-vapour
+coefficient are parameters, not literals. The BSM2 `eps` (1e-6) in the valerate/butyrate
+competition term is the kinetic parameter `eps_c4`. Acid–base kinetic constants have no
+field because the system is algebraic.
+
+**Reason.** CLAUDE.md rule 6 (no silent unit or constant choices); the fractions become
+scenario-adjustable without touching the matrix file.
+
+---
+
+## 2026-09-02 — Solver defaults and influent handling
+
+**Decision.** `configs/adm1/solver.yaml`: `solve_ivp(method="BDF")`, rtol 1e-6,
+atol 1e-8 (the oracle's settings), `max_step` unlimited, negative states clipped to zero
+inside rate expressions only (BSM2 convention, a flag). Radau is the cross-check (Probe 1
+agrees to 3 s.f. with the oracle under both). An `Influent` series is applied either as
+**sample-and-hold** (default; the integrator is restarted at every breakpoint so the
+discontinuity is exact) or **linearly interpolated** (one call, internal step capped at
+the sample spacing). The two treatments differ at the third significant figure on the
+BSM2 dynamic influent (final S_ac 59.95 vs 59.99 g COD m⁻³), so each is ring-tested
+against an oracle run that applied the series the same way.
+
+**Reason.** Restarting at breakpoints is the only treatment that is exact for a
+discontinuous input; it costs ≈ 10 BDF steps and one Jacobian per 15-minute segment
+(≈ 150 s for the 280-day series in CI). Linear interpolation is 4× cheaper and is what a
+smooth influent generator (§6.1) will produce anyway.
+
+**Alternatives.** One BDF call across the discontinuities (rejected: error control, not
+the model, decides how the jump is resolved); LSODA per segment (3× slower here);
+per-segment `odeint` as shipped by bsm2-python (rejected: explicit outer stepping).
+
+---
+
+## 2026-09-02 — Ring-test oracle data and the meaning of "3 significant figures"
+
+**Decision.** The BSM2 dynamic influent is PyADM1's `src/digester_influent.csv`
+(280 d at 15 min; original SHA-256 `df97e295…bb30`), trimmed to time + 26 states + Q + T
+with the numeric text unchanged and committed gzipped under
+`scripts/adm1_candidates/data/` (2.4 MB; SHA-256 of the uncompressed trimmed file is
+recorded in the oracle JSON and checked by the test). Oracle values are produced only in
+a throwaway venv (`probe_bsm2python.py`, `probe_bsm2python_dynamic.py`) and committed as
+JSON; neither bsm2-python nor QSDsan is a dependency. "Agreement to 3 s.f." is
+implemented as relative difference ≤ 5e-4 (`tests/test_adm1_ring.py`, `REL_TOL_3SF`).
+
+**Reason.** A rounding-based definition of 3 s.f. is ill-posed at digit boundaries; a
+fixed relative bound is reproducible and, for leading digits above 1, stricter than the
+words. Committing the influent makes the CI test self-contained (decision-log condition
+of 2026-09-02).
