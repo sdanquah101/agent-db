@@ -16,11 +16,30 @@ on top of these pure functions. This package never writes ``runs/<id>/truth/`` a
 reads it (CLAUDE.md rule 1).
 """
 
-from sim.influent.defaults import CONFIG_DIR, FEED_FRACTIONATION, load_feed_fractionation
+from sim.influent.defaults import (
+    CONFIG_DIR,
+    FEED_FRACTIONATION,
+    GENERATOR_CONFIG,
+    load_feed_fractionation,
+    load_generator_config,
+)
 from sim.influent.fractionation import (
     TrueFractionations,
+    draw_true_fractionations,
     sample_fractionation,
     sample_true_fractionations,
+)
+from sim.influent.generator import (
+    ASSAY_NAMES,
+    AssayRecord,
+    FeedTruth,
+    GeneratedInfluent,
+    GeneratorConfig,
+    InfluentTruth,
+    OperatorRecord,
+    PlantGenerator,
+    check_generator_against_plant,
+    generate_influent,
 )
 from sim.influent.mapping import (
     COD_STATES,
@@ -45,23 +64,36 @@ from sim.influent.schema import (
 )
 
 __all__ = [
+    "ASSAY_NAMES",
     "COD_EQUIVALENTS_KG_COD_PER_KG",
     "COD_STATES",
     "CONFIG_DIR",
     "FEED_FRACTIONATION",
     "FRACTION_NAMES",
+    "GENERATOR_CONFIG",
+    "AssayRecord",
     "CODFractionation",
     "FeedFractionation",
     "FeedFractionationCatalogue",
+    "FeedTruth",
+    "GeneratedInfluent",
+    "GeneratorConfig",
+    "InfluentTruth",
+    "OperatorRecord",
+    "PlantGenerator",
     "TrueFractionations",
+    "check_generator_against_plant",
     "cod_loading_rate",
     "constant_influent",
+    "draw_true_fractionations",
     "extension_influent",
     "feed_cod_per_m3",
     "feed_concentrations",
     "feed_tkn",
+    "generate_influent",
     "implied_tkn",
     "load_feed_fractionation",
+    "load_generator_config",
     "mix_feeds",
     "nominal_mass_rates",
     "organic_loading_rate",
