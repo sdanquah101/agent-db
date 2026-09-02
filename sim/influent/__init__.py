@@ -1,19 +1,24 @@
-"""Influent generator (proposal §6.1): feed composition, true fractionation, ADM1 mapping.
-
-What is here now, salvaged from PR #7 and fitted to the frozen plant contract of PR #6:
+"""Influent generator (proposal §6.1): feed composition, true fractionation, dynamics.
 
 * :mod:`sim.influent.schema` — the declared feed-fractionation catalogue
   (``configs/influent/feed_fractionation.yaml``, keyed by the feed ids of
-  ``configs/plants``; values provisional pending the lead's review);
+  ``configs/plants``; values provisional pending the lead's freeze). COD/VS is derived
+  from the fractionation; the literature value is a checked field.
 * :mod:`sim.influent.fractionation` — the seeded Dirichlet draw of each feed's hidden
-  true COD fractionation (one ``default_rng(seed)`` stream, deterministic);
+  true COD fractionation (one ``default_rng(seed)`` stream, deterministic).
 * :mod:`sim.influent.mapping` — feed recipe to the 26-state ADM1 influent (flow-weighted,
-  COD/VS conversions, OLR and COD loading, TKN consistency against the ADM1 N contents).
+  derived COD/VS, OLR and COD loading, TKN consistency against the ADM1 N contents).
+* :mod:`sim.influent.nitrogen` — the truth model's per-feed inert nitrogen (an
+  intentional mismatch with the fitted model's ADM1 default) and the assay TKN.
+* :mod:`sim.influent.generator` — the stochastic delivery process, moisture and seasonal
+  drift, unrecorded and mis-logged deliveries, routine assays with noise and lag, and the
+  daily sample-and-hold :class:`~sim.adm1.schema.Influent`
+  (``configs/influent/generator.yaml``; Plant B/C statistics from the Muscatine daily
+  file through ``anchor/ingest_muscatine.py``).
 
-What is not here yet: the stochastic delivery process, assay noise and lag, seasonal
-drift and mis-logged deliveries (§6.1 "Influent generator"), which a later session adds
-on top of these pure functions. This package never writes ``runs/<id>/truth/`` and never
-reads it (CLAUDE.md rule 1).
+This package never writes ``runs/<id>/truth/`` and never reads it (CLAUDE.md rule 1):
+:class:`~sim.influent.generator.InfluentTruth` is returned to the run layer, which owns
+that directory.
 """
 
 from sim.influent.defaults import (

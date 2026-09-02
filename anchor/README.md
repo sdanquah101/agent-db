@@ -10,6 +10,9 @@ anchor/
                   + every candidate that was examined and deliberately not fetched
   manifest.py     Pydantic schema for MANIFEST.json
   fetch.py        reproduces the download and verifies checksums (pure I/O)
+  ingest_muscatine.py  the daily file as unit-explicit records (gallons -> m3, degF -> K,
+                  cfm -> m3/d with a "reference conditions unknown" flag) and the §8
+                  step-2 delivery / assay statistics the influent generator declares
   raw/<id>/       the bytes; large files are git-ignored, small ones committed
 ```
 

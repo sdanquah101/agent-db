@@ -480,3 +480,80 @@ ESM's slurry `S_IN`), which the session must settle before deriving `tan`.
 | Full suite (`pytest -q`) | ≈ 2 min 40 s, 162 passed | — | dominated by the sample-and-hold ring test, as before |
 
 No LLM-agent compute inside the benchmark; development cost only.
+
+### Session 2026-09-02 (sixth session) — influent generator (§6.1)
+
+PRs #8 and #9 merged (41ffdd4). Branch `claude/milestone-2-influent-generator` from
+`main`. The lead's four catalogue answers were applied first, then the generator.
+
+**Done**
+
+- **Per-feed inert N in the truth model** (`sim/influent/nitrogen.py`): the truth `N_I`
+  is the inert-COD-weighted mean of the fed feeds' `inert_N_I`, a hidden truth parameter
+  derived from catalogue + recipe; `truth_parameters` returns a copy of the BSM2 set, the
+  file and the loaded default are untouched (tested); `feed_tkn` is the assay TKN. The
+  mismatch is documented as intentional; a test shows it is real for Plants A and B and
+  absent for C (both sludges carry the BSM2 value).
+- **Catalogue consistency (1)**: `cod_per_vs` is derived from the fractionation
+  (`1 / Σ f_i/e_i`, equivalents 1.19 / 1.42 / 2.90 / 1.07, inerts at 1.19);
+  `cod_per_vs_literature` is a check within `cod_per_vs_tolerance` (10 %), enforced by
+  the schema and by tests. FOG fixed (lipid COD share 0.95 → 2.72), HSW re-split (lipid
+  0.75 → 2.15 vs the measured 2.23), primary sludge re-split (lipid 0.35, inerts 0.33 →
+  1.56 vs 1.60), each with its reason beside the value. Total COD now follows the true
+  fractionation (a different composition carries a different COD per VS).
+- **Catalogue consistency (2)**: cattle slurry at inerts 0.40 (particulate 0.38 +
+  soluble 0.02), κ 100 (sd 0.049 on the inert share, 2.5–97.5 % ≈ 0.30–0.50, tested);
+  carbohydrate 0.18, not the entry's 0.16, so the shares sum to one.
+- **Catalogue consistency (3)**: both Tisocco papers read in full (Springer PDF + ESM;
+  Europe PMC). The 2024 Table 1 "NH4-N [g/kg TS]" row is total N (it equals XP/6.25 for
+  silage; the ESM feeds it as `S_IN`; the Foulum measured NH4-N is 0.49 of it); silage
+  and slurry `tkn` on that basis at the catalogue TS, `tan` by cited TAN/TKN ratios
+  (0.10, 0.55); the 2026 "7.28 g/L" cannot be traced and is dropped.
+- **Generator** (`sim/influent/generator.py`, `configs/influent/generator.yaml`):
+  delivery days (continuous / weekday with skips / two-state Markov), lognormal AR(1)
+  amounts with a seasonal factor, per-delivery TS with its own AR(1) and season,
+  unrecorded deliveries and mis-logged masses, routine assays with noise, lag, unit and
+  basis, and a daily sample-and-hold `Influent`; one `default_rng(seed)` per run in a
+  documented order after the true-fractionation draw. Hidden truth (`InfluentTruth`)
+  and the visible `OperatorRecord` are returned to the run layer; nothing is written.
+- **`anchor/ingest_muscatine.py`**: unit-explicit parsing of the daily file (gallons,
+  °F, cfm with a "reference conditions unknown" flag) and the §8 step-2 delivery and
+  assay statistics; the generator's Plant B/C blocks are re-derived from it by tests
+  (zero fractions, weekday patterns, nonzero medians, log spreads, lag-1, seasonal
+  amplitudes; HSW's mean no-delivery run 6.9 d reproduced by the Markov chain).
+- Tests: `tests/test_influent.py` 19 (was 14), `tests/test_generator.py` 12,
+  `tests/test_ingest_muscatine.py` 4. Four decision-log entries.
+
+**Blocked / open**
+
+- The catalogue stays `provisional` until the lead freezes it; every changed value is
+  listed in the PR checklist. Flagged for the freeze: the silage TS basis (Foulum 31.9 %
+  vs AFBI 20–25 %) and the inert COD equivalent (1.19 for both inert classes).
+- Assay noise and lags, mis-log and unrecorded-delivery rates, feed pH values and the
+  Plant A moisture statistics are assumed (marked `ASSUMED` in `generator.yaml`).
+- Temperature seasonality is left to the plant heating / observation model; the
+  Level-3 "feed mislabelled" scenario is a fault injection on the mapping, not part of
+  the generator.
+- The 1-minute SCADA file is not ingested (the observation model's job).
+
+**Next session should start on**
+
+1. Fault-injection API (§6.1): scenario YAML → truth variants (imperfect mixing via
+   `sim/plants/mixing.py`, feed mislabelling on the mapping, unrecorded-delivery and
+   moisture-drift scenarios on the generator's parameters, the SAO/precipitation
+   omissions on the fitted model); the run layer that writes `runs/<id>/truth/`.
+2. Observation model (§6.1) with the SCADA noise and dropout statistics.
+3. Weinrich R3/R4 ports as fitted models.
+
+**Resource cost this session (rough)**
+
+| Item | Wall-clock | Disk | Notes |
+|---|---|---|---|
+| Reading (CLAUDE.md, decisions, milestones, proposal, sim/influent, plants, tests) | ≈ 15 min | — | |
+| Literature (Tisocco 2024 PDF + ESM via Springer; 2026 via Europe PMC) | ≈ 15 min | 10 MB scratch | PyMuPDF for the PDF (pdfminer/pypdf broken by the container's `cryptography`); the 2026 supplement (mmc1.docx) unreachable on PMC and Elsevier |
+| Tasks 1–4 (code, YAML, tests) | ≈ 30 min | — | 3 fast runs |
+| Generator + ingest + tests | ≈ 45 min | — | generator ≈ 0.05 s per 365-day plant run |
+| Docs | ≈ 15 min | — | |
+| Full suite (`python -m pytest -q`) | see the PR | — | dominated by the sample-and-hold ring test |
+
+No LLM-agent compute inside the benchmark; development cost only.
