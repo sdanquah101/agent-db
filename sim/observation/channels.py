@@ -491,10 +491,13 @@ def condition_flags(
     gas = channels["q_gas_stp_dry"]
     t = channels.t
     overload = fos_tac > fos_tac_overload
+    # the window start by binary search on the (increasing) output times, rather than a
+    # full boolean mask per sample: the mask made this O(n^2) and it dominated the suite's
+    # runtime at the horizons the missingness tests need
+    lo = np.searchsorted(t, t - gas_median_window_d, side="left")
     trailing = np.empty(t.size)
     for i in range(t.size):
-        window = (t >= t[i] - gas_median_window_d) & (t <= t[i])
-        trailing[i] = np.median(gas[window])
+        trailing[i] = np.median(gas[lo[i] : i + 1])
     foaming = (fos_tac > fos_tac_foaming) & (gas > gas_surge_ratio * trailing)
     return overload, foaming
 

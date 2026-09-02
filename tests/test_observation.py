@@ -489,6 +489,35 @@ def test_fos_tac_is_on_the_anchor_s_own_scale_and_its_thresholds_are_reachable(c
     assert float((vfa > 1.0).mean()) > 0.3
 
 
+def test_the_trailing_median_matches_its_own_definition_on_an_irregular_grid():
+    """The windowed median is computed by binary search; it must equal the plain definition.
+
+    The original built a boolean mask over the whole series per sample, which is O(n^2) and
+    dominated the suite's runtime once the missingness tests needed 6,000- and 20,000-day
+    horizons (20,000 days: 0.47 s now). This checks the fast form against the definition it
+    replaced, on an *irregular* grid with a real gas cycle — a uniform grid would hide an
+    off-by-one in the window bounds.
+    """
+    rng = np.random.default_rng(0)
+    t = np.sort(rng.uniform(0.0, 400.0, 800))
+    t[0] = 0.0
+    gas = 1500.0 + 600.0 * np.sin(t / 7.0) + rng.normal(0.0, 100.0, t.size)
+    fos = 0.2 + 0.3 * np.sin(t / 23.0)
+    channels = TruthChannels(t, {"fos_tac": fos, "q_gas_stp_dry": gas})
+    window = 14.0
+    overload, foaming = condition_flags(
+        channels,
+        fos_tac_overload=0.40,
+        fos_tac_foaming=0.30,
+        gas_surge_ratio=1.35,
+        gas_median_window_d=window,
+    )
+    trailing = np.array([np.median(gas[(t >= ti - window) & (t <= ti)]) for ti in t])
+    np.testing.assert_array_equal(foaming, (fos > 0.30) & (gas > 1.35 * trailing))
+    np.testing.assert_array_equal(overload, fos > 0.40)
+    assert foaming.any() and overload.any()  # both flags are exercised, not trivially empty
+
+
 def test_condition_flags_use_only_past_gas_history(config):
     channels = _flat_channels(stress_from=100)
     overload, foaming = condition_flags(
