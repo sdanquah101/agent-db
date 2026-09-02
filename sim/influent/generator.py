@@ -51,6 +51,14 @@ by ``anchor/ingest_muscatine.py`` and ``tests/test_generator.py``):
    a piecewise-constant input, decision "Solver defaults and influent handling").
    The truth ``N_I`` is the inert-COD-weighted mean over the horizon's mean true recipe.
 
+**Fault injection.** The Level-3 influent faults (§6.3) reach the generator as per-feed
+:class:`FeedModifier` objects compiled by :mod:`sim.faults`: a per-day multiplier on the
+true total solids (moisture drift), a per-day probability of an unlogged delivery
+(unrecorded delivery) and a replacement true fractionation (feed mislabelling). They
+change the *parameters* the generator draws with, never the series it produced, and they
+consume no extra variates, so a faulted run has the same stream layout as the run without
+the fault.
+
 **Randomness.** One ``numpy.random.default_rng(seed)`` stream per run (CLAUDE.md rule 4),
 consumed in this fixed order: the true-fractionation draw (feeds in sorted id order);
 then per feed in sorted id order: ``n`` uniforms for delivery days (always consumed,
@@ -77,6 +85,7 @@ such in the file (decisions log, "Influent generator: stochastic structure").
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Annotated, Literal
 
@@ -98,6 +107,7 @@ __all__ = [
     "AssaySchedule",
     "DeliveryModel",
     "FeedGenerator",
+    "FeedModifier",
     "FeedTruth",
     "GeneratedInfluent",
     "GeneratorConfig",
@@ -363,6 +373,31 @@ class AssayRecord(_Frozen):
 
 
 @dataclass(frozen=True)
+class FeedModifier:
+    """A fault-injected change to **one feed's generator parameters** (:mod:`sim.faults`).
+
+    The Level-3 influent faults of proposal §6.3 are changes to the process that produces
+    the influent, not edits of what it produced: a wetter season changes the moisture the
+    deliveries are drawn with, an unrecorded delivery changes the logging model, and a
+    mislabelled feed changes the true fractionation while the operator's catalogue keeps
+    saying what it always said. The arrays are per day of the horizon, so a fault can have
+    an onset and a ramp; ``None`` leaves the generator's own model in force.
+
+    Passing modifiers never changes how many variates the generator draws, so a run with
+    a fault has the same stream layout as the run without it (tested).
+    """
+
+    ts_factor: np.ndarray | None = None
+    """Per-day multiplier on the delivery's true total solids, - (moisture drift)."""
+    extra_unrecorded_probability: np.ndarray | None = None
+    """Per-day probability of an extra unlogged delivery, 1/d, **added** to the feed's own
+    ``unrecorded_probability_per_d`` so the plant's baseline stays in force."""
+    fractionation: CODFractionation | None = None
+    """The feed's true COD fractionation, replacing the drawn one (feed mislabelling).
+    The draw still consumes its variate, so the stream layout does not move."""
+
+
+@dataclass(frozen=True)
 class FeedTruth:
     """One feed's true delivery history. Hidden truth."""
 
@@ -483,6 +518,7 @@ def generate_influent(
     n_days: int,
     start_doy: int = 1,
     start_weekday: int = 0,
+    modifiers: Mapping[str, FeedModifier] | None = None,
 ) -> GeneratedInfluent:
     """Generate one run's influent truth and operator record for a plant.
 
@@ -496,13 +532,15 @@ def generate_influent(
         n_days: Horizon, d (one influent sample per day).
         start_doy: Day of year of day 0 (seasonal phase), d.
         start_weekday: Weekday of day 0 (0 = Monday).
+        modifiers: Per-feed :class:`FeedModifier` from the fault-injection API
+            (:mod:`sim.faults`); ``None`` runs the plant's declared statistics.
 
     Returns:
         The hidden truth and the visible record.
 
     Raises:
-        ValueError: If the generator statistics contradict the plant contract, or the
-            horizon is empty.
+        ValueError: If the generator statistics contradict the plant contract, the horizon
+            is empty, or a modifier names a feed the plant does not have.
     """
     if n_days < 1:
         raise ValueError("n_days must be positive")
@@ -510,9 +548,22 @@ def generate_influent(
     check_generator_against_plant(gen, plant, catalogue)
     rng = np.random.default_rng(seed)
     feed_ids = sorted(f.name for f in plant.feeds)
+    modifiers = dict(modifiers or {})
+    unknown = set(modifiers) - set(feed_ids)
+    if unknown:
+        raise ValueError(f"modifiers for feeds not at plant {plant.id}: {sorted(unknown)}")
 
-    # 1. true fractionation (same stream head as sample_true_fractionations)
+    # 1. true fractionation (same stream head as sample_true_fractionations); a
+    # mislabelled feed replaces its drawn fractionation after the draw, so the stream
+    # layout is the same with and without the fault
     truth_frac = draw_true_fractionations(catalogue, feed_ids, rng, seed)
+    overridden = {
+        fid: m.fractionation for fid, m in modifiers.items() if m.fractionation is not None
+    }
+    if overridden:
+        truth_frac = TrueFractionations(
+            seed=truth_frac.seed, fractionations={**truth_frac.fractionations, **overridden}
+        )
 
     day = np.arange(n_days)
     feeds_truth: dict[str, FeedTruth] = {}
@@ -543,9 +594,15 @@ def generate_influent(
             day, start_doy, g.moisture.seasonal_amplitude, g.moisture.seasonal_peak_doy
         )
         ts = spec.ts * season_ts * np.exp(_ar1(z_ts, g.moisture.ts_log_sigma, g.moisture.lag1))
+        modifier = modifiers.get(fid)
+        if modifier is not None and modifier.ts_factor is not None:
+            ts = ts * modifier.ts_factor
         ts = np.minimum(ts, 1.0)
 
-        unrecorded = u_unrec < g.logging.unrecorded_probability_per_d
+        unrecorded_p: float | np.ndarray = g.logging.unrecorded_probability_per_d
+        if modifier is not None and modifier.extra_unrecorded_probability is not None:
+            unrecorded_p = unrecorded_p + modifier.extra_unrecorded_probability
+        unrecorded = u_unrec < unrecorded_p
         extra_kg = _amount_to_kg(g.amount.nonzero_median, g.amount.unit, spec) * np.exp(
             g.logging.unrecorded_log_sigma * z_unrec
         )

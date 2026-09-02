@@ -37,6 +37,7 @@ from sim.influent.fractionation import (
 from sim.influent.generator import (
     ASSAY_NAMES,
     AssayRecord,
+    FeedModifier,
     FeedTruth,
     GeneratedInfluent,
     GeneratorConfig,
@@ -80,6 +81,7 @@ __all__ = [
     "CODFractionation",
     "FeedFractionation",
     "FeedFractionationCatalogue",
+    "FeedModifier",
     "FeedTruth",
     "GeneratedInfluent",
     "GeneratorConfig",
