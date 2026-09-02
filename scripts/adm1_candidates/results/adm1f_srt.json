@@ -1,0 +1,100 @@
+{
+  "candidate": "adm1f_srt",
+  "source": "https://github.com/lanl/ADM1F",
+  "version": "a39394ff6c3c1164716288683e674a689849da4c",
+  "python": "3.11.15",
+  "platform": "Linux-6.18.44-fc-v22-x86_64-with-glibc2.39",
+  "licence": "BSD-3-Clause",
+  "probes": [
+    {
+      "name": "P1_sludge_100d",
+      "ok": true,
+      "wall_s": 0.5686148649999723,
+      "wall_s_per_sim_day": 0.005686148649999723,
+      "solver": "PETSc TSARKIMEX (default ARK 3) with ADOL-C AD Jacobian; adaptive dt from 1e-3 d",
+      "solver_settings": {
+        "ts_type": "arkimex",
+        "initial_dt_d": 0.001,
+        "ts_exact_final_time": "matchstep",
+        "tolerances": "PETSc TSAdapt defaults (rtol 1e-4, atol 1e-4)"
+      },
+      "stats": {
+        "steps": 21,
+        "min_dt_d": 0.001,
+        "max_dt_d": 52.4011
+      },
+      "final": {
+        "pH": 7.09215,
+        "P_gas_bar": 1.06277,
+        "p_ch4_bar": 0.599602,
+        "p_co2_bar": 0.406921,
+        "p_h2_bar": 9.87087e-06,
+        "ch4_fraction_wet": 0.5641879240098986,
+        "ch4_fraction_dry": 0.5957103015242134,
+        "q_gas_m3_d": 2610.85,
+        "q_gas_STP_dry_m3_d": 2191.8439442166014,
+        "vfa_total_gCOD_m3": 5296.47729,
+        "S_ac_gCOD_m3": 5272.32,
+        "S_pro_gCOD_m3": 6.8866
+      },
+      "extremes": {
+        "pH_min": 7.00212,
+        "vfa_max_gCOD_m3": 5296.47729,
+        "q_gas_max_m3_d": 3194.37
+      },
+      "gate": {
+        "pH": true,
+        "ch4_fraction_dry": true,
+        "q_gas_m3_d": true,
+        "vfa_total_gCOD_m3": false
+      },
+      "error": null,
+      "notes": []
+    },
+    {
+      "name": "P2_olr_step_x3",
+      "ok": true,
+      "wall_s": 0.9393943669999771,
+      "wall_s_per_sim_day": 0.04696971834999886,
+      "solver": "PETSc TSARKIMEX (default ARK 3) with ADOL-C AD Jacobian; adaptive dt from 1e-3 d",
+      "solver_settings": {
+        "ts_type": "arkimex",
+        "initial_dt_d": 0.001,
+        "ts_exact_final_time": "matchstep",
+        "tolerances": "PETSc TSAdapt defaults (rtol 1e-4, atol 1e-4)"
+      },
+      "stats": {
+        "steps": 29,
+        "min_dt_d": 0.001,
+        "max_dt_d": 6.69473
+      },
+      "final": {
+        "pH": 7.05403,
+        "P_gas_bar": 1.1462800000000002,
+        "p_ch4_bar": 0.623298,
+        "p_co2_bar": 0.466733,
+        "p_h2_bar": 1.22285e-05,
+        "ch4_fraction_wet": 0.5437571971944027,
+        "ch4_fraction_dry": 0.5718103499965919,
+        "q_gas_m3_d": 7540.86,
+        "q_gas_STP_dry_m3_d": 6356.42485376457,
+        "vfa_total_gCOD_m3": 10993.8561,
+        "S_ac_gCOD_m3": 10954.800000000001,
+        "S_pro_gCOD_m3": 11.4274
+      },
+      "extremes": {
+        "pH_min": 6.85785,
+        "vfa_max_gCOD_m3": 10993.8561,
+        "q_gas_max_m3_d": 7548.68
+      },
+      "gate": {},
+      "error": null,
+      "notes": []
+    }
+  ],
+  "notes": [
+    "Built from build/adm1f source against system PETSc 3.19.6 and ADOL-C 2.7.2 (Ubuntu packages) with adolc-utils copied from the PETSc source tree; the shipped makefile does not work with PETSc >= 3.15.",
+    "Uses the shipped simulations/params.dat (BSM2 defaults, but Henry constants and water vapour pressure use Metcalf & Eddy / Antoine forms, not the R&J 2006 ones).",
+    "Driven by files + subprocess; one output file per accepted step."
+  ]
+}
