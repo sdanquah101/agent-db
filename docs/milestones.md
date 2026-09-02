@@ -572,3 +572,106 @@ PRs #8 and #9 merged (41ffdd4). Branch `claude/milestone-2-influent-generator` f
 | Review round (M1–M3, L1–L7 of the coordinating session) | ≈ 25 min | — | 2 fast runs, 1 full run (see the PR for the count) |
 
 No LLM-agent compute inside the benchmark; development cost only.
+
+### Session 2026-09-02 (seventh session) — observation model and fault-injection API
+
+PR #10 merged (2204dcf). Branch `claude/milestone-2-observation-faults` from `main`. The
+two components ship together because they share the scenario contract: a fault is only
+"injected at the sensor layer" if the observation model consumes it.
+
+**Done**
+
+- **Observation model** (`sim/observe/`, `configs/observe/observation.yaml`): one catalogue
+  of 20 channels with unit, wet/dry basis, standard conditions on every gas quantity,
+  sampling interval, weekday schedule and turnaround; an instrument layer (noise,
+  quantisation, bounded drift, fouling and flatline episodes, saturation, conditional
+  missingness) that plants share and override; the §6.4 tiers as masks over that one
+  catalogue (Tier A ⊂ B ⊂ C, and a channel's series is bit for bit the same at every tier
+  that shows it). `observe()` is pure and seeded — one `SeedSequence` per run with a child
+  stream per catalogue channel — and returns the operator's record beside the hidden record
+  of what the instruments did (drift realisations, episodes, per-sample missing
+  probabilities, saturation flags).
+- **Conditional missingness** (§6.1): the per-sample hazard is
+  `p_base exp(sensitivity x stress)` with `stress` counting doublings of total VFA above,
+  and of the gas rate away from, the run's own median — scale-free, so no per-plant
+  threshold is invented. The thermowell declares no sensitivity, the methane analyser the
+  most; the Level-4 scenario multiplies the coupling.
+- **Truth channels** (`sim/observe/truth.py`): reactor states as measurable quantities under
+  declared conventions — dry-STP gas volumes, VFA as the acids, bicarbonate alkalinity, and
+  TS/VS from a declared COD-equivalent table plus a conservative ash tracer (ADM1 has no
+  solids state; the tracer adds nothing to the truth model's physics).
+- **Plant B/C sensor statistics from the Muscatine 1-minute SCADA year**:
+  `anchor/ingest_muscatine.py` gained `load_scada`, `sensor_noise_statistics` and
+  `dropout_statistics`; `scripts/muscatine_scada_observation.py` writes the committed
+  60-day window extract (765 KB, ODC-By, with attribution) and the full-record statistics
+  JSON carrying the parent's SHA-256. Temperature noise 0.0291 K, quantisation 0.00556 K
+  (0.01 °F), flatline 0.0172/d × 64 min, the record at its lower instrument limit on
+  0.066 % of minutes; biogas relative noise 2.00 %; dropouts 19 gaps in 347.8 d, 0.0966 %
+  of minutes. Plant A's instruments are assumed and marked, as its statistics-anchored
+  status requires.
+- **Fault-injection API** (`sim/faults/`, `configs/faults/faults.yaml`): `FAULT_LAYER` and
+  `FAULT_MAGNITUDE`, total over the closed `FaultType`, are the authority the scenario
+  schema defers to; `compile_faults` returns sensor faults for the observation model,
+  per-feed modifiers for the influent generator's parameters, initial-state multipliers, a
+  bounded time-varying parameter schedule, the structural variant (fitted-model extensions
+  and the two-zone mixing structure) and the carried workflow faults. Nothing is written.
+- **The influent generator gained a `FeedModifier` hook** so Level-3 faults change the
+  parameters it draws with rather than editing what it produced, consuming no extra
+  variates (a run without modifiers is bitwise the run before the hook).
+- Tests: `tests/test_observe.py` (26) and `tests/test_faults.py` (41), one per fault type,
+  each asserting both that the fault changes what §6.3 says and that everything else is
+  unchanged — bitwise where the comparison can be. 10 decision-log entries.
+
+**Which fault is applied at which layer**
+
+| Layer | Faults | Applied to |
+|---|---|---|
+| sensor | `sensor_noise`, `random_gaps`, `ph_electrode_drift`, `gas_meter_scale`, `ch4_analyser_flatline`, `informative_missingness` | the observation model; the truth is untouched |
+| influent | `feed_mislabelled` (the catalogue→influent mapping), `unrecorded_delivery`, `moisture_drift` (the generator's parameters) | `sim/influent` |
+| state | `biomass_misinitialised` | the truth run's initial state |
+| parameter | `ammonia_inhibition_shift` (30-day acclimation ramp), `hydrolysis_regime_change` (step) | bounded, time-varying truth parameters |
+| structural | `omitted_sao`, `omitted_precipitation` (the **fitted** model loses the extension), `imperfect_mixing` (the truth's two-zone reactor) | `sim/plants/mixing.py`, the fitted-model flag |
+| workflow | `tool_failure`, `adversarial_log_note` | carried in the record for the tool registry (§6.2) |
+
+**Blocked / open (for the lead's review)**
+
+- **Every number in `configs/faults/faults.yaml` is DESIGN and provisional**, and the
+  observation model's drift, fouling, laboratory-assay and Plant A statistics are ASSUMED.
+  The PR checklist lists each with its source or "assumed".
+- **Off-gas H2S** (§6.4 Tier C) is declared in the catalogue and not implemented: the truth
+  model carries no sulfur. Either a sulfate-reduction extension (a truth-model change) or a
+  §6.4 edit is needed; Tier C's off-gas measurement is hydrogen only until then.
+- **Tier C's "richer fractionation"** is soluble COD and TKN; a carbohydrate/protein/lipid
+  split of the digestate would need an analytical convention the anchor cannot supply.
+- **Which feed an influent fault hits** is a stated rule (the largest batch-delivered feed:
+  FOG at Plant B, grass silage at Plant A) because Appendix B has no feed field.
+- **Temperature seasonality** is still unowned: the plant contract has a set point and a
+  day-to-day spread, the truth model integrates at a constant `T_op`, and the observation
+  model deliberately does not invent variation the truth does not have. It belongs to a
+  plant heating model.
+- The 88.8 MB SCADA file stays git-ignored; the full-file re-derivation test skips when it
+  is absent (the committed window covers the noise statistics offline).
+
+**Next session should start on**
+
+1. The **run harness**: `runs/<id>/` — scenario → seeded run → `truth/` (the hidden
+   objects these two packages return) and the operator record, with the parameter
+   schedule's breakpoints driving the segmented integration.
+2. The **scenario library**: the 19 rows of §6.3 as YAML against the frozen contract, using
+   the magnitude table of `sim.faults.magnitude_table()`.
+3. Weinrich R3/R4 ports as fitted models.
+
+**Resource cost this session (rough)**
+
+| Item | Wall-clock | Disk | Notes |
+|---|---|---|---|
+| Reading (CLAUDE.md, proposal, decisions, milestones, sim/, anchor/) | ≈ 20 min | — | |
+| Muscatine SCADA download + first analysis | ≈ 3 min | 88.8 MB (git-ignored) | `python -m anchor.fetch`; parsing 500,400 rows ≈ 25 s |
+| Window extract + statistics JSON | ≈ 2 min | 771 KB committed | reproducible bytes (`mtime=0`) |
+| Observation model + config | ≈ 50 min | — | |
+| Fault-injection API + config | ≈ 45 min | — | |
+| Tests (67 new) | ≈ 40 min | — | ≈ 20 s per targeted run |
+| Full suite (`pytest -q`) | 5 min 09 s, 252 passed | — | was 2 min 44 s / 182 tests; the 280-day ring test still dominates, the 60-day observation and fault runs add ≈ 25 s |
+| Docs (decisions, milestones, PR) | ≈ 20 min | — | |
+
+No LLM-agent compute inside the benchmark; development cost only.

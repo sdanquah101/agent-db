@@ -1265,3 +1265,277 @@ published range (rejected: the catalogue would no longer reproduce the plant it 
 anchored to, and the OLR test is one of the few anchored checks Plant A has); loosen the
 OLR test (rejected: it would hide the inconsistency the basis change exposed); use a
 lignin-like 1.9 kg COD/kg for lignocellulosic inerts (superseded: the lead fixed ~1.2).
+
+---
+
+## 2026-09-02 — Observation model: one channel catalogue, tiers as masks, instruments as the reusable unit
+
+**Decision.** `configs/observe/observation.yaml` declares **one** catalogue of channels
+(`sim/observe/schema.py::ChannelSpec`: unit, wet/dry basis, standard conditions for a gas
+quantity, sampling interval, weekday schedule, turnaround lag, the truth quantity it
+observes) and a separate set of **instruments** (`InstrumentModel`: noise, quantisation,
+bounded drift, fouling episodes, flatlining, saturation, missingness). A channel names its
+instrument; a plant overrides only the instruments that differ (`plants.<id>.instruments`,
+a deep merge validated on load). The three tiers of §6.4 are the mask
+`ObservationConfig.channels_for_tier`, which returns the channels declared at that tier and
+below.
+
+**Reason.** The proposal says tiers are "observation masks on identical underlying truth";
+three catalogues would let the same quantity acquire three different units or noise models
+without anything failing. The instrument layer is what makes Plant B and Plant C the
+*controlled pair* the plant decision froze: they are the same digester, so they are the
+same instruments, and the config says so by having no Plant C overrides at all.
+
+**Alternatives.** One flat per-plant channel table (rejected: 18 channels x 3 plants of
+duplicated noise models); tier-specific catalogues (rejected: the masks stop being masks);
+instrument statistics inline per channel (rejected: the pH electrode's fouling model would
+be repeated for every channel it measures).
+
+---
+
+## 2026-09-02 — Each observation channel draws from its own child stream, so a tier is a true mask
+
+**Decision.** `sim.observe.model.observe` takes one `numpy.random.SeedSequence(seed)` per
+run and gives every channel of the **catalogue** its own child stream, keyed by the
+channel's index in the sorted catalogue (`spawn_key=(i,)`). Within a channel the stream is
+consumed in a fixed block order (noise, drift, fouling onset, flatline onset, missingness),
+each block `n_samples` long and always consumed whatever the instrument's models say.
+
+**Reason.** With a single stream consumed channel by channel, the pH series of a Tier-A run
+would differ from the pH series of the Tier-C run with the same seed, because Tier C draws
+for `alkalinity` and `ch4_fraction` first — the tier would change the *realisation*, not
+just the mask, and a per-tier comparison (RQ1: what is identifiable at each tier) would
+confound the mask with the noise. Keying on the catalogue makes Tier A literally Tier C
+with columns removed (tested), and makes a channel's realisation independent of every other
+channel's configuration (also tested).
+
+**Alternatives.** One stream in channel order (rejected as above); a stream per (channel,
+tier) (rejected: the same channel would then differ between tiers again); re-seeding from a
+hash of the channel name (rejected: `SeedSequence` spawn keys are the documented numpy
+mechanism and stay stable across versions in a way `hash()` does not).
+
+---
+
+## 2026-09-02 — Conditional missingness is a scale-free stress indicator on the run's own median
+
+**Decision.** The per-sample missing probability is
+`p = min(p_max, p_base exp(sensitivity x stress(t)))` with
+
+`stress(t) = k_vfa max(0, log2(VFA(t)/median VFA)) + k_gas |log2(q_gas(t)/median q_gas)|`
+
+— doublings of total VFA *above*, and of the gas rate *away from*, the run's own median.
+`k_vfa` 0.8, `k_gas` 0.5 and `p_max` 0.5 are in `configs/observe/observation.yaml`; the
+per-instrument `stress_sensitivity` scales the whole term (thermowell 0, gas meter 0.5,
+laboratory sampling 0.5, pH electrode 1.0, methane analyser 1.5).
+
+**Reason.** §6.1 requires that "instruments are more likely to fail during foaming and
+overload, so that naive interpolation destroys information". Referencing the run's own
+median makes the indicator scale-free, so no plant-specific VFA or gas threshold has to be
+invented for three plants with different loads, and a Plant-A scenario and a Plant-B
+scenario stress their instruments at the same *relative* excursion. One-sided for VFA
+(only an accumulation is stress); two-sided for gas (a foaming episode both spikes and
+chokes the meter). The couplings were lowered from a first draft of 1.5/1.0 with `p_max`
+0.9, which saturated at the cap during an ordinary start-up transient; at the values above
+the hazard stays within a factor of 7 of its base over a normal 60-day Plant C run and
+rises by a further order of magnitude under an injected excursion.
+
+**Alternatives.** Absolute per-plant thresholds (rejected: three more DESIGN numbers per
+plant with no anchor); coupling the *fouling* and *flatline* onsets to the same indicator
+(not adopted: one coupled mechanism is enough to make interpolation lossy, and a second
+would make the Level-4 scenario's signature hard to attribute); a hidden Markov "instrument
+health" state (rejected for Phase 1: more machinery than the scenario needs).
+
+---
+
+## 2026-09-02 — SCADA statistics: a committed 60-day window plus a recorded full-year JSON
+
+**Decision.** The Plant B/C sensor statistics are derived from the 1-minute Muscatine SCADA
+file by `anchor/ingest_muscatine.py` and recorded in two committed artefacts written by
+`scripts/muscatine_scada_observation.py`:
+`anchor/derived/muscatine-scada-sensor-statistics.json` (full-record statistics plus the
+parent's SHA-256) and `anchor/derived/muscatine-scada-window.csv.gz` (the first 60 days,
+three columns, 765 KB). `configs/observe/observation.yaml` declares the **full-record**
+values; `tests/test_observe.py` checks the config against the JSON always, re-derives the
+noise, quantisation and flatline statistics from the committed window always, and
+re-derives everything from `SCADA-raw.csv` when that file is present.
+
+**Reason.** The generator's Plant B/C statistics are re-derived from the *committed* daily
+file, and the observation model should be held to the same standard; but the SCADA file is
+88.8 MB and the manifest decision of the same day (git-ignore raw files above 1 MB) is
+frozen. The window is representative for the high-frequency statistics (the temperature
+noise reproduces the year's value exactly, the biogas noise to 26 %) and is **not**
+representative for the dropouts — 18 of the record's 19 gaps fall in the first 90 days, so
+the window's gap rate is 3.4x the year's. That asymmetry is why the configuration takes
+dropouts from the full record, and the test asserts the difference so the reason stays
+visible rather than becoming folklore.
+
+**What was derived** (full record, 500,400 rows, 347.8 d): digester-temperature noise
+0.0291 K (robust one-minute scale, 1.4826 MAD/sqrt2), quantisation 0.00556 K (0.01 degF),
+flatline runs of >= 10 identical minutes 0.0172/d of mean length 63.8 min, the record at
+its lower instrument limit (85 degF) on 0.066 % of minutes; biogas relative noise 2.00 %,
+flatline 0.0029/d of 72 min, zero reading on 0.74 % of minutes; dropouts 19 gaps in 347.8 d,
+0.0966 % of minutes absent, median 2 min, longest 421 min. The providers deleted 485 rows
+they assumed were power surges, so the dropout rate is the *published* record's and a lower
+bound on the plant's; the configuration says so.
+
+**Alternatives.** Commit the whole SCADA file (rejected: reopens a frozen decision and adds
+88 MB); commit only the JSON and skip the offline re-derivation (rejected: a test that
+compares a config to a file the same script wrote proves only that nobody edited one of
+them); commit a window containing the 421-minute outage as well (rejected: the outage is at
+day 235, so the window would have to span 8 months).
+
+---
+
+## 2026-09-02 — Solids, alkalinity, VFA and the activity test are declared conventions, not silent ones
+
+**Decision.** `sim/observe/truth.py` turns reactor states into measurable quantities under
+conventions that are declared rather than assumed in code (CLAUDE.md rule 6):
+
+1. **Gas volumes** are `q_gas_stp_dry` (dry, 0 degC, 1.013 bar) and the channel carries
+   those standard conditions. The wet, T_op-referenced BSM2 `q_gas` is never reported as
+   "the biogas volume".
+2. **VFA** are reported as the acids, each COD state at its own stoichiometric demand
+   (acetic 1.066, propionic 1.512, butyric 1.816, valeric 2.037 kg COD/kg).
+3. **Alkalinity** is the bicarbonate (partial) alkalinity `50 x S_hco3` kg CaCO3/m3 — the
+   same proxy the influent generator uses for a feed, not a titration to pH 4.3.
+4. **Solids.** ADM1 has no solids state, so VS is the organic COD at per-class COD
+   equivalents (`configs/observe/observation.yaml: solids`, the catalogue's 1.19/1.42/2.90
+   plus 1.42 for reactor inerts, biomass and composites), VFA excluded because they
+   volatilise at 105 degC, and **TS is VS plus the inorganic solids**: the conservative ash
+   the feed carries, integrated on the observation side as an exact CSTR tracer
+   (`ash_concentration`, `reactor_ash`), plus any calcite the precipitation extension has
+   formed. `truth_channels` takes the ash series as a required argument — defaulting it to
+   zero would be exactly the silent unit choice rule 6 forbids.
+5. **The activity test** (Tier C) is `k_m_ac x X_ac` kg COD/m3/d: the maximum acetoclastic
+   rate at saturating acetate with no inhibition, which is what a specific-methanogenic-
+   activity assay measures.
+
+**Reason.** Every one of these is a place where a plausible-looking number could be
+produced with the wrong convention and never be caught: a wet gas volume is 5-7 % larger
+than a dry one at 35 degC, VFA as COD are 1.5-2x VFA as acids, and TS without ash is VS.
+The ash tracer adds no state to the truth model and changes none of its physics; it is
+bookkeeping that lets Tier A report TS at all.
+
+**Alternatives.** Add ash as a 30th ADM1 state (rejected: it would change the ring-tested
+state vector for a quantity with no kinetics); report TS = VS and document the omission
+(rejected: Tier A's weekly TS/VS is one of five channels a constrained plant has, and a
+TS that equals VS would make the VS/TS assay a constant 1); a total-alkalinity titration
+model (not adopted for Phase 1: it needs the VFA contribution and an endpoint convention,
+and the bicarbonate proxy is what the generator already uses).
+
+---
+
+## 2026-09-02 — Off-gas H2S is declared in the catalogue and not implemented (no sulfur in the truth model)
+
+**Decision.** The Tier-C channel `offgas_h2s` of §6.4 is present in the catalogue with its
+unit, schedule and instrument, but with `truth_quantity: null` and a stated
+`unavailable_reason`: the extended ADM1 of §6.1 adds ionic strength, syntrophic acetate
+oxidation and a precipitation/inorganic-carbon sink, and no sulfur species. The tier mask
+excludes it; a test asserts the reason exists and names the gap.
+
+**Reason.** An H2S channel would have to be invented rather than observed. Declaring it
+with its reason keeps the §6.4 list honest and auditable instead of quietly dropping a
+line of the proposal.
+
+**For the lead.** Either add a sulfate-reduction extension (a *truth-model* change, not an
+observation one, and one no scenario currently needs) or drop H2S from the Tier-C list in
+§6.4. Until then Tier C's off-gas measurement is hydrogen only.
+
+---
+
+## 2026-09-02 — Fault layering: the simulator's two tables are the authority the scenario schema defers to
+
+**Decision.** `sim/faults/schema.py` holds two mappings that are total over
+`scenarios.schema.FaultType`: `FAULT_LAYER` (which layer a fault is applied at — sensor,
+influent, state, parameter, structural, workflow) and `FAULT_MAGNITUDE` (what its
+`magnitude` means and in what unit). `configs/faults/faults.yaml` is validated against
+`FAULT_LAYER` block by block, so a fault in the wrong block, a missing fault or an extra one
+fails on load. The benchmark card's fault table is generated from these
+(`sim.faults.magnitude_table`).
+
+**Reason.** The scenario schema says "the simulator, not this schema, is authoritative for
+that mapping" but nothing made that authority explicit; a magnitude whose meaning lives only
+in prose is exactly the kind of contract that drifts. Totality is what makes adding a fault
+type to the closed enum fail loudly here rather than silently do nothing.
+
+**Alternatives.** Per-fault magnitude types in the scenario schema (rejected by the earlier
+decision that keeps the schema free of simulator semantics); a benchmark-card markdown table
+maintained by hand (rejected: it would drift from the code within a session).
+
+---
+
+## 2026-09-02 — A structural omission changes the fitted model, never the truth
+
+**Decision.** `omitted_sao` and `omitted_precipitation` compile to a `StructuralVariant`
+whose `truth_extensions` is the plant's own list, unchanged, and whose
+`fitted_extensions` is that list minus the omitted extension. The compiler raises if the
+plant does not run the extension at all. `imperfect_mixing` is the one structural fault that
+touches the truth's *reactor*, through the two-zone variant of `sim/plants/mixing.py` that
+the frozen plant decision parked for exactly this scenario; the fitted model keeps every
+extension there.
+
+**Reason.** Proposal §6.1: "The extension exists so that the *fitted* model (standard or
+simplified ADM1) is structurally wrong by design." Removing SAO from the truth would
+produce a different plant, not a structural mismatch, and would silently change what the
+Level-6 scenario is about. The distinction is asserted in a test per fault.
+
+---
+
+## 2026-09-02 — Influent faults are generator parameters, applied through a modifier hook
+
+**Decision.** The Level-3 faults reach the influent generator as per-feed
+`FeedModifier` objects (`sim/influent/generator.py`): a per-day multiplier on the true total
+solids (`moisture_drift`), a per-day probability *added* to the feed's own unrecorded-delivery
+rate (`unrecorded_delivery`), and a replacement true fractionation (`feed_mislabelled`). The
+generator applies them where it draws, consumes no extra variates, and a run without
+modifiers is bit for bit the run before the hook existed (tested).
+
+**Reason.** The session brief requires these faults to act on "the generator's parameters,
+not post-hoc edits"; editing the produced series would make the fault detectable in ways the
+process could not produce (a moisture drift that changes TS but not the COD it implies, for
+instance). Keeping the variate count identical is what lets a faulted and an unfaulted run
+be compared bitwise outside the fault window.
+
+**Alternatives.** Generate the horizon in two segments, before and after the onset
+(rejected: the generator's stream blocks are `n_days` long and not prefix-stable, so the
+unfaulted part of a split run would not match the unfaulted run, and the AR(1) state would
+restart at the onset); post-hoc edits of `InfluentTruth` (rejected as above); a
+time-varying `GeneratorConfig` (rejected: it would put fault semantics into the frozen
+generator schema).
+
+**Open for the lead: which feed an influent fault hits.** Appendix B's scenario contract has
+no feed field, so the compiler applies a stated rule — the plant's largest batch-delivered
+feed by wet mass, else the first feed in sorted order — which selects FOG at Plant B and
+grass silage at Plant A. A pumped, metered sludge line is not a feed a plant mis-logs or
+mis-characterises, so the restriction to batch feeds is deliberate; if the lead wants the
+high-strength waste at Plant B instead, that is a one-line change to the rule (or a schema
+change to name the feed, which reopens the frozen contract).
+
+---
+
+## 2026-09-02 — Fault magnitudes, bounds and the mixing bands are DESIGN content, provisional
+
+**Decision.** Every number in `configs/faults/faults.yaml` is marked `# DESIGN` with its
+source and is **provisional** pending the lead's review. Magnitudes are *bounded*: the
+compiler rejects a scenario whose magnitude falls outside the configured band, so a
+scenario cannot move a truth parameter arbitrarily far.
+
+Anchored where the proposal or an earlier decision fixes them: the gas-meter scale (+8 %,
+§6.3), the methane-analyser flatline (6 days, §6.3), the ammonia-inhibition ceiling (10x
+the BSM2 unadapted `K_I_nh3`, below the 40x that Tisocco et al. 2024 fitted for an adapted
+community), and the imperfect-mixing bands (bypass 1-10 %, stagnant 3-30 %, exchange
+0.2-2 1/d), which PR #7 carried as a plant prior and the salvage decision of 2026-09-02
+moved to "the fault-injection scenario definition, where they belong". Assumed and flagged:
+the pH drift slope, the sensor-noise and random-gap sizes, the informative-missingness
+multiplier, the feed-mislabelling share and its direction (degradable COD into particulate
+inerts), the unrecorded-delivery rate, the moisture-drift factor and its 30-day ramp, the
+biomass multiplier, the hydrolysis factor, and the acclimation time.
+
+**Reason.** These are the sizes that decide whether a scenario is detectable at all, which
+is design content the lead owns (as with the feed catalogue). Recording them as data with
+bounds means the scenario library can be written against them now and re-tuned once without
+touching code.
+
+**Not in the state fault: `X_sao`.** `biomass_misinitialised` multiplies the seven ADM1
+biomass states and deliberately leaves the SAO biomass alone, so a Level-4 state fault
+cannot be confused with the Level-6 SAO scenario.
