@@ -32,8 +32,9 @@ is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
   "Plant configurations A/B/C — frozen").
 - `influent/feed_fractionation.yaml` — the feed-fractionation catalogue of the influent
   generator (schema `sim/influent/schema.py`), keyed by the plants' feed ids: TS, VS/TS,
-  six-way COD fractionation and its Dirichlet spread, a literature COD/VS as a *check*
-  on the value derived from the fractionation (±10 %, enforced), pH, TAN/TKN, per-feed
+  six-way COD fractionation and its Dirichlet spread, the per-feed inert COD equivalent
+  (1.2 lignocellulosic / 1.42 sludge-derived, lead's freeze), a literature COD/VS as a
+  *check* on the value derived from the fractionation (±10 %, enforced), pH, TAN/TKN, per-feed
   inert N (applied by the truth model only), inorganic C, strong ions, calcium, with
   sources. **Provisional** (decisions log, "Feed fractionation values are provisional";
   revised on the lead's consistency answers, "Feed catalogue consistency"): every value

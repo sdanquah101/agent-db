@@ -1207,3 +1207,61 @@ seasonal term, which is shared by construction through the day of year).
 4. **The horizon is not prefix-stable**: the stream blocks are `n_days` long, so seed and
    horizon together identify a run (documented; a per-day stream layout would make the
    generator O(feeds × days) slower for no scenario need).
+
+---
+
+## 2026-09-02 — FREEZE (by the lead): silage on the Tisocco 2024 basis; the inert COD equivalent is per feed
+
+**Decisions (the lead's answers on PR #10; the catalogue values they touch are now
+settled, the rest of the catalogue stays `provisional` until the lead says otherwise).**
+
+1. **Silage basis follows Tisocco et al. 2024 throughout.** Total solids as a percentage
+   of **fresh matter**, every composition figure **per kg TS**, and **VS = TS − ash**.
+   Every silage field in `configs/influent/feed_fractionation.yaml` is labelled with that
+   basis. The liquid-basis ("g/L") reading of the 2026 Foulum table is dropped for this
+   feed, and with it the last use of the untraced 7.28 g/L.
+2. **The inert COD equivalent is per feed, with a source.** `inert_cod_equivalent`
+   (kg COD per kg of inert VS mass) is a catalogue field, not a global constant:
+   **1.2** for lignocellulosic inerts (cattle slurry, grass silage) and **1.42** for
+   sludge-derived inerts (the Muscatine feeds, at the ADM1 biomass composition C₅H₇O₂N,
+   inside the lead's 1.4–1.5). **FOG and food waste take the sludge value** by the lead's
+   instruction, documented beside each value as an assumption rather than a measurement.
+
+**What changed in the catalogue.**
+
+| Field | Before | After |
+|---|---|---|
+| `grass_silage.ts` | 0.319 (Foulum, % FM) | **0.2265** (AFBI 2024: mean of 20.1 / 25.2 % FM) |
+| `grass_silage.vs_of_ts` | 0.877 (Foulum) | **0.815** (TS − ash: 1000 − 185 g XA per kg TS) |
+| `grass_silage.fractionation` | 0.327 / 0.148 / 0.075 / 0.25 / 0 / 0.20 | **0.328 / 0.202 / 0.081 / 0.25 / 0 / 0.139** (2024 crude fractions per kg TS; acids at acetic 1.07, butyric 1.82, propionic 1.51, lactic 1.07 kg COD/kg) |
+| `grass_silage.cod_per_vs_literature` | 1.277 | **1.274** (derived 1.275, +0.1 %) |
+| `grass_silage.tkn` / `tan` | 0.540 / 0.054 | **0.383 / 0.038** (23.7 g N per kg TS × 226.5 g TS/kg FM = 5.37 g N/kg FM; TAN ratio 0.10 unchanged) |
+| `inert_cod_equivalent` | (global 1.19) | **1.2** slurry, silage; **1.42** food waste, HSW, FOG, primary sludge, thickened WAS |
+| `cattle_slurry.ts` / `vs_of_ts` | 0.036 / 0.751 (Foulum) | **0.0715 / 0.759** (AFBI 2024) — see the flag below |
+| `cattle_slurry.tkn` / `tan` | 0.158 / 0.087 | **0.314 / 0.173** (same 61.6 g N per kg TS at the 2024 TS; = the ESM's slurry `S_IN` of 4.35–5.95 kg N/m³) |
+| `cattle_slurry.cod_per_vs_literature` | 1.337 (2026 fractions) | **1.332** (2024 fractions; derived 1.314, −1.4 %) |
+
+Derived COD/VS against its check after the freeze: slurry −1.8 %, silage +0.1 %, food
+waste +0.1 %, HSW −2.2 %, FOG −2.1 %, primary sludge +4.8 %, thickened WAS +1.6 % — all
+inside ±10 %. Declared TKN against the ADM1-implied one: −9.2 % to +12.2 %, all inside
+each entry's `tkn_tolerance` of 0.15.
+
+**FLAGGED FOR THE LEAD: the cattle-slurry basis moved too, and it was not in the
+instruction.** Applying the freeze to silage alone put grass silage on AFBI 2024
+(22.65 % TS) while cattle slurry stayed on Foulum 2026 (3.6 % TS), and Plant A's organic
+loading then fell to **1.17 kg VS m⁻³ d⁻¹**, outside the published AFBI envelope of
+1.4–2.1 that `tests/test_influent.py::test_plant_a_loading_lands_in_the_published_olr_range`
+asserts. Putting both Plant A feeds on the 2024 basis restores **1.78**, inside it. The
+freeze's stated principle is a basis rule for the AFBI plant, so it was applied to the
+plant's other feed as well; the slurry's *fractionation* is untouched (it is the lead's
+frozen one, and the two tables' crude fractions agree to a few per cent). Consequence to
+note: the slurry's feed TKN and TAN roughly double (4.40 and 2.42 g N/L), which is what
+the 2024 ESM lists as the slurry `S_IN`. If the lead prefers the slurry on the 2026
+column, revert those four fields and the OLR test's envelope needs the lead's ruling
+instead.
+
+**Alternatives.** Keep the slurry on the 2026 column and accept an OLR outside the
+published range (rejected: the catalogue would no longer reproduce the plant it is
+anchored to, and the OLR test is one of the few anchored checks Plant A has); loosen the
+OLR test (rejected: it would hide the inconsistency the basis change exposed); use a
+lignin-like 1.9 kg COD/kg for lignocellulosic inerts (superseded: the lead fixed ~1.2).

@@ -63,7 +63,8 @@ def feed_cod_per_m3(
     total solids (the generator's per-delivery moisture), kg TS/kg wet.
     """
     ts_used = spec.ts if ts is None else float(ts)
-    return ts_used * spec.vs_of_ts * fractionation.cod_per_vs * spec.density
+    cod_per_vs = fractionation.cod_per_vs(spec.inert_cod_equivalent)
+    return ts_used * spec.vs_of_ts * cod_per_vs * spec.density
 
 
 def feed_concentrations(

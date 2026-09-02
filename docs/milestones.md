@@ -534,9 +534,15 @@ PRs #8 and #9 merged (41ffdd4). Branch `claude/milestone-2-influent-generator` f
   the first-sorted feed's variate count; moisture log sds by quadrature; unit
   descriptions tested on every generator model; docstring corrections (decisions log
   addendum).
-- The catalogue stays `provisional` until the lead freezes it; every changed value is
-  listed in the PR checklist. Flagged for the freeze: the silage TS basis (Foulum 31.9 %
-  vs AFBI 20–25 %) and the inert COD equivalent (1.19 for both inert classes).
+- **Freeze answers applied** (lead, same day; `docs/decisions.md`, "FREEZE ... silage on
+  the Tisocco 2024 basis; the inert COD equivalent is per feed"): grass silage moved to
+  the 2024 basis (TS % FM, composition per kg TS, VS = TS − ash), `inert_cod_equivalent`
+  became a per-feed field (1.2 lignocellulosic, 1.42 sludge-derived, FOG and food waste
+  at the sludge value by instruction). Cattle slurry moved to the same basis because the
+  mixed basis put Plant A's OLR at 1.17 against the published 1.4–2.1 (1.78 with both on
+  2024) — flagged for the lead in the decision entry and on the PR.
+- The rest of the catalogue stays `provisional` until the lead freezes it; every changed
+  value is listed in the PR checklist.
 - Assay noise and lags, mis-log and unrecorded-delivery rates, feed pH values and the
   Plant A moisture statistics are assumed (marked `ASSUMED` in `generator.yaml`).
 - Temperature seasonality is left to the plant heating / observation model; the

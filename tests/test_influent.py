@@ -248,12 +248,19 @@ def test_true_fractionation_moves_cod_between_classes_and_changes_total_cod(cata
     # total COD moves with the derived COD/VS, bounded by the class equivalents
     ratio = true[cod].sum() / declared[cod].sum()
     assert ratio != pytest.approx(1.0, rel=1e-6)
-    equivalents = list(COD_EQUIVALENTS_KG_COD_PER_KG.values())
+    equivalents = [
+        e
+        for fid in rates
+        for e in catalogue.feeds[fid]
+        .fractionation.equivalents(catalogue.feeds[fid].inert_cod_equivalent)
+        .values()
+    ]
     assert min(equivalents) / max(equivalents) < ratio < max(equivalents) / min(equivalents)
     # and exactly: per feed, COD/m3 = TS x VS/TS x COD/VS(true) x density
     for fid in rates:
         spec = catalogue.feeds[fid]
-        expected = spec.ts * spec.vs_of_ts * truth[fid].cod_per_vs * spec.density
+        cod_per_vs = truth[fid].cod_per_vs(spec.inert_cod_equivalent)
+        expected = spec.ts * spec.vs_of_ts * cod_per_vs * spec.density
         assert feed_cod_per_m3(spec, truth[fid]) == pytest.approx(expected)
     other = [i for n, i in _L.items() if n not in COD_STATES]
     np.testing.assert_array_equal(declared[other], true[other])  # dissolved species untouched
@@ -266,13 +273,14 @@ def test_cod_per_vs_is_derived_and_checked_against_the_literature(catalogue):
     """COD/VS = 1 / sum(f_i / e_i); the literature value is a check within the tolerance."""
     for fid, spec in catalogue.feeds.items():
         f = spec.fractionation
-        by_hand = 1.0 / sum(
-            getattr(f, n) / COD_EQUIVALENTS_KG_COD_PER_KG[n] for n in FRACTION_NAMES
-        )
+        e = f.equivalents(spec.inert_cod_equivalent)
+        assert e["f_xi"] == e["f_si"] == spec.inert_cod_equivalent
+        assert {k: e[k] for k in COD_EQUIVALENTS_KG_COD_PER_KG} == COD_EQUIVALENTS_KG_COD_PER_KG
+        by_hand = 1.0 / sum(getattr(f, n) / e[n] for n in FRACTION_NAMES)
         assert spec.cod_per_vs == pytest.approx(by_hand), fid
         gap = abs(spec.cod_per_vs - spec.cod_per_vs_literature) / spec.cod_per_vs_literature
         assert gap <= spec.cod_per_vs_tolerance <= 0.10, (fid, gap)
-        assert sum(f.mass_shares().values()) == pytest.approx(1.0)
+        assert sum(f.mass_shares(spec.inert_cod_equivalent).values()) == pytest.approx(1.0)
         assert "cod_per_vs" not in FeedFractionation.model_fields  # derived, never declared
     # the lead's targets: FOG near 2.7-2.9, HSW against the measured 2.23, primary 1.60
     assert 2.7 <= catalogue.feeds["fog"].cod_per_vs <= 2.9
@@ -287,7 +295,49 @@ def test_cod_per_vs_is_derived_and_checked_against_the_literature(catalogue):
     old = {"f_ch": 0.05, "f_pr": 0.05, "f_li": 0.85, "f_xi": 0.04, "f_si": 0.01, "f_vfa": 0.0}
     with pytest.raises(ValidationError, match="COD/VS derived"):
         FeedFractionation.model_validate(fog.model_dump() | {"fractionation": old})
-    assert CODFractionation(**old).cod_per_vs == pytest.approx(2.43, abs=0.01)
+    assert CODFractionation(**old).cod_per_vs(1.42) == pytest.approx(2.47, abs=0.01)
+
+
+def test_inert_cod_equivalent_is_per_feed_with_the_frozen_values(catalogue):
+    """Lead's freeze: ~1.2 for lignocellulosic inerts, 1.4-1.5 for sludge-derived ones."""
+    lignocellulosic = {"cattle_slurry", "grass_silage"}
+    for fid, spec in catalogue.feeds.items():
+        if fid in lignocellulosic:
+            assert spec.inert_cod_equivalent == pytest.approx(1.2), fid
+        else:
+            assert 1.4 <= spec.inert_cod_equivalent <= 1.5, fid
+    # every entry names a source for it, and the two assumed ones say so
+    text = FEED_FRACTIONATION.read_text(encoding="utf-8")
+    lines = [ln for ln in text.splitlines() if "inert_cod_equivalent:" in ln]
+    assert len(lines) == len(catalogue.feeds)
+    assert all("# DESIGN" in ln and "kg COD/kg VS mass" in ln for ln in lines)
+    assert sum("LEAD'S INSTRUCTION" in ln for ln in lines) == 2  # fog, food waste
+    # the equivalent is not cosmetic: it moves the derived COD/VS
+    ps = catalogue.feeds["primary_sludge"]
+    assert ps.fractionation.cod_per_vs(1.2) < ps.cod_per_vs
+    with pytest.raises(ValueError, match="inert COD equivalent must be positive"):
+        ps.fractionation.cod_per_vs(0.0)
+
+
+def test_grass_silage_is_on_the_tisocco_2024_basis(catalogue):
+    """Lead's freeze: TS in % FM, composition per kg TS, VS = TS - ash; basis labelled."""
+    spec = catalogue.feeds["grass_silage"]
+    assert spec.ts == pytest.approx((20.1 + 25.2) / 2 / 100)  # T2024 Table 1, % FM
+    assert spec.vs_of_ts == pytest.approx((1000 - 185) / 1000)  # VS = TS - ash (XA 185)
+    # the fractionation is the 2024 per-kg-TS composition, acids at their own equivalents
+    acids = {"acetic": (25.5, 1.07), "butyric": (1.4, 160 / 88), "propionic": (0.8, 112 / 74)}
+    acid_cod = sum(m * e for m, e in acids.values()) + 106.5 * (96 / 90)  # + lactic
+    xc, xp, xl = (624 + 653) / 2, (160 + 135) / 2, (31 + 27) / 2
+    total = (xc - (25.5 + 1.4 + 0.8 + 106.5)) * 1.19 + xp * 1.42 + xl * 2.90 + acid_cod
+    assert spec.cod_per_vs_literature == pytest.approx(total / (1000 - 185), rel=0.01)
+    assert spec.fractionation.f_pr == pytest.approx(xp * 1.42 / total, abs=0.002)
+    assert spec.fractionation.f_vfa == pytest.approx(acid_cod / total, abs=0.002)
+    # the dropped liquid-basis reading is gone from the entry
+    body = FEED_FRACTIONATION.read_text(encoding="utf-8")
+    entry = body[body.index("  grass_silage:") : body.index("Plant B feeds")]
+    assert "31.9" in entry and "NOT used" in entry  # the 2026 column is named and rejected
+    assert "FRESH-MATTER basis" in entry and "TS - ash" in entry
+    assert "0.319" not in entry and "0.877" not in entry
 
 
 # --------------------------------------------- cattle slurry re-centred (task 3)
@@ -318,6 +368,7 @@ def test_plant_a_nitrogen_is_on_the_2024_total_n_basis(catalogue):
     """Tkn = Tisocco 2024 Table 1 N (g N per kg TS, read as total N) x TS; tan by a cited ratio."""
     env = load_plant_a_statistics()["plants"]["afbi_hillsborough"]["ammonia_envelope"]
     n_per_ts = env["feed_TAN_g_N_per_kg_TS"]  # the file's field name; total N per the decision
+    assert catalogue.feeds["cattle_slurry"].ts == pytest.approx((6.8 + 7.5) / 2 / 100)
     for fid, ratio in (("cattle_slurry", 0.55), ("grass_silage", 0.10)):
         spec = catalogue.feeds[fid]
         mean_g_per_kg_ts = float(np.mean(n_per_ts[fid]))
@@ -379,7 +430,8 @@ def test_catalogue_nitrogen_is_consistent_under_its_declared_inert_n(catalogue, 
             assert spec.inert_N_I < bsm2.N_I
             assert not tkn_consistent(spec, bsm2), fid
     silage = catalogue.feeds["grass_silage"]
-    assert implied_tkn(silage, bsm2) * 14.007 > 10.0  # ~11 g N/L against the declared 7.6
+    # the finding in its own terms: the BSM2 inert N over-counts silage N by ~60 %
+    assert implied_tkn(silage, bsm2) > 1.5 * silage.tkn
 
 
 # ---------------------------------------- per-feed inert N in the truth (task 1)
