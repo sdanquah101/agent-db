@@ -41,6 +41,38 @@ hydraulics:
 mixing:
   model: cstr
   note: "Ideal CSTR in the plant contract; imperfect mixing is a fault-injection truth variant (answer 6)."
+# DECLARED community adaptation (lead's ruling 2, 2026-09-03). ADM1's default acetoclastic
+# free-ammonia inhibition constant (BSM2 K_I_nh3 = 0.0018 kmol N/m3, ~25 mg NH3-N/L) is for
+# a mesophilic sewage-sludge community. AFBI Hillsborough has run for years at a digestate
+# TAN of 2.3-4.3 kg N/m3 (configs/plant_a_statistics.yaml, Tisocco et al. 2024 §3.2) while
+# producing steadily, which a community at the default constant cannot do: at the default
+# the acetoclastic methanogens wash out entirely within ~800 d and the whole acetate flux
+# goes through syntrophic oxidation, leaving the Level-5/6/7 ammonia scenarios nothing to
+# act on. An adapted community is the physical explanation and the one the plant's own
+# stable operation evidences.
+#
+# The lead's ruling sets the adapted range at 0.02-0.05 kmol N/m3. The value is the BOTTOM
+# of that range, and the reason is measured rather than aesthetic (gate G1, 2026-09-03):
+#
+#   * Acetoclasts and SAO compete for one substrate, so they cannot coexist at a steady
+#     state. Whichever has the lower break-even acetate concentration excludes the other.
+#     Measured: at K_I below ~0.003 SAO wins outright, above it the acetoclasts do, and
+#     the stochastic feed does not change this. There is therefore NO adapted K_I in
+#     0.02-0.05 at which both are present -- the plant is acetoclastic at all of them.
+#   * The Level-5/6/7 rows are therefore staged as *transitions*: the run starts adapted
+#     and acetoclastic, and a loss of adaptation at the onset day takes K_I below the
+#     exclusion threshold, after which SAO grows in and takes over inside the horizon.
+#   * `ammonia_inhibition_shift` admits multipliers of 0.1 to 10 (sim/faults/schema.py,
+#     frozen). 0.02 x 0.1 = 0.002 is below the ~0.003 threshold; 0.035 x 0.1 = 0.0035 is
+#     ABOVE it, so from the midpoint the largest admissible loss of adaptation does not
+#     reach the shift at all. 0.02 is the only part of the ruled range from which the
+#     frozen magnitude range can express a full de-adaptation.
+#
+# tests/test_plants.py pins the exclusion threshold and this consequence.
+adaptation:
+  K_I_nh3: 0.02            # DESIGN  kmol N/m3; lead's ruling 2 range 0.02-0.05, bottom
+  source: "lead's ruling 2 of 2026-09-03 on the evidence of Tisocco et al. 2024 (AFBI digestate TAN 2.3-4.3 kg N/m3 with stable production); ADM1/BSM2 default is 0.0018"
+  note: "Plants B and C carry no adaptation block and keep the ADM1 default: Muscatine's free ammonia is an order of magnitude below the pathway-shift window."
 feeds:
   - name: cattle_slurry
     kind: slurry

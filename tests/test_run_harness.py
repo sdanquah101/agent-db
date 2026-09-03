@@ -42,7 +42,13 @@ from sim.adm1 import (
 )
 from sim.influent import constant_influent, load_feed_fractionation, nominal_mass_rates
 from sim.plants import declared_geometry, load_plant_config
-from sim.run.harness import generate_cells, generate_run, load_harness_config, simulate_truth
+from sim.run.harness import (
+    apply_adaptation,
+    generate_cells,
+    generate_run,
+    load_harness_config,
+    simulate_truth,
+)
 from sim.run.layout import RunPaths, run_id
 from sim.run.manifest import REDACTED_FIELDS, PublicManifest, RunManifest
 from sim.run.seeds import STREAM_ORDER, RunSeeds
@@ -213,22 +219,25 @@ def test_the_published_initial_state_config_matches_the_probe_module(probe_commo
         assert vector[i] == pytest.approx(RJ2006_GAS_STATE[name], rel=0), name
 
 
-@pytest.mark.parametrize("plant_id", ["B", "C"])
-def test_the_burn_in_has_converged_on_the_factorial_plants(adm1_params, plant_id):
+@pytest.mark.parametrize("plant_id", ["A", "B", "C"])
+def test_the_burn_in_has_converged_on_every_plant(adm1_params, plant_id):
     """Independent of the harness: the same burn-in run 50 % longer reaches the same state.
 
     If the burn-in were not converged, a scenario would begin on a transient no fault
     caused and Level-4's mis-initialised biomass would be indistinguishable from it.
-    Checked on Plants B and C, which carry the factorial; Plant A is a different story and
-    has its own test below.
+    Checked on all three plants. It used to exclude Plant A, whose acetoclasts washed out
+    slowly at the ADM1 default so that no burn-in length converged without making the
+    ammonia scenarios inert; Plant A's declared adaptation (the lead's ruling 2 of
+    2026-09-03) removed that, and with it the 200-d workaround.
 
     States below 1e-3 kg COD/m3 are compared on an absolute floor rather than relatively:
     the SAO biomass washes out towards zero on these plants (X_sao ~ 1e-7 at Plant B), and
     a state that is decaying to nothing has a large *relative* change and no consequence.
     """
     cfg = load_harness_config()
-    _, at_declared = _burn_in_to(plant_id, cfg.burn_in_days, adm1_params)
-    _, at_longer = _burn_in_to(plant_id, cfg.burn_in_days * 1.5, adm1_params)
+    params = apply_adaptation(adm1_params, load_plant_config(plant_id))
+    _, at_declared = _burn_in_to(plant_id, cfg.burn_in_days, params)
+    _, at_longer = _burn_in_to(plant_id, cfg.burn_in_days * 1.5, params)
     scale = np.maximum(np.abs(at_declared.y[:, -1]), 1e-3)
     drift = np.abs(at_longer.y[:, -1] - at_declared.y[:, -1]) / scale
     assert drift.max() < 0.05, (plant_id, drift.max(), int(drift.argmax()))
@@ -238,69 +247,60 @@ def test_the_burn_in_has_converged_on_the_factorial_plants(adm1_params, plant_id
     assert abs(gas_b - gas_a) / gas_a < 0.01
 
 
-def test_plant_a_is_mid_succession_at_the_burn_in_length_and_that_is_the_point(adm1_params):
-    """Plant A does NOT converge in 200 d, and lengthening the burn-in breaks three rows.
+def test_plant_a_is_a_stable_adapted_digester_and_the_pathways_exclude(adm1_params):
+    """Plant A's declared adaptation, and the competition it does *not* resolve.
 
-    Its free ammonia is inside the pathway-shift window, so the acetoclastic population is
-    slowly losing to syntrophic acetate oxidation. The succession completes at ~800 d with
-    the acetoclasts gone entirely - and from *that* state the Level-5 ammonia-inhibition
-    fault has nothing to act on: doubling K_I_nh3 changes the gas rate by 0.002 % and
-    acetate not at all, so S5-01, S6-01 and S7-02 would all be inert.
+    The lead's ruling 2 asked for a steady state with both acetoclastic and syntrophic
+    populations present. Measured, no such state exists at any adapted constant: the two
+    compete for one substrate, so one excludes the other, and the exchange point sits an
+    order of magnitude below the adapted range. This pins both halves of that finding —
+    the plant IS a stable adapted digester, and it is acetoclastic rather than mixed —
+    because the scenario design (transitions rather than a mixed baseline) rests on it.
 
-    This test is what stops someone "fixing" the convergence by lengthening the burn-in.
-    It fails if the configured burn-in no longer leaves a mixed community, and it fails if
-    the ammonia fault stops producing a signal there. See configs/runs/harness.yaml and
-    docs/decisions.md, "Burn-in length, and Plant A's SAO succession".
+    It replaces the guard on the 200-d burn-in workaround, which the same ruling removed.
     """
-    cfg = load_harness_config()
-    model, at_burn_in = _burn_in_to("A", cfg.burn_in_days, adm1_params)
+    plant = load_plant_config("A")
+    assert plant.adaptation is not None and plant.adaptation.K_I_nh3 is not None
+    adapted = plant.adaptation.K_I_nh3
+    assert 0.02 <= adapted <= 0.05, adapted  # the lead's ruled range
+    assert adapted > 10.0 * adm1_params.kinetics.K_I_nh3  # far above the sludge default
+
+    params = apply_adaptation(adm1_params, plant)
+    assert params.kinetics.K_I_nh3 == pytest.approx(adapted)
+    for other in ("B", "C"):
+        untouched = apply_adaptation(adm1_params, load_plant_config(other))
+        assert untouched.kinetics.K_I_nh3 == pytest.approx(adm1_params.kinetics.K_I_nh3)
+
+    model, at_burn_in = _burn_in_to("A", load_harness_config().burn_in_days, params)
     names = model.state_names
-    x_ac = float(at_burn_in.y[names.index("X_ac"), -1])
-    x_sao = float(at_burn_in.y[names.index("X_sao"), -1])
+    adapted_ac = float(at_burn_in.y[names.index("X_ac"), -1])
+    adapted_sao = float(at_burn_in.y[names.index("X_sao"), -1])
     nh3_mg_per_l = float(at_burn_in.derived["S_nh3"][-1]) * 14.007 * 1000.0
+    assert nh3_mg_per_l > 150.0, nh3_mg_per_l  # still a high-ammonia digester
+    assert adapted_ac > 0.5, adapted_ac  # the adapted acetoclasts hold their own...
+    assert adapted_sao < 1e-3, adapted_sao  # ... and exclude the oxidisers entirely
 
-    assert 150.0 < nh3_mg_per_l < 300.0, nh3_mg_per_l  # inside the pathway-shift window
-    assert x_ac > 0.1, x_ac  # a mixed community, not a pure-SAO one
-    assert x_sao > 0.1, x_sao  # ... and SAO has genuinely established
-    assert 0.2 < x_ac / x_sao < 5.0, (x_ac, x_sao)
+    # at the ADM1 default the winner flips, which is what makes a loss of adaptation a
+    # pathway shift rather than a nudge. The acetoclasts are still on their way out at the
+    # burn-in length rather than gone (they reach ~0 by 1000 d), so the comparison is with
+    # the adapted run and not with zero.
+    _, unadapted = _burn_in_to("A", load_harness_config().burn_in_days, adm1_params)
+    unadapted_ac = float(unadapted.y[names.index("X_ac"), -1])
+    assert float(unadapted.y[names.index("X_sao"), -1]) > 0.5
+    assert unadapted_ac < 0.1 * adapted_ac, (unadapted_ac, adapted_ac)
 
-    # and the succession really is still running: the acetoclasts are on their way out
-    _, at_longer = _burn_in_to("A", 800.0, adm1_params)
-    assert float(at_longer.y[names.index("X_ac"), -1]) < 0.01 * x_ac
 
-    # the fault this state exists for produces a signal from here, and not from there
-    def response(y0: np.ndarray, multiplier: float) -> tuple[float, float]:
-        plant = load_plant_config("A")
-        catalogue = load_feed_fractionation()
-        kinetics = adm1_params.kinetics.model_copy(
-            update={"K_I_nh3": adm1_params.kinetics.K_I_nh3 * multiplier}
-        )
-        shifted = compile_extended(
-            adm1_params.model_copy(update={"kinetics": kinetics}),
-            declared_geometry(plant),
-            load_matrix(),
-            load_solver_config(),
-            load_extensions(),
-            plant.truth_model.extensions,
-        )
-        out = simulate_extended(
-            y0=y0,
-            influent=constant_influent(catalogue, nominal_mass_rates(plant, catalogue)),
-            model=shifted,
-            t_span=(0.0, 120.0),
-            t_eval=np.array([120.0]),
-        )
-        return float(out.derived["q_gas_stp_dry"][-1]), float(out.y[6, -1])  # gas, S_ac
+def test_the_feed_reseeds_syntrophic_oxidisers_so_a_washed_out_pathway_can_return():
+    """ADM1 has no immigration, and a population at exactly zero can never come back.
 
-    gas_0, ac_0 = response(at_burn_in.y[:, -1], 1.0)
-    gas_1, ac_1 = response(at_burn_in.y[:, -1], 2.0)
-    assert (gas_1 - gas_0) / gas_0 > 0.01, (gas_0, gas_1)  # measured +2.2 %
-    assert (ac_0 - ac_1) / ac_0 > 0.10, (ac_0, ac_1)  # measured -19 %
-
-    late_0, late_ac_0 = response(at_longer.y[:, -1], 1.0)
-    late_1, late_ac_1 = response(at_longer.y[:, -1], 2.0)
-    assert abs(late_1 - late_0) / late_0 < 0.001  # inert from the converged state
-    assert abs(late_ac_1 - late_ac_0) / late_ac_0 < 0.001
+    Without a trace of oxidisers in the feed, Plant A's loss-of-adaptation rows produce no
+    pathway shift at all — acetate accumulates while nothing grows to consume it — and the
+    Level-6/7 structural rows are inert because the fitted model omits a pathway carrying
+    no flux. This pins the term's presence and its size: enough to survive, far too small
+    to matter where it is not selected for.
+    """
+    seeded = load_harness_config().influent_extension_states.get("X_sao")
+    assert seeded is not None and 0.0 < seeded <= 1e-3, seeded
 
 
 def test_the_scenario_starts_from_the_burn_in_state(clean_run):

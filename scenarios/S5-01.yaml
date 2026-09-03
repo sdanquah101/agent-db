@@ -1,21 +1,25 @@
-# Level 5 — true ammonia-inhibition shift. The ladder's "inhibition constant changes after
-# acclimation"; truth label `parameter`. This is one of the three AMMONIA scenarios, which
-# run on PLANT A ONLY: Muscatine's free ammonia is an order of magnitude below the
-# pathway-shift window, and Plant A's 180-250 mg NH3-N/L is inside it (decisions log,
-# 2026-09-02, "The SAO Level-6 scenario runs on Plant A, not Plant B"). It is the one rung
-# where moving a kinetic parameter is the *correct* action.
+# Level 5 — true ammonia-inhibition shift, staged as a LOSS OF ADAPTATION. The ladder's
+# "inhibition constant changes after acclimation"; truth label `parameter`. One of the three
+# AMMONIA scenarios, which run on PLANT A ONLY: Muscatine's free ammonia is an order of
+# magnitude below the pathway-shift window and Plant A's is inside it (decisions log,
+# 2026-09-02). It is the one rung where moving a kinetic parameter is the *correct* action.
 #
-# MAGNITUDE 2.0 = the acetoclastic methanogens' free-ammonia inhibition constant K_I_nh3
-# doubles at the onset day (admissible 0.1-10). The direction is the ladder's own: a
-# community that has *acclimated* tolerates more ammonia, so K_I_nh3 rises. Doubling is
-# large enough to be seen and small enough to stay a parameter change rather than a
-# different organism: at Plant A's free ammonia of ~215 mg N/L against the ADM1 default
-# K_I_nh3 of ~25 mg N/L, the non-competitive inhibition factor K_I/(K_I + NH3) goes from
-# 0.10 to 0.19, so acetoclastic uptake roughly doubles and acetate falls. The run is
-# integrated in two segments, so the change is exact rather than a smooth ramp.
+# DIRECTION: DOWNWARD, and that is the redesign of 2026-09-03 (the lead's ruling 2). Plant A
+# now declares an ADAPTED acetoclastic inhibition constant (`adaptation.K_I_nh3` = 0.02
+# kmol N/m3, against the ADM1 default 0.0018), because a digester that has run for years at
+# a digestate TAN above 3 kg N/m3 does not have a sewage-sludge community. The scenario is
+# a transition AWAY from that adapted state: the community loses its acclimation - after a
+# feed change, a temperature excursion, a washout event - and its inhibition constant falls
+# back towards the unadapted value.
 #
-# ONSET day 120 of 240: four months of the pre-shift regime and four of the post, which is
-# what a residual analysis by time period needs.
+# MAGNITUDE 0.1 = the constant falls to a tenth, 0.02 -> 0.002 kmol N/m3 (admissible
+# 0.1-10, and 0.1 is the floor). It is not a round number chosen for looks: MEASURED, the
+# acetoclastic and syntrophic pathways exchange dominance at K_I ~ 0.003, so 0.002 is the
+# largest admissible loss of adaptation that actually crosses the threshold and starts the
+# pathway shift. From the midpoint of the lead's adapted range (0.035) the same x0.1 lands
+# at 0.0035, above the threshold, and nothing happens.
+#
+# ONSET day 120 of 240: four months of the adapted regime and four of the transition.
 id: S5-01
 plant: A
 tier: B
@@ -25,7 +29,7 @@ truth_label: [parameter]
 faults:
   - type: ammonia_inhibition_shift
     onset_day: 120
-    magnitude: 2.0
+    magnitude: 0.1
 correct_conclusion:
   flag_sensor: null
   estimate_scale_factor: false
@@ -37,12 +41,12 @@ budget:
   assay_units: 4
 seed: 1051
 notes: >-
-  What a workflow should notice: from day 120 the model under-predicts gas and
-  over-predicts acetate, the residual is sustained rather than transient, and it is
-  load-dependent - largest on the days the digester is most heavily fed, because that is
-  when the inhibition term does the most work. Nothing in the feed log, the feed assays or
-  the instruments moved, and the residual does not heal, so it is neither influent, sensor
-  nor state. The correct action is a bounded update of the ammonia-inhibition constant
-  alone. Two characteristic failures: attributing it to the influent because it correlates
-  with load, and updating hydrolysis (which also scales with load) instead of the
-  inhibition constant, which fits the gas and gets the acetate wrong.
+  What a workflow should notice: from day 120 acetate climbs steeply while the gas rate
+  barely moves, and the residual is sustained rather than transient and largest on the days
+  the digester is most heavily fed - because that is when the inhibition term does the most
+  work. Nothing in the feed log, the feed assays or the instruments moved, and the residual
+  does not heal, so it is neither influent, sensor nor state. The correct action is a
+  bounded update of the ammonia-inhibition constant alone. Two characteristic failures:
+  attributing it to the influent because it correlates with load, and updating hydrolysis
+  (which also scales with load) instead of the inhibition constant, which can be made to
+  fit the gas and then gets the acetate badly wrong.
