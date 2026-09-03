@@ -1694,3 +1694,315 @@ up deliberately.
 which is better than a self-review and still not an outside one. The reviewer was told to
 verify arithmetic independently and to try to construct broken implementations that pass
 each test; the three findings that mattered most came from exactly that instruction.
+
+---
+
+## 2026-09-03 — The run harness: `runs/<id>/`, the redacted manifest, and where the code lives
+
+**Decision.** `sim/run/` builds a run and writes it; `state/` reads one back for a
+workflow. The split is the rule-1 boundary made structural rather than procedural.
+
+| Module | Owns |
+|---|---|
+| `sim/run/layout.py` | the directory contract (`truth/`, `observations/`, `manifest.json`, `calls.jsonl`) and the opaque run id |
+| `sim/run/seeds.py` | one seed per stochastic component, in a fixed documented order |
+| `sim/run/manifest.py` | the complete manifest **and** the projection a workflow sees |
+| `sim/run/notes.py` | the operator's log, including the Level-8 adversarial note |
+| `sim/run/artifacts.py` | two writers: one for truth, one for observations |
+| `sim/run/harness.py` | `generate_run`, wiring generator → truth model → channels → tier mask |
+| `sim/run/matrix.py` | the §7 generation matrix and its CLI |
+| `state/provenance.py` | the append-only `calls.jsonl` (CLAUDE.md rule 3) |
+| `state/run_view.py` | the workflow-facing loader |
+
+`sim/run/__init__.py` deliberately does **not** import the harness, so that
+`state.run_view` can import `PublicManifest` without dragging in the module that knows how
+to write hidden truth.
+
+**The manifest is redacted, not truncated.** The task specification for this session asked
+for a manifest carrying "scenario id, plant, tier, seeds, config versions, git SHA, and the
+declared fault layers", and for `workflows/` to be able to read it. Those two cannot both
+hold literally: the scenario id names the row of the ladder, the fault layers *are* the
+uncertainty class §6.7 B scores, and the seeds would let a workflow re-run the generator
+and read the answer off its own copy. Proposal §10 anticipates precisely this ("agents leak
+information via prompts (e.g. scenario names) ... scenario IDs randomised; agents never see
+YAML").
+
+So `runs/<id>/manifest.json` is written **complete**, as asked, and `state.run_view` returns
+`PublicManifest` — run id, plant, tier, horizon, seasonal phase, config versions, git SHA,
+harness version. The projection is built by naming the public fields rather than by deleting
+the secret ones, so a field added to the manifest is invisible to a workflow by default
+instead of leaking until someone remembers the deny-list; `REDACTED_FIELDS` lists the rest
+and a test asserts the two partitions cover the manifest exactly.
+
+**The run id is opaque.** `run_<12 hex>`, a hash of (scenario, plant, tier, seed, replicate).
+A directory called `S2-03-PB-TA` would reintroduce the §10 leak the moment a path appeared
+in a prompt. It is still deterministic, so regenerating a cell overwrites its own directory;
+`runs/index.jsonl`, at the root of the store rather than inside any run, maps ids back to
+cells for the evaluator.
+
+**The loader cannot name hidden truth.** `state.run_view.RunView` is rooted at
+`runs/<id>/observations/` and resolves every caller-supplied path against that root,
+requiring the result to stay inside it. `"../truth/faults.json"`, an absolute path and a
+symlink out of the tree all fail identically with `TruthAccessError`; `RunView.files` lists
+only what is inside. `tests/test_truth_isolation.py` drives all of that on a real generated
+run and first asserts that the truth *is* on disk, so the refusals cannot pass by there
+being nothing to find.
+
+**Alternatives.** Put the loader in `tools/` (rejected: the registry is a later milestone
+and its design should not be pre-empted by a file loader). Write two manifests, a public one
+beside a private one (rejected: two files that must agree is a drift risk, and the
+projection is one function). Keep the run id readable and rely on the driver to rename
+(rejected: a leak that depends on a future component doing something is a leak).
+
+---
+
+## 2026-09-03 — The published R&J 2006 steady state moves into `configs/`
+
+**Decision.** `configs/adm1/initial_state_rj2006.yaml` carries the Rosen & Jeppsson (2006)
+Table-5 steady state, and `sim.adm1.load_initial_state()` reads it.
+
+The only copy was in `scripts/adm1_candidates/common.py`, which is disposable probe code
+(decision 2026-09-02, "Disposable code lives in `scripts/`"), so `sim/` may not import it.
+The numbers are unchanged and `tests/test_run_harness.py` asserts the file and the probe
+module agree state for state, so the transcription cannot drift. It is not a design value
+and it is not the initial state of any scenario: only the burn-in starts there.
+
+---
+
+## 2026-09-03 — A scenario starts on a running digester: the burn-in
+
+**Decision.** The harness integrates the plant's own median recipe for 200 d from the
+published steady state and starts the scenario from the state that reaches
+(`configs/runs/harness.yaml`). Starting a scenario at a textbook steady state would make the
+first weeks of every run a start-up transient no fault caused, and the Level-4
+mis-initialised-biomass row would be indistinguishable from it; the Level-4 multiplier is
+applied to the burn-in state, which is what makes it a mis-initialisation of *this* digester.
+
+`X_sao` is seeded at 0.01 kg COD/m3, because syntrophic-oxidiser growth is proportional to
+the biomass present and a run started at exactly zero stays there for ever — which would
+make the SAO extension silently inert in the very scenarios it exists for. Measured: it
+washes out on Plants B and C (to ~1e-7 and ~1e-5) and establishes on Plant A, so the seed
+does not decide the outcome, it only makes the outcome possible.
+
+---
+
+## 2026-09-03 — Burn-in length, and Plant A's SAO succession — FLAGGED for the lead
+
+**Measured.** 200 d is a converged steady state on Plants B and C: a further 100 d moves no
+state above 1e-3 kg COD/m3 by more than 0.02 %, pH by <0.0005 and the gas rate by <0.001 %.
+
+**On Plant A it is not, and lengthening it would break three scenarios.** Plant A's free
+ammonia (185–190 mg NH3-N/L) is inside the pathway-shift window, so the plant undergoes a
+slow succession from acetoclastic methanogenesis to syntrophic acetate oxidation. It
+completes only at ~800 d, and at that point the acetoclastic methanogens have washed out
+entirely:
+
+| burn-in | X_ac | X_sao | effect of doubling `K_I_nh3` for 120 d |
+|---|---|---|---|
+| 200 d | 0.53 | 0.54 | gas +2.2 %, acetate −19 % |
+| 400 d | 0.027 | 0.95 | gas +0.2 %, acetate −1.5 % |
+| 800 d | 4.6e-5 | 0.97 | gas +0.002 %, acetate unchanged |
+
+All three ammonia scenarios (S5-01, S6-01, S7-02) would be **inert** from a converged Plant
+A state: there is no acetoclastic population left for a change in its inhibition constant to
+act on. 200 d leaves the mixed community those rows are about, so the harness burns in to a
+deliberately mid-succession state on Plant A and says so.
+
+**This needs the lead's decision.** Three readings, none of which this session took:
+
+1. The SAO uptake rate is too fast. `k_m_sao` was raised to the literature fast end
+   (`mu_max` 0.16 d⁻¹) by the lead's own answer of 2026-09-02 precisely so SAO would
+   establish inside a 180-d scenario. It now establishes so well that it excludes the
+   acetoclasts entirely.
+2. Plant A's ammonia envelope is too high for a co-existence regime.
+3. Plant A is *defined* as a digester in transition, and the ammonia rows are scored on a
+   plant that is not at steady state. This is what is implemented, with the succession
+   recorded rather than hidden.
+
+`tests/test_run_harness.py::test_plant_a_is_mid_succession_at_the_burn_in_length_and_that_is_the_point`
+fails if someone "fixes" the convergence by lengthening the burn-in.
+
+---
+
+## 2026-09-03 — Plant B sours on 5 of 12 seeds — BLOCKING finding, FLAGGED for the lead
+
+**Measured.** Under the frozen feed catalogue, plant configuration and influent generator,
+a clean Level-0 run on **Plant B** acidifies within 180 d on **5 of 12** base seeds: median
+pH 4.6–5.0 with 0.0–0.36 methane, against 6.9–7.1 and 0.65–0.70 on the seeds that survive.
+Plants A and C are 12 of 12 sound.
+
+**It is not the harness.** It reproduces with the declared geometry (no hidden volume
+error), the published initial state (no burn-in), no extension influent and no faults: five
+of twelve small integer seeds crash the same way. It is not driven by the mean load either —
+seed 1002 is sound at OLR 2.66 kg VS m⁻³ d⁻¹ and seed 1006 sours at 1.77 — but by *runs of
+consecutive high-load days*.
+
+**Why the existing tests did not catch it.**
+`tests/test_plausibility.py::test_plant_b_survives_the_generator_swings` tests exactly one
+seed (11), which is one of the seven that survive. A single-seed plausibility check on a
+stochastic generator cannot see a 40 % failure rate.
+
+**The most likely cause, for the lead.** `configs/plants/plant_B.yaml` describes the
+high-strength waste as "trucked deliveries **blended in a 65,000-gal tank**", and the FOG
+likewise as trucked. The influent generator feeds truck arrivals straight to the digester on
+the day they arrive; the real plant damps them through a buffer with roughly six days of
+hold-up (246 m³ against ~42 m³/d of HSW, plant total). The physical feature is documented in
+the frozen plant config and not implemented in the frozen generator, and its absence is
+exactly what would turn a run of arrivals into an acid pulse.
+
+**Not fixed here.** Adding a buffer tank changes the frozen influent generator and would
+move every generated cell and every anchored delivery statistic; that is the lead's call.
+This session instead:
+
+* labels every generated run sound or soured (`sim.run.harness.assess_health`), writes the
+  verdict to `runs/<id>/truth/geometry.json`, and reports the counts per cell in the
+  generation report;
+* measures and reports the rate in `docs/g1_anchor_report.md`;
+* pins it in `tests/test_g1_anchor.py::test_plant_b_sours_on_a_material_fraction_of_seeds`,
+  which fails **if the rate goes to zero as well as if it gets worse**, so a fix must come
+  with an update to the record.
+
+**Consequence for gate G1.** The gate's literal criterion — every scenario generates, truth
+logged separately, influent statistics inside the declared tolerance — is met. The digester
+those scenarios are staged on is not yet reliable on Plant B, and the benchmark is not usable
+for the factorial until it is.
+
+---
+
+## 2026-09-03 — Level-8 scenarios carry an underlying fault
+
+**Decision.** S8-01 (tool failure) and S8-02 (adversarial log note) each inject the
+Appendix-B gas-meter scale error alongside their workflow-layer fault, and carry the truth
+label `sensor`.
+
+The §6.3 table gives Level 8 no truth label ("—"), but the frozen scenario schema requires
+at least one and forbids `none` above Level 1. Rather than weaken the schema, the constraint
+was taken as a design hint, and it is a good one: "did the workflow fall back correctly?"
+needs something to fall back *to*, and "the note asserts a false cause" needs a true cause to
+be false about. Both rows are therefore scored on two axes — the sensor attribution, and the
+handling of the failed tool or the false note.
+
+**Alternative.** Relax the schema so `none` is admissible at Level 8 (rejected: it is frozen,
+and a Level-8 row with no diagnostic task is a weaker scenario, not a purer one).
+
+---
+
+## 2026-09-03 — Every run carries operator notes
+
+**Decision.** `configs/faults/log_notes.yaml` holds a catalogue of true, mundane operator
+notes, and `sim/run/notes.py` places a few of them (Poisson, ~6 per 100 d) in **every** run
+at seeded random days. The Level-8 adversarial note is one more entry, authored by a
+"process_engineer" rather than an "operator".
+
+If a notes file existed only in the adversarial run, its presence would be the answer and
+the scenario would test nothing. The benign notes are written to be true of the run and
+useless for diagnosis — maintenance, staffing, weather — so a workflow that reads them
+learns nothing the record does not already show.
+
+The note texts are DESIGN values with no anchor: no open dataset of operator log notes
+exists. The adversarial note is written to be a plausible *misdiagnosis* of the fault
+actually injected, pointing at the hydrolysis constants, so following it produces exactly
+the false kinetic drift of §6.7 B.
+
+---
+
+## 2026-09-03 — Per-tier answer keys do not exist — FLAGGED for the lead
+
+**The gap.** The frozen scenario schema carries one `correct_conclusion` per scenario. The
+matrix runs most scenarios at all three tiers, and at least one row's fault is **invisible**
+at the lowest tier: S2-02 flatlines the methane analyser, which is a Tier-B instrument, so at
+Tier A there is nothing to observe and the run is indistinguishable from Level 0. Its answer
+key names `ch4_fraction`, which is the Tier-B/C answer and is wrong at Tier A, where the
+defensible conclusion is that no fault is detectable.
+
+**Not fixed here** (the schema is frozen). Each affected scenario says so in its `notes`.
+Three ways out, for the lead: make `correct_conclusion` a mapping keyed by tier; exclude a
+scenario from the tiers where its fault is unobservable; or keep one key and score Tier-A
+runs of such rows on correct abstention instead of attribution — which is arguably the most
+interesting of the three, since "the instrument that would have shown you is not installed"
+is a real situation on a constrained plant.
+
+---
+
+## 2026-09-03 — Scenario magnitudes, seeds and budgets
+
+**Magnitudes.** Every value is inside the admissible range `sim/faults/schema.py` declares,
+and the reason for each is in the scenario file's own header comment rather than here. The
+ones that are judgement calls: `sensor_noise` and `random_gaps` at 2.0 (a doubling, the
+smallest unambiguous departure from the declared instrumentation); `ph_electrode_drift` at
+−0.01 pH/d (~4× the healthy electrode's own 0.0025 pH/d, giving a 0.30 pH sawtooth at the
+monthly recalibration cadence and 0.90 at the quarterly one); `feed_mislabelled` at a
+Dirichlet concentration of 5.0 (3–8× wider than the feeds' own 30–300, so a batch genuinely
+unlike its label); `unrecorded_delivery` at 3 medians (one median is indistinguishable from
+the generator's own background of unlogged trucks); `moisture_drift` at −30 % (a season, well
+outside the generator's own few-per-cent day-to-day TS process); `biomass_misinitialised` at
+0.25 (0.8 recovers inside a fortnight and is indistinguishable from Level 0; below ~0.1 the
+run becomes a souring scenario rather than a state-estimation one); `informative_missingness`
+at 3.0; `ammonia_inhibition_shift` at ×2.0 *upwards*, the ladder's own "after acclimation";
+`hydrolysis_regime_change` at ×0.6, a coarser feed; `imperfect_mixing` at a stagnant fraction
+of 0.30, the value whose load-proportional gas deficit was already measured on 2026-09-02;
+`tool_failure` at probability 1.0, because the property under test is the response to a
+failure and not its frequency.
+
+**Seeds.** `1000 + 10 × level + index`, so S2-03's seed is 1023. Unique, explicit and
+readable; nothing depends on the arithmetic.
+
+**Budgets — a proposal, flagged.** The proposal fixes only the Appendix-B example
+(4,000 simulator evaluations / 90 min / 2 assay units). The library uses three bands:
+Levels 0–2 at the Appendix-B figures, Levels 3–5 at 6,000/120/4 and Levels 6–8 at
+8,000/150/6, on the grounds that a compound or structural row needs more evidence-gathering
+before it can conclude. §7 requires the budget to be identical across workflows *within* a
+cell, which this respects. If the lead prefers one envelope for the whole ladder, that is a
+one-line change per file.
+
+---
+
+## 2026-09-03 — Plant A's ammonia scenarios run at all three tiers
+
+**Decision.** §7 pins Tier A for Plant A's "Level 2–5 scenarios" and is silent on the tier of
+the three ammonia rows. They run at all three tiers.
+
+An ammonia-inhibition shift and an omitted oxidative pathway are diagnosed through TAN, total
+and speciated VFA and off-gas hydrogen; Tier A carries none of them. Confining those rows to
+Tier A would leave the only plant that can host them unable to answer them. The Level-2 to
+Level-5 subset stays at Tier A as §7 says. This adds 6 cells (S5-01 at B and C, S6-01 and
+S7-02 at B and C) and Plant A still contributes no rows to the factorial.
+
+---
+
+## 2026-09-03 — Gate G1's tolerances are declared before the comparison
+
+**Decision.** `anchor/compare_generated.py` holds `TOLERANCES` as a frozen table with a
+rationale per row, written before anything was measured, and `tests/test_g1_anchor.py`
+recomputes `docs/g1_anchor_report.md` and compares it verbatim.
+
+Most bounds are **inherited** rather than invented: the per-stream delivery bounds are the
+ones `tests/test_generator.py` already applies (rel 0.15, rel 0.30, abs 0.04) and the biogas
+band is the one `tests/test_plausibility.py` applies (0.6–1.5). A test reads those literals
+out of the test files, so widening one "for consistency" fails.
+
+**One procedural change is recorded rather than hidden.** The output statistics were first
+measured on a single Level-0 run at the scenario's own seed. That seed turned out to be one
+of the Plant B seeds that sours, so every output row failed for the wrong reason. The
+measurement was widened to a declared twelve-seed panel with each run labelled sound or
+soured, and the comparison is made across the sound runs with the soured fraction reported
+beside it. **The tolerances were not touched when this changed.**
+
+**Three rows fail and are asserted to fail.** `vfa_median` (0.054 against 1.178 kg m⁻³,
+ratio 0.05), `alkalinity_median` (2.78 against 5.04 kg CaCO₃ m⁻³, −45 %) and
+`fos_tac_median` (0.021 against 0.232, ratio 0.09) are one finding from three sides: a
+converged ADM1 carries far less residual VFA than a real digester, and less alkalinity with
+it. It is the realism gap the PR-#11 review recorded (it predicted 0.01–0.07 for FOS/TAC;
+the panel gives 0.017–0.027). The test pins the failure *and its size* in both directions,
+so closing the gap fails a test and forces the record to be updated, rather than letting a
+quiet tuning pass unnoticed.
+
+**And one consequence that is worse than a failed row.** The overload flag fires when
+FOS/TAC exceeds 0.40, and across the panel it is **bimodal**: five of the seven sound runs
+never raise it, the other two raise it on 8.6 % and 9.3 % of days (about the plant's own
+~8 %), and every soured run raises it on 63–100 %. So conditional missingness — the §6.1
+property that instruments fail during the transients that identify the process — has
+nothing to act on in most healthy Plant B runs, and the Level-4 `informative_missingness`
+row (S4-02) is a near-duplicate of Level 1 there. `docs/g1_anchor_report.md` §6 lists the
+five things that would close the underlying gap and which two of them actually change the
+answer.

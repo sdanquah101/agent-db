@@ -791,3 +791,122 @@ That needs the run harness (`runs/<id>/truth/`, `calls.jsonl`) built first.
 | Independent review (subagent) | ≈ 15 min | 53 tool calls, fresh context |
 | Applying nine findings + tests | ≈ 70 min | 4 full suite runs |
 | Docs, PR body | ≈ 20 min | |
+
+---
+
+## Milestone 3 — Observation model and fault-injection API (weeks 7–9)
+
+### Session 2026-09-03 (eighth session) — the run harness, the 19-scenario library, gate G1
+
+Branched from `main` at `b469317` (PR #11 merged). This is the gate-G1 session: build the
+`runs/<id>/` layer, write the other 18 scenarios, generate the §7 matrix, and compare the
+generated statistics with the Muscatine anchor inside tolerances declared in advance.
+
+**Done**
+
+- **The run harness** (`sim/run/`, `state/`). `generate_run` wires every frozen component
+  together — `build_plan` → hidden geometry → `generate_influent` → a burn-in on the
+  plant's median recipe → the truth model, segmented where a parameter fault has an onset
+  → channels → the tier's mask → files. Two writers, one per region, so the rule-1
+  boundary is structural rather than procedural. `generate_cells` integrates the truth
+  **once** per (plant, scenario) and masks it three times, which is how §6.4's "tiers are
+  masks on identical truth" becomes a guarantee rather than a hope.
+- **`state/provenance.py`**: the append-only `calls.jsonl` of rule 3, with an argument
+  *fingerprint* rather than the arguments (a trajectory is not a log line). A second
+  writer continues the sequence, which is what the tool registry will do.
+- **`state/run_view.py`**: the workflow-facing loader. Hidden truth is not refused, it is
+  unnameable — the view is rooted at `observations/` and every path is resolved and
+  required to stay inside it. `tests/test_truth_isolation.py` now drives that on a real
+  run, after first asserting the truth *is* on disk.
+- **The manifest is redacted, not truncated.** Written complete (scenario, seeds, fault
+  layers, config hashes, git SHA) because reproducibility needs it; a workflow gets a
+  projection with no field for any of the three. `REDACTED_FIELDS` and a test partition
+  the manifest exactly, so a new field cannot be forgotten on one side.
+- **All 19 scenarios**, each with its answer key and a `notes` field saying what a workflow
+  should notice and what the characteristic failure is. Every magnitude is inside the range
+  `sim/faults/schema.py` publishes and its choice is argued in the file's own header.
+- **The §7 matrix generates end to end: 114 of 114 cells**, 44 distinct truth integrations,
+  13 min wall-clock, 40 MB. 96 factorial cells on B and C, 18 on Plant A.
+- **`docs/g1_anchor_report.md`** plus `anchor/compare_generated.py` and
+  `tests/test_g1_anchor.py`, which recomputes the report's generated block verbatim.
+- Tests 233 → **296**.
+
+**Gate G1: the stated criterion is met, and there is a blocking finding underneath it**
+
+*Met.* Every scenario generates; hidden truth is written only to `runs/<id>/truth/` and is
+unreachable through the workflow API; **every influent statistic is inside its declared
+tolerance** — per-stream delivery medians (ratios 0.95–1.00), spreads (1.01–1.08), zero
+fractions, total feed flow (1.08), the VS fractions, the HSW COD and the organic loading
+rate (1.13). Biogas is 1.37× the plant's measured mean, inside the inherited 0.6–1.5 band.
+
+*Blocking.* **Plant B acidifies on 5 of 12 clean Level-0 seeds** (pH 4.6–5.0, 0–0.31
+methane) under the frozen configuration. It reproduces with declared geometry, the
+published initial state and no burn-in, so it is not the harness.
+`test_plant_b_survives_the_generator_swings` missed it because it tests one seed — and that
+seed is one of the seven that survive. Across the matrix: 87 of 114 cells sound, all 27
+that are not being Plant B. The likeliest cause is that `plant_B.yaml` documents the
+high-strength waste as "blended in a 65,000-gal tank" (~6 d of hold-up) and the generator
+feeds truck arrivals straight to the digester. **Not fixed** — it changes the frozen
+generator — but every run is now labelled sound or soured and the rate is pinned by a test
+that fails if it goes to zero as well as if it gets worse.
+
+*Three output rows fail their declared tolerance,* and they are one finding: VFA 0.054
+against 1.178 kg m⁻³, alkalinity 2.78 against 5.04 kg CaCO₃ m⁻³, FOS/TAC 0.021 against
+0.232. This is the realism gap the PR-#11 review recorded, now measured on a panel. Its
+consequence is worse than the rows: the overload flag fires on 0 % of days in five of the
+seven sound runs, so conditional missingness — and with it the Level-4
+`informative_missingness` row — has nothing to act on in most healthy Plant B cells.
+
+**Flagged to the lead (needs a decision; none of it was changed here)**
+
+1. **Plant B's stability** and the missing HSW/FOG buffer tank (above).
+2. **The VFA/FOS-TAC gap** and what closing it would take (`g1_anchor_report.md` §6). Two
+   of the five options actually change the answer: the acetate-uptake kinetics, and the
+   buffer tank.
+3. **Plant A never reaches a steady state.** Its SAO succession completes at ~800 d with
+   the acetoclastic methanogens washed out entirely, at which point all three ammonia
+   scenarios are inert (doubling `K_I_nh3` moves gas by 0.002 %). The burn-in is therefore
+   set to leave a mixed community at 200 d, and the succession is documented rather than
+   hidden. Either `k_m_sao` is too fast, or Plant A's ammonia envelope is too high, or
+   Plant A is defined as a digester in transition — the third is implemented.
+4. **There is one answer key per scenario, not one per tier**, so S2-02 (methane-analyser
+   flatline, a Tier-B instrument) has an unreachable conclusion at Tier A.
+5. **Level-8 rows now carry an underlying fault**, because the frozen schema requires a
+   truth label and forbids `none` above Level 1 — and the constraint turns out to improve
+   the rows.
+6. **Plant A's ammonia rows run at all three tiers** (§7 pins Tier A only for its Level 2–5
+   subset and is silent on these).
+7. **Budgets** are a three-band proposal (4,000/6,000/8,000 simulator evaluations by level);
+   the proposal fixes only the Appendix-B example.
+
+**Changed, with the reason stated**
+
+- `tests/test_scenario_schema.py` asserted `S2-03.seed is None`. The Appendix-B example now
+  carries seed 1023, because rule 4 forbids an implicit seed and the matrix refuses a
+  scenario without one. Nothing else about the example changed and the test still pins the
+  rest of it.
+- `configs/adm1/initial_state_rj2006.yaml` is new: the published steady state as data, so
+  `sim/` need not import the disposable probe code. A test asserts the two agree.
+
+**Next session should start on**
+
+1. The lead's answers to items 1–3 above. Item 1 in particular gates the factorial: until
+   Plant B is reliably stable, roughly a third of its cells are crashed digesters.
+2. The tool registry v1.0 (§6.2, weeks 10–13), appending to the same `calls.jsonl` and
+   enforcing the budgets the scenarios declare — and applying the Level-8 `tool_failure`
+   directive the harness hands it in memory.
+3. The Weinrich R3/R4 ports as the *fitted* models, which is what makes the Level-6 rows
+   scoreable; `fitted_extensions` is computed and written to truth but nothing consumes it
+   yet.
+
+**Resource cost**
+
+| Item | Wall-clock | Notes |
+|---|---|---|
+| Run harness, provenance, run view | ≈ 70 min | |
+| 18 scenario YAMLs | ≈ 40 min | |
+| Full matrix generation | 13 min | 114 cells, 44 integrations, 40 MB |
+| Diagnosing the Plant B souring | ≈ 35 min | seed sweeps, cause isolation |
+| Anchor comparison, report, tests | ≈ 60 min | |
+| Docs | ≈ 30 min | |
+| Test suite | ≈ 8 min per full run | 4 full runs |

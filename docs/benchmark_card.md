@@ -61,8 +61,40 @@ statement about what it cannot identify — from a realistic observation window.
 | Faults | Nothing | Fault type, layer, onset, magnitude, target |
 
 CLAUDE.md rule 1 is the hard boundary: **nothing under `workflows/` may import from or
-read `runs/<id>/truth/`**, and a test enforces it. Evaluation reads
-`runs/<id>/calls.jsonl` and the truth record; workflows read neither.
+read `runs/<id>/truth/`**, and two tests enforce it — a static scan of `workflows/`, and a
+set of tests that drive the workflow-facing loader `state.run_view.open_run` on a real
+generated run and ask it for truth by relative path, traversal, absolute path, symlink,
+listing and manifest field. Evaluation reads `runs/<id>/calls.jsonl` and the truth record;
+workflows read neither.
+
+A generated run is laid out as:
+
+```
+runs/<id>/                     <id> is an opaque hash of the cell, not its scenario name
+  manifest.json                complete provenance: scenario, seeds, fault layers, config
+                               hashes, git SHA -- REDACTED before a workflow sees it
+  calls.jsonl                  one line per tool call (rule 3); append-only, shared by the
+                               harness now and the tool registry later
+  truth/    parameters.json    true parameters per integration segment, truth N_I
+            influent.npz       true deliveries, true solids, the true influent series
+            fractionation.json true COD fractionation, unrecorded and mis-logged days
+            geometry.json      realised volume error, realised mixing, digester health
+            states.npz         the full state trajectory and the burn-in state
+            channels.npz       every observable channel and the condition flags
+            faults.json        the fault plan, the truth label, the answer key
+  observations/
+            sensors.json       the tier's record, with units, flags and report times
+            feed_log.csv       the operator's feed log (mis-logs applied)
+            feed_assays.csv    the assays the tier's mask permits
+            operator_notes.json  the operator's log, including any Level-8 false note
+```
+
+**The manifest is redacted, not truncated.** `manifest.json` is written complete, because
+reproducibility and evaluation need it; `state.run_view` returns only the projection that
+describes the *environment* — plant, tier, horizon, seasonal phase, config versions, git
+SHA. The scenario id, the seeds and the declared fault layers stay out of it: the first
+would leak the row of the ladder (proposal §10), the second would let a workflow regenerate
+the truth for itself, and the third *is* the uncertainty class §6.7 B scores.
 
 **Instrumentation tiers are masks on identical truth** (§6.4). Tier C contains Tier B
 contains Tier A — the schema validates the containment and the tests check it. Two runs at
@@ -111,6 +143,25 @@ was wrong and the data said so.
   stable. The error was invisible in steady-state tests with nominal feeds and only
   appeared once deliveries became stochastic; `tests/test_plausibility.py` now pins the
   operating envelope so it cannot recur silently.
+
+### 5.2 What the anchor has NOT yet resolved
+
+Two findings from gate G1 (2026-09-03, `docs/g1_anchor_report.md`) are open and are stated
+here because they bear on what the benchmark can currently be used for:
+
+- **Plant B acidifies on 5 of 12 seeds.** A clean Level-0 run on the factorial's reference
+  plant crashes to pH 4.6–5.0 within 180 d on five of twelve declared seeds, under the
+  frozen feed catalogue and influent generator. It reproduces without the run harness, so
+  it is a property of the configuration. The likeliest cause is that the plant config
+  documents the high-strength waste as "blended in a 65,000-gal tank" and the generator
+  feeds truck arrivals straight to the digester. Every generated run is now labelled sound
+  or soured; 87 of the 114 matrix cells are sound and all 27 that are not are Plant B.
+- **The simulated VFA and alkalinity are well below the plant's.** Median VFA 0.054 against
+  1.178 kg m⁻³ and alkalinity 2.78 against 5.04 kg CaCO₃ m⁻³, so FOS/TAC is 0.021 against
+  0.232. The consequence is that the overload flag — which drives conditional missingness,
+  and is the whole subject of the Level-4 `informative_missingness` row — fires on 0 % of
+  days in five of the seven sound runs. `docs/g1_anchor_report.md` §6 lists what closing
+  that would take and which options actually change the answer.
 
 ## 6. Scenario ladder (§6.3)
 
@@ -180,6 +231,19 @@ from the analysis plan are documented rather than absorbed.
 - **No human baseline.** There is no measurement of what an experienced AD modeller would
   conclude from the same window. Workflow-to-workflow comparison is the only comparison
   the benchmark supports.
+- **Plant B is not yet reliably stable** (§5.2). Until that is resolved, a Plant B cell may
+  be a crashed digester rather than the scenario it claims to be; the run's own
+  `truth/geometry.json` says which.
+- **Conditional missingness barely fires on a healthy digester** (§5.2), so the Level-4
+  `informative_missingness` row is close to a duplicate of Level 1 on most sound Plant B
+  cells.
+- **One answer key per scenario, not one per tier.** A fault whose instrument the tier does
+  not carry (the Level-2 methane-analyser flatline at Tier A) is unobservable there, while
+  its `correct_conclusion` still names the instrument. Flagged for the lead.
+- **Plant A is deliberately not at steady state.** Its acetoclastic and syntrophic
+  populations are mid-succession at the burn-in point, because a converged Plant A has no
+  acetoclasts left and all three ammonia scenarios become inert. Recorded in
+  `docs/decisions.md`.
 
 ## 9. Reproducibility
 
@@ -193,6 +257,12 @@ from the analysis plan are documented rather than absorbed.
   registry, not in workflows, so no workflow can grant itself more.
 - All numerical tolerances and solver settings live in `configs/`, versioned, so a run is
   reproducible from a tag.
+- A run directory is **self-contained and deterministically named**: the id is a hash of
+  (scenario, plant, tier, seed, replicate), so regenerating a cell overwrites its own
+  directory rather than accumulating copies, and `runs/index.jsonl` — at the root of the
+  store, never inside a run — maps ids back to cells for the evaluator.
+- The manifest records the **declared version and content hash of every configuration file**
+  the run read, plus the git commit, marked `-dirty` when the tree was not clean.
 - Final runs execute from a tagged release; Docker image and pinned dependencies at
   release (§13).
 

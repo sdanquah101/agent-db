@@ -47,6 +47,21 @@ is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
   `tests/test_generator.py` through `anchor/ingest_muscatine.py` (seasonal amplitudes
   are bounded by the monthly-mean statistic rather than equal to it); assumed values
   are marked `ASSUMED`. Loaded by `sim.influent.load_generator_config`.
+- `adm1/initial_state_rj2006.yaml` — the Rosen & Jeppsson (2006) Table-5 steady state as
+  data, so `sim/` can reach it without importing the disposable probe code in
+  `scripts/adm1_candidates/`. Loaded by `sim.adm1.load_initial_state`; only the run
+  harness's burn-in starts there, and no scenario does.
+- `runs/harness.yaml` — how the run harness stages a scenario (schema
+  `sim/run/harness.py::HarnessConfig`): burn-in length and output cadence, the scenario's
+  output cadence, the extension states the burn-in starts from (X_sao must be seeded or
+  the SAO extension is silently inert), and the health thresholds that label a generated
+  run sound or soured. The burn-in comment records what was **measured**: 200 d is a
+  converged steady state on Plants B and C and a deliberately mid-succession state on
+  Plant A, where a converged burn-in would make all three ammonia scenarios inert.
+- `faults/log_notes.yaml` — the operator log notes placed in **every** run (a handful of
+  true, diagnostically useless ones) plus the Level-8 note that asserts a false cause. If
+  only the adversarial run had notes, the file's existence would be the answer. All
+  DESIGN: no open dataset of operator notes exists. Loaded by `sim.run.notes`.
 - `faults/injection.yaml` — constants that shape a fault beyond the single magnitude a
   scenario row carries (schema `sim/faults/schema.py::FaultInjectionConfig`): for the
   Level-6 mixing variant, the bypass as a share of the stagnant fraction and the
