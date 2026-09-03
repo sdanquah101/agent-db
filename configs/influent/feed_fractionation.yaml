@@ -227,7 +227,17 @@ feeds:
     tkn_tolerance: 0.15          # DESIGN  -
     inert_N_I: 0.0015  # DESIGN  kmol N/kg COD; PR #7 Plant B override (see food_waste)
     s_ic: 0.01                   # DESIGN  kmol C/m3; assumed
-    s_cat: 0.03                  # DESIGN  kmol/m3; assumed
+    s_cat: 0.225                 # DESIGN  kmol/m3; CALIBRATED to the anchor's digester
+                                 # alkalinity (lead's ruling 3 of 2026-09-03). The Muscatine
+                                 # daily file measures alkalinity in the DIGESTER (median
+                                 # 5.04 kg CaCO3/m3), which fixes only the flow-weighted
+                                 # strong-cation excess of the feed blend, not its split
+                                 # between streams; the split is assumed. Most of it is put
+                                 # on this stream because caustic from clean-in-place is the
+                                 # usual source of alkalinity in food and beverage
+                                 # industrial waste, and because at 137 kg COD/m3 this is by
+                                 # far the most concentrated feed: 225 meq/L is ~5 g Na/L on
+                                 # a stream carrying 137 g COD/L. Was 0.03.
     s_an: 0.02                   # DESIGN  kmol/m3; assumed
     s_ca: 0.01                   # DESIGN  kmol/m3; assumed
   fog:
@@ -313,7 +323,12 @@ feeds:
     tkn_tolerance: 0.15          # DESIGN  -
     inert_N_I: 0.004285714285714286   # DESIGN  kmol N/kg COD; BSM2 N_I (0.06/14): sewage sludge is what ADM1's N contents were derived for (PR #7 Plant C, no override)
     s_ic: 0.04                   # DESIGN  kmol C/m3; BSM2 influent S_IC
-    s_cat: 0.04                  # DESIGN  kmol/m3; BSM2 influent S_cat
+    s_cat: 0.05                  # DESIGN  kmol/m3; CALIBRATED (lead's ruling 3 of
+                                 # 2026-09-03), from BSM2's 0.04. Net of s_an this is
+                                 # 30 meq/L, about 1,500 mg/L as CaCO3 in the sludge liquor
+                                 # - the upper end of what thickened municipal sludge with
+                                 # digester recycle carries, and the smaller share of the
+                                 # calibration; see high_strength_waste for the split.
     s_an: 0.02                   # DESIGN  kmol/m3; BSM2 influent S_an
     s_ca: 0.02                   # DESIGN  kmol/m3; assumed (~0.8 g Ca/L)
   thickened_was:
@@ -344,6 +359,6 @@ feeds:
     tkn_tolerance: 0.15          # DESIGN  -
     inert_N_I: 0.004285714285714286   # DESIGN  kmol N/kg COD; BSM2 N_I (see primary_sludge)
     s_ic: 0.04                   # DESIGN  kmol C/m3; BSM2
-    s_cat: 0.04                  # DESIGN  kmol/m3; BSM2
+    s_cat: 0.05                  # DESIGN  kmol/m3; CALIBRATED (see primary_sludge)
     s_an: 0.02                   # DESIGN  kmol/m3; BSM2
     s_ca: 0.02                   # DESIGN  kmol/m3; assumed
