@@ -7,6 +7,7 @@ rates and physico-chemistry are pure functions, and :func:`simulate` integrates 
 
 from sim.adm1.defaults import (
     load_extensions,
+    load_initial_state,
     load_matrix,
     load_parameters,
     load_plant,
@@ -56,6 +57,7 @@ __all__ = [
     "derived_quantities",
     "extended_state",
     "load_extensions",
+    "load_initial_state",
     "load_matrix",
     "load_parameters",
     "load_plant",
