@@ -88,6 +88,15 @@ On the full twenty-four-seed panel with both changes in place: **24 of 24 sound*
 pH 7.24–7.40, methane 0.70–0.73. The acceptance condition is met, and met with margin
 rather than scraped.
 
+**Stated plainly, because it matters for who gets the credit:** the calibrated feed with
+**no tank at all is already 12 of 12 sound**. The alkalinity calibration removes the
+souring on its own. So does the tank on its own, on the uncalibrated feed. Neither is
+redundant and neither should be credited with the other's work — the tank is a
+plant-contract correction justified by the plant's own description, and it happens also to
+be sufficient; the calibration is an anchor-driven correction, and it happens also to be
+sufficient. Together they leave the most margin (min pH 7.13 against 6.53 and 7.06), which
+is why both are kept.
+
 ### 3.1 The blend tank (ruling 1)
 
 `configs/plants/plant_B.yaml` had always described the high-strength waste as "trucked
@@ -125,6 +134,15 @@ liquor), and the remainder on the high-strength waste (0.03 → 0.225), on the g
 clean-in-place caustic is the usual source of alkalinity in food and beverage industrial
 waste and that this stream carries 137 kg COD m⁻³. **Inert-N was left alone**: S_cat alone
 reaches the anchor, and inert-N carries the deliberate truth/fitted mismatch of 2026-09-02.
+
+**One difference from the coordinator's own calibration sweep, flagged for checking.** That
+sweep varied `S_cat` *uniformly* across the Muscatine feeds and found +0.05 kmol m⁻³ hits
+alkalinity 5.024 and pH 7.29. This implementation applies the same **+0.05 flow-weighted**
+but splits it unevenly, for the physical reasons above. Plant B is identical either way —
+only the flow-weighted total reaches its digester — but **Plant C differs**, because it is
+fed the sludges alone: uniform would give it alkalinity 7.77, the split used here gives
+5.85, which is the more defensible figure for a sludge-only municipal digester. Plant C has
+no output anchor, so this is a judgement rather than a fit, and it is recorded as one.
 
 ## 4. The comparison
 
@@ -230,29 +248,42 @@ In the first pass this was masked: the flag fired on 63–100 % of days in the *
 and on 0–9 % of the sound ones, so the panel looked bimodal. With no soured runs left, the
 picture is unambiguous.
 
-## 6. What closing the VFA gap would take
+## 6. What closing the VFA gap would take — the list exists, and it rules out kinetics
 
-**The lead's ruling 3 reserves this list to the coordinator, and no kinetic parameter has
-been touched.** What follows is only what this session *measured* while doing the other two
-rulings, offered as input to that list and not as a substitute for it.
+**The list is `docs/vfa_gap.md` (branch `claude/vfa-gap-list`), written by the coordinator
+under the lead's ruling 3. It supersedes what this section previously speculated.** No
+kinetic parameter has been touched here, and on the list's evidence none should be.
 
-1. **The alkalinity lever is spent.** It is now calibrated to the anchor and passing, and
-   raising it further would push FOS/TAC *down*. It cannot contribute.
-2. **Loading is not the lever either.** The PR-#11 review measured Plant B reaching only
-   FOS/TAC 0.15 at 2.5× the declared feed, and the anchored loading rates currently pass —
+Its findings that bear on this report:
+
+1. **Kinetics cannot close the gap, and this is measured rather than argued.** No value of
+   `k_m_ac` works: ×0.40 gives VFA 0.183 kg m⁻³ at pH 6.95, and ×0.35 gives 10.08 at
+   pH 4.60. The model is **bistable**, and the anchor's 1.18 lies *between* the two
+   branches — there is no parameter value that lands on it. `k_hyd` at ×2 and ×4 changes
+   residual VFA not at all. An earlier draft of this section proposed a lower `k_m_ac` or
+   a higher `K_S_ac` as "the most direct lever"; that was wrong and is withdrawn.
+2. **The gap is a measurement-convention question**, now with the lead: what the plant's
+   titrimetric method reports as "VFA" and what a converged ADM1 carries as residual
+   volatile acids are not the same quantity.
+3. **The alkalinity lever is spent.** It is calibrated to the anchor and passing (§3.2);
+   raising it further pushes FOS/TAC *down*, not up.
+4. **Loading is not the lever either.** The PR-#11 review measured Plant B reaching only
+   FOS/TAC 0.15 at 2.5× the declared feed, and the anchored loading rates currently pass,
    so buying VFA with load would break a row that works.
-3. **That leaves the acetate kinetics**, which is what the coordinator's list is for. The
-   quantity to move is the residual acetate a converged digester carries: a lower `k_m_ac`
-   or a higher `K_S_ac` raises it at the same load without touching the feed. It is
-   consequential because the same constants are what the Level-5 parameter scenarios move,
-   so it must be a documented re-anchoring of the truth model rather than a nudge.
-4. **Or accept the gap and declare it.** The benchmark's claims are about attribution,
-   calibrated uncertainty and abstention, not about reproducing a plant's VFA
-   distribution. The consequence to state in the benchmark card would be that conditional
-   missingness is inert on a healthy digester and S4-02 does not test what §6.3 says it
-   tests.
 
-**The 0.40 overload threshold has not moved and is not proposed to move** (ruling 3).
+**The declared VFA tolerance stays at ratio 0.25–4.0 and is left to fail.** A declared
+bound is not widened to accommodate a known, reported gap; the failure is the report, and
+this section is the pointer to why it is not being fixed here.
+
+**FOS/TAC getting worse is expected and is not compensated for.** The calibration moved it
+from 0.021 to 0.013 because alkalinity is the denominator. That is correct behaviour: the
+denominator is now anchored, so the whole discrepancy sits in the numerator where it
+belongs instead of being split between two causes.
+
+**The 0.40 overload threshold has not moved and is not proposed to move** (ruling 3). Its
+consequence — conditional missingness firing on almost no day of a healthy digester, and
+S4-02 therefore sitting close to a duplicate of Level 1 — stands as recorded in §5 and in
+the benchmark card, for the lead to weigh against whatever the convention question settles.
 
 ## 7. Provenance
 

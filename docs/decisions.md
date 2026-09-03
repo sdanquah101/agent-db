@@ -2046,10 +2046,15 @@ correction held back:
 | original strong cations | 7/12 sound, min pH 4.50 | 12/12, min pH 6.53 |
 | calibrated strong cations | 12/12, min pH 7.06 | 12/12, min pH 7.13 |
 
-**Either change alone is sufficient**; both together give the most margin. The tank was the
-right diagnosis and it does work on its own. On the twenty-four-seed panel with both:
-**24 of 24 sound**, pH 7.24–7.40, methane 0.70–0.73. The acceptance condition is met with
-margin rather than scraped. The sound/soured labelling stays as instrumentation, as ruled.
+**Either change alone is sufficient**; both together give the most margin. Stated plainly,
+as the coordinator asked: **the calibrated feed with no tank at all is already 12 of 12
+sound**, so the alkalinity calibration removes the souring on its own — and so does the tank
+on its own, on the uncalibrated feed. Neither is credited with the other's work. The tank is
+a plant-contract correction justified by the plant's own description that also happens to be
+sufficient; the calibration is an anchor-driven correction that also happens to be
+sufficient. On the twenty-four-seed panel with both: **24 of 24 sound**, pH 7.24–7.40,
+methane 0.70–0.73, met with margin rather than scraped. The sound/soured labelling stays as
+instrumentation, as ruled.
 
 **Alternatives.** Buffer FOG as well (not chosen: the anchor names a tank only for HSW);
 model the tank as a fixed-outflow surge vessel (rejected: it can run dry or overflow, and
@@ -2161,11 +2166,28 @@ expose.
 
 **Consequence, reported not hidden.** FOS/TAC falls from 0.021 to 0.013 against the
 anchor's 0.232, because the denominator is now right and the whole discrepancy sits in the
-numerator where it belongs. The overload flag now fires on no day at all in most sound runs
-and on 3.3 % in the worst, so the Level-4 `informative_missingness` row is close to a
-duplicate of Level 1. **The 0.40 threshold has not moved.** The list of what closing the VFA
-gap would take is the coordinator's; `docs/g1_anchor_report.md` §6 records only what this
-session measured while doing rulings 1 and 2, and no kinetic parameter was touched.
+numerator where it belongs. The coordinator's sweep predicted exactly this and instructed
+that it be noted rather than compensated for; it is. The overload flag now fires on no day
+at all in most sound runs and on 3.3 % in the worst, so the Level-4 `informative_missingness`
+row is close to a duplicate of Level 1. **The 0.40 threshold has not moved.**
+
+**Addendum (same day): the gap list exists and rules out kinetics.** `docs/vfa_gap.md`
+(branch `claude/vfa-gap-list`) measured that **no value of `k_m_ac` closes the VFA gap** —
+×0.40 gives VFA 0.183 kg m⁻³ at pH 6.95, ×0.35 gives 10.08 at pH 4.60, the model is
+**bistable**, and the anchor's 1.18 lies *between* the branches; `k_hyd` at ×2 and ×4
+changes residual VFA not at all. The gap is a measurement-convention question and is with
+the lead. An earlier draft of `docs/g1_anchor_report.md` §6 proposed a lower `k_m_ac` or a
+higher `K_S_ac` as "the most direct lever"; that was speculation, it is now measured to be
+wrong, and it has been **withdrawn** from the report. No kinetic parameter was touched at
+any point, and the declared VFA tolerance stays at 0.25–4.0 and is left to fail.
+
+**On the split, flagged for the coordinator to check.** The coordinator's sweep varied
+`S_cat` uniformly and found +0.05 kmol m⁻³ hits the anchor. This implementation applies the
+same **+0.05 flow-weighted** with an uneven split (nothing on FOG, a little on the sludges,
+most on the industrial stream). Plant B is identical either way, since only the
+flow-weighted total reaches its digester; **Plant C is not**, because it is fed the sludges
+alone — uniform gives it alkalinity 7.77, this split 5.85, the more defensible figure for a
+sludge-only municipal digester. Plant C has no output anchor, so this is a judgement.
 
 ---
 

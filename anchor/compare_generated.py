@@ -286,7 +286,10 @@ TOLERANCES: tuple[Tolerance, ...] = (
         "residual VFA is the least identifiable output of a converged ADM1 - it is a small "
         "difference of large production and consumption terms - and the plant's titrimetric "
         "method over-reads true VFA. A factor of four either way is deliberately generous, "
-        "so a failure here would be unambiguous",
+        "so a failure here would be unambiguous. IT FAILS, and the bound is deliberately "
+        "NOT widened to accommodate that: see docs/vfa_gap.md, which measured that no value "
+        "of k_m_ac closes the gap (the model is bistable and the anchor lies between the "
+        "branches) and concluded it is a measurement-convention question",
     ),
     Tolerance(
         "fos_tac_median",
@@ -298,7 +301,10 @@ TOLERANCES: tuple[Tolerance, ...] = (
         "simulated digester sits at 0.01-0.07 against the plant's median 0.23. It is "
         "declared at the same width every other ratio gets, measured, and reported as a "
         "failure. Moving the bound to make it pass would be the one thing this module "
-        "exists to prevent",
+        "exists to prevent. It got WORSE (0.021 -> 0.013) when the feed alkalinity was "
+        "calibrated to the anchor, which is expected and correct rather than a regression: "
+        "alkalinity is the denominator, so the discrepancy now sits wholly in the numerator "
+        "(docs/vfa_gap.md)",
     ),
 )
 
