@@ -46,7 +46,12 @@ def test_example_scenario_loads_with_every_field_from_appendix_b():
     assert conclusion.abstain_on == ()
 
     assert scenario.budget == Budget(simulator_evals=4000, wall_clock_min=90, assay_units=2)
-    assert scenario.seed is None
+    # Appendix B carries no `seed`, and this test asserted its absence until the run harness
+    # landed (2026-09-03). It is there now, because CLAUDE.md rule 4 forbids an implicit seed
+    # and `sim.run.matrix` refuses a scenario without one: every library scenario carries a
+    # seed of 1000 + 10 x level + index, so this row's is 1023. Nothing else about the
+    # appendix's example changed, which is what the assertions above are for.
+    assert scenario.seed == 1023
 
 
 def test_example_scenario_round_trips_through_yaml(tmp_path: Path):

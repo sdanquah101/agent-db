@@ -75,5 +75,39 @@ The influent generator (`sim/influent/`, `configs/influent/`):
   non-sludge entries are shown inconsistent under BSM2's; nothing under `sim/influent`
   or `sim/plants` writes files or references `truth/`.
 
+The run harness and the scenario library (`sim/run/`, `state/`, `scenarios/`):
+
+- `test_run_harness.py` — the declared `runs/<id>/` layout; no truth file, value or
+  vocabulary in `observations/`; an opaque, deterministic run id; the burn-in measured to
+  have converged on Plants B and C and measured **not** to have on Plant A, where
+  lengthening it would make all three ammonia scenarios inert; tiers as masks on
+  bit-identical truth; the Level-4 biomass multiplier and the Level-5 parameter multiplier
+  read back off the state vector and the segment parameters and compared with the numbers
+  in the YAML; the two-zone truth reactor; operator notes in every run and the false one in
+  only the adversarial run; the Level-8 tool-failure directive absent from the
+  observations; one seed per stream with the tier deliberately absent from the derivation;
+  every simulator call logged, a second writer continuing the sequence, a raising call
+  logged before the exception escapes; and the manifest partitioned exactly into public
+  and redacted fields.
+- `test_scenarios_library.py` — the 19-row ladder against the §6.3 table (rows per level
+  as literals from the proposal), unique explicit seeds, every magnitude inside the range
+  `sim/faults/schema.py` publishes, every fault type in the closed enum exercised
+  somewhere, the answer keys consistent with the truth labels, and the §7 matrix shape:
+  96 factorial cells on B and C, 18 on Plant A, the ammonia rows nowhere else, 44 distinct
+  truth integrations.
+- `test_g1_anchor.py` — gate G1. Recomputes `docs/g1_anchor_report.md`'s generated block
+  and compares it verbatim; asserts every influent statistic is inside a tolerance
+  **declared before the comparison**, that the inherited bounds really are the ones the
+  other test files apply (read out of those files), and that a bound actually bites. It
+  then pins the two things that are *wrong*: the VFA and FOS/TAC rows fail, and the size
+  of the failure is asserted in both directions so closing the gap forces the record to be
+  updated; and Plant B sours on a material fraction of the twelve declared seeds, asserted
+  to be neither zero nor everything.
+
+`test_truth_isolation.py` (above) also drives the workflow-facing loader
+`state.run_view.open_run` on a real generated run, asking it for hidden truth by relative
+path, traversal, absolute path, symlink, listing and manifest field — after first asserting
+the truth *is* on disk, so the refusals cannot pass vacuously.
+
 `conftest.py` provides the default configuration, the Rosen & Jeppsson (2006) initial
 state and the probe-definition module as fixtures.
