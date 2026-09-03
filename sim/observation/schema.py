@@ -169,12 +169,27 @@ class MissingnessPolicy(_Frozen):
     a scheduled sample is simply lost belongs to the tier (a constrained Tier-A plant
     loses more), while how much worse it gets under stress belongs to the kind of
     instrument (an online probe in a foaming digester fails far more often than a grab
-    sample sent to a laboratory). Every value is ASSUMED: the anchor's SCADA file is
-    pre-cleaned, so no dropout statistics exist to fit.
+    sample sent to a laboratory).
+
+    **One rate is measured, the rest are assumed.** The SCADA file is pre-cleaned at the
+    *cell* level, which is why this was first recorded as unanchorable; but whole *rows*
+    are missing from it, and those are dropouts
+    (:func:`anchor.ingest_muscatine.scada_row_gap_statistics`). That measurement anchors
+    the **Tier C online** rate and nothing else — it is what a SCADA-equipped plant's
+    online instruments lose — so it is carried in ``base_rate_overrides`` while
+    ``base_rate_by_tier`` stays the structure and stays ASSUMED (lead's ruling of
+    2026-09-03).
     """
 
     base_rate_by_tier: dict[Literal["A", "B", "C"], _Frac] = Field(
         description="Probability that a scheduled sample is lost, by tier, -"
+    )
+    base_rate_overrides: dict[Literal["A", "B", "C"], dict[Literal["online", "lab"], _Frac]] = (
+        Field(
+            default_factory=dict,
+            description="Base rate for one instrument kind at one tier, overriding "
+            "`base_rate_by_tier`, - (used where a rate is measured rather than assumed)",
+        )
     )
     stress_multipliers_by_kind: dict[Literal["online", "lab"], dict[ConditionFlag, _Pos]] = Field(
         description="Multiplier on the base rate while each flag is raised, by instrument kind, -"
@@ -190,9 +205,14 @@ class MissingnessPolicy(_Frozen):
         return self
 
     def model_for(self, tier: str, kind: str) -> MissingnessModel:
-        """The resolved missingness model of one sensor kind at one tier."""
+        """The resolved missingness model of one sensor kind at one tier.
+
+        An entry in :attr:`base_rate_overrides` for this ``(tier, kind)`` wins over the
+        tier's rate; everything else falls back to :attr:`base_rate_by_tier`.
+        """
+        override = self.base_rate_overrides.get(tier, {}).get(kind)  # type: ignore[arg-type]
         return MissingnessModel(
-            base_rate=self.base_rate_by_tier[tier],  # type: ignore[index]
+            base_rate=self.base_rate_by_tier[tier] if override is None else override,  # type: ignore[index]
             stress_multipliers=dict(self.stress_multipliers_by_kind[kind]),  # type: ignore[index]
         )
 

@@ -7,7 +7,15 @@ What is tested and why it cannot pass vacuously:
   adds channels, and removing a sensor from B is shown to fail;
 * the two anchored sensor values are re-derived from the Muscatine 1-minute SCADA file
   (temperature noise, gas-flow noise cv, both flatline rates), so the specs cannot drift
-  from the data they claim to summarise;
+  from the data they claim to summarise — and the **noise** half of that is re-derived on
+  a fresh clone from the committed 60-day extract, so the anchor is not a promise that
+  only holds for whoever fetched the 88.8 MB parent. What the extract cannot carry (the
+  rare-event flatline occupancies, the dropout rate) is asserted to be recorded in
+  `anchor/derived/muscatine-scada-sensor-statistics.json` and checked against the parent
+  when it is present;
+* the one **measured** missing rate — Tier C online, from the record's row dropouts — is
+  the value the config declares and reaches the resolved sensor model, while every other
+  tier and kind keeps its assumed rate;
 * the channel arithmetic is checked against hand calculations written down as **literals**
   rather than restated from the implementation — alkalinity as CaCO3, VFA as acetic acid
   (1 kg COD/m3 of acetate is 0.93828 kg/m3), the extension components' contribution to COD
@@ -31,11 +39,21 @@ What is tested and why it cannot pass vacuously:
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from anchor.ingest_muscatine import DAILY_FILE, SCADA_FILE, load_daily, scada_noise_statistics
+from anchor.ingest_muscatine import (
+    DAILY_FILE,
+    SCADA_FILE,
+    SCADA_WINDOW_FILE,
+    load_daily,
+    scada_noise_statistics,
+    scada_row_gap_statistics,
+)
 from sim.observation import (
     CHANNEL_UNITS,
     ObservationConfig,
@@ -56,6 +74,12 @@ from sim.observation.schema import (
 )
 
 DEGF_TO_K = 5.0 / 9.0
+SCADA_STATISTICS_FILE = (
+    Path(__file__).resolve().parent.parent
+    / "anchor"
+    / "derived"
+    / "muscatine-scada-sensor-statistics.json"
+)
 
 
 @pytest.fixture(scope="module")
@@ -65,7 +89,11 @@ def config() -> ObservationConfig:
 
 def _without_missingness(config: ObservationConfig) -> ObservationConfig:
     """The same configuration with no samples lost — missingness is now a tier policy."""
-    quiet = config.missingness.model_copy(update={"base_rate_by_tier": dict.fromkeys("ABC", 0.0)})
+    quiet = config.missingness.model_copy(
+        # the measured Tier C online override is part of the same policy and would
+        # otherwise keep dropping ~0.1 % of that tier's online samples
+        update={"base_rate_by_tier": dict.fromkeys("ABC", 0.0), "base_rate_overrides": {}}
+    )
     return config.model_copy(update={"missingness": quiet})
 
 
@@ -177,12 +205,17 @@ def test_missingness_and_turnaround_are_tier_properties(config):
     assert lab == {"overload": 1.5, "foaming": 1.5}
     for flag in ("overload", "foaming"):
         assert online[flag] > lab[flag], flag
-    # resolved per sensor: the same probe is described differently at each tier
+    # resolved per sensor: the same probe is described differently at each tier. Exactly
+    # one cell departs from the tier rate - Tier C online, where the rate is measured
+    # rather than assumed (lead's ruling 2026-09-03) - and the multipliers never do.
+    exceptions = []
     for tier in "ABC":
         for kind in ("online", "lab"):
             model = policy.model_for(tier, kind)
-            assert model.base_rate == policy.base_rate_by_tier[tier]
+            if model.base_rate != policy.base_rate_by_tier[tier]:
+                exceptions.append((tier, kind))
             assert model.stress_multipliers == policy.stress_multipliers_by_kind[kind]
+    assert exceptions == [("C", "online")]
     assert policy.model_for("A", "online").rate(frozenset({"overload"})) == pytest.approx(0.32)
 
 
@@ -196,16 +229,25 @@ def test_the_tier_sets_the_missing_rate_the_lag_and_the_recalibration_cadence(co
     """
     channels = _flat_channels(n_days=6000)
     lost = {}
+    lost_lab = {}
     for tier in "ABC":
         record = observe(channels, config, tier, seed=5)
         lost[tier] = int(record["ph"].missing.sum()) + int(record["gas_flow"].missing.sum())
+        if tier != "A":
+            lost_lab[tier] = int(record["alkalinity"].missing.sum()) + int(
+                record["cod_total"].missing.sum()
+            )
         # the laboratory turnaround is the tier's, and online instruments report at once
         assert np.all(record["ph"].report_t == record["ph"].sample_t)
         if tier != "A":
             weekly = record["alkalinity"]
             assert np.all(weekly.report_t - weekly.sample_t == config.tiers[tier].lab_turnaround_d)
     assert lost["A"] > lost["B"] > lost["C"] > 0
-    assert lost["A"] / lost["C"] == pytest.approx(4.0, rel=0.25)  # 8 % against 2 %
+    # Tier C's online rate is the MEASURED SCADA dropout, 0.00097 against the assumed
+    # 0.08, so the online gap between the tiers is now an order of magnitude, not 4x
+    assert lost["A"] / lost["C"] > 20.0
+    # and the assumed tier structure is still what the laboratory assays see: 4 % vs 2 %
+    assert lost_lab["B"] / lost_lab["C"] == pytest.approx(2.0, rel=0.35)
 
 
 def test_the_recalibration_cadence_is_the_tier_s(config):
@@ -241,6 +283,107 @@ def test_the_recalibration_cadence_is_the_tier_s(config):
     np.testing.assert_allclose(offsets[30.0][:30], offsets[90.0][:30])
 
 
+def test_the_committed_window_rederives_the_anchored_noise_offline(config):
+    """The anchored NOISE comes out of a committed file, so a fresh clone can check it.
+
+    The 88.8 MB SCADA parent is git-ignored, which left
+    ``test_anchored_sensor_values_are_rederived_from_the_scada_file`` skipped on every
+    machine that had not fetched it - an anchor nobody verifies. The 60-day extract
+    (days 240-300, chosen because it reproduces both noise values inside the tolerances
+    that test already uses) is committed under ODC-By with its attribution, so the same
+    two assertions run everywhere.
+    """
+    temp = scada_noise_statistics("D1_TEMPERATURE", path=SCADA_WINDOW_FILE)
+    gas = scada_noise_statistics("Biogas", path=SCADA_WINDOW_FILE)
+    assert temp.n == gas.n == 86_400  # 60 days at one minute, nothing dropped in this window
+    assert config.sensors["temperature"].noise.sd_abs == pytest.approx(
+        temp.noise_sd * DEGF_TO_K, abs=0.005
+    )
+    assert config.sensors["gas_flow"].noise.cv == pytest.approx(gas.noise_cv, abs=0.003)
+    # and it agrees with the full record it was cut from, which is the point of choosing
+    # this window rather than a convenient one
+    full = json.loads(SCADA_STATISTICS_FILE.read_text(encoding="utf-8"))["full_record"]
+    assert temp.noise_sd == pytest.approx(full["channels"]["D1_TEMPERATURE"]["noise_sd"], rel=0.01)
+    assert gas.noise_cv == pytest.approx(full["channels"]["Biogas"]["noise_cv"], rel=0.10)
+    # what the window cannot carry is said out loud rather than quietly asserted away:
+    # a 60-day window holds no stuck run of 10+ minutes at all
+    assert temp.flatline_fraction == 0.0 and gas.flatline_fraction == 0.0
+    assert full["channels"]["D1_TEMPERATURE"]["flatline_fraction"] > 0.0
+
+
+def test_the_config_matches_the_recorded_full_record_statistics(config):
+    """Every anchored spec equals the committed derivation of the full SCADA year."""
+    recorded = json.loads(SCADA_STATISTICS_FILE.read_text(encoding="utf-8"))
+    channels = recorded["full_record"]["channels"]
+    temp, gas = channels["D1_TEMPERATURE"], channels["Biogas"]
+    assert recorded["source"]["file"] == "SCADA-raw.csv" and len(recorded["source"]["sha256"]) == 64
+    assert config.sensors["temperature"].noise.sd_abs == pytest.approx(
+        temp["noise_sd"] * DEGF_TO_K, abs=0.005
+    )
+    assert config.sensors["gas_flow"].noise.cv == pytest.approx(gas["noise_cv"], abs=0.003)
+    for name, stats in (("temperature", temp), ("gas_flow", gas)):
+        spec = config.sensors[name]
+        assert spec.flatline is not None
+        declared = spec.flatline.hazard_per_d * spec.flatline.mean_duration_d
+        assert declared == pytest.approx(stats["flatline_fraction"], rel=0.25), name
+    # the temperature saturation range is the data dictionary's, and its floor is reached
+    saturation = config.sensors["temperature"].saturation
+    assert saturation is not None
+    assert saturation.low == pytest.approx((85.0 - 32.0) * DEGF_TO_K + 273.15, abs=1e-2)
+    assert saturation.high == pytest.approx((150.0 - 32.0) * DEGF_TO_K + 273.15, abs=1e-2)
+
+
+def test_tier_c_online_missingness_is_the_measured_dropout_and_nothing_else_is(config):
+    """One rate is measured; the tier structure and every other rate stay assumed."""
+    recorded = json.loads(SCADA_STATISTICS_FILE.read_text(encoding="utf-8"))
+    gaps = recorded["full_record"]["row_gaps"]
+    assert gaps["n_gaps"] == 19 and gaps["span_d"] == pytest.approx(347.8, abs=0.1)
+    policy = config.missingness
+    measured = policy.model_for("C", "online").base_rate
+    assert measured == pytest.approx(gaps["missing_minute_fraction"], abs=5e-5)
+    # every other (tier, kind) still resolves to the assumed tier rate
+    assert policy.model_for("C", "lab").base_rate == policy.base_rate_by_tier["C"]
+    for tier in ("A", "B"):
+        for kind in ("online", "lab"):
+            assert policy.model_for(tier, kind).base_rate == policy.base_rate_by_tier[tier]
+    assert measured < 0.05 * policy.base_rate_by_tier["C"]  # it is far below the assumption
+    # and it reaches the record: a Tier C online sensor loses almost nothing, while a
+    # Tier C laboratory assay keeps losing at the assumed 2 %
+    channels = _flat_channels(n_days=4_000)
+    record = observe(channels, config, "C", seed=0)
+    assert record["temperature"].missing.mean() < 0.01
+    assert record["alkalinity"].missing.mean() > 5.0 * record["temperature"].missing.mean()
+
+
+def test_a_base_rate_override_must_name_a_known_tier_and_kind(config):
+    """The override is a narrow exception, not a second structure."""
+    policy = config.missingness
+    with pytest.raises(ValidationError):
+        policy.model_copy(update={"base_rate_overrides": {"D": {"online": 0.001}}}).model_validate(
+            policy.model_dump() | {"base_rate_overrides": {"D": {"online": 0.001}}}
+        )
+    with pytest.raises(ValidationError):
+        MissingnessPolicy.model_validate(
+            policy.model_dump() | {"base_rate_overrides": {"C": {"handwritten": 0.001}}}
+        )
+    # with no override at all the policy still resolves for every tier and kind
+    plain = MissingnessPolicy.model_validate(policy.model_dump() | {"base_rate_overrides": {}})
+    assert plain.model_for("C", "online").base_rate == plain.base_rate_by_tier["C"]
+
+
+@pytest.mark.skipif(not SCADA_FILE.exists(), reason="Muscatine SCADA file not fetched")
+def test_the_recorded_statistics_are_the_full_files_own(config):
+    """When the parent is present, the committed JSON is exactly what it yields."""
+    recorded = json.loads(SCADA_STATISTICS_FILE.read_text(encoding="utf-8"))
+    for column, values in recorded["full_record"]["channels"].items():
+        derived = scada_noise_statistics(column)
+        for field, value in values.items():
+            assert getattr(derived, field) == pytest.approx(value, rel=1e-9), (column, field)
+    gaps = scada_row_gap_statistics()
+    for field, value in recorded["full_record"]["row_gaps"].items():
+        assert getattr(gaps, field) == pytest.approx(value, rel=1e-9), field
+
+
 @pytest.mark.skipif(not SCADA_FILE.exists(), reason="Muscatine SCADA file not fetched")
 def test_anchored_sensor_values_are_rederived_from_the_scada_file(config):
     """The two ANCHORED specs come out of the 1-minute file (the rest are marked ASSUMED)."""
@@ -270,8 +413,14 @@ def test_anchored_sensor_values_are_rederived_from_the_scada_file(config):
         )
         realised = held / (5 * channels.t.size)
         assert realised == pytest.approx(declared, rel=0.30), (name, realised, declared)
-    # and the file really is pre-cleaned, which is why missingness is ASSUMED
+    # the file's CELLS really are pre-cleaned - but its ROWS are not, and those dropouts
+    # are what anchors the Tier C online missing rate (lead's ruling 2026-09-03)
     assert temp.missing_fraction == 0.0 and gas.missing_fraction == 0.0
+    gaps = scada_row_gap_statistics()
+    assert gaps.n_gaps == 19 and 0.0009 < gaps.missing_minute_fraction < 0.0011
+    assert config.missingness.model_for("C", "online").base_rate == pytest.approx(
+        gaps.missing_minute_fraction, abs=5e-5
+    )
 
 
 # ------------------------------------------------------------------ channels
