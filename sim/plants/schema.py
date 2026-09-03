@@ -190,6 +190,64 @@ class Mixing(_Frozen):
     note: str = ""
 
 
+class Equalisation(_Frozen):
+    """A declared, well-mixed buffer between the trucked deliveries and the digester.
+
+    Trucked feed does not go straight into a digester: it is discharged into a receiving or
+    blend tank and drawn from there. Muscatine's own plant description says so — the
+    high-strength waste is "blended in a 65,000-gal tank" (``configs/plants/plant_B.yaml``) —
+    and the omission of that tank was what made a clean Level-0 run on Plant B acidify on
+    5 of 12 seeds: a run of large arrivals reached the biomass as an acid pulse rather than
+    as a week of slightly heavier feeding (gate G1, 2026-09-03; the lead's ruling 1).
+
+    It is part of the **declared contract**, not hidden truth: a workflow is told the tank
+    exists, which feeds pass through it and how big it is, exactly as it is told the
+    digester's volume. What stays hidden is the same as ever — the true composition of what
+    was delivered into it.
+
+    The model is one continuously stirred buffer per plant, holding the feeds named in
+    ``feeds``: inflow is the day's deliveries, outflow is ``V / tau`` with ``tau`` the
+    hold-up implied by the tank volume and the long-run buffered flow. Mass is conserved
+    exactly and the tank cannot run dry or overflow (:mod:`sim.plants.equalisation`).
+    """
+
+    volume_m3: _Pos = Field(
+        description="Working volume of the buffer serving the modelled unit, m3"
+    )
+    feeds: tuple[str, ...] = Field(
+        min_length=1, description="Feed ids that pass through the buffer; the rest are direct"
+    )
+    source: str = Field(description="Where the volume comes from, and how it was apportioned")
+    note: str = ""
+
+
+class Adaptation(_Frozen):
+    """Truth-model constants this plant's community has adapted to (lead's ruling 2, 2026-09-03).
+
+    ADM1's kinetic defaults describe a mesophilic sewage-sludge community. A digester that
+    has run for years at high ammonia does not have that community: acetoclastic
+    methanogens acclimate, and their free-ammonia inhibition constant rises by an order of
+    magnitude. Treating that as a **plant property** rather than as a fault is what lets
+    Plant A hold a genuine steady state with both acetoclastic and syntrophic pathways
+    present — the state the Level-5/6/7 ammonia rows are supposed to start from.
+
+    Before this existed, Plant A at the ADM1 default washed its acetoclasts out entirely
+    within ~800 d, and the harness had to stop the burn-in early to keep a mixed community.
+    That workaround is gone (gate G1, 2026-09-03).
+
+    Adaptation is **declared**, not hidden: it is a property of the plant a workflow is
+    told about, like its temperature. What stays hidden is the run's realised parameters.
+    """
+
+    K_I_nh3: _Pos | None = Field(
+        default=None,
+        description="Adapted free-ammonia inhibition constant of the acetoclastic "
+        "methanogens, kmol N/m3. None keeps the ADM1 default.",
+    )
+    source: str = Field(default="", description="Evidence for the adapted value")
+    note: str = ""
+
+
 class FeedStream(_Frozen):
     """One entry of a plant's feed catalogue (identity and delivery pattern only).
 
@@ -299,6 +357,14 @@ class PlantConfig(_Frozen):
     temperature: Temperature
     hydraulics: Hydraulics
     mixing: Mixing
+    adaptation: Adaptation | None = Field(
+        default=None,
+        description="Truth-model constants this plant's community has adapted to, if any",
+    )
+    equalisation: Equalisation | None = Field(
+        default=None,
+        description="Declared blend/receiving tank the trucked feeds pass through, if any",
+    )
     feeds: tuple[FeedStream, ...]
     truth_model: TruthModel
     scenario_subset: ScenarioSubset
@@ -316,6 +382,15 @@ class PlantConfig(_Frozen):
         names = [f.name for f in self.feeds]
         if len(set(names)) != len(names):
             raise ValueError("feed names must be unique")
+        if self.equalisation is not None:
+            unknown = set(self.equalisation.feeds) - set(names)
+            if unknown:
+                raise ValueError(
+                    f"equalisation buffers feeds {sorted(unknown)}, which this plant does "
+                    f"not declare; its feeds are {sorted(names)}"
+                )
+            if len(set(self.equalisation.feeds)) != len(self.equalisation.feeds):
+                raise ValueError("equalisation.feeds must be unique")
         h = self.hydraulics
         implied = self.geometry.V_liq_declared / h.feed_flow_m3_d.median
         mismatch = abs(implied - h.hrt_d.median) / h.hrt_d.median

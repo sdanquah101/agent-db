@@ -21,7 +21,13 @@ import numpy as np
 import yaml
 
 from sim.adm1.schema import PlantGeometry
-from sim.plants.schema import AmmoniaEnvelope, Anchoring, PlantConfig
+from sim.plants.schema import (
+    Adaptation,
+    AmmoniaEnvelope,
+    Anchoring,
+    Equalisation,
+    PlantConfig,
+)
 
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs" / "plants"
 PLANT_A_STATISTICS = CONFIG_DIR.parent / "plant_a_statistics.yaml"
@@ -32,8 +38,10 @@ __all__ = [
     "KG_N_PER_KMOL",
     "PLANT_A_STATISTICS",
     "PLANT_IDS",
+    "Adaptation",
     "AmmoniaEnvelope",
     "Anchoring",
+    "Equalisation",
     "HiddenGeometry",
     "PlantConfig",
     "declared_geometry",

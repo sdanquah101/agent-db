@@ -43,6 +43,27 @@ hydraulics:
 mixing:
   model: cstr
   note: "Ideal CSTR in the plant contract; imperfect mixing is a fault-injection truth variant (answer 6)."
+# DECLARED blend tank (lead's ruling 1, 2026-09-03). The plant's own description says the
+# high-strength waste is "blended in a 65,000-gal tank" before it is fed; the benchmark
+# recorded that in the feed note below and did not simulate it, so trucked arrivals reached
+# the biomass as pulses. It is part of the declared contract, visible to workflows like the
+# rest of this file: what stays hidden is the true composition of what was delivered, not
+# the existence of the tank.
+#
+# 65,000 gal = 246.05 m3 for the plant; the benchmark models one of the two digesters and
+# gives it half the feed (geometry.units_at_plant), so the modelled unit's share is
+# 123.02 m3. At the median buffered flow that is about 4-5 d of hold-up.
+#
+# FOG is NOT buffered here. It is trucked too, but the plant description names a blend tank
+# only for the high-strength waste, and this is the reading closest to the evidence.
+# Buffering FOG as well is a one-line change if the lead wants the wider reading; the
+# stress margin measured with and without it is in docs/g1_anchor_report.md.
+equalisation:
+  volume_m3: 123.02        # DESIGN  m3; muscatine_paper: 65,000 gal = 246.05 m3 for the
+                           # plant, halved for the modelled unit
+  feeds: [high_strength_waste]
+  source: "muscatine_paper: HSW 'trucked deliveries blended in a 65,000-gal tank'; halved for the modelled unit (geometry.units_at_plant = 2)"
+  note: "Well-mixed buffer; outflow proportional to level, so it cannot run dry or overflow and passes what it receives in steady state (sim/plants/equalisation.py)."
 feeds:
   - name: primary_sludge
     kind: primary_sludge

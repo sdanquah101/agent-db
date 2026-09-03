@@ -91,6 +91,7 @@ from sim.faults import (
     truth_mixing,
 )
 from sim.influent import (
+    FeedFractionationCatalogue,
     GeneratedInfluent,
     constant_influent,
     generate_influent,
@@ -98,6 +99,7 @@ from sim.influent import (
     load_generator_config,
     truth_parameters,
 )
+from sim.influent.mapping import feed_concentrations
 from sim.observation import (
     ObservationRecord,
     TruthChannels,
@@ -105,7 +107,6 @@ from sim.observation import (
     channel_series,
     channels_from_two_zone,
     condition_flags,
-    influent_ash_concentration,
     influent_inert_cod_equivalent,
     load_observation_config,
     observe,
@@ -116,6 +117,12 @@ from sim.plants import (
     load_plant_config,
     sample_hidden_geometry,
     true_geometry,
+)
+from sim.plants.equalisation import (
+    BufferedInfluent,
+    apply_equalisation,
+    buffer_series,
+    feed_contribution,
 )
 from sim.plants.mixing import (
     MixingStructure,
@@ -146,11 +153,13 @@ __all__ = [
     "HealthThresholds",
     "RunArtifacts",
     "RunTruth",
+    "apply_adaptation",
     "assess_health",
     "generate_cells",
     "generate_run",
     "load_harness_config",
     "simulate_truth",
+    "split_for_equalisation",
 ]
 
 HARNESS_CONFIG = Path(__file__).resolve().parents[2] / "configs" / "runs" / "harness.yaml"
@@ -187,6 +196,10 @@ class HarnessConfig(BaseModel):
     output_interval_d: float = Field(gt=0.0, description="Scenario output spacing, d")
     initial_extension_states: dict[str, float] = Field(
         description="Extension states at the start of the burn-in, in their own units"
+    )
+    influent_extension_states: dict[str, float] = Field(
+        default_factory=dict,
+        description="Extension components carried by the feed, beyond the catalogue's S_ca",
     )
     extension_influent: str = Field(description="How the per-day S_ca series becomes a constant")
 
@@ -392,26 +405,151 @@ def _compile(
 # ------------------------------------------------------------------ generation
 
 
-def _daily_ash(catalogue: object, truth: GeneratedInfluent, feed_ids: Sequence[str]) -> np.ndarray:
-    """Feed ash per influent sample, kg/m3 of wet feed.
+def _ash_load(
+    catalogue: FeedFractionationCatalogue, truth: GeneratedInfluent, feed_ids: Sequence[str]
+) -> dict[str, np.ndarray]:
+    """Ash delivered by each feed on each day, kg/d.
 
-    Computed day by day rather than from the mean recipe, because the whole point of the
-    Level-3 moisture fault is that the solids of a feed drift: an ash series taken from the
-    mean would hold the fault out of the solids channels it is supposed to move.
+    Ash is ``mass x TS x (1 - VS/TS)``, per feed and per day rather than from the mean
+    recipe, because the whole point of the Level-3 moisture fault is that a feed's solids
+    drift: an ash series taken from the mean would hold the fault out of the solids
+    channels it is supposed to move.
     """
     feeds = truth.truth.feeds
-    n = truth.truth.n_days
-    out = np.zeros(n)
+    return {
+        fid: feeds[fid].delivered_kg * feeds[fid].ts * (1.0 - catalogue.feeds[fid].vs_of_ts)
+        for fid in feed_ids
+    }
+
+
+def _ash_concentration(ash_load: Mapping[str, np.ndarray], q: np.ndarray) -> np.ndarray:
+    """Blend an ash load into a concentration, kg/m3 of the wet feed reaching the digester.
+
+    A day with no feed has no defined feed ash, so the previous day's value is held rather
+    than a zero being invented.
+    """
+    total = sum(ash_load.values())
+    out = np.zeros_like(q)
     last = 0.0
-    for t in range(n):
-        rates = {fid: float(feeds[fid].delivered_kg[t]) for fid in feed_ids}
-        if sum(rates.values()) <= 0.0:
-            out[t] = last  # nothing fed today: the feed's ash is undefined, not zero
-            continue
-        overrides = {fid: float(feeds[fid].ts[t]) for fid in feed_ids}
-        last = influent_ash_concentration(catalogue, rates, overrides)
+    for t in range(q.size):
+        if q[t] > 0.0:
+            last = float(total[t] / q[t])
         out[t] = last
     return out
+
+
+def apply_adaptation(params: ADM1Parameters, plant: PlantConfig) -> ADM1Parameters:
+    """Apply the plant's declared community adaptation to the truth parameters.
+
+    A plant whose contract declares no adaptation keeps the ADM1 defaults untouched, which
+    is Plants B and C.
+
+    Raises:
+        ValueError: If the contract names an adapted constant this function does not know
+            how to apply — better than silently ignoring it.
+    """
+    block = plant.adaptation
+    if block is None or block.K_I_nh3 is None:
+        return params
+    kinetics = params.kinetics.model_copy(update={"K_I_nh3": float(block.K_I_nh3)})
+    return params.model_copy(update={"kinetics": kinetics})
+
+
+def split_for_equalisation(
+    plant: PlantConfig,
+    catalogue: FeedFractionationCatalogue,
+    generated: GeneratedInfluent,
+    plan: FaultPlan,
+    feed_ids: Sequence[str],
+) -> tuple[np.ndarray, np.ndarray]:
+    """The flow and load passing through the declared buffer, ``(q, load)``.
+
+    One side of the split is reconstructed from the catalogue and this run's true
+    fractionation and solids; the other comes free as ``total - reconstructed``, which is
+    exact whatever composition the feeds on that side happen to have. So the choice of
+    which side to reconstruct is a **correctness** question, not a style one: it must be
+    the side no composition-altering fault touches.
+
+    A mislabelled batch is the case in point. On Plant B the buffer holds the
+    high-strength waste and the mislabelling targets the FOG, so the buffered side is the
+    clean one; if a scenario ever targeted the buffered feed instead, the direct side
+    would be, and this picks whichever applies. If a fault touched both sides there would
+    be no exact reconstruction and this raises rather than quietly returning something
+    close.
+
+    Raises:
+        ValueError: If composition-altering faults touch both sides of the split.
+    """
+    buffered = tuple(f for f in feed_ids if f in set(plant.equalisation.feeds))
+    direct = tuple(f for f in feed_ids if f not in set(plant.equalisation.feeds))
+    altered = {m.feed_id for m in plan.influent.mislabelled}
+
+    if not altered & set(buffered):
+        reconstruct, residual_of_total = buffered, False
+    elif not altered & set(direct):
+        reconstruct, residual_of_total = direct, True
+    else:
+        raise ValueError(
+            f"composition-altering faults touch both sides of the buffer split "
+            f"({sorted(altered)}); neither side can be reconstructed exactly"
+        )
+
+    feeds = generated.truth.feeds
+    per_feed_q: dict[str, np.ndarray] = {}
+    per_feed_conc: dict[str, np.ndarray] = {}
+    for fid in reconstruct:
+        spec = catalogue.feeds[fid]
+        per_feed_q[fid] = feeds[fid].delivered_kg / spec.density
+        frac = generated.truth.fractionations[fid]
+        per_feed_conc[fid] = np.stack(
+            [feed_concentrations(spec, frac, float(ts)) for ts in feeds[fid].ts]
+        )
+    q, load = feed_contribution(reconstruct, per_feed_q, per_feed_conc)
+    if not residual_of_total:
+        return q, load
+    q_total = np.asarray(generated.truth.influent.q, dtype=float)
+    load_total = q_total[:, None] * np.asarray(generated.truth.influent.concentrations, dtype=float)
+    return np.maximum(q_total - q, 0.0), load_total - load
+
+
+def _equalise(
+    plant: PlantConfig,
+    catalogue: FeedFractionationCatalogue,
+    generated: GeneratedInfluent,
+    plan: FaultPlan,
+    feed_ids: Sequence[str],
+    ash_load: Mapping[str, np.ndarray],
+) -> BufferedInfluent | None:
+    """Send the trucked feeds through the plant's declared blend tank, if it has one.
+
+    Returns:
+        The buffered influent, or ``None`` for a plant whose contract declares no tank.
+    """
+    if plant.equalisation is None:
+        return None
+    _ = ash_load  # buffered separately, once the tank's hold-up is known
+    q, load = split_for_equalisation(plant, catalogue, generated, plan, feed_ids)
+    return apply_equalisation(generated.truth.influent, q, load, plant.equalisation)
+
+
+def _buffered_ash_load(
+    plant: PlantConfig, buffered: BufferedInfluent, ash_load: Mapping[str, np.ndarray]
+) -> dict[str, np.ndarray]:
+    """The ash load reaching the digester once the buffered feeds have passed the tank.
+
+    Ash is conserved and inert, so it goes through the same tank as everything else: the
+    buffered feeds' ash is pushed through :func:`~sim.plants.equalisation.buffer_series`
+    at the tank's own hold-up and flow, and the direct feeds' ash is untouched.
+    """
+    buffered_ids = [f for f in ash_load if f in set(plant.equalisation.feeds)]
+    if not buffered_ids:
+        return dict(ash_load)
+    stacked = np.stack([ash_load[f] for f in buffered_ids], axis=1)
+    _, out, _ = buffer_series(buffered.passthrough_q_m3_d, stacked, buffered.hold_up_d)
+    smoothed = dict(ash_load)
+    for i, fid in enumerate(buffered_ids):
+        smoothed[fid] = out[:, i]
+    return smoothed
 
 
 def _mean_s_ca(truth: GeneratedInfluent) -> float:
@@ -491,13 +629,28 @@ def simulate_truth(
     )
     truth_frac = generated.truth.fractionations.fractionations
     truth_params = truth_parameters(params, catalogue, generated.truth.mean_recipe_kg_d, truth_frac)
+    truth_params = apply_adaptation(truth_params, plant)
+    # the adaptation is applied BEFORE the segments, so a Level-5 ammonia fault multiplies
+    # the constant this community actually has rather than the sludge default it does not:
+    # that is what makes a multiplier below 1 a *loss of adaptation* (lead's ruling 2)
     segments = tuple(parameter_segments(plan, truth_params))
     enabled = tuple(plant.truth_model.extensions)
-    u_ext = {"S_ca": _mean_s_ca(generated)}
+    u_ext = {"S_ca": _mean_s_ca(generated), **cfg.influent_extension_states}
+
+    # --- the declared blend tank, where the plant contract has one -------------------
+    ash_load = _ash_load(catalogue, generated, feed_ids)
+    buffered = _equalise(plant, catalogue, generated, plan, feed_ids, ash_load)
+    fed_influent = generated.truth.influent if buffered is None else buffered.influent
+    ash_in = _ash_concentration(
+        ash_load if buffered is None else _buffered_ash_load(plant, buffered, ash_load),
+        np.asarray(fed_influent.q, dtype=float),
+    )
 
     # --- burn-in: the digester the scenario finds already running -------------------
     burn_model = _compile(segments[0][2], geometry, enabled, mixing, matrix, solver, extensions)
     burn_influent = constant_influent(catalogue, generated.truth.mean_recipe_kg_d, truth_frac)
+    # the burn-in runs on the mean recipe, which the tank passes through unchanged: a
+    # constant inflow leaves a well-mixed buffer as the same constant
     y0 = (
         extended_state(burn_model, load_initial_state(), cfg.initial_extension_states)
         if mixing.ideal
@@ -538,7 +691,7 @@ def simulate_truth(
             {"scenario": scenario.id, "segment": index, "t_span": [start, end]},
             lambda m=model, yy=y, span=(start, end), te=t_eval: _simulate(
                 y0=yy,
-                influent=generated.truth.influent,
+                influent=fed_influent,
                 model=m,
                 t_span=span,
                 t_eval=te,
@@ -558,8 +711,7 @@ def simulate_truth(
 
     # --- channels ------------------------------------------------------------------
     inert = influent_inert_cod_equivalent(catalogue, generated.truth.mean_recipe_kg_d, truth_frac)
-    ash_in = _daily_ash(catalogue, generated, feed_ids)
-    ash = ash_trajectory(result.t, generated.truth.influent, geometry.V_liq, ash_in)
+    ash = ash_trajectory(result.t, fed_influent, geometry.V_liq, ash_in)
     channels = _logged(
         log,
         "sim.channel_series",
