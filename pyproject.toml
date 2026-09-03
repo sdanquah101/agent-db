@@ -88,5 +88,12 @@ known-first-party = ["anchor", "eval", "scenarios", "sim", "state", "tools", "wo
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
-addopts = "-ra --strict-markers --strict-config"
+addopts = "-ra --strict-markers --strict-config -m 'not g1'"
+markers = [
+    # The gate-G1 realism panel: twelve 180-day Level-0 runs plus a two-year generator
+    # draw, ~3 min. Deselected by default so an ordinary PR is not slowed by it; CI runs
+    # it nightly and on any pull request that touches sim/ (lead's ruling, 2026-09-03).
+    # Run it locally with `pytest -m g1`.
+    "g1: gate-G1 anchor comparison; slow, deselected unless -m g1 is given",
+]
 filterwarnings = ["error::DeprecationWarning:(scenarios|sim|tools|state|eval|anchor|workflows).*"]
