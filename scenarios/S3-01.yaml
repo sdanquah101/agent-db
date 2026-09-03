@@ -1,0 +1,55 @@
+# Level 3 — feed mislabelled. The ladder's "one feed's true fractionation differs from
+# catalogue"; truth label `influent`. The correct conclusion is to revise the mapping for
+# that batch, NOT to move hydrolysis: the kinetics are exactly what they always were and
+# the model is being fed the wrong composition.
+#
+# MAGNITUDE is a Dirichlet concentration (admissible 1-1000; smaller = further from the
+# catalogue). The feeds' own catalogue concentrations are 30-300, and this run's true
+# fractionation is drawn at the feed's own value; the mislabelled batch is redrawn at
+# 5.0, which spreads the fractionation roughly 3-8x wider than the feed's own draw (for a
+# share m the Dirichlet sd is sqrt(m(1-m)/(kappa+1)), so a 0.4 inert share moves from an
+# sd of 0.06 at kappa = 60 to 0.20 at kappa = 5). A batch that far from its label is a
+# genuinely different material, which is what "mislabelled" means. The realised departure
+# of each cell is written to runs/<id>/truth/fractionation.json rather than assumed, and
+# the generation report tabulates it.
+#
+# TARGET FEED is the plant's co-substrate - the last feed each plant declares, which is
+# FOG at Plant B, thickened WAS at Plant C (it has no co-substrate) and grass silage at
+# Plant A. That is sim.faults.build_plan's documented default and the harness passes the
+# plant's declaration order, never a sorted one.
+#
+# WINDOW days 60-120: two months of clean baseline first, then a 60-day run of mislabelled
+# batches, then a return - so the residual has a beginning and an end, which is what tells
+# an analyst it is a batch property rather than a drift.
+id: S3-01
+plant: B
+tier: A
+level: 3
+duration_days: 180
+truth_label: [influent]
+faults:
+  - type: feed_mislabelled
+    onset_day: 60
+    magnitude: 5.0
+    duration_days: 60.0
+correct_conclusion:
+  flag_sensor: null
+  estimate_scale_factor: false
+  kinetic_update_allowed: false
+  abstain_on: []
+  revise_influent_mapping: true
+budget:
+  simulator_evals: 6000
+  wall_clock_min: 120
+  assay_units: 4
+seed: 1031
+notes: >-
+  What a workflow should notice: from day 60 the model under- or over-predicts gas on the
+  days that feed is delivered and is unbiased on the days it is not, and the residual
+  returns to zero at day 120 without anything being changed. A residual that switches with
+  a feed's delivery days and ends when the window ends is a property of that batch. The
+  feed assays are the corroboration: the reported COD and TKN of that feed move with its
+  true fractionation, so the operator's own laboratory has already recorded the change
+  even though the catalogue entry has not. The characteristic failure is to fit the
+  hydrolysis constants over the whole record, which trades a batch-local influent error
+  for a permanent kinetic one.

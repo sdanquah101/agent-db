@@ -1,0 +1,46 @@
+# Level 6 — omitted SAO pathway. The ladder's "truth includes SAO; fitted model does not";
+# truth label `structural`. The second of the three AMMONIA scenarios and therefore PLANT
+# A ONLY: syntrophic acetate oxidation only takes over where free ammonia is high enough
+# to suppress the acetoclastic route, which is Plant A's 180-250 mg NH3-N/L and not
+# Muscatine's (decisions log, 2026-09-02).
+#
+# NO MAGNITUDE. sim/faults/schema.py says so: the fault is the omission itself. The truth
+# model keeps the `sao` extension - every plant declares all four - and the FITTED model
+# is denied it. The magnitude is written as 0.0 because the schema requires a number.
+#
+# THIS ROW IS NEVER SCORED ON PARAMETER RECOVERY (CLAUDE.md, domain reminders; §6.7 A).
+# When the truth has a pathway the fitted model lacks, "the right value" of a parameter
+# does not exist, and the schema enforces the consequence: a purely structural scenario
+# may not declare a kinetic update as correct.
+id: S6-01
+plant: A
+tier: C
+level: 6
+duration_days: 240
+truth_label: [structural]
+faults:
+  - type: omitted_sao
+    onset_day: 0
+    magnitude: 0.0
+correct_conclusion:
+  flag_sensor: null
+  estimate_scale_factor: false
+  kinetic_update_allowed: false
+  abstain_on: [acetate_speciation, methanogenic_pathway_split, acetoclastic_parameters]
+  recommend_structural_review: true
+budget:
+  simulator_evals: 8000
+  wall_clock_min: 150
+  assay_units: 6
+seed: 1061
+notes: >-
+  What a workflow should notice: a persistent, structured residual that appears wherever
+  free ammonia is highest and that no admissible parameter set removes. The truth makes
+  methane from acetate by a route the fitted model does not have, so the fitted model can
+  only reproduce the gas by pushing its acetoclastic parameters to values that then get
+  the acetate concentration and the hydrogen wrong; every fit trades one channel against
+  another and none of them closes. The correct action is to report that the residual is
+  not attributable to any parameter, recommend a structural revision, and ABSTAIN on the
+  split between acetoclastic and oxidative routes - the data at any tier cannot identify
+  it. The characteristic failure is to keep fitting: a good gas fit here is evidence of a
+  wrong model, not a right one.

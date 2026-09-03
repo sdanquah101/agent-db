@@ -1,0 +1,44 @@
+# Level 1 — noise and missingness. Same digester as Level 0, worse instrumentation: the
+# ladder's "sensor noise, random gaps", truth label `none`. The point is that a workflow
+# must widen its intervals rather than explain the extra scatter with a fault.
+#
+# MAGNITUDES (both inside the admissible range of sim/faults/schema.py):
+#   sensor_noise 2.0  — every sensor's cv and sd_abs doubled. A doubling is the smallest
+#     multiplier that is unambiguously outside the declared instrumentation: the pH
+#     probe's 0.02 becomes 0.04, which is still far below the 0.3 sawtooth of the Level-2
+#     drift fault, so the two rungs cannot be confused.
+#   random_gaps 2.0   — adds gaps at 1.0x the tier's base rate on top of whatever the
+#     conditional model already drops, so a Tier-A run loses ~16 % of scheduled samples
+#     instead of ~8 %. The added term is unconditional by construction (decisions log,
+#     2026-09-02): these gaps are missing-completely-at-random and carry no information,
+#     which is what separates this row from the Level-4 informative-missingness row.
+id: S1-01
+plant: B
+tier: A
+level: 1
+duration_days: 180
+truth_label: [none]
+faults:
+  - type: sensor_noise
+    onset_day: 0
+    magnitude: 2.0
+  - type: random_gaps
+    onset_day: 0
+    magnitude: 2.0
+correct_conclusion:
+  flag_sensor: null
+  estimate_scale_factor: false
+  kinetic_update_allowed: true
+  abstain_on: []
+budget:
+  simulator_evals: 4000
+  wall_clock_min: 90
+  assay_units: 2
+seed: 1011
+notes: >-
+  What a workflow should notice: the residual variance is larger than the declared sensor
+  model predicts and the gaps are frequent, but neither is structured — no trend, no
+  dependence on load, feed batch or time, and the gaps fall as often in quiet weeks as in
+  busy ones. The correct action is to calibrate anyway and report wider intervals; the
+  characteristic failure is to read the extra scatter as a process change and move a
+  kinetic parameter to absorb it.

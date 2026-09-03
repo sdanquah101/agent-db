@@ -1,0 +1,44 @@
+# Level 6 — omitted precipitation. The ladder's "truth includes inorganic-carbon sink";
+# truth label `structural`. The residual appears in alkalinity and pH, which is what makes
+# it a different structural signature from the SAO row: the gas is nearly right and the
+# acid-base chemistry is not.
+#
+# NO MAGNITUDE, as for omitted_sao: the truth keeps the `precipitation` extension and the
+# fitted model is denied it. Written as 0.0 because the schema requires a number.
+#
+# NOT AN AMMONIA SCENARIO. Calcite precipitation needs dissolved calcium and inorganic
+# carbon, not high ammonia, so this row runs on Plants B and C like the rest of the
+# factorial. Plant B's and Plant C's feeds carry the calcium (`s_ca` in the catalogue) that
+# drives the sink.
+id: S6-02
+plant: B
+tier: B
+level: 6
+duration_days: 240
+truth_label: [structural]
+faults:
+  - type: omitted_precipitation
+    onset_day: 0
+    magnitude: 0.0
+correct_conclusion:
+  flag_sensor: null
+  estimate_scale_factor: false
+  kinetic_update_allowed: false
+  abstain_on: [alkalinity_budget, inorganic_carbon_balance]
+  recommend_structural_review: true
+budget:
+  simulator_evals: 8000
+  wall_clock_min: 150
+  assay_units: 6
+seed: 1062
+notes: >-
+  What a workflow should notice: the measured alkalinity is persistently below what the
+  model predicts from the feed's inorganic carbon, and the measured pH with it, while the
+  gas rate and methane content are close to right. Carbon is leaving the liquid by a route
+  the model does not have. The give-away is that the discrepancy is in the CHARGE and
+  CARBON balances rather than in the COD balance: the model's COD closes and its inorganic
+  carbon does not, and the digestate carries more inorganic solids than the fed ash
+  accounts for. The correct action is to recommend a structural review of the
+  inorganic-carbon chemistry and abstain on the alkalinity budget; the characteristic
+  failure is to absorb the missing alkalinity into the cation-anion parameters or into the
+  feed's declared inorganic carbon, which fits this record and mispredicts the next.

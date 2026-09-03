@@ -1,0 +1,44 @@
+# Level 2 — pH electrode drift. The ladder's "slow negative drift, later
+# step-recalibration"; truth label `sensor`. The digester is untouched: the correct
+# conclusion is to flag the pH probe and exclude or correct it, and NOT to move a kinetic
+# parameter to explain a pH that is only being mis-read.
+#
+# MAGNITUDE -0.01 pH/d (admissible range -0.05 to 0.05). Chosen against the electrode's
+# own intrinsic drift, which configs/observation/sensors.yaml puts at 0.075 pH/month =
+# 0.0025 pH/d: the fault is therefore ~4x the drift of a healthy probe, which is what
+# makes it a fault rather than an instrument being itself. The ramp is reset on the tier's
+# recalibration cadence like the intrinsic drift is (decisions log, 2026-09-02, finding 4),
+# so the reading walks away and jumps back: a 0.30 pH sawtooth at Tiers B and C (30-d
+# cadence) and 0.90 pH at Tier A (90-d). Both are far outside the probe's 0.02 noise, and
+# the step at each recalibration *is* the ladder's "later step-recalibration".
+#
+# ONSET day 45, so that six weeks of the run are clean and the drift has a baseline to
+# depart from.
+id: S2-01
+plant: B
+tier: A
+level: 2
+duration_days: 180
+truth_label: [sensor]
+faults:
+  - type: ph_electrode_drift
+    onset_day: 45
+    magnitude: -0.01
+correct_conclusion:
+  flag_sensor: ph
+  estimate_scale_factor: false
+  kinetic_update_allowed: false
+  abstain_on: []
+budget:
+  simulator_evals: 4000
+  wall_clock_min: 90
+  assay_units: 2
+seed: 1021
+notes: >-
+  What a workflow should notice: pH falls steadily from day 45 and then steps back up at
+  each recalibration, while every other channel is unmoved - gas rate, methane content,
+  alkalinity and VFA all say the digester is fine, and the charge balance implied by the
+  measured alkalinity and VFA disagrees with the reported pH. A discrepancy in one channel
+  that no other channel corroborates is a sensor, not a process. The characteristic
+  failure is to read a falling pH as acidification and refit acid-base or kinetic
+  parameters to chase it.

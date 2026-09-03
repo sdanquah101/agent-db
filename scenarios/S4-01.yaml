@@ -1,0 +1,48 @@
+# Level 4 — unknown initial biomass. The ladder's "biomass states mis-initialised"; truth
+# label `state`. The correct conclusion is that state estimation converges and the
+# parameters are unchanged: nothing about the digester's chemistry is different, only what
+# the analyst believes about where it started.
+#
+# MAGNITUDE 0.25 = every biomass state (X_su ... X_h2, and X_sao where the truth model
+# carries it) starts at a quarter of the value the burn-in reached (admissible 0.01-100).
+# A quarter is chosen against the two failure modes at either end: at 0.8 the digester
+# recovers inside a fortnight and the scenario is indistinguishable from Level 0, while
+# below about 0.1 the acetoclastic population cannot keep up with the load, VFA runs away
+# and the run becomes a souring scenario rather than a state-estimation one. At 0.25 the
+# digester visibly under-performs for several weeks, accumulates VFA without acidifying,
+# and then recovers to the same steady state - the transient a state estimator is supposed
+# to be able to track, on a digester whose parameters never moved. The realised depth and
+# length of the excursion are measured per cell in the generation report.
+#
+# ONSET 0: an initial condition is by definition at t = 0. The harness applies the
+# multiplier to the state its burn-in reached, so this is a mis-initialisation of a
+# running digester rather than a different digester.
+id: S4-01
+plant: B
+tier: A
+level: 4
+duration_days: 180
+truth_label: [state]
+faults:
+  - type: biomass_misinitialised
+    onset_day: 0
+    magnitude: 0.25
+correct_conclusion:
+  flag_sensor: null
+  estimate_scale_factor: false
+  kinetic_update_allowed: false
+  abstain_on: []
+budget:
+  simulator_evals: 6000
+  wall_clock_min: 120
+  assay_units: 4
+seed: 1041
+notes: >-
+  What a workflow should notice: the model over-predicts gas for the first weeks and then
+  stops, with the residual decaying towards zero on the timescale of biomass growth rather
+  than jumping or drifting. The signature is that the discrepancy *heals itself* while
+  nothing in the feed or the instruments changed - a parameter error does not heal and a
+  sensor fault does not either. The correct action is to estimate the initial state (or
+  discard the transient) and leave the kinetics alone; the characteristic failure is to
+  fit over the whole record, which lets the start-up transient bias every growth
+  parameter downwards and then over-predicts for the rest of the run.

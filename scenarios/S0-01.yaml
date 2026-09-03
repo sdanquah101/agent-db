@@ -1,0 +1,34 @@
+# Level 0 — clean run, no injected fault. The rung the whole ladder is measured against:
+# the truth model is the fitted model, the data are what the tier's instruments give, and
+# a competent workflow should calibrate the screened subset and report tight intervals.
+#
+# A Level-0 run is NOT featureless. The influent generator still delivers stochastically,
+# still mis-logs the occasional mass and still lets the odd delivery go unrecorded; the
+# active volume still carries its hidden 5-15 % error; the sensors still drift, foul and
+# lose samples at the tier's base rate. All of that is the *background* against which
+# every higher rung is judged, and a workflow that flags a fault here has produced a false
+# positive (§6.7 B).
+id: S0-01
+plant: B
+tier: A
+level: 0
+duration_days: 180
+truth_label: [none]
+faults: []
+correct_conclusion:
+  flag_sensor: null
+  estimate_scale_factor: false
+  kinetic_update_allowed: true
+  abstain_on: []
+budget:
+  simulator_evals: 4000
+  wall_clock_min: 90
+  assay_units: 2
+seed: 1001
+notes: >-
+  What a workflow should notice: nothing. Residuals are consistent with the declared
+  sensor noise and the generator's own delivery variability; no structured residual by
+  feed batch, load or time. The correct action is to calibrate the identifiable subset
+  and report intervals that cover the truth. Flagging a sensor, revising the influent
+  mapping or recommending a structural review are all errors here, and they are what make
+  this row the false-positive control for every other row.

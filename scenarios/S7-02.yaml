@@ -1,0 +1,58 @@
+# Level 7 — compound: structural AND parameter. The ladder's "SAO omitted and inhibition
+# shift ... partial attribution; explicit abstention on the confounded part"; truth label
+# `structural` + `parameter`. The third of the three AMMONIA scenarios and therefore PLANT
+# A ONLY, and the hardest row in the library: one of the two faults is diagnosable and the
+# other is not, and the scored property is whether the workflow knows which is which.
+#
+# It is the superposition of S6-01 and S5-01 at their own magnitudes and onsets:
+#
+#   omitted_sao               from t = 0                (as S6-01)
+#   ammonia_inhibition_shift  x2.0 on K_I_nh3, day 120  (as S5-01)
+#
+# WHY `kinetic_update_allowed` IS TRUE HERE and false in S6-01: the truth label carries
+# `parameter` as well as `structural`, so a bounded update of the ammonia-inhibition
+# constant is a correct action, and the scenario schema permits it for exactly that reason
+# (a purely structural row may not). What is NOT permitted is treating the structural
+# residual as a parameter problem too, which is what `abstain_on` pins down.
+#
+# THE CONFOUND is real and is the point. Both faults act on the same chemistry: the
+# omitted pathway and the changed inhibition constant both alter how acetate becomes
+# methane under high ammonia. A workflow can see that something changed at day 120 and can
+# see that a residual persists throughout, but it cannot cleanly apportion the acetate
+# budget between the two - and saying so is the correct answer, not a failure.
+id: S7-02
+plant: A
+tier: C
+level: 7
+duration_days: 240
+truth_label: [structural, parameter]
+faults:
+  - type: omitted_sao
+    onset_day: 0
+    magnitude: 0.0
+  - type: ammonia_inhibition_shift
+    onset_day: 120
+    magnitude: 2.0
+correct_conclusion:
+  flag_sensor: null
+  estimate_scale_factor: false
+  kinetic_update_allowed: true
+  abstain_on: [acetate_speciation, methanogenic_pathway_split, inhibition_constant_magnitude]
+  recommend_structural_review: true
+budget:
+  simulator_evals: 8000
+  wall_clock_min: 150
+  assay_units: 6
+seed: 1072
+notes: >-
+  What a workflow should notice: two things at once, with different time signatures. A
+  residual that is present from the first day, is worst where free ammonia is highest, and
+  survives every admissible parameter set - the missing pathway; and a step at day 120
+  after which gas rises and acetate falls - the inhibition shift. The correct conclusion
+  is PARTIAL: report the structural mismatch and recommend a model revision, report that a
+  bounded change in the ammonia-inhibition constant occurred around day 120, and abstain
+  explicitly on its MAGNITUDE, because a fitted inhibition constant in a model missing the
+  oxidative route absorbs part of that route and cannot be believed as a number. Two
+  characteristic failures: reporting a confident value for the shifted constant (the
+  confounded quantity), and reporting only the structural mismatch, which is defensible
+  but misses a real, detectable parameter change.

@@ -1,0 +1,47 @@
+# Level 4 — informative missingness. The ladder's "sensors fail during overload"; truth
+# label `state`/`sensor`. The correct conclusion is to recognise that the missing samples
+# are not missing at random, and to abstain or widen rather than interpolate across them.
+#
+# MAGNITUDE 3.0 = the conditional missing multipliers are tripled (admissible from 0
+# upwards), so an online instrument goes from 4x its base loss rate under overload to 12x,
+# and from 3x under foaming to 9x. At Tier A's 8 % base rate that is a near-certain loss
+# of every online reading while a flag is up. Three is chosen to make the mechanism
+# unmistakable when it fires: this row is not about a subtle bias but about whether a
+# workflow notices that its gaps and its transients are the same days.
+#
+# MEASURED CAVEAT, flagged rather than hidden. The flags this fault scales are thresholded
+# on FOS/TAC, and the independent review of PR #11 recorded that the simulated FOS/TAC
+# distribution sits well below the anchor's (0.01-0.07 healthy against a plant median of
+# 0.23). The number of days on which the overload or foaming flag actually fires in this
+# scenario is therefore measured per cell and reported in docs/g1_anchor_report.md, NOT
+# assumed. Where it is zero, this row degenerates to Level 1 and the generation report
+# says so. Closing that gap is a feed-catalogue or kinetics change and is the lead's.
+id: S4-02
+plant: B
+tier: B
+level: 4
+duration_days: 180
+truth_label: [state, sensor]
+faults:
+  - type: informative_missingness
+    onset_day: 0
+    magnitude: 3.0
+correct_conclusion:
+  flag_sensor: null
+  estimate_scale_factor: false
+  kinetic_update_allowed: false
+  abstain_on: [transient_response, peak_load_behaviour]
+budget:
+  simulator_evals: 6000
+  wall_clock_min: 120
+  assay_units: 4
+seed: 1042
+notes: >-
+  What a workflow should notice: the gaps are not spread evenly. They cluster on the days
+  the feed spikes and the VFA-to-alkalinity ratio climbs - exactly the days that carry the
+  information about how the digester responds to load. A missingness-by-event analysis
+  (the `data_qc` tool of §6.2) shows the loss rate conditional on a high load is several
+  times the unconditional rate. The correct action is to say so, to decline claims about
+  the transient response the data no longer support, and to widen intervals accordingly.
+  The characteristic failure is to interpolate across the gaps, which manufactures a
+  smooth response the digester never had and then fits parameters to it.

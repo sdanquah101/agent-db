@@ -1,0 +1,46 @@
+# Level 3 — wetter season. The ladder's "moisture drift lowers VS per delivery"; truth
+# label `influent`. The correct conclusion is to update the fractionation trend; there is
+# no kinetic drift to find.
+#
+# MAGNITUDE -0.30 = the feed's total solids fall by 30 % across the window, ramped
+# linearly and held afterwards (admissible -0.9 to 2.0; negative is wetter). Thirty per
+# cent is a season, not a storm: the generator's own day-to-day TS process has a marginal
+# log-sd of a few per cent, so a 30 % trend is well outside the background while staying
+# inside what a wet autumn does to an outdoor feedstock or a diluted trucked receipt. The
+# same tonnage then delivers 30 % less volatile solids, so gas falls by a comparable
+# fraction with no change to any rate constant.
+#
+# WINDOW days 30-180: a slow ramp over five months, which is what makes it a trend rather
+# than a step and is why it is confusable with a kinetic decline - the confusion this row
+# exists to score.
+id: S3-03
+plant: B
+tier: A
+level: 3
+duration_days: 180
+truth_label: [influent]
+faults:
+  - type: moisture_drift
+    onset_day: 30
+    magnitude: -0.30
+    duration_days: 150.0
+correct_conclusion:
+  flag_sensor: null
+  estimate_scale_factor: false
+  kinetic_update_allowed: false
+  abstain_on: []
+  revise_influent_mapping: true
+budget:
+  simulator_evals: 6000
+  wall_clock_min: 120
+  assay_units: 4
+seed: 1033
+notes: >-
+  What a workflow should notice: gas production declines steadily from day 30 while the
+  logged feed *volumes* are unchanged - and the feed's own TS and VS assays decline with
+  it, at the same rate, which is the whole answer. Gas per tonne of feed falls; gas per kg
+  of volatile solids actually delivered does not. The correct action is to update the
+  feed's solids trend in the influent mapping. The characteristic failure is to normalise
+  by tonnage rather than by measured VS, see a declining specific yield, and reduce the
+  hydrolysis constants - a kinetic answer to an influent question, and the exact error the
+  Level-3 rung exists to catch.

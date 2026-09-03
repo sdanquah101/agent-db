@@ -1,0 +1,46 @@
+# Level 5 — hydrolysis rate regime change. The ladder's "feed particle size change alters
+# k_hyd"; truth label `parameter`. Only hydrolysis may be updated in response, which is
+# what distinguishes this from the neighbouring rung: the answer is a parameter, but a
+# *specific* parameter.
+#
+# MAGNITUDE 0.6 = all three hydrolysis constants (k_hyd_ch, k_hyd_pr, k_hyd_li) fall to
+# 60 % of their value at the onset day (admissible 0.1-10). A coarser grind or a longer
+# stored feed hydrolyses more slowly, so the direction is a decrease. Forty per cent is
+# chosen to be visible in gas without being catastrophic: hydrolysis is the rate-limiting
+# step for particulate feeds, so gas falls by a comparable fraction and particulate COD
+# accumulates in the digestate, but the digester does not sour - the acids are made more
+# slowly, not consumed less. All three constants move together because a change in
+# particle size does not care which macromolecule it is holding.
+#
+# ONSET day 120 of 240, matching S5-01 so the two Level-5 rows differ only in which
+# parameter moved.
+id: S5-02
+plant: B
+tier: A
+level: 5
+duration_days: 240
+truth_label: [parameter]
+faults:
+  - type: hydrolysis_regime_change
+    onset_day: 120
+    magnitude: 0.6
+correct_conclusion:
+  flag_sensor: null
+  estimate_scale_factor: false
+  kinetic_update_allowed: true
+  abstain_on: []
+budget:
+  simulator_evals: 6000
+  wall_clock_min: 120
+  assay_units: 4
+seed: 1052
+notes: >-
+  What a workflow should notice: gas falls from day 120 and stays low, and the digestate's
+  volatile and total solids RISE - undegraded particulate matter is accumulating. That
+  pairing is the discriminator. A wetter feed (S3-03) lowers gas and lowers digestate
+  solids, because less material is arriving; slower hydrolysis lowers gas and raises them,
+  because the same material is arriving and leaving undigested. The feed's own TS and VS
+  assays are flat through the change, which rules out the influent outright. The correct
+  action is a bounded update of the three hydrolysis constants and nothing else; the
+  characteristic failure is to move the methanogenic parameters instead, which can fit the
+  gas curve while getting the solids and the VFA profile wrong.
