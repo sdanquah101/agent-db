@@ -1,5 +1,21 @@
 # AD-AgentBench — standing instructions for Claude Code
 
+## FIRST ACTION, before anything else
+
+**Read `docs/coordinator.md` and confirm you are not the coordinator.** It names the one
+session that coordinates this project, by ID. Compare it with your own session ID and say
+which you are, in your first message, before you read another file or run another command.
+
+If you are **not** the coordinator — you almost certainly are not — then: do not spawn
+sessions, do not create scheduled routines beyond a check-in on your own PR, do not merge
+anything including your own PR, and route every question through the coordinator rather
+than sideways to another session. Then list the open PRs before you write any code: if one
+already covers your component, stop and say so.
+
+Three of the first six components here were built twice by sessions that did not know
+about each other. `docs/coordinator.md` says what that cost and why this check is the
+first line of this file.
+
 ## What this repository is
 An open, reproducible benchmark for agent-supported calibration and discrepancy
 diagnosis of anaerobic-digestion (AD) process models. Full design in

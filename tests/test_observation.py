@@ -56,11 +56,13 @@ from anchor.ingest_muscatine import (
 )
 from sim.observation import (
     CHANNEL_UNITS,
+    HistorianDropout,
     ObservationConfig,
     TruthChannels,
     ash_trajectory,
     channel_series,
     condition_flags,
+    historian_outages,
     load_observation_config,
     observe,
 )
@@ -88,13 +90,15 @@ def config() -> ObservationConfig:
 
 
 def _without_missingness(config: ObservationConfig) -> ObservationConfig:
-    """The same configuration with no samples lost — missingness is now a tier policy."""
-    quiet = config.missingness.model_copy(
-        # the measured Tier C online override is part of the same policy and would
-        # otherwise keep dropping ~0.1 % of that tier's online samples
-        update={"base_rate_by_tier": dict.fromkeys("ABC", 0.0), "base_rate_overrides": {}}
-    )
-    return config.model_copy(update={"missingness": quiet})
+    """The same configuration with no samples lost, from EITHER missingness process.
+
+    There are two: the per-sensor independent policy, and the plant-level historian
+    outage shared across a tier's online sensors. A test that asks for no gaps has to
+    silence both, or the historian keeps taking days out from under it.
+    """
+    quiet = config.missingness.model_copy(update={"base_rate_by_tier": dict.fromkeys("ABC", 0.0)})
+    no_outage = config.historian.model_copy(update={"rate_by_tier": dict.fromkeys("ABC", 0.0)})
+    return config.model_copy(update={"missingness": quiet, "historian": no_outage})
 
 
 def _flat_channels(n_days: int = 200, stress_from: int | None = None) -> TruthChannels:
@@ -205,17 +209,14 @@ def test_missingness_and_turnaround_are_tier_properties(config):
     assert lab == {"overload": 1.5, "foaming": 1.5}
     for flag in ("overload", "foaming"):
         assert online[flag] > lab[flag], flag
-    # resolved per sensor: the same probe is described differently at each tier. Exactly
-    # one cell departs from the tier rate - Tier C online, where the rate is measured
-    # rather than assumed (lead's ruling 2026-09-03) - and the multipliers never do.
-    exceptions = []
+    # resolved per sensor: the same probe is described differently at each tier. NO cell
+    # departs from its tier rate - the one measured dropout is a plant-level correlated
+    # process and lives in `historian`, not here (lead's ruling 2026-09-03).
     for tier in "ABC":
         for kind in ("online", "lab"):
             model = policy.model_for(tier, kind)
-            if model.base_rate != policy.base_rate_by_tier[tier]:
-                exceptions.append((tier, kind))
+            assert model.base_rate == policy.base_rate_by_tier[tier], (tier, kind)
             assert model.stress_multipliers == policy.stress_multipliers_by_kind[kind]
-    assert exceptions == [("C", "online")]
     assert policy.model_for("A", "online").rate(frozenset({"overload"})) == pytest.approx(0.32)
 
 
@@ -243,10 +244,17 @@ def test_the_tier_sets_the_missing_rate_the_lag_and_the_recalibration_cadence(co
             weekly = record["alkalinity"]
             assert np.all(weekly.report_t - weekly.sample_t == config.tiers[tier].lab_turnaround_d)
     assert lost["A"] > lost["B"] > lost["C"] > 0
-    # Tier C's online rate is the MEASURED SCADA dropout, 0.00097 against the assumed
-    # 0.08, so the online gap between the tiers is now an order of magnitude, not 4x
-    assert lost["A"] / lost["C"] > 20.0
-    # and the assumed tier structure is still what the laboratory assays see: 4 % vs 2 %
+    # the per-sensor structure is 8 %/2 %, and each tier's shared historian outage adds on
+    # top, so the online ratio is the composition of the two: 1-(1-.08)(1-.010) over
+    # 1-(1-.02)(1-.000966) = 8.92 %/2.10 % = 4.25, not the bare 4.0
+    per, shared = config.missingness.base_rate_by_tier, config.historian.rate_by_tier
+
+    def total(tier: str) -> float:
+        return 1.0 - (1.0 - per[tier]) * (1.0 - shared[tier])
+
+    assert lost["A"] / lost["C"] == pytest.approx(total("A") / total("C"), rel=0.25)
+    # and the laboratory assays, which never pass through the historian, keep the bare
+    # assumed structure exactly: 4 % against 2 %
     assert lost_lab["B"] / lost_lab["C"] == pytest.approx(2.0, rel=0.35)
 
 
@@ -333,42 +341,90 @@ def test_the_config_matches_the_recorded_full_record_statistics(config):
     assert saturation.high == pytest.approx((150.0 - 32.0) * DEGF_TO_K + 273.15, abs=1e-2)
 
 
-def test_tier_c_online_missingness_is_the_measured_dropout_and_nothing_else_is(config):
-    """One rate is measured; the tier structure and every other rate stay assumed."""
+def test_the_measured_dropout_drives_a_correlated_plant_level_process(config):
+    """The measured rate belongs to the process it describes, not to a per-sensor rate.
+
+    Whole ROWS are missing from the SCADA record, so both online channels lose exactly the
+    same minutes. Carried as an independent per-sensor rate p, two online sensors would
+    lose the same sample with probability p^2 = 9.3e-7; in the record it is 1. This asserts
+    the number went to the shared process and that the shared process really is shared.
+    """
     recorded = json.loads(SCADA_STATISTICS_FILE.read_text(encoding="utf-8"))
     gaps = recorded["full_record"]["row_gaps"]
     assert gaps["n_gaps"] == 19 and gaps["span_d"] == pytest.approx(347.8, abs=0.1)
+    historian = config.historian
+    assert historian.measured_tiers == ("C",)
+    assert historian.rate_by_tier["C"] == pytest.approx(gaps["missing_minute_fraction"], abs=5e-5)
+    assert len(historian.gap_lengths_min) == gaps["n_gaps"]
+    assert max(historian.gap_lengths_min) == pytest.approx(421.0)
+    # the per-sensor policy is untouched: every tier and kind still resolves to its own rate
     policy = config.missingness
-    measured = policy.model_for("C", "online").base_rate
-    assert measured == pytest.approx(gaps["missing_minute_fraction"], abs=5e-5)
-    # every other (tier, kind) still resolves to the assumed tier rate
-    assert policy.model_for("C", "lab").base_rate == policy.base_rate_by_tier["C"]
-    for tier in ("A", "B"):
+    for tier in "ABC":
         for kind in ("online", "lab"):
             assert policy.model_for(tier, kind).base_rate == policy.base_rate_by_tier[tier]
-    assert measured < 0.05 * policy.base_rate_by_tier["C"]  # it is far below the assumption
-    # and it reaches the record: a Tier C online sensor loses almost nothing, while a
-    # Tier C laboratory assay keeps losing at the assumed 2 %
+
+    # ---- the property that matters: online losses are CORRELATED, laboratory ones are not
+    channels = _flat_channels(n_days=3_000)
+    only_outages = config.model_copy(
+        update={
+            "missingness": policy.model_copy(
+                update={"base_rate_by_tier": dict.fromkeys("ABC", 0.0)}
+            )
+        }
+    )
+    record = observe(channels, only_outages, "C", seed=0)
+    a, b = record["temperature"].missing, record["gas_flow"].missing
+    assert a.sum() > 0, "no outage fired; the test would be vacuous"
+    np.testing.assert_array_equal(a, b)  # the same days, not merely the same rate
+    # a laboratory assay does not pass through the historian at all
+    assert record["alkalinity"].missing.sum() == 0
+    # realised rate is the declared one (every observed outage is under a day, so an
+    # outage costs exactly the sample it lands on)
+    assert a.mean() == pytest.approx(historian.rate_by_tier["C"], rel=0.6)
+
+    # ---- and against the independent alternative, which is what the ruling rejected
+    p = historian.rate_by_tier["C"]
+    joint_if_independent = p * p
+    assert float((a & b).mean()) > 100.0 * joint_if_independent
+
+
+def test_the_two_missingness_processes_compose_without_replacing_each_other(config):
+    """Per-sensor independent losses and shared outages are additive, not alternatives."""
     channels = _flat_channels(n_days=4_000)
-    record = observe(channels, config, "C", seed=0)
-    assert record["temperature"].missing.mean() < 0.01
-    assert record["alkalinity"].missing.mean() > 5.0 * record["temperature"].missing.mean()
-
-
-def test_a_base_rate_override_must_name_a_known_tier_and_kind(config):
-    """The override is a narrow exception, not a second structure."""
     policy = config.missingness
-    with pytest.raises(ValidationError):
-        policy.model_copy(update={"base_rate_overrides": {"D": {"online": 0.001}}}).model_validate(
-            policy.model_dump() | {"base_rate_overrides": {"D": {"online": 0.001}}}
-        )
-    with pytest.raises(ValidationError):
-        MissingnessPolicy.model_validate(
-            policy.model_dump() | {"base_rate_overrides": {"C": {"handwritten": 0.001}}}
-        )
-    # with no override at all the policy still resolves for every tier and kind
-    plain = MissingnessPolicy.model_validate(policy.model_dump() | {"base_rate_overrides": {}})
-    assert plain.model_for("C", "online").base_rate == plain.base_rate_by_tier["C"]
+    per_sensor_only = config.model_copy(
+        update={
+            "historian": config.historian.model_copy(
+                update={"rate_by_tier": dict.fromkeys("ABC", 0.0)}
+            )
+        }
+    )
+    both = observe(channels, config, "A", seed=3)["gas_flow"].missing
+    alone = observe(channels, per_sensor_only, "A", seed=3)["gas_flow"].missing
+    # the historian only ever ADDS losses; it never rescues a sample the sensor lost
+    assert bool((alone & ~both).sum() == 0)
+    assert both.sum() > alone.sum()
+    # and the total is the independent composition of the two rates
+    per_sensor = policy.base_rate_by_tier["A"]
+    shared = config.historian.rate_by_tier["A"]
+    expected = 1.0 - (1.0 - per_sensor) * (1.0 - shared)
+    assert both.mean() == pytest.approx(expected, rel=0.15)
+
+
+def test_a_historian_rate_must_cover_every_tier_and_carry_its_lengths(config):
+    """The outage process is declared completely or not at all."""
+    raw = config.historian.model_dump()
+    with pytest.raises(ValidationError, match="must cover tiers A, B and C"):
+        HistorianDropout.model_validate(raw | {"rate_by_tier": {"A": 0.01, "B": 0.005}})
+    with pytest.raises(ValidationError, match="at least one observed outage length"):
+        HistorianDropout.model_validate(raw | {"gap_lengths_min": ()})
+    with pytest.raises(ValidationError, match=r"literal_error|unknown tiers"):
+        HistorianDropout.model_validate(raw | {"measured_tiers": ("D",)})
+    # a tier whose rate is zero is legal: it means the plant has no shared outage process
+    silent = HistorianDropout.model_validate(raw | {"rate_by_tier": dict.fromkeys("ABC", 0.0)})
+    t = np.arange(500.0)
+    lost = historian_outages(silent, "C", t, np.random.default_rng(0))
+    assert not lost.any()
 
 
 @pytest.mark.skipif(not SCADA_FILE.exists(), reason="Muscatine SCADA file not fetched")
@@ -418,8 +474,13 @@ def test_anchored_sensor_values_are_rederived_from_the_scada_file(config):
     assert temp.missing_fraction == 0.0 and gas.missing_fraction == 0.0
     gaps = scada_row_gap_statistics()
     assert gaps.n_gaps == 19 and 0.0009 < gaps.missing_minute_fraction < 0.0011
-    assert config.missingness.model_for("C", "online").base_rate == pytest.approx(
+    # the measured figure drives the plant-level outage process, not a per-sensor rate
+    assert config.historian.rate_by_tier["C"] == pytest.approx(
         gaps.missing_minute_fraction, abs=5e-5
+    )
+    assert (
+        config.missingness.model_for("C", "online").base_rate
+        == (config.missingness.base_rate_by_tier["C"])
     )
 
 

@@ -422,8 +422,15 @@ def test_the_ph_drift_fault_is_a_sawtooth_not_a_ramp_to_infinity():
         update={"drift": DriftModel(sd_per_sqrt_d=0.0, bound=0.5, recalibrated=True)}
     )
     policy = config.missingness.model_copy(update={"base_rate_by_tier": dict.fromkeys("ABC", 0.0)})
+    # the plant-level historian outage is the OTHER missingness process and would put NaNs
+    # through the sawtooth this test measures; silence both
+    no_outage = config.historian.model_copy(update={"rate_by_tier": dict.fromkeys("ABC", 0.0)})
     cfg = config.model_copy(
-        update={"sensors": {**config.sensors, "ph": quiet}, "missingness": policy}
+        update={
+            "sensors": {**config.sensors, "ph": quiet},
+            "missingness": policy,
+            "historian": no_outage,
+        }
     )
     interval = cfg.tiers["B"].recalibration_interval_d
     assert interval == 30.0

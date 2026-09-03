@@ -13,9 +13,12 @@ into the :class:`ObservationRecord` a workflow may read. Per sensor, in this ord
    ``sqrt((value cv)^2 + sd_abs^2)`` rather than the two perfectly correlated.
 5. **Saturation** — clipped to the readable range; clipped samples are flagged.
 6. **Flatline** — inside an episode the sensor repeats its last reported value.
-7. **Missingness** — the sample is dropped with a probability that depends on the tier
-   and on the condition flags raised at that time
-   (:class:`~sim.observation.schema.MissingnessPolicy`).
+7. **Missingness** — two processes compose. The sample is dropped with a per-sensor,
+   **independent** probability that depends on the tier and on the condition flags raised
+   at that time (:class:`~sim.observation.schema.MissingnessPolicy`); and, for an online
+   sensor, it is also dropped if a **plant-level logging outage** covers it
+   (:class:`~sim.observation.schema.HistorianDropout`), which every online sensor at the
+   tier loses together.
 8. **Lag** — the record's ``report_t`` is the sample time plus the tier's laboratory
    turnaround (online instruments report immediately).
 
@@ -29,8 +32,15 @@ order: ``n`` uniforms for flatline onsets, ``n`` uniforms for fouling onsets, ``
 normals for the drift walk, ``n`` normals for the relative noise, ``n`` normals for the
 absolute noise, ``n`` uniforms for missingness — every block drawn whether or not the
 sensor declares that effect, so adding a drift model to one sensor cannot change another
-sensor's noise (tested). The stream is
-independent of the influent generator's: a run gives the observation model its own seed.
+sensor's noise (tested).
+
+The **historian** is a separate stochastic component and takes its own stream, derived
+from the run seed by :data:`HISTORIAN_STREAM_OFFSET` and drawn once per run before any
+sensor: one block of ``n`` uniforms for outage onsets and one of ``n`` integers for outage
+lengths, at the finest online schedule of the tier. Deriving it by an offset rather than
+by splitting the run seed leaves every sensor's own draws bit-identical to what they were
+before the historian existed. Both streams are independent of the influent generator's: a
+run gives the observation model its own seed.
 
 Nothing here writes files; :class:`ObservationRecord` goes to the run layer, which owns
 ``runs/<id>/`` (CLAUDE.md rule 1).
@@ -47,6 +57,7 @@ from sim.faults.plan import ObservationFaults
 from sim.observation.channels import TruthChannels, condition_flags, flags_at
 from sim.observation.schema import (
     EpisodeModel,
+    HistorianDropout,
     MissingnessModel,
     ObservationConfig,
     SensorSpec,
@@ -54,12 +65,66 @@ from sim.observation.schema import (
 )
 
 __all__ = [
+    "HISTORIAN_STREAM_OFFSET",
     "ObservationRecord",
     "SensorSeries",
     "episode_mask",
+    "historian_outages",
     "observe",
     "sample_times",
 ]
+
+HISTORIAN_STREAM_OFFSET = 1_000_003
+"""Offset from the run seed to the plant-level historian stream (a prime, for tidiness).
+
+The historian is a *separate stochastic component* and takes its own stream (CLAUDE.md
+rule 4). Deriving it by an offset rather than by splitting the run seed keeps every
+sensor's own draws bit-identical to what they were before the historian existed, so the
+component can be added without silently re-rolling every archived run.
+"""
+
+
+def historian_outages(
+    dropout: HistorianDropout,
+    tier: str,
+    t: np.ndarray,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    """Which of the sample times ``t`` fall inside a shared logging outage.
+
+    One outage series for the whole plant: the same mask is applied to **every** online
+    sensor at the tier, which is what makes the losses correlated rather than independent
+    (:class:`~sim.observation.schema.HistorianDropout`).
+
+    An outage starts at a sample with probability ``rate`` and lasts a length drawn from
+    the empirical distribution ``gap_lengths_min``; a sample is lost if an outage covers it.
+    With daily sampling every observed outage (longest 421 min) is shorter than one
+    interval, so it costs exactly the sample it lands on and the realised loss fraction is
+    the declared rate — the length distribution only starts to matter for a schedule finer
+    than the longest outage, which is why it is carried rather than collapsed to a mean.
+
+    Args:
+        dropout: The declared outage process.
+        tier: Instrumentation tier.
+        t: Sample times, d.
+        rng: The historian's own stream.
+
+    Returns:
+        Boolean mask over ``t``: True where the sample is lost to a shared outage.
+    """
+    rate = dropout.rate_by_tier[tier]  # type: ignore[index]
+    lost = np.zeros(t.size, dtype=bool)
+    # both blocks are drawn whatever the rate, so a tier's mask does not depend on how
+    # many outages another tier happened to have
+    starts = rng.uniform(size=t.size) < rate
+    lengths_d = np.asarray(dropout.gap_lengths_min, dtype=float) / 1440.0
+    draws = rng.integers(0, lengths_d.size, size=t.size)
+    if rate <= 0.0:
+        return lost
+    for i in np.flatnonzero(starts):
+        lost |= (t >= t[i]) & (t < t[i] + max(lengths_d[draws[i]], np.finfo(float).tiny))
+        lost[i] = True  # the sample the outage starts on is always lost
+    return lost
 
 
 @dataclass(frozen=True)
@@ -165,6 +230,22 @@ def episode_mask(
     return active, progress
 
 
+def _outages_at(
+    historian_t: np.ndarray, lost: np.ndarray, interval_d: float, horizon_d: float
+) -> np.ndarray:
+    """The shared outage mask resampled onto one sensor's own schedule.
+
+    The outage series is drawn once on the tier's finest online schedule; a sensor sampling
+    less often reads the same series at its own times. Sample-and-hold, not interpolation:
+    an outage either covers a sample instant or it does not.
+    """
+    t = sample_times(interval_d, horizon_d)
+    if t.size == historian_t.size and np.array_equal(t, historian_t):
+        return lost
+    idx = np.clip(np.searchsorted(historian_t, t, side="right") - 1, 0, historian_t.size - 1)
+    return lost[idx]
+
+
 def _sensor_series(
     spec: SensorSpec,
     channels: TruthChannels,
@@ -176,6 +257,7 @@ def _sensor_series(
     missingness: MissingnessModel,
     lag_d: float,
     recalibration_interval_d: float,
+    historian_lost: np.ndarray | None = None,
 ) -> SensorSeries:
     """One sensor's record; consumes this sensor's block of the run's stream.
 
@@ -279,6 +361,11 @@ def _sensor_series(
     for i in range(n):
         rate = min(scaled.rate(flags_at(overload, foaming, int(idx[i]))) + extra, 1.0)
         missing[i] = u_missing[i] < rate
+    if historian_lost is not None:
+        # the plant-level outage is drawn once for the tier and applied to every online
+        # sensor, so these losses are perfectly correlated across instruments; the
+        # per-sensor draw above is unchanged and independent, and the two compose
+        missing = missing | historian_lost
     value = np.where(missing, np.nan, value)
 
     return SensorSeries(
@@ -366,6 +453,19 @@ def observe(
     )
 
     rng = np.random.default_rng(seed)
+    # the plant-level outage series: ONE draw for the tier, on the finest online schedule,
+    # shared by every online sensor. Its own stream, taken before any sensor's, so every
+    # sensor's blocks stay exactly where they were.
+    online = [n for n in spec_tier.sensors if config.sensors[n].kind == "online"]
+    historian_t = sample_times(
+        min((config.sensors[n].sampling_interval_d for n in online), default=1.0), horizon
+    )
+    historian_lost = historian_outages(
+        config.historian,
+        tier,
+        historian_t,
+        np.random.default_rng(int(seed) + HISTORIAN_STREAM_OFFSET),
+    )
     # `or` would replace an empty-but-configured directive object, because
     # ObservationFaults defines __bool__; only None means "no faults"
     applied = ObservationFaults() if faults is None else faults
@@ -388,6 +488,10 @@ def observe(
             config.missingness.model_for(tier, sensor.kind),
             spec_tier.lab_turnaround_d if sensor.kind == "lab" else 0.0,
             spec_tier.recalibration_interval_d,
+            # a grab sample does not pass through the historian, so lab assays are untouched
+            _outages_at(historian_t, historian_lost, sensor.sampling_interval_d, horizon)
+            if sensor.kind == "online"
+            else None,
         )
         if name in requested:
             out[name] = series
