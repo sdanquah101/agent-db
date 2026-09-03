@@ -30,13 +30,13 @@ its number).
 | `S3-03` | 3 | moisture drift −30 % over d30–180 | influent | B, C, A |
 | `S4-01` | 4 | biomass mis-initialised ×0.25 | state | B, C, A |
 | `S4-02` | 4 | informative missingness ×3 | state + sensor | B, C, A |
-| `S5-01` | 5 | ammonia inhibition `K_I_nh3` ×2 at d120 | parameter | **A only** |
+| `S5-01` | 5 | loss of adaptation: `K_I_nh3` ×0.1 at d120 | parameter | **A only** |
 | `S5-02` | 5 | hydrolysis constants ×0.6 at d120 | parameter | B, C, A |
 | `S6-01` | 6 | SAO omitted from the fitted model | structural | **A only** |
 | `S6-02` | 6 | precipitation omitted from the fitted model | structural | B, C |
 | `S6-03` | 6 | imperfect mixing, stagnant fraction 0.30 | structural | B, C |
 | `S7-01` | 7 | pH drift **and** feed mislabelled | sensor + influent | B, C |
-| `S7-02` | 7 | SAO omitted **and** inhibition shift | structural + parameter | **A only** |
+| `S7-02` | 7 | SAO omitted **and** loss of adaptation | structural + parameter | **A only** |
 | `S8-01` | 8 | `bayes_mcmc` always fails, over a gas-meter fault | sensor | B, C |
 | `S8-02` | 8 | false operator note, over a gas-meter fault | sensor | B, C |
 
@@ -66,5 +66,10 @@ three tiers and nowhere but Plant A (`sim/run/matrix.py`, and the decisions entr
   instrument, so at Tier A there is nothing to observe and its `correct_conclusion` is
   the Tier-B/C answer. Flagged for the lead in `docs/decisions.md`.
 * **`S4-02` is currently weak on a healthy digester.** The overload flag it scales fires
-  on 0 % of days in five of seven sound Plant B runs. Measured in
-  `docs/g1_anchor_report.md` §5.
+  on no day at all in most sound Plant B runs and on 3.3 % in the worst, against the
+  plant's ~8 %. Measured in `docs/g1_anchor_report.md` §5.
+* **`S6-01` is inert.** Plant A declares an adapted acetoclastic inhibition constant and is
+  acetoclastic at baseline, so omitting the syntrophic pathway from the fitted model omits
+  one that carries no flux. Acetoclasts and syntrophs cannot coexist at a steady state —
+  they compete for one substrate — so the other two ammonia rows are staged as
+  *transitions* instead. Three ways out are written into `S6-01.yaml`, awaiting the lead.

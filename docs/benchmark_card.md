@@ -144,24 +144,35 @@ was wrong and the data said so.
   appeared once deliveries became stochastic; `tests/test_plausibility.py` now pins the
   operating envelope so it cannot recur silently.
 
-### 5.2 What the anchor has NOT yet resolved
+### 5.2 What gate G1 caught, fixed, and did not fix
 
-Two findings from gate G1 (2026-09-03, `docs/g1_anchor_report.md`) are open and are stated
-here because they bear on what the benchmark can currently be used for:
+Gate G1 (2026-09-03, `docs/g1_anchor_report.md`) found that a clean Level-0 run on **Plant
+B acidified on 5 of 12 seeds** under the then-frozen configuration. Two corrections were
+made on the lead's rulings, and **either one alone is sufficient**:
 
-- **Plant B acidifies on 5 of 12 seeds.** A clean Level-0 run on the factorial's reference
-  plant crashes to pH 4.6–5.0 within 180 d on five of twelve declared seeds, under the
-  frozen feed catalogue and influent generator. It reproduces without the run harness, so
-  it is a property of the configuration. The likeliest cause is that the plant config
-  documents the high-strength waste as "blended in a 65,000-gal tank" and the generator
-  feeds truck arrivals straight to the digester. Every generated run is now labelled sound
-  or soured; 87 of the 114 matrix cells are sound and all 27 that are not are Plant B.
-- **The simulated VFA and alkalinity are well below the plant's.** Median VFA 0.054 against
-  1.178 kg m⁻³ and alkalinity 2.78 against 5.04 kg CaCO₃ m⁻³, so FOS/TAC is 0.021 against
-  0.232. The consequence is that the overload flag — which drives conditional missingness,
-  and is the whole subject of the Level-4 `informative_missingness` row — fires on 0 % of
-  days in five of the seven sound runs. `docs/g1_anchor_report.md` §6 lists what closing
-  that would take and which options actually change the answer.
+- **The blend tank the plant always had.** `plant_B.yaml` had described the high-strength
+  waste as "trucked deliveries blended in a 65,000-gal tank" and the simulator had never
+  implemented it, so arrivals reached the biomass as acid pulses. It is now part of the
+  **declared contract** (`sim/plants/equalisation.py`), visible to workflows.
+- **The feed's strong cations, calibrated to the anchor's own digester alkalinity.**
+  Simulated alkalinity went 2.78 → **5.12** kg CaCO₃ m⁻³ against the plant's 5.04, and pH
+  to **7.29** against 7.27 — both anchored quantities landing together.
+
+On a twenty-four-seed panel with both in place, **24 of 24 runs are sound** and all 114
+matrix cells are sound. The sound/soured labelling stays as instrumentation.
+
+**Still open**, and stated because it bears on what the benchmark can be used for:
+
+- **The simulated residual VFA is far below the plant's** — 0.067 against 1.178 kg m⁻³, so
+  FOS/TAC is 0.013 against 0.232. The alkalinity half of that gap is closed; the VFA half
+  is a truth-model question reserved to a separate review, and **no kinetic parameter has
+  been changed**. The consequence: the overload flag fires on no day at all in most sound
+  runs (3.3 % in the worst, against the plant's ~8 %), so conditional missingness — and
+  with it the Level-4 `informative_missingness` row — has almost nothing to act on.
+- **`S6-01` (omitted SAO) is inert.** Plant A now declares an adapted acetoclastic
+  inhibition constant and is acetoclastic at baseline, so a fitted model that omits the
+  syntrophic pathway omits one carrying no flux. The row generates and currently tests
+  nothing; three ways out are written into the scenario file, awaiting a decision.
 
 ## 6. Scenario ladder (§6.3)
 
@@ -231,19 +242,20 @@ from the analysis plan are documented rather than absorbed.
 - **No human baseline.** There is no measurement of what an experienced AD modeller would
   conclude from the same window. Workflow-to-workflow comparison is the only comparison
   the benchmark supports.
-- **Plant B is not yet reliably stable** (§5.2). Until that is resolved, a Plant B cell may
-  be a crashed digester rather than the scenario it claims to be; the run's own
-  `truth/geometry.json` says which.
 - **Conditional missingness barely fires on a healthy digester** (§5.2), so the Level-4
-  `informative_missingness` row is close to a duplicate of Level 1 on most sound Plant B
-  cells.
+  `informative_missingness` row is close to a duplicate of Level 1 on Plant B.
+- **`S6-01` is inert** (§5.2) pending a decision on Plant A's adapted inhibition constant.
+- **Acetoclastic and syntrophic methanogenesis cannot coexist** at a steady state: they
+  compete for one substrate, so one always excludes the other. The pathway-shift scenarios
+  are therefore staged as *transitions* from an adapted state rather than as faults applied
+  to a mixed community, and the truth model carries a trace re-seeding term in the feed
+  because ADM1 has no immigration and a population at zero can never return.
 - **One answer key per scenario, not one per tier.** A fault whose instrument the tier does
   not carry (the Level-2 methane-analyser flatline at Tier A) is unobservable there, while
   its `correct_conclusion` still names the instrument. Flagged for the lead.
-- **Plant A is deliberately not at steady state.** Its acetoclastic and syntrophic
-  populations are mid-succession at the burn-in point, because a converged Plant A has no
-  acetoclasts left and all three ammonia scenarios become inert. Recorded in
-  `docs/decisions.md`.
+- **Plant A declares an adapted inhibition constant** (`adaptation.K_I_nh3`), because a
+  digester running for years above 3 kg N/m³ of ammonia does not have ADM1's sewage-sludge
+  community. It is a declared plant property, not a hidden one.
 
 ## 9. Reproducibility
 

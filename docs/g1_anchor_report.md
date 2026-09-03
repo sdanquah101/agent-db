@@ -1,8 +1,10 @@
 # Gate G1 — anchor comparison report
 
-**Date:** 2026-09-03 · **Gate:** G1 (proposal §11) · **Status:** the gate's stated
-criterion is **met**; one **blocking** realism finding is recorded below and needs the
-lead's decision before the benchmark is usable on Plant B.
+**Date:** 2026-09-03 (revised after the lead's rulings of the same day) · **Gate:** G1
+(proposal §11) · **Status:** infrastructure criterion **met**; plant criterion **met** —
+the Plant B souring that failed the first pass is fixed and the acceptance condition is
+satisfied. Two output rows still fail their declared tolerance and are the subject of the
+coordinator's separate list; one scenario row (S6-01) is inert and needs a decision.
 
 > **G1.** Simulator generates all scenarios with logged truth, and influent statistics
 > match anchor within declared tolerance. *Fail → fix realism before any workflow work.*
@@ -32,13 +34,18 @@ rationale each, and most are **inherited rather than invented**:
 A test reads the inherited literals out of the test files themselves, so widening one "for
 consistency" fails rather than passes quietly.
 
-**One procedural change is recorded rather than hidden.** The output statistics were first
-measured on a single clean Level-0 run at that scenario's own seed. That seed turned out to
-be one of the Plant B seeds that acidifies (§3), so every output row failed for the wrong
-reason. The measurement was widened to a declared twelve-seed panel with each run labelled
-sound or soured, and the output rows are now taken across the runs that are working
-digesters, with the soured fraction reported beside them. **No tolerance was touched when
-that changed.**
+**Two procedural changes are recorded rather than hidden, and neither touched a
+tolerance.** (i) The output statistics were first measured on a single clean Level-0 run at
+that scenario's own seed. That seed turned out to be one of the Plant B seeds that
+acidified, so every output row failed for the wrong reason; the measurement was widened to
+a declared panel with each run labelled sound or soured. (ii) The panel was widened again
+from twelve seeds to **twenty-four** when the lead made "zero souring on clean Level-0
+seeds" the acceptance condition: twelve seeds could show a 40 % failure rate but could not
+support a claim that the rate is zero.
+
+**What did change, on the lead's rulings of 2026-09-03, is the simulator** — the feed's
+strong-cation content is now calibrated to the anchor's own digester alkalinity, and Plant
+B's blend tank is declared in the plant contract. Both are recorded in §3.
 
 ## 2. What is compared, and against what
 
@@ -48,10 +55,10 @@ that changed.**
 * **Generated influent:** a 730-day draw of the influent generator alone, no digester, at
   seed 7 — the same seed and horizon `tests/test_generator.py` uses, so the two
   descriptions are of one realisation.
-* **Generated output:** a twelve-run panel of clean Level-0 runs on Plant B (base seeds
-  1000–1011, 180 days each) through the whole chain — burn-in, hidden active-volume error,
-  stochastic influent, truth model, channels. Statistics are medians across the runs that
-  are working digesters.
+* **Generated output:** a twenty-four-run panel of clean Level-0 runs on Plant B (base
+  seeds 1000–1023, 180 days each) through the whole chain — burn-in, hidden active-volume
+  error, stochastic influent, blend tank, truth model, channels. Statistics are medians
+  across the runs that are working digesters, which is now all of them.
 
 **Plant C is not separately anchored on the output side, and the report does not pretend
 otherwise.** Plant C is Plant B fed only its sludge streams — a counterfactual the real
@@ -60,47 +67,64 @@ Its *feed* streams (primary sludge, thickened WAS) are the same anchored columns
 B's. Plant A is statistics-anchored throughout (§8 of the proposal) and has no time series
 at all.
 
-## 3. The finding: Plant B sours on 5 of 12 seeds
+## 3. Plant B: what was wrong, what fixed it, and which change did the work
 
-**This is the most important number in this report and it is not in the tolerance table,
-because nothing thought to declare a tolerance for it.**
+The first pass of this report found that a clean Level-0 run on **Plant B** acidified
+within 180 days on **5 of 12 seeds** — median pH 4.6–5.0 with 0.0–0.31 methane. It
+reproduced with the declared geometry, the published initial state and no burn-in, so it
+was a property of the configuration and not of the harness, and
+`tests/test_plausibility.py::test_plant_b_survives_the_generator_swings` had missed it
+because it tests one seed, which happens to be one of the seven that survived.
 
-Under the frozen feed catalogue, plant configuration and influent generator, a clean
-Level-0 run on **Plant B** acidifies within 180 days on **5 of the 12 declared seeds**:
-median pH 4.6–5.0 with 0.0–0.31 methane content, against 6.9–7.1 and 0.68–0.70 on the
-seven that survive. The gap between the two groups is wide — there is nothing marginal
-about the classification. Plants A and C are **12 of 12 sound**.
+The lead ruled two changes. **Both were made, and it turns out that either one alone would
+have been enough.** Measured on the twelve-seed panel with the other held back:
 
-Across the full generation matrix the same thing shows up as **87 of 114 cells sound**: all
-27 soured cells are Plant B, being 9 of its 16 scenarios at 3 tiers each.
+| | no blend tank | with blend tank |
+|---|---|---|
+| **original strong cations** | **7/12 sound**, min pH 4.50, worst p95 FOS/TAC 2.93 | 12/12, min pH 6.53, 0.111 |
+| **anchor-calibrated cations** | 12/12, min pH 7.06, 0.078 | **12/12, min pH 7.13, 0.044** |
 
-**It is not an artefact of the run harness.** It reproduces with the declared geometry (no
-hidden volume error), the published Rosen & Jeppsson initial state (no burn-in), no
-extension influent and no injected fault: five of twelve small integer seeds crash the same
-way. It is not driven by mean load either — seed 1002 is sound at an organic loading rate
-of 2.66 kg VS m⁻³ d⁻¹ while seed 1006 sours at 1.77 — but by *runs of consecutive
-high-load days*.
+On the full twenty-four-seed panel with both changes in place: **24 of 24 sound**, median
+pH 7.24–7.40, methane 0.70–0.73. The acceptance condition is met, and met with margin
+rather than scraped.
 
-**Why the existing tests did not catch it.**
-`tests/test_plausibility.py::test_plant_b_survives_the_generator_swings` tests exactly one
-seed (11), which is one of the seven that survive. A single-seed plausibility check on a
-stochastic generator cannot see a 40 % failure rate. That test is correct and is not
-weakened here; it is extended by a panel.
+### 3.1 The blend tank (ruling 1)
 
-**The most likely cause, for the lead.** `configs/plants/plant_B.yaml` describes the
-high-strength waste as "trucked deliveries **blended in a 65,000-gal tank**", and the FOG
-as trucked likewise. The influent generator feeds truck arrivals straight to the digester
-on the day they arrive; the real plant damps them through a buffer with roughly six days of
-hold-up (246 m³ against ~42 m³/d of HSW, plant total). The physical feature is documented
-in the frozen plant configuration and is not implemented in the frozen generator, and its
-absence is exactly what would turn a run of arrivals into an acid pulse.
+`configs/plants/plant_B.yaml` had always described the high-strength waste as "trucked
+deliveries **blended in a 65,000-gal tank**", and the simulator had never implemented it:
+truck arrivals reached the biomass on the day they arrived, as an acid pulse rather than as
+a week of slightly heavier feeding. The tank is now part of the **declared contract**
+(`sim/plants/equalisation.py`) — visible to a workflow like the digester's volume, because
+what is hidden is the composition of what was delivered, not the existence of the tank.
+65,000 gal is 246.05 m³ for the plant, halved to 123.02 m³ for the modelled unit, giving
+about 4–5 days of hold-up. It is one well-mixed buffer: inflow is the day's arrivals,
+outflow is proportional to level, mass closes to machine precision, and at zero volume it
+reduces to a pass-through exactly.
 
-**Not fixed here.** Adding a buffer tank changes the frozen influent generator and would
-move every generated cell and every anchored delivery statistic. That is the lead's call.
-This session instead labels every run (`sim.run.harness.assess_health`, written to
-`runs/<id>/truth/geometry.json`), reports the counts, and pins the rate in
-`tests/test_g1_anchor.py` so that a fix must come with an update to this record — the test
-fails if the rate goes to **zero** as well as if it gets worse.
+**The influent generator is untouched**, as ruled. Every anchored delivery statistic still
+describes arrivals, so the influent half of the table below is unaffected by this change —
+which the table confirms: those rows are identical to the first pass.
+
+FOG is trucked too and is **not** buffered, because the plant description names a tank only
+for the high-strength waste. That is the reading closest to the evidence; widening it is a
+one-line change.
+
+### 3.2 The alkalinity calibration (ruling 3)
+
+The anchor measures the digester's own alkalinity — median 5.04 kg CaCO₃ m⁻³ — and the
+simulator was producing 2.78. An under-buffered digester is exactly one that acidifies
+under a load pulse, so this was the same finding from the other side. Calibrating the feed's
+strong-cation content to that column lands alkalinity at **5.12** and pH at **7.29**
+against the plant's **7.27**: both anchored quantities fall into place together, which is
+the sign that the calibration is physically coherent rather than a fitted offset.
+
+The anchor constrains only the **flow-weighted** cation excess of the blend, not its split
+between streams, and the split is an assumption stated as such: nothing on the FOG, a
+modest rise on the two sludges (0.04 → 0.05 kmol m⁻³, ~1,500 mg L⁻¹ as CaCO₃ in the
+liquor), and the remainder on the high-strength waste (0.03 → 0.225), on the grounds that
+clean-in-place caustic is the usual source of alkalinity in food and beverage industrial
+waste and that this stream carries 137 kg COD m⁻³. **Inert-N was left alone**: S_cat alone
+reaches the anchor, and inert-N carries the deliberate truth/fitted mismatch of 2026-09-02.
 
 ## 4. The comparison
 
@@ -128,110 +152,107 @@ fails if the rate goes to **zero** as well as if it gets worse.
 | `vs_fraction_high_strength_waste` | kg VS/kg wet | 0.06548 | 0.06485 | 1.01 | +/- 25 % | pass |
 | `hsw_cod_concentration` | kg COD/m3 | 133.3 | 136.8 | 0.97 | +/- 25 % | pass |
 | `organic_loading_rate` | kg VS/m3/d | 2.131 | 1.885 | 1.13 | +/- 30 % | pass |
-| `biogas_mean` | m3/d per digester at the meter's conditions | 2882 | 2111 | 1.37 | ratio in [0.6, 1.5] | pass |
-| `digester_pH_median` | pH units | 7.005 | 7.27 | 0.96 | +/- 0.4 pH units | pass |
-| `alkalinity_median` | kg CaCO3/m3 | 2.778 | 5.043 | 0.55 | +/- 35 % | **FAIL** |
-| `vfa_median` | kg/m3 as acetic acid | 0.0538 | 1.178 | 0.05 | ratio in [0.25, 4] | **FAIL** |
-| `fos_tac_median` | - (VFA as acetic over alkalinity as CaCO3) | 0.02099 | 0.2323 | 0.09 | ratio in [0.5, 2] | **FAIL** |
+| `biogas_mean` | m3/d per digester at the meter's conditions | 2984 | 2111 | 1.41 | ratio in [0.6, 1.5] | pass |
+| `digester_pH_median` | pH units | 7.293 | 7.27 | 1.00 | +/- 0.4 pH units | pass |
+| `alkalinity_median` | kg CaCO3/m3 | 5.12 | 5.043 | 1.02 | +/- 35 % | pass |
+| `vfa_median` | kg/m3 as acetic acid | 0.06717 | 1.178 | 0.06 | ratio in [0.25, 4] | **FAIL** |
+| `fos_tac_median` | - (VFA as acetic over alkalinity as CaCO3) | 0.01302 | 0.2323 | 0.06 | ratio in [0.5, 2] | **FAIL** |
 
 | Generated statistic with no anchor row | Value |
 |---|---:|
-| `ch4_fraction_median` | 0.6846 |
-| `foaming_day_fraction` | 0.006623 |
+| `ch4_fraction_median` | 0.7223 |
+| `foaming_day_fraction` | 0 |
 | `fos_tac_exceedance_fraction` | 0 |
 | `overload_day_fraction` | 0 |
-| `sound_run_fraction` | 0.5833 |
+| `sound_run_fraction` | 1 |
 | `vs_fraction_fog` | 0.01984 |
 
 ### The output panel, run by run
 
 | Base seed | Verdict | median pH | mean CH4 | median VFA (kg/m3) | median FOS/TAC |
 |---|---|---:|---:|---:|---:|
-| 1000 | sound | 7.11 | 0.685 | 0.069 | 0.019 |
-| 1001 | **soured** | 5.04 | 0.314 | 8.674 | 1.686 |
-| 1002 | sound | 6.96 | 0.692 | 0.070 | 0.027 |
-| 1003 | sound | 7.00 | 0.679 | 0.063 | 0.022 |
-| 1004 | **soured** | 4.84 | 0.026 | 9.107 | 2.002 |
-| 1005 | sound | 6.92 | 0.691 | 0.052 | 0.023 |
-| 1006 | **soured** | 4.89 | 0.021 | 9.375 | 1.921 |
-| 1007 | **soured** | 4.60 | 0.000 | 12.901 | 2.612 |
-| 1008 | sound | 6.95 | 0.678 | 0.054 | 0.021 |
-| 1009 | sound | 7.01 | 0.681 | 0.050 | 0.018 |
-| 1010 | **soured** | 4.81 | 0.002 | 10.589 | 2.067 |
-| 1011 | sound | 7.03 | 0.696 | 0.051 | 0.017 |
+| 1000 | sound | 7.33 | 0.712 | 0.088 | 0.015 |
+| 1001 | sound | 7.29 | 0.727 | 0.073 | 0.015 |
+| 1002 | sound | 7.32 | 0.725 | 0.078 | 0.015 |
+| 1003 | sound | 7.29 | 0.711 | 0.083 | 0.016 |
+| 1004 | sound | 7.28 | 0.725 | 0.058 | 0.012 |
+| 1005 | sound | 7.24 | 0.718 | 0.058 | 0.013 |
+| 1006 | sound | 7.26 | 0.725 | 0.054 | 0.012 |
+| 1007 | sound | 7.26 | 0.701 | 0.059 | 0.012 |
+| 1008 | sound | 7.27 | 0.707 | 0.058 | 0.012 |
+| 1009 | sound | 7.30 | 0.711 | 0.063 | 0.012 |
+| 1010 | sound | 7.32 | 0.720 | 0.071 | 0.013 |
+| 1011 | sound | 7.37 | 0.730 | 0.071 | 0.012 |
+| 1012 | sound | 7.40 | 0.730 | 0.074 | 0.012 |
+| 1013 | sound | 7.25 | 0.701 | 0.062 | 0.013 |
+| 1014 | sound | 7.30 | 0.723 | 0.062 | 0.012 |
+| 1015 | sound | 7.34 | 0.722 | 0.083 | 0.015 |
+| 1016 | sound | 7.29 | 0.711 | 0.063 | 0.013 |
+| 1017 | sound | 7.32 | 0.731 | 0.072 | 0.014 |
+| 1018 | sound | 7.39 | 0.728 | 0.100 | 0.016 |
+| 1019 | sound | 7.24 | 0.725 | 0.058 | 0.013 |
+| 1020 | sound | 7.29 | 0.705 | 0.063 | 0.012 |
+| 1021 | sound | 7.25 | 0.704 | 0.054 | 0.011 |
+| 1022 | sound | 7.24 | 0.723 | 0.072 | 0.017 |
+| 1023 | sound | 7.36 | 0.723 | 0.097 | 0.017 |
 
-**7 of 12 runs are working digesters.**
+**24 of 24 runs are working digesters.**
 
 <!-- END GENERATED: g1 anchor comparison -->
 
 ## 5. Reading the failures
 
-**Every influent row passes.** That is gate G1's literal criterion: delivery medians,
-spreads and zero fractions per stream, total feed flow, volatile-solids fractions, the
-high-strength-waste COD and the organic loading rate are all inside bounds declared in
-advance. The biogas a working digester makes is inside the band too, at 1.37 × the plant's
-measured mean.
+**Every influent row passes**, and so now do **biogas, pH and alkalinity**. Two rows fail,
+and they are **one finding**: a converged ADM1 carries far less residual VFA than a real
+digester.
 
-Three output rows fail, and they are **one finding, not three**: a converged ADM1 carries
-far less residual VFA than a real digester, and less alkalinity with it.
-
-* **`vfa_median` 0.054 against 1.178 kg m⁻³ (ratio 0.05).** A converged ADM1 steady state
+* **`vfa_median` 0.067 against 1.178 kg m⁻³ (ratio 0.06).** A converged ADM1 steady state
   holds VFA as a small difference between large production and consumption terms, and it
   settles far lower than a plant does. The plant's titrimetric method also over-reads true
-  VFA — but not by a factor of twenty.
-* **`alkalinity_median` 2.78 against 5.04 kg CaCO₃ m⁻³ (−45 %).** The simulated digester is
-  less buffered than the plant. This is the same story from the other side: alkalinity here
-  is bicarbonate plus VFA anions, and both terms are low.
-* **`fos_tac_median` 0.021 against 0.232 (ratio 0.09).** The ratio of the two, so it
-  inherits both. The PR-#11 review recorded 0.01–0.07 for a healthy simulated digester; the
-  panel gives 0.017–0.027, inside that range.
+  VFA — but not by a factor of eighteen.
+* **`fos_tac_median` 0.013 against 0.232 (ratio 0.06).** VFA over alkalinity. Note that
+  this ratio got *worse* than the first pass (0.09), and that is a good sign rather than a
+  bad one: the denominator is now right, so the discrepancy is no longer split between two
+  causes and sits entirely where it belongs, in the numerator.
+* **`alkalinity_median` now PASSES** at 5.12 against 5.043 (was 2.78, ratio 0.55). The
+  calibration the lead approved closed this half of the gap outright.
 
-**The consequence, and it matters for a scenario.** The overload flag fires when FOS/TAC
-exceeds 0.40. Across the panel it is **bimodal, not uniformly low**:
+**The consequence, and it costs the benchmark a scenario.** The overload flag fires when
+FOS/TAC exceeds 0.40. Across the twenty-four sound runs the median run raises it on **no
+day at all**, most runs never raise it, and the worst raises it on **3.3 %** of days —
+against ~8 % of the plant's own days. Conditional missingness — the §6.1 property that
+"instruments are more likely to fail during foaming and overload", and the entire subject
+of the Level-4 `informative_missingness` row (S4-02) — therefore has **almost nothing to
+act on on a healthy Plant B**, and S4-02 is close to a duplicate of Level 1. Pinned by
+`tests/test_g1_anchor.py::test_the_overload_flag_never_fires_on_a_healthy_plant_b`.
 
-| | overload flag raised on |
-|---|---|
-| five of the seven **sound** runs | **0 % of days** |
-| the other two sound runs (seeds 1000, 1002) | 8.6 % and 9.3 % — about the plant's own ~8 % |
-| all five **soured** runs | 63–100 % of days |
+In the first pass this was masked: the flag fired on 63–100 % of days in the *soured* runs
+and on 0–9 % of the sound ones, so the panel looked bimodal. With no soured runs left, the
+picture is unambiguous.
 
-So conditional missingness — the §6.1 property that "instruments are more likely to fail
-during foaming and overload", and the whole subject of the Level-4 `informative_missingness`
-row (S4-02) — has **nothing to act on in most healthy runs**, roughly the right amount in a
-minority of them, and far too much in a crashed one. The foaming flag is similar but never
-quite zero (0–1.3 % on sound runs). S4-02 is generated on every cell, and on most healthy
-Plant B cells it is currently a near-duplicate of Level 1. This is stated rather than
-glossed, and pinned by
-`tests/test_g1_anchor.py::test_the_overload_flag_is_all_or_nothing_across_the_panel`.
+## 6. What closing the VFA gap would take
 
-## 6. What closing the gap would take
+**The lead's ruling 3 reserves this list to the coordinator, and no kinetic parameter has
+been touched.** What follows is only what this session *measured* while doing the other two
+rulings, offered as input to that list and not as a substitute for it.
 
-None of the following is a threshold change, and none was done here.
+1. **The alkalinity lever is spent.** It is now calibrated to the anchor and passing, and
+   raising it further would push FOS/TAC *down*. It cannot contribute.
+2. **Loading is not the lever either.** The PR-#11 review measured Plant B reaching only
+   FOS/TAC 0.15 at 2.5× the declared feed, and the anchored loading rates currently pass —
+   so buying VFA with load would break a row that works.
+3. **That leaves the acetate kinetics**, which is what the coordinator's list is for. The
+   quantity to move is the residual acetate a converged digester carries: a lower `k_m_ac`
+   or a higher `K_S_ac` raises it at the same load without touching the feed. It is
+   consequential because the same constants are what the Level-5 parameter scenarios move,
+   so it must be a documented re-anchoring of the truth model rather than a nudge.
+4. **Or accept the gap and declare it.** The benchmark's claims are about attribution,
+   calibrated uncertainty and abstention, not about reproducing a plant's VFA
+   distribution. The consequence to state in the benchmark card would be that conditional
+   missingness is inert on a healthy digester and S4-02 does not test what §6.3 says it
+   tests.
 
-1. **Load the digesters harder, or feed them more degradable material.** FOS/TAC rises with
-   loading. The PR-#11 review measured Plant B reaching only 0.15 even at 2.5 × the
-   declared feed, so this alone does not close a factor of ten and it would break the
-   anchored loading rates, which currently pass.
-2. **Change the kinetics.** Lower `k_m_ac` (acetate uptake) or a higher `K_S_ac` leaves more
-   residual acetate at the same load and lifts both VFA and FOS/TAC without touching the
-   feed. This is the most direct lever and the most consequential, because the same
-   constants are what the Level-5 parameter scenarios move: it must be a deliberate,
-   documented re-anchoring of the truth model, not a nudge.
-3. **Raise the feed's alkalinity.** The catalogue's `s_ic` and `S_cat` are design values
-   with sources but no fit. Raising them lifts the denominator, which *lowers* FOS/TAC —
-   so it works only together with (1) or (2), and it would improve the `alkalinity_median`
-   row on its own.
-4. **Model the buffer tank** (§3). This is the change most likely to be simply *right*: it
-   is a physical feature the anchored plant has and the simulator does not, and it would
-   address the souring rate directly. Its effect on FOS/TAC is not obvious in advance —
-   smoothing the load could lower peak VFA further — so it must be measured, not assumed.
-5. **Accept the gap and declare it.** The benchmark's claims are about attribution,
-   calibrated uncertainty and abstention, not about reproducing a plant's VFA distribution.
-   If the lead takes this route, the consequence to state in the benchmark card is that
-   conditional missingness is inert on a healthy digester and S4-02 does not test what the
-   ladder says it tests.
-
-Options 2 and 4 are the two that change the answer; 1 and 3 alone do not.
+**The 0.40 overload threshold has not moved and is not proposed to move** (ruling 3).
 
 ## 7. Provenance
 

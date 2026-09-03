@@ -15,11 +15,13 @@ statistics come from a **panel** of twelve clean Level-0 truth runs through the 
 each labelled sound or soured. Both are seeded explicitly and deterministic.
 
 **The panel exists because of what the first run found.** Measuring one Level-0 run turned
-out to measure a crashed digester: Plant B acidifies on 5 of 12 seeds under the frozen feed
-catalogue and influent generator. That is the headline finding of this comparison, it is
-reported as such, and it is why the output rows are taken across the runs that are working
-digesters with the soured fraction reported beside them rather than averaged in. The
-tolerances below were not touched when the measurement changed.
+out to measure a crashed digester: before the changes of 2026-09-03, Plant B acidified on
+5 of 12 seeds. Two corrections fixed it — the feed's strong-cation content calibrated to
+the anchor's own digester alkalinity, and the blend tank the plant has always had, added to
+the plant contract — and the panel is now uniformly sound. It stays, because "no seed
+sours" is a claim that needs a panel to support it, and because the output rows are taken
+across the runs that are working digesters. The tolerances were not touched when the
+measurement changed.
 
 **What this does NOT re-test.** ``tests/test_generator.py`` already pins Plant B's
 per-stream delivery statistics against ``anchor.ingest_muscatine`` in detail, and
@@ -89,9 +91,13 @@ INFLUENT_DAYS = 730
 OUTPUT_DAYS = 180
 """Horizon of each panel run, matching the horizon most of the scenario ladder uses."""
 
-OUTPUT_PANEL_SEEDS: tuple[int, ...] = tuple(range(1000, 1012))
-"""The twelve base seeds of the output panel. Declared, contiguous and arbitrary: they are
-not chosen for the runs they produce, which is the point (see :func:`output_panel`)."""
+OUTPUT_PANEL_SEEDS: tuple[int, ...] = tuple(range(1000, 1024))
+"""The twenty-four base seeds of the output panel. Declared, contiguous and arbitrary: they
+are not chosen for the runs they produce, which is the point (see :func:`output_panel`).
+
+Widened from twelve on 2026-09-03, when the lead made "zero souring on clean Level-0 seeds"
+the acceptance condition for Plant B: twelve seeds could show a 40 % failure rate but could
+not support a claim that the rate is zero."""
 
 INFLUENT_SEED = 7
 """Seed of the influent draw. The same seed ``tests/test_generator.py`` uses, so the two

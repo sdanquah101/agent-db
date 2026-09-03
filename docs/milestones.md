@@ -910,3 +910,62 @@ seven sound runs, so conditional missingness — and with it the Level-4
 | Anchor comparison, report, tests | ≈ 60 min | |
 | Docs | ≈ 30 min | |
 | Test suite | ≈ 8 min per full run | 4 full runs |
+
+### Session 2026-09-03 (eighth session, continued) — the lead's three rulings on G1
+
+The lead read the G1 status and ruled: **G1 not passed — the infrastructure criterion is
+met, the plant criterion is not.** Three rulings, all implemented on the same branch. The
+five interpretations of the first pass were approved.
+
+**Ruling 1 — Plant B's blend tank.** Added to the *plant contract* as a declared, well-mixed
+buffer (`configs/plants/plant_B.yaml`, `sim/plants/equalisation.py`): 123.02 m³, holding the
+trucked high-strength waste, about 4–5 d of hold-up. The influent generator is untouched, as
+ruled. Mass closes to machine precision and at zero volume it is a pass-through exactly.
+
+**Ruling 3 — feed alkalinity calibrated.** The Muscatine feeds' strong cations calibrated to
+the anchor's own digester alkalinity: 2.78 → **5.12** kg CaCO₃ m⁻³ against the plant's 5.04,
+with pH landing at **7.29** against 7.27 at the same time. Inert-N untouched; no kinetic
+parameter touched.
+
+**The acceptance condition is met, and either change alone would have met it.** Measured on
+the twelve-seed panel with the other held back — original cations/no tank 7/12 sound (min pH
+4.50), tank alone 12/12 (6.53), calibration alone 12/12 (7.06), both 12/12 (7.13). On the
+twenty-four-seed panel with both: **24 of 24 sound**, and **all 114 matrix cells sound**.
+
+**Ruling 2 — Plant A.** The 200-d burn-in workaround and its guard test are gone; the burn-in
+is 400 d and converges on all three plants. `PlantConfig` gains a declared `adaptation` block
+and Plant A declares `K_I_nh3 = 0.02` kmol N/m³ (the **bottom** of the ruled 0.02–0.05: the
+frozen ×0.1 fault magnitude reaches below the pathway-exchange threshold from 0.02 and not
+from the midpoint). S5-01 and S7-02 are redesigned as loss-of-adaptation transitions and
+both now produce strong, correctly-signed signals through the full harness.
+
+**Two things ruling 2 asked for could not be delivered, and both are measured, not asserted.**
+Coexistence of acetoclasts and SAO is impossible at *any* adapted K_I — they compete for one
+substrate, so one always excludes the other, and the exchange point is at K_I ≈ 0.003, an
+order of magnitude below the ruled range; the stochastic feed does not change it. The
+ruling's fallback, reducing `k_m_sao` towards 3.0, has the **wrong sign**: it weakens SAO and
+moves the exchange point down. `k_m_sao` was therefore not changed.
+
+**One change beyond the rulings, flagged.** A trace of syntrophic oxidisers in the feed
+(`influent_extension_states: {X_sao: 1e-4}`). ADM1 has no immigration, so a population at
+zero can never return: without it a loss of adaptation produces no pathway shift at all and
+the Level-6/7 rows stay inert. It is not a kinetic change, it is physically standard, and
+it is flagged in the config, the decisions log and the PR.
+
+**Open, needing the lead**
+
+1. **S6-01 is inert.** The pure structural omission has no transition by construction, so at
+   Plant A's adapted acetoclastic baseline the truth's SAO carries no flux and omitting it
+   produces no residual. Three ways out are written into the scenario file; this session
+   recommends setting Plant A's adapted K_I to the ~0.003 exchange point, or rescoring the
+   row as an abstention row, and changed nothing.
+2. **The VFA gap.** 0.067 against 1.178 kg m⁻³, so FOS/TAC 0.013 against 0.232 — the
+   alkalinity half is closed, the VFA half is the coordinator's list. The overload flag now
+   fires on no day at all in most sound runs, so S4-02 is close to a duplicate of Level 1.
+3. **Plant A's baseline TAN is 3.1–3.7 kg N/m³**, above the 2.3–2.8 the ruling named and
+   inside Tisocco et al. 2024's published 2.3–4.3. Nothing was adjusted to move it.
+
+**CI.** The G1 panel is behind a `g1` marker, deselected by default, run nightly and on any
+PR touching `sim/`, `configs/`, `scenarios/` or the comparison module.
+
+**Next session should start on** the two open items above, then the tool registry (§6.2).

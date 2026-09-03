@@ -23,7 +23,12 @@ is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
   1982 at T_op, in code, not a parameter). `shared_parameters` holds constants used by
   more than one extension (pK_a2). Loaded by `sim.adm1.load_extensions`; each extension
   is switchable independently.
-- `plants/plant_{A,B,C}.yaml` — the three virtual plants as *declared* to workflows
+- `plants/plant_{A,B,C}.yaml` — the three virtual plants as *declared* to workflows,
+  including two blocks added on the lead's rulings of 2026-09-03: Plant B's `equalisation`
+  (the 65,000-gal blend tank its trucked high-strength waste passes through, without which
+  arrivals reached the biomass as acid pulses and 5 of 12 clean seeds acidified) and Plant
+  A's `adaptation` (the acetoclastic ammonia-inhibition constant its community has
+  acclimated to, 0.02 against ADM1's sewage-sludge 0.0018). Both are declared, not hidden
   (schema `sim/plants/schema.py`): geometry, temperature, feed catalogue, hydraulics,
   anchoring with sources, truth-model extensions, scenario subset, and the
   *distribution* of the hidden active-volume error (its realisation is sampled per run
@@ -55,9 +60,9 @@ is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
   `sim/run/harness.py::HarnessConfig`): burn-in length and output cadence, the scenario's
   output cadence, the extension states the burn-in starts from (X_sao must be seeded or
   the SAO extension is silently inert), and the health thresholds that label a generated
-  run sound or soured. The burn-in comment records what was **measured**: 200 d is a
-  converged steady state on Plants B and C and a deliberately mid-succession state on
-  Plant A, where a converged burn-in would make all three ammonia scenarios inert.
+  run sound or soured, and the trace of syntrophic oxidisers the feed carries (ADM1 has no
+  immigration, so without it a washed-out pathway can never return and the Level-6/7 rows
+  are inert). The burn-in is 400 d and is **measured** to converge on all three plants.
 - `faults/log_notes.yaml` — the operator log notes placed in **every** run (a handful of
   true, diagnostically useless ones) plus the Level-8 note that asserts a false cause. If
   only the adversarial run had notes, the file's existence would be the answer. All

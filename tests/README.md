@@ -79,8 +79,10 @@ The run harness and the scenario library (`sim/run/`, `state/`, `scenarios/`):
 
 - `test_run_harness.py` — the declared `runs/<id>/` layout; no truth file, value or
   vocabulary in `observations/`; an opaque, deterministic run id; the burn-in measured to
-  have converged on Plants B and C and measured **not** to have on Plant A, where
-  lengthening it would make all three ammonia scenarios inert; tiers as masks on
+  have converged on all three plants; Plant A measured to be a stable *adapted* digester
+  whose acetoclastic and syntrophic pathways exclude one another rather than coexisting,
+  and the feed's trace re-seeding without which a washed-out pathway could never return;
+  tiers as masks on
   bit-identical truth; the Level-4 biomass multiplier and the Level-5 parameter multiplier
   read back off the state vector and the segment parameters and compared with the numbers
   in the YAML; the two-zone truth reactor; operator notes in every run and the false one in
@@ -99,10 +101,13 @@ The run harness and the scenario library (`sim/run/`, `state/`, `scenarios/`):
   and compares it verbatim; asserts every influent statistic is inside a tolerance
   **declared before the comparison**, that the inherited bounds really are the ones the
   other test files apply (read out of those files), and that a bound actually bites. It
-  then pins the two things that are *wrong*: the VFA and FOS/TAC rows fail, and the size
-  of the failure is asserted in both directions so closing the gap forces the record to be
-  updated; and Plant B sours on a material fraction of the twelve declared seeds, asserted
-  to be neither zero nor everything.
+  carries the lead's acceptance condition — **no clean Level-0 seed sours**, on a
+  twenty-four-seed panel, with a margin assertion so a run that merely scraped over the
+  threshold would not pass — and it pins what is still *wrong*: the VFA and FOS/TAC rows
+  fail, their size asserted in both directions so closing the gap forces the record to be
+  updated, and the overload flag measured to fire on almost no day of a healthy Plant B.
+  Marked `g1`, so it is deselected by default and CI runs it nightly and on changes to
+  `sim/`.
 
 `test_truth_isolation.py` (above) also drives the workflow-facing loader
 `state.run_view.open_run` on a real generated run, asking it for hidden truth by relative

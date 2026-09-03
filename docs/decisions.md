@@ -2006,3 +2006,190 @@ nothing to act on in most healthy Plant B runs, and the Level-4 `informative_mis
 row (S4-02) is a near-duplicate of Level 1 there. `docs/g1_anchor_report.md` §6 lists the
 five things that would close the underlying gap and which two of them actually change the
 answer.
+
+---
+
+## 2026-09-03 — RULING 1 (the lead): Plant B's blend tank is part of the plant contract
+
+**Decision.** `configs/plants/plant_B.yaml` declares an `equalisation` block — a well-mixed
+buffer of 123.02 m³ (65,000 gal for the plant, halved for the modelled unit) holding the
+high-strength waste — and `sim/plants/equalisation.py` implements it. The influent
+generator is **untouched**, as ruled: the buffer is what absorbs the swings.
+
+**Reason.** The plant's own description had always said the HSW is "trucked deliveries
+blended in a 65,000-gal tank" and the simulator had never implemented it, so arrivals
+reached the biomass as acid pulses. It is **declared, not hidden**: a workflow is told the
+tank exists, its size and which feeds pass through it, exactly as it is told the digester's
+volume. What stays hidden is the composition of what was delivered into it.
+
+**The model.** One continuously stirred tank: `dV/dt = q_in − V/τ` and the same for each
+component mass, integrated exactly over a day with the arrivals held. Drawing in proportion
+to level is what a level-controlled pump does and makes the tank unconditionally stable —
+it cannot run dry or overflow and passes exactly what it receives in steady state. The
+outflow is computed *from* the balance rather than alongside it, so mass closes to machine
+precision, and at zero volume it reduces to a pass-through exactly (tested).
+
+**The buffered share is taken as a residual** — the whole influent minus the direct feeds'
+own flow and load — so the tank never has to know the composition of what is in it,
+including a mislabelled batch's redrawn fractionation. The direct feeds are reconstructed
+from the catalogue, so a fault that altered *their* composition would break that; the code
+refuses rather than silently mis-reconstructing.
+
+**FOG is not buffered.** It is trucked too, but the plant description names a tank only for
+the HSW, and this is the reading closest to the evidence. Widening it is a one-line change.
+
+**Measured, and it matters for the diagnosis.** On the twelve-seed panel, with the other
+correction held back:
+
+| | no tank | with tank |
+|---|---|---|
+| original strong cations | 7/12 sound, min pH 4.50 | 12/12, min pH 6.53 |
+| calibrated strong cations | 12/12, min pH 7.06 | 12/12, min pH 7.13 |
+
+**Either change alone is sufficient**; both together give the most margin. The tank was the
+right diagnosis and it does work on its own. On the twenty-four-seed panel with both:
+**24 of 24 sound**, pH 7.24–7.40, methane 0.70–0.73. The acceptance condition is met with
+margin rather than scraped. The sound/soured labelling stays as instrumentation, as ruled.
+
+**Alternatives.** Buffer FOG as well (not chosen: the anchor names a tank only for HSW);
+model the tank as a fixed-outflow surge vessel (rejected: it can run dry or overflow, and
+needs a control law the plant description does not give); re-tune the generator (forbidden
+by the ruling, and wrong — the arrivals are anchored data).
+
+---
+
+## 2026-09-03 — RULING 2 (the lead): Plant A declares an adapted inhibition constant
+
+**Decision.** `PlantConfig` gains an `adaptation` block; Plant A declares
+`K_I_nh3 = 0.02 kmol N/m³` against the ADM1 default 0.0018; Plants B and C declare nothing
+and keep the default. The 200-d burn-in workaround and its guard test are **gone**; the
+burn-in is now 400 d and converges on all three plants.
+
+**Reason.** ADM1's default is a sewage-sludge community's. A digester that has run for
+years at a digestate TAN above 3 kg N/m³ does not have that community, and modelling the
+acclimation as a **plant property** is what lets Plant A hold a stable steady state instead
+of being caught mid-washout.
+
+**Why the bottom of the ruled range and not its midpoint.** Measured: the
+`ammonia_inhibition_shift` magnitude range is 0.1–10 (frozen), the acetoclastic/syntrophic
+exchange point is at K_I ≈ 0.003, and 0.02 × 0.1 = 0.002 clears it while 0.035 × 0.1 =
+0.0035 does not. From the midpoint, the largest admissible loss of adaptation produces no
+pathway shift at all. 0.02 is the only part of the ruled range from which the frozen
+magnitude range can express a full de-adaptation.
+
+### What could not be delivered, and why — FLAGGED
+
+**Coexistence is impossible, and it is not a parameter problem.** The ruling asked for a
+steady state with both acetoclasts and SAO present. They compete for one substrate, so one
+always excludes the other; measured, below K_I ≈ 0.003 SAO wins outright and above it the
+acetoclasts do, at both a constant and the stochastic feed. There is **no** adapted K_I in
+0.02–0.05 at which both are present.
+
+**The ruling's fallback has the wrong sign.** Reducing `k_m_sao` towards 3.0 makes SAO
+weaker, which moves the exchange point *down* and makes coexistence harder, not easier.
+Measured at k_m_sao 3.0: at K_I 0.003 the acetoclasts already win outright, where at 4.0
+both were still present. `k_m_sao` has therefore **not** been changed.
+
+**So the rows are staged as transitions, which is the ruling's other half and does work.**
+S5-01 and S7-02 now apply a ×0.1 loss of adaptation at day 120. Measured through the full
+harness: S5-01 takes acetate from 0.045 to 4.30 kg m⁻³ with X_ac 1.09 → 0.84 and X_sao
+7.5e-5 → 0.15; S7-02 gives a residual that *grows* as the truth reroutes its acetate
+through a pathway the fitted model does not have. Both are strong, correctly-signed rows.
+
+**S6-01 is inert and needs a decision.** It is the pure structural omission with no
+transition by construction, so at an acetoclastic baseline the truth's SAO carries no flux
+and omitting it produces no residual. Three ways out are written into the scenario file:
+(a) set Plant A's adapted K_I to ~0.003, the exchange point — outside the ruled range and
+structurally fragile, being the knife edge of a competitive exclusion; (b) give the row the
+same transition and accept a `structural + parameter` label, at which point it duplicates
+S7-02; (c) rescore it as an **abstention** row — the fitted model omits a pathway carrying
+no flux, so the correct conclusion is that no structural residual is detectable. This
+session recommends (a) or (c) and has changed nothing pending the answer.
+
+**Baseline TAN is 3.1–3.7 kg N/m³**, above the 2.3–2.8 the ruling named but inside
+Tisocco et al. 2024's published 2.3–4.3. Nothing was adjusted to move it.
+
+---
+
+## 2026-09-03 — One change beyond the rulings: the feed re-seeds syntrophic oxidisers — FLAGGED
+
+**Decision.** `configs/runs/harness.yaml` adds `influent_extension_states: {X_sao: 1e-4}`,
+a trace of syntrophic oxidisers in the feed.
+
+**Reason, and it is the ruling's own goal that requires it.** ADM1 has no immigration term:
+a population that reaches zero can never return, however favourable conditions become. With
+Plant A adapted, its oxidisers wash out to ~1e-8 during the burn-in, and a loss of
+adaptation then produces **no pathway shift at all** — measured, acetate simply accumulates
+to 1.4 kg m⁻³ while nothing grows to consume it, and the Level-6/7 structural rows stay
+inert. With the term, the same transition takes X_sao from 7e-5 to 0.60 kg COD m⁻³ and the
+acetoclasts from 1.2 to 0.46 in 240 d.
+
+It is physically the right correction rather than a fudge: syntrophic acetate oxidisers are
+continuously re-introduced with the substrate and in a real digester are never absent, only
+rare. At 1e-4 kg COD m⁻³ it is ~1e-5 of the smallest ADM1 biomass state — far too small to
+matter anywhere it is not selected for, which the measurements confirm.
+
+**It is not a kinetic change** and so does not trespass on ruling 3, but it is a truth-model
+addition beyond the letter of ruling 2 and is flagged here, in the config beside the value,
+and in the PR.
+
+---
+
+## 2026-09-03 — RULING 3 (the lead): feed strong cations calibrated to the anchor's alkalinity
+
+**Decision.** The Muscatine feeds' `s_cat` is calibrated to the anchor's own digester
+alkalinity: primary sludge and thickened WAS 0.04 → 0.05, high-strength waste 0.03 → 0.225
+kmol m⁻³, FOG unchanged. `s_an` and **inert-N are untouched**. No kinetic parameter moved.
+
+**Reason and result.** The anchor measures alkalinity in the digester (median 5.04 kg
+CaCO₃ m⁻³) and the simulator produced 2.78 — an under-buffered digester, which is exactly
+one that acidifies under a load pulse. After calibration: alkalinity **5.12** and pH
+**7.29** against the plant's **7.27**. Both anchored quantities land together, which is the
+sign of a physically coherent calibration rather than a fitted offset. The
+`alkalinity_median` row now passes its declared tolerance.
+
+**What the anchor does and does not fix.** It constrains the **flow-weighted** cation excess
+of the blend, not its split between streams; the split is an assumption, stated as such:
+nothing on FOG, a modest rise on the sludges (~1,500 mg L⁻¹ as CaCO₃ in the liquor, the
+upper end for thickened municipal sludge with recycle), and the remainder on the industrial
+stream, on the grounds that clean-in-place caustic is the usual source of alkalinity in food
+and beverage waste and that this stream carries 137 kg COD m⁻³.
+
+**Inert-N was available and not used**: `s_cat` alone reaches the anchor, and inert-N
+carries the deliberate truth/fitted mismatch of 2026-09-02 that the benchmark exists to
+expose.
+
+**Consequence, reported not hidden.** FOS/TAC falls from 0.021 to 0.013 against the
+anchor's 0.232, because the denominator is now right and the whole discrepancy sits in the
+numerator where it belongs. The overload flag now fires on no day at all in most sound runs
+and on 3.3 % in the worst, so the Level-4 `informative_missingness` row is close to a
+duplicate of Level 1. **The 0.40 threshold has not moved.** The list of what closing the VFA
+gap would take is the coordinator's; `docs/g1_anchor_report.md` §6 records only what this
+session measured while doing rulings 1 and 2, and no kinetic parameter was touched.
+
+---
+
+## 2026-09-03 — The gate-G1 panel runs behind a `g1` marker
+
+**Decision.** `tests/test_g1_anchor.py` is marked `g1` and `pyproject.toml` deselects it by
+default (`-m 'not g1'`). CI runs it **nightly** (03:17 UTC) and on any pull request that
+touches `sim/`, `configs/`, `scenarios/` or the comparison module itself; the rest of the
+suite runs on every push and pull request as before.
+
+**Reason.** The panel is twenty-four 180-day Level-0 runs plus a two-year generator draw,
+about six minutes, and it only tells you something when the simulator has changed. The
+paths filter is deliberately wider than `sim/` alone, because a config or scenario change
+moves these numbers just as surely as a code change does.
+
+**Alternatives.** Keep it in the default suite (rejected: it trebles the time of an
+unrelated documentation PR); run it only nightly (rejected: a PR that breaks it would not
+be caught until the next morning, and the author would have moved on).
+
+---
+
+## 2026-09-03 — The five interpretations of the first G1 pass are approved (the lead)
+
+Recorded so the approval is on the record with the things it approves: the redacted
+manifest; the opaque run id; Level-8 rows carrying an underlying fault; Plant A's ammonia
+rows running at all three tiers; and the per-level budget bands. All five stand as
+implemented and described in their own entries above.

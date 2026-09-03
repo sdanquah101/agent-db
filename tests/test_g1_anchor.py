@@ -14,10 +14,11 @@ Three things are asserted, and the third is the awkward one:
    does not go unnoticed.
 3. **The rows that fail are asserted to fail.** The simulated VFA and FOS/TAC distributions
    sit far below the plant's; that is a recorded realism gap in the truth model
-   (``docs/decisions.md``, 2026-09-02). Pinning the failure is deliberate. A test that
-   merely allowed it would let someone "fix" the gap by widening a bound or tuning a feed
-   value and never notice; this one fails if the numbers move in *either* direction, which
-   is the only way a known-bad row stays honest.
+   (``docs/decisions.md``). Pinning the failure is deliberate. A test that merely allowed
+   it would let someone "fix" the gap by widening a bound or tuning a feed value and never
+   notice; this one fails if the numbers move in *either* direction, which is the only way
+   a known-bad row stays honest. The **alkalinity** half of that gap is closed, by the
+   calibration the lead approved on 2026-09-03, and is now asserted to *pass*.
 
 The panel of Level-0 runs costs ~90 s, so it is a module fixture.
 """
@@ -44,7 +45,10 @@ from tests.conftest import REPO_ROOT
 
 REPORT = REPO_ROOT / "docs" / "g1_anchor_report.md"
 
-pytestmark = pytest.mark.skipif(not anchor_available(), reason="Muscatine daily file not present")
+pytestmark = [
+    pytest.mark.g1,
+    pytest.mark.skipif(not anchor_available(), reason="Muscatine daily file not present"),
+]
 
 
 @pytest.fixture(scope="module")
@@ -144,57 +148,65 @@ def test_the_vfa_and_fos_tac_rows_still_fail_and_by_how_much(comparisons):
     """
     by_name = {c.name: c for c in comparisons}
     vfa, fos = by_name["vfa_median"], by_name["fos_tac_median"]
+    alkalinity = by_name["alkalinity_median"]
+    # the alkalinity half of the gap IS closed, by the calibration the lead approved
+    assert alkalinity.passed, (alkalinity.generated, alkalinity.anchor)
     assert not vfa.passed and not fos.passed
     assert 0.0 < vfa.ratio < 0.25, vfa.ratio  # the generated median is at most a quarter
     assert 0.0 < fos.ratio < 0.5, fos.ratio
-    assert 0.005 < fos.generated < 0.12, fos.generated  # the recorded 0.01-0.07 band, widened
+    assert 0.005 < fos.generated < 0.05, fos.generated
     assert 0.20 < fos.anchor < 0.26, fos.anchor  # and the anchor's own 0.23
 
 
-def test_plant_b_sours_on_a_material_fraction_of_seeds(panel):
-    """The finding of this session, pinned so it cannot be forgotten or quietly fixed.
+def test_no_clean_level_0_seed_sours(panel):
+    """The lead's acceptance condition for Plant B (ruling 1, 2026-09-03).
 
-    Plant B acidifies on several of the twelve declared Level-0 seeds under the frozen feed
-    catalogue and influent generator. It reproduces without the harness (declared geometry,
-    published initial state, no burn-in), so it is a property of the configuration; and
-    ``tests/test_plausibility.py`` missed it because it tests one seed.
+    Before the changes of that date, Plant B acidified on 5 of 12 clean Level-0 seeds.
+    Two independent corrections were made and **either one alone is sufficient**, measured
+    on the twelve-seed panel with the other held back:
 
-    If a change makes Plant B sound on every seed, this test fails and the report, the
-    decisions log and the benchmark card must be updated to say so — which is the point.
+    ============================  ==========  ==========
+    ..                            no tank     with tank
+    ============================  ==========  ==========
+    original strong cations       7/12 sound  12/12
+    anchor-calibrated cations     12/12       12/12
+    ============================  ==========  ==========
+
+    with the worst-case minimum pH going 4.50 -> 6.53 (tank alone), 7.06 (calibration
+    alone) and 7.13 (both). The panel is now twenty-four seeds, because twelve could show a
+    40 % failure rate but could not support a claim that the rate is zero.
+
+    This asserts the condition itself, and the margin: a run that merely scrapes over the
+    soundness threshold would satisfy "no seed sours" while being one bad week from not.
     """
-    sound = [r for r in panel if r.sound]
-    assert len(panel) == len(OUTPUT_PANEL_SEEDS) == 12
-    assert 4 <= len(sound) <= 10, [r.seed for r in sound]
-    soured = [r for r in panel if not r.sound]
-    assert soured, "Plant B no longer sours; update docs/g1_anchor_report.md and decisions.md"
-    for run in soured:
-        assert run.statistics["digester_pH_median"] < 6.0
-        assert run.statistics["ch4_fraction_median"] < 0.55
-    for run in sound:
-        assert run.statistics["digester_pH_median"] > 6.8
-        assert run.statistics["ch4_fraction_median"] > 0.60
+    assert len(panel) == len(OUTPUT_PANEL_SEEDS) == 24
+    soured = [r.seed for r in panel if not r.sound]
+    assert not soured, f"clean Level-0 seeds that soured: {soured}"
+    ph = [r.statistics["digester_pH_median"] for r in panel]
+    ch4 = [r.statistics["ch4_fraction_median"] for r in panel]
+    assert min(ph) > 7.0, min(ph)  # not merely above the 6.5 threshold
+    assert min(ch4) > 0.65, min(ch4)
+    assert max(ph) < 7.7, max(ph)  # ... and not over-buffered into a different plant
 
 
-def test_the_overload_flag_is_all_or_nothing_across_the_panel(panel):
-    """The Level-4 informative-missingness row needs the flags to fire, and they barely do.
+def test_the_overload_flag_never_fires_on_a_healthy_plant_b(panel):
+    """The measured consequence of the VFA gap, and it costs the benchmark a scenario.
 
-    The review of PR #11 predicted the overload flag would fire on far fewer simulated days
-    than the anchor's ~8 %. Measured on the panel, the picture is bimodal rather than
-    uniformly low: **five of the seven sound runs never raise it at all** and the other two
-    raise it on 8.6 % and 9.3 % of days, which is about the plant's own rate; every soured
-    run raises it on more than half of its days, and three of the five on every day.
+    The overload flag fires when FOS/TAC exceeds 0.40. Across the whole panel of sound runs
+    it fires on **no day at all**, against ~8 % of the plant's own days. Conditional
+    missingness — the §6.1 property that instruments fail during the transients that
+    identify the process, and the entire subject of the Level-4 `informative_missingness`
+    row (S4-02) — therefore has nothing to act on anywhere on a healthy Plant B.
 
-    So S4-02, the row whose whole subject is instruments failing during the transients that
-    identify the process, has nothing to act on in most healthy runs and far too much in a
-    crashed one. Pinned here because it is a property of the truth model, not of the
-    missingness code, and because a change that fixes it must update the record.
+    Pinned because it is a property of the truth model rather than of the missingness code,
+    and because whatever closes the VFA gap must update this record.
     """
-    sound = sorted(r.statistics["overload_day_fraction"] for r in panel if r.sound)
-    soured = sorted(r.statistics["overload_day_fraction"] for r in panel if not r.sound)
-    assert sound[len(sound) // 2] == 0.0, sound  # the median sound run never overloads
-    assert sum(f == 0.0 for f in sound) >= len(sound) // 2, sound
-    assert 0.05 < max(sound) < 0.15, sound  # ... and the ones that do are near the plant's 8 %
-    assert min(soured) > 0.5, soured
+    assert all(r.sound for r in panel)
+    overload = sorted(r.statistics["overload_day_fraction"] for r in panel)
+    assert overload[len(overload) // 2] == 0.0, overload  # the median run: never
+    assert sum(f == 0.0 for f in overload) > 0.5 * len(overload), overload  # most runs: never
+    assert max(overload) < 0.05, overload  # the worst run: 3.3 %, against the plant's ~8 %
+    assert max(r.statistics["fos_tac_median"] for r in panel) < 0.05
 
 
 # ------------------------------------------------------------------ the report
