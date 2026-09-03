@@ -791,3 +791,62 @@ That needs the run harness (`runs/<id>/truth/`, `calls.jsonl`) built first.
 | Independent review (subagent) | ≈ 15 min | 53 tool calls, fresh context |
 | Applying nine findings + tests | ≈ 70 min | 4 full suite runs |
 | Docs, PR body | ≈ 20 min | |
+
+### Session 2026-09-03 — duplicate PR closed, its anchor salvaged, and the launcher fixed
+
+A parallel session had built the observation model and the fault-injection API a second
+time (PR #12, `sim/observe/` + `sim/faults/`, CI green). The lead ruled PR #11 canonical
+and closed #12, keeping three things from it. Branch
+`claude/salvage-scada-anchor-offline` from `main` at b469317.
+
+**Done**
+
+- **The SCADA anchor is now reproducible from a fresh clone.**
+  `anchor/derived/muscatine-scada-window.csv.gz` (days 240–300 of the record, 86,400 rows,
+  three columns, 629 KB, ODC-By with attribution) and
+  `anchor/derived/muscatine-scada-sensor-statistics.json` (full-record statistics, the
+  window's, the row-dropout statistics and the parent's SHA-256), written by
+  `scripts/muscatine_scada_observation.py`. `scada_noise_statistics` reads the gzipped
+  extract, so the two anchored **noise** values are re-derived in CI instead of skipping;
+  the config is checked against the committed JSON always, and the JSON against the 88.8 MB
+  parent when it is present. The window was picked by measuring candidates against the year
+  on the tolerances the test already used (temperature exact, gas cv within 0.0013).
+- **Tier C online missingness is measured**: 0.00097 per sample, from 19 row gaps in
+  347.8 d of SCADA (`scada_row_gap_statistics`). The earlier "the anchor carries no
+  dropouts" was true of the file's cells and false of its rows. Carried as a narrow
+  `base_rate_overrides[tier][kind]`; Tiers A/B and every laboratory rate stay assumed and
+  the tier structure stays, with a test asserting `("C", "online")` is the only exception.
+- **Temperature saturation** is the data dictionary's 85–150 °F (302.594–338.706 K) instead
+  of an assumed 273–353 K; the record sits at the floor on 0.066 % of its minutes.
+- **`CLAUDE.md` opens with who may start a component session**: the routine never launches
+  one; the lead sends `launch: <component>` to the coordinator after the previous PR
+  merges. Two decision entries record the ruling and the process change.
+- Tests 233 → **238** (five added, three of #11's updated where the contract changed, not
+  around it). Two of the five need the git-ignored SCADA parent and skip without it; the
+  window test — the one that closes the gap — runs everywhere.
+
+**Blocked / open**
+
+- Unchanged from the previous session: the simulated FOS/TAC distribution sits below the
+  plant's, and the below-LOQ valerate question is still open.
+- The window cannot carry the flatline occupancies (rare events) or the dropout rate
+  (unrepresentative over 60 days); both stay full-record figures in the JSON.
+
+**Next session should start on**
+
+Nothing is launched automatically any more. The next component — scenario generation for
+gate G1 — starts when the lead sends `launch: scenario generation (G1)` to the
+coordinating session, after this salvage merges. It still needs the run harness
+(`runs/<id>/truth/`, `calls.jsonl`) first.
+
+**Resource cost this session (rough)**
+
+| Item | Wall-clock | Disk | Notes |
+|---|---|---|---|
+| Establishing the duplication and reporting it | ≈ 15 min | — | diff against `main`, comparison of both implementations |
+| Window selection (13 candidates scored) | ≈ 10 min | 88.8 MB parent (git-ignored) | one full parse per candidate |
+| Salvage code, config and tests | ≈ 45 min | 629 KB committed | |
+| Docs (decisions, milestones, CLAUDE.md) | ≈ 20 min | — | |
+| Full suite | ≈ 5 min per run | — | |
+
+No LLM-agent compute inside the benchmark; development cost only.

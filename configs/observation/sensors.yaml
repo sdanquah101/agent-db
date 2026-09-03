@@ -14,8 +14,14 @@
 #   * total biogas flow: 1-minute noise sigma 2.35 cfm on a mean of 112.8 cfm = 2.1 %
 #     relative; stuck-value runs of >= 10 min are 0.0144 % of the time (both fractions
 #     re-measured after an off-by-one in the run marker was fixed; see the decisions log).
-#   * MISSINGNESS CANNOT BE ANCHORED: the provider pre-cleaned the SCADA file and the two
-#     columns are 100 % finite, so every rate below is the lead's design value.
+#   * ROW DROPOUTS: the file's CELLS are 100 % finite (the provider pre-cleaned it), but
+#     whole ROWS are absent - 19 gaps in 347.8 d, 0.0966 % of its minutes, median 2 min,
+#     longest 421 min. That measures the Tier C ONLINE base missing rate and nothing else;
+#     the Tier A/B rates and every laboratory rate stay the lead's design values.
+#   * The anchored NOISE above is re-derived on a fresh clone from the committed 60-day
+#     extract anchor/derived/muscatine-scada-window.csv.gz; the flatline occupancies and
+#     the dropout rate are rare-event statistics that need the whole year and are checked
+#     against anchor/derived/muscatine-scada-sensor-statistics.json instead.
 #
 # WHAT BELONGS TO THE TIER, NOT THE SENSOR (lead's decision 2026-09-02). A tier is a
 # plant's monitoring capability, so it carries: the base missing rate, the laboratory
@@ -61,13 +67,30 @@ conditions:
   source: "fos_tac_overload APPROVED by the lead, ANCHORED to muscatine_daily Dig1-FOS-TAC; the foaming rule is ASSUMED"
 
 # Conditional missingness (proposal §6.1). Base rate by TIER, stress multipliers by
-# instrument KIND. Lead's decision 2026-09-02; every value ASSUMED (no dropout statistics
-# exist in the anchor - the SCADA file is pre-cleaned and 100 % finite).
+# instrument KIND (lead's decision 2026-09-02). One rate is MEASURED - Tier C online, from
+# the SCADA record's own row dropouts - and every other value is ASSUMED.
 missingness:
   base_rate_by_tier:
     A: 0.08                   # DESIGN  -; ASSUMED: the constrained plant loses most
     B: 0.04                   # DESIGN  -; ASSUMED
     C: 0.02                   # DESIGN  -; ASSUMED: the best-instrumented plant loses least
+  base_rate_overrides:
+    C:
+      online: 0.00097         # MEASURED -; the Muscatine SCADA record is missing 0.0966 %
+                              # of its minutes (19 gaps in 347.8 d, median 2 min, longest
+                              # 421 min: anchor.ingest_muscatine.scada_row_gap_statistics,
+                              # recorded in anchor/derived/muscatine-scada-sensor-
+                              # statistics.json). This is the dropout of a SCADA-equipped
+                              # plant's ONLINE instruments and anchors nothing else: the
+                              # Tier A and B rates above (manual logging) and every
+                              # laboratory rate stay ASSUMED (lead's ruling 2026-09-03).
+                              # Two caveats stated rather than buried: the providers
+                              # deleted 485 rows they assumed were power surges, so it is
+                              # the published record's dropout and a LOWER BOUND on the
+                              # plant's; and these sensors report a daily mean of the
+                              # 1-minute record, which survives a partial-day gap, so as a
+                              # per-sample loss rate it is conservative in the same
+                              # direction.
   stress_multipliers_by_kind:
     online:
       overload: 4.0           # DESIGN  -; ASSUMED: an online probe in an overloaded digester
@@ -76,7 +99,11 @@ missingness:
       overload: 1.5           # DESIGN  -; ASSUMED: a grab sample is far less affected
       foaming: 1.5            # DESIGN  -; ASSUMED: the lead gave one figure for lab assays,
                               # applied to both flags (recorded in the decisions log)
-  source: "ASSUMED throughout (lead's decision 2026-09-02); the anchor carries no dropouts"
+  source: >-
+    Tier C online MEASURED from the muscatine_scada row dropouts; every other rate and
+    every stress multiplier ASSUMED (lead's decision 2026-09-02, amended 2026-09-03). The
+    earlier "the anchor carries no dropouts" was true of the file's CELLS, which are
+    100 % finite, and false of its ROWS, which are not.
 
 sensors:
   # ------------------------------------------------------------------ Tier A (online)
@@ -111,8 +138,12 @@ sensors:
                                 # under one daily sample: at this schedule a flatline is a
                                 # single held reading.
       source: "muscatine_scada: consecutive identical D1_TEMPERATURE values"
-    saturation: {low: 273.15, high: 353.15}   # DESIGN  K; ASSUMED: the SCADA dictionary's
-                                              # acceptable range is 85-150 degF (302-339 K)
+    saturation: {low: 302.594, high: 338.706}  # DESIGN  K; ANCHORED: the SCADA data
+                                # dictionary's acceptable range for D1/D2_TEMPERATURE is
+                                # 85-150 degF, and the FLOOR is reached - the record sits
+                                # at 85 degF on 0.066 % of its minutes - so it is an
+                                # observed limit, not an assumed one (lead's ruling
+                                # 2026-09-03; was an assumed 273.15-353.15 K).
     source: "noise and flatline ANCHORED to muscatine_scada; drift ASSUMED"
 
   ph:

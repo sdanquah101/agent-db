@@ -1694,3 +1694,99 @@ up deliberately.
 which is better than a self-review and still not an outside one. The reviewer was told to
 verify arithmetic independently and to try to construct broken implementations that pass
 each test; the three findings that mattered most came from exactly that instruction.
+
+---
+
+## 2026-09-03 — Duplicate observation model and fault injection: PR #11 canonical, PR #12 closed, three items salvaged
+
+**What happened.** The observation model and the fault-injection API were built twice in
+parallel: PR #11 (`claude/milestone-2-observation-fault-injection`, merged at b469317) and
+PR #12 (`claude/milestone-2-observation-faults`, `sim/observe/` + `sim/faults/`, CI green,
+closed unmerged). The second session branched from `main` at 2204dcf after confirming that
+its stated predecessor (PR #10) had merged, and did not list the *other* open PRs. This is
+the third collision of the same kind after "Duplicate ADM1 core" (#2 vs #4) and "Duplicate
+plant layer" (#6 vs #7).
+
+**Decision (by the lead).** PR #11 is canonical: it is merged and its configuration already
+carries the lead's answers. PR #12 is closed. No design is re-decided. Three things it had
+that `main` did not are salvaged into a small follow-on PR, adapted to #11's contract:
+
+1. **The anchored sensor values are re-derivable on a fresh clone.**
+   `tests/test_observation.py::test_anchored_sensor_values_are_rederived_from_the_scada_file`
+   skips unless the git-ignored 88.8 MB `SCADA-raw.csv` is present — an anchor that only
+   holds for whoever fetched it. `anchor/derived/muscatine-scada-window.csv.gz` (days
+   240-300, three columns, biogas rounded to 1e-3 cfm, 629 KB, ODC-By with attribution and
+   the parent's SHA-256) plus `anchor/derived/muscatine-scada-sensor-statistics.json` make
+   the anchored **noise** re-derivable offline, and the config checkable against a
+   committed derivation always. `scripts/muscatine_scada_observation.py` writes both.
+2. **The Tier C online missing rate is measured, not assumed.**
+3. **The temperature saturation range is the data dictionary's, and its floor is reached.**
+
+**On (1), the window was chosen by measurement.** Candidate 60/90/120-day windows were
+scored against the full year on the two anchored statistics using the tolerances the
+existing test already applies. Days 240-300 reproduce the temperature noise *exactly*
+(0.052418 degF -> 0.02912 K) and the gas cv to 0.0013 (0.0221 against 0.0208, tolerance
+0.003). **What the window cannot carry is stated rather than smoothed over:** the flatline
+occupancies are rare-event statistics — this window contains no stuck run of ten minutes
+or more, and no 60-day window reproduces 0.00077 within 25 % — and the dropout rate is
+unrepresentative over 60 days (18 of the record's 19 gaps fall in the first 90). Both stay
+full-record figures in the JSON, checked against the parent when it is present.
+
+**On (2), what "the anchor carries no dropouts" got wrong.** `sensors.yaml` and
+`MissingnessPolicy` said missingness could not be anchored because the SCADA file is
+pre-cleaned and "100 % finite". That is true of the file's *cells* and false of its *rows*:
+`anchor.ingest_muscatine.scada_row_gap_statistics` finds **19 gaps in 347.8 d, 0.0966 % of
+minutes missing, median 2 min, p90 9.8 min, longest 421 min**. The lead's ruling: that
+measures **Tier C online and nothing else** — it is what a SCADA-equipped plant's online
+instruments lose. Tier A and B (8 % and 4 %, manual logging) and every laboratory rate stay
+assumed, and the tier structure stays. Implemented as a narrow
+`MissingnessPolicy.base_rate_overrides[tier][kind]` consulted by `model_for`, so
+`base_rate_by_tier` remains the contract and the exception is visible; a test asserts that
+`("C", "online")` is the *only* cell that departs from its tier rate.
+
+Two caveats are recorded beside the value: the providers deleted 485 rows they assumed
+were power surges, so 0.097 % is the *published* record's dropout and a lower bound on the
+plant's; and these sensors report a daily mean of the 1-minute record, which survives a
+partial-day gap, so as a per-sample loss rate it is conservative in the same direction.
+
+**On (3).** The range was assumed at 273.15-353.15 K while the file's data dictionary gives
+85-150 degF for `D1/D2_TEMPERATURE`. The record sits **at** the 85 degF floor on 0.066 % of
+its minutes, so the dictionary range is an observed limit, not a hypothetical one; the
+config now carries 302.594-338.706 K.
+
+**Consequences for #11's tests.** Two assertions changed with the contract, not around it:
+the tier-property test now asserts exactly one measured exception rather than none, and the
+observed-ordering test asserts the online A/C ratio is now more than 20x (it was 4x) while
+the *laboratory* B/C ratio still carries the assumed 4 %/2 % structure. The
+"without missingness" helper also clears the override, or Tier C online would keep losing
+0.1 % of its samples in tests that ask for none.
+
+**Alternatives.** Resolve #12's conflict and keep both (rejected: two observation packages
+and two fault schemas); re-open the design questions #11 settled (rejected: the lead had
+already answered them there); apply the measured dropout to every tier (rejected by the
+lead: it is a SCADA-equipped plant's online figure and says nothing about manual logging
+at a constrained plant).
+
+---
+
+## 2026-09-03 — The daily routine no longer launches component sessions
+
+**Decision (by the lead).** The routine's launch authority is removed. It reviews,
+subscribes, reports and salvages; it launches nothing. A component session starts only when
+the lead sends `launch: <component>` to the coordinating session, after the previous
+component's PR has merged. Every "reply to paste" goes to the coordinator, and the
+coordinator relays a child session's questions. Recorded in `CLAUDE.md` under "Who starts a
+component session", which is now the first section of the file.
+
+**Reason.** Three of the first six components were built twice (#2/#4, #6/#7, #11/#12).
+Each collision had the same shape: the routine launched a component because its plan said
+so, while a session was already building it because a decision had reached that session
+directly. The mitigation added after the first collision — "check the open PRs" in
+`CLAUDE.md` — did not stop the third, because by the time anyone looks the duplicate work
+has usually started. Removing the authority removes the failure mode at a cost of one
+message per component.
+
+**Alternatives.** A stronger check in the session brief (rejected: it is the same
+mitigation that already failed twice); a lock file or a registry of in-flight components
+(rejected: more machinery than a one-line message, and it would still depend on every
+launcher consulting it).
