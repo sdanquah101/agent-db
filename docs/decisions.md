@@ -1790,3 +1790,95 @@ message per component.
 mitigation that already failed twice); a lock file or a registry of in-flight components
 (rejected: more machinery than a one-line message, and it would still depend on every
 launcher consulting it).
+
+---
+
+## 2026-09-03 — The measured dropout is a plant-level process, not a per-sensor rate
+
+**Decision (by the lead), on the coordinator's finding.** PR #13 carried the Muscatine
+row-dropout measurement into `MissingnessPolicy.base_rate_overrides[C][online]`, i.e. as
+an independent per-sensor rate. That imports the *number* and discards the *structure*.
+A plant-level historian dropout process is added instead, shared across all online sensors
+at a tier; **per-sensor independent missingness is unchanged**, and the two compose.
+
+### What the anchor actually shows, and why the shape matters
+
+The SCADA file is 100 % finite in its **cells** — which is why missingness was first
+recorded as unanchorable — but whole **rows** are absent. Measured independently by the
+coordinator before the ruling, and again here:
+
+| | |
+|---|---|
+| gaps | **19** over 347.8 d |
+| minutes missing | **484** = **0.0966 %** of the record |
+| lengths | median 2 min, p90 9.8 min, longest **421 min**; all 19: 1,1,1,1,1,2,2,2,2,2,3,3,4,4,5,7,9,13,421 |
+| blank cells in either channel | **0** — every dropout is a whole row |
+
+Because whole rows go, both online channels lose **exactly the same minutes**. As an
+independent per-sensor rate `p`, two online sensors lose the same sample with probability
+`p² = 9.3e-7`; in the record it is `1`. Six orders of magnitude, in exactly the structure
+§6.1 exists to test — a workflow that sees every online channel drop out together learns
+something quite different from one seeing scattered independent gaps.
+
+### The design
+
+`HistorianDropout` (`sim/observation/schema.py`), declared in `configs/observation/sensors.yaml`:
+
+- **`rate_by_tier`** — C **0.000966** (MEASURED, `measured_tiers: [C]`); A **0.010** and
+  B **0.005** (ASSUMED). Tiers A and B have no historian: their online readings are logged
+  by hand, so the shared failure is "nobody wrote the readings down that day" — coarser and
+  rarer than a per-instrument fault, hence well below the 8 %/4 % per-sensor rates.
+  **FLAGGED: nothing anchors the A and B figures.**
+- **`gap_lengths_min`** — the record's own 19 outages. Carried rather than collapsed to a
+  mean because it decides how many samples one outage costs: every observed outage is under
+  a day, so on the daily schedule an outage costs exactly the sample it lands on and the
+  realised loss fraction equals the declared rate. On an hourly schedule the 421-minute
+  outage would cost seven samples, and `spans_multiple_samples()` says so.
+- **Laboratory assays are untouched** — a grab sample does not pass through the historian.
+- **Additive, not a replacement.** An instrument can fail while the historian is up, and
+  the historian can fall over while every instrument is healthy. Online loss at a tier is
+  `1 − (1−per_sensor)(1−shared)`: **8.92 % / 4.48 % / 2.10 %** at A/B/C against the frozen
+  per-sensor 8 / 4 / 2 %. **FLAGGED: this moves the frozen totals, by design.**
+
+**Its own random stream** (rule 4), derived from the run seed by `HISTORIAN_STREAM_OFFSET`
+and drawn once per run before any sensor, on the tier's finest online schedule. Deriving it
+by an offset rather than by splitting the run seed leaves every sensor's own draws
+bit-identical to what they were before the historian existed — an archived run is not
+silently re-rolled by adding a component.
+
+### Consequences
+
+`base_rate_overrides` is removed: with the measurement in its proper home there is no
+exception to the tier structure, and `model_for` is a plain lookup again. Four of #13's
+tests move back with it — the tier-property test asserts no cell departs from its tier
+rate, and the observed A/C ordering is the composition `4.25`, not the bare `4.0` and not
+`>20`. Two new tests carry the property that motivated all this: with only the shared
+process active, `temperature.missing` and `gas_flow.missing` are asserted **array-equal**
+(the same days, not merely the same rate), the laboratory assay loses nothing, and the
+joint loss rate is >100× what independence would give.
+
+**Alternatives.** Keep the override as well as the process (rejected: double-counts, and
+preserves the misattribution); model the outage as a per-sensor rate with a correlation
+parameter (rejected: one shared series is the physical object, and a correlation
+coefficient would be a free parameter nothing anchors); give Tiers A and B no shared
+process at all (rejected: manual logging fails in exactly this correlated way, and
+declaring the rate zero would assert something stronger than "unmeasured").
+
+**Addendum, same day — the composite totals are ACCEPTED as the effective online loss.**
+The lead's answer on the two items flagged with the ruling: the Tier A and B shared rates
+(0.010 and 0.005) **stay as assumed**, and the composite totals are **accepted and recorded
+as the effective online loss, with no renormalisation**:
+
+| Tier | per-sensor (frozen) | shared | **effective online loss** |
+|---|---|---|---|
+| A | 0.08 | 0.010 | **8.92 %** |
+| B | 0.04 | 0.005 | **4.48 %** |
+| C | 0.02 | 0.000966 | **2.09 %** |
+
+The per-sensor rates are unchanged at the frozen 8/4/2 %. The totals are higher because a
+second, real failure mode was added — not because a rate was re-tuned — and renormalising
+them back to 8/4/2 % would make the historian free, which is the opposite of modelling it.
+Laboratory assays never pass through the historian, so their loss remains exactly the
+per-sensor tier rate. Recorded in `configs/observation/sensors.yaml` beside the process and
+pinned by `test_the_effective_online_loss_is_the_recorded_composite`, which asserts both
+the declared inputs and the loss a 6,000-day run actually shows.
