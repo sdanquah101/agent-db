@@ -101,6 +101,20 @@ missingness:
 # minutes. Applied as an independent per-sensor rate p, two online sensors would lose the
 # same sample with probability p^2 = 9.3e-7; in the record it is 1. So the measurement
 # drives the process it actually describes, and the per-sensor rates above are unchanged.
+# EFFECTIVE ONLINE LOSS (accepted by the lead 2026-09-03, recorded and NOT renormalised).
+# The two processes compose independently, so an online sensor's unconditional loss rate is
+# 1 - (1 - per_sensor)(1 - shared):
+#
+#     Tier A   0.08   + 0.010    -> 8.92 %
+#     Tier B   0.04   + 0.005    -> 4.48 %
+#     Tier C   0.02   + 0.000966 -> 2.09 %
+#
+# The per-sensor rates above stay at the frozen 8/4/2 %; the totals are higher because a
+# second, real failure mode was added, not because a rate was re-tuned. The lead's ruling
+# is explicit that they are NOT renormalised back to 8/4/2 %: doing so would make the
+# historian free, which is the opposite of modelling it. Laboratory assays never pass
+# through the historian, so their loss stays exactly the per-sensor tier rate.
+# Pinned by tests/test_observation.py::test_the_effective_online_loss_is_the_recorded_composite.
 historian:
   rate_by_tier:
     A: 0.010                  # DESIGN  -; ASSUMED. Tier A has no historian: its online

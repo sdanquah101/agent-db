@@ -1863,3 +1863,22 @@ parameter (rejected: one shared series is the physical object, and a correlation
 coefficient would be a free parameter nothing anchors); give Tiers A and B no shared
 process at all (rejected: manual logging fails in exactly this correlated way, and
 declaring the rate zero would assert something stronger than "unmeasured").
+
+**Addendum, same day — the composite totals are ACCEPTED as the effective online loss.**
+The lead's answer on the two items flagged with the ruling: the Tier A and B shared rates
+(0.010 and 0.005) **stay as assumed**, and the composite totals are **accepted and recorded
+as the effective online loss, with no renormalisation**:
+
+| Tier | per-sensor (frozen) | shared | **effective online loss** |
+|---|---|---|---|
+| A | 0.08 | 0.010 | **8.92 %** |
+| B | 0.04 | 0.005 | **4.48 %** |
+| C | 0.02 | 0.000966 | **2.09 %** |
+
+The per-sensor rates are unchanged at the frozen 8/4/2 %. The totals are higher because a
+second, real failure mode was added — not because a rate was re-tuned — and renormalising
+them back to 8/4/2 % would make the historian free, which is the opposite of modelling it.
+Laboratory assays never pass through the historian, so their loss remains exactly the
+per-sensor tier rate. Recorded in `configs/observation/sensors.yaml` beside the process and
+pinned by `test_the_effective_online_loss_is_the_recorded_composite`, which asserts both
+the declared inputs and the loss a 6,000-day run actually shows.

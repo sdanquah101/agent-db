@@ -411,6 +411,35 @@ def test_the_two_missingness_processes_compose_without_replacing_each_other(conf
     assert both.mean() == pytest.approx(expected, rel=0.15)
 
 
+def test_the_effective_online_loss_is_the_recorded_composite(config):
+    """The lead accepted the composite totals as the effective loss; they are recorded here.
+
+    Adding the shared historian process on top of the frozen per-sensor rates raises an
+    online sensor's unconditional loss from 8/4/2 % to 8.92/4.48/2.09 %. The lead's ruling
+    of 2026-09-03 accepts those as the effective figures and explicitly does NOT
+    renormalise the per-sensor rates back down — renormalising would make the historian
+    free, which is the opposite of modelling it. This pins both halves: the declared
+    inputs, and the loss a run actually shows.
+    """
+    per = config.missingness.base_rate_by_tier
+    shared = config.historian.rate_by_tier
+    assert [per[t] for t in "ABC"] == [0.08, 0.04, 0.02]  # frozen, unchanged
+    expected = {t: 1.0 - (1.0 - per[t]) * (1.0 - shared[t]) for t in "ABC"}
+    assert expected["A"] == pytest.approx(0.0892, abs=5e-5)
+    assert expected["B"] == pytest.approx(0.0448, abs=5e-5)
+    assert expected["C"] == pytest.approx(0.020947, abs=5e-5)
+    # and a run loses at that rate, not at the per-sensor rate
+    channels = _flat_channels(n_days=6_000)
+    for tier in "ABC":
+        record = observe(channels, config, tier, seed=11)
+        online = record["gas_flow"].missing.mean()
+        assert online == pytest.approx(expected[tier], rel=0.12), tier
+        assert online > per[tier] * 0.98, (tier, "the shared process must add, not replace")
+    # a laboratory assay never passes through the historian: it loses the bare tier rate
+    lab = observe(channels, config, "C", seed=11)["alkalinity"].missing.mean()
+    assert lab == pytest.approx(per["C"], rel=0.25)
+
+
 def test_a_historian_rate_must_cover_every_tier_and_carry_its_lengths(config):
     """The outage process is declared completely or not at all."""
     raw = config.historian.model_dump()
