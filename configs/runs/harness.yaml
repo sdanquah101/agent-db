@@ -1,0 +1,83 @@
+# Run-harness settings (sim/run/harness.py). Numerical choices live in configs/, never
+# hard-coded (CLAUDE.md conventions).
+#
+# All values here are DESIGN choices of the harness, not anchored quantities: they say how
+# a scenario is *staged*, not what the plant is. The plant, the feeds, the sensors and the
+# fault magnitudes are frozen elsewhere and this file does not touch them.
+version: 1
+
+# ---------------------------------------------------------------- burn-in
+# A scenario begins on a digester that is already running, so the harness integrates the
+# plant's own median recipe from the published Rosen & Jeppsson (2006) state
+# (configs/adm1/initial_state_rj2006.yaml) and starts the scenario from the state that
+# burn-in ends at. 200 d is ~10 HRT at Plants B and C (19.5 d) and 5 HRT at Plant A (40 d).
+#
+# MEASURED, and NOT the same story on all three plants (tests/test_run_harness.py):
+#
+#   Plants B and C ARE converged here. Integrating a further 100 d moves no state by more
+#   than 1.3 % (and no state above 1e-3 kg COD/m3 by more than 0.02 %), pH by <0.0005 and
+#   the gas rate by <0.001 %.
+#
+#   Plant A is NOT, and deliberately so. Its free ammonia (185-190 mg NH3-N/L) sits inside
+#   the pathway-shift window, so the plant undergoes a slow succession from acetoclastic
+#   methanogenesis to syntrophic acetate oxidation which completes only after ~800 d - at
+#   which point the acetoclastic methanogens have washed out entirely (X_ac 4.6e-5 against
+#   X_sao 0.97 kg COD/m3). Burning in that far would make all three ammonia scenarios
+#   INERT: from the 800-d state, doubling K_I_nh3 moves the gas rate by 0.01 m3/d in 458
+#   (0.002 %) and acetate not at all, because there is no acetoclastic population left for
+#   a change in its inhibition constant to act on. At 200 d the community is mixed
+#   (X_ac 0.53, X_sao 0.54) and the same fault moves gas by +2.2 % and acetate by -19 %,
+#   which is the regime the Level-5/6/7 ammonia rows are about.
+#
+# So 200 d is chosen as a converged steady state on the factorial plants and as a
+# deliberately mid-succession state on Plant A. FLAGGED for the lead (docs/decisions.md,
+# "Burn-in length, and Plant A's SAO succession"): the alternative readings are that the
+# SAO uptake rate is too fast or that Plant A's ammonia envelope is too high, and both are
+# frozen design values that this session did not change.
+burn_in_days: 200.0        # DESIGN  d
+burn_in_output_interval_d: 10.0   # DESIGN  d; only the final state is used, so the
+                                  # burn-in needs no dense output
+
+# ---------------------------------------------------------------- scenario integration
+# One output per day, which is the influent's own sample-and-hold cadence and the highest
+# frequency any sensor of §6.4 reports at. A finer grid would change no observation and
+# would multiply the size of runs/<id>/truth/states.npz.
+output_interval_d: 1.0     # DESIGN  d
+
+# Extension states at the start of the burn-in. X_sao must be seeded: syntrophic acetate
+# oxidiser growth is proportional to the biomass present, so a run started at exactly zero
+# stays at zero for ever and the SAO extension would be silently inert — which is the
+# whole signal of the Level-5/6 ammonia scenarios. 0.01 kg COD/m3 is ~1 % of the smallest
+# ADM1 biomass state at the published steady state: enough to grow from where the
+# thermodynamics allow it, small enough to wash out where they do not (tests/test_plants.py
+# shows both). X_caco3 starts at zero: precipitate is formed in the reactor, not inherited.
+initial_extension_states:
+  X_sao: 0.01              # DESIGN  kg COD/m3; ASSUMED, see above
+  X_caco3: 0.0             # DESIGN  kmol/m3
+
+# ---------------------------------------------------------------- health check
+# Every generated run is labelled sound or soured, because a scenario staged on a digester
+# that has acidified is not the scenario it claims to be: a Level-0 "clean" run that
+# crashed is not a control, and a fault injected into a crash is unattributable.
+#
+# The two thresholds are INHERITED from tests/test_plausibility.py, which already applies
+# pH > 6.5 and mean methane content > 0.55 to a generator-driven Plant B run; they are not
+# invented here. The margin is wide in practice - across a 12-seed panel the sound runs sit
+# at pH 6.9-7.1 with 0.65-0.70 methane and the soured ones at pH 4.6-5.0 with 0.00-0.36 -
+# so the label does not depend on where in that gap the line is drawn.
+#
+# MEASURED AND FLAGGED (docs/g1_anchor_report.md, docs/decisions.md): on PLANT B, 5 of 12
+# seeds sour within 180 d under the frozen feed catalogue and influent generator. Plants A
+# and C are 12 of 12 sound. This is a property of the frozen configuration, not of the
+# harness - it reproduces with the declared geometry, the published initial state and no
+# burn-in - and tests/test_plausibility.py did not catch it because it tests one seed.
+health:
+  min_pH_median: 6.5       # DESIGN  pH; inherited from tests/test_plausibility.py
+  min_ch4_fraction_mean: 0.55   # DESIGN  -; inherited from tests/test_plausibility.py
+  settling_days: 30.0      # DESIGN  d; days dropped from the head before the statistic
+
+# The dissolved calcium of the feed is a per-day series in the influent truth, but
+# `simulate_extended` takes one constant extension influent, so the harness passes the
+# flow-weighted mean over the horizon. `mean` is the only option implemented; the field
+# exists so the choice is visible rather than buried in the code.
+extension_influent: mean   # DESIGN

@@ -14,8 +14,10 @@ venv/
 .coverage
 htmlcov/
 
-# Benchmark run artefacts — never committed; contains hidden truth under runs/<id>/truth/
-runs/
+# Benchmark run artefacts — never committed; contains hidden truth under runs/<id>/truth/.
+# Anchored to the repository root: an unanchored `runs/` also matches `configs/runs/`,
+# which holds the run harness's frozen settings and MUST be committed.
+/runs/
 
 # Real-data anchor (proposal §8): raw downloads are reproduced by `python -m anchor.fetch`
 # from anchor/MANIFEST.json. Everything under anchor/raw/ is ignored except the few files
