@@ -75,6 +75,7 @@ __all__ = [
     "extract_block",
     "generated_influent_statistics",
     "generated_output_statistics",
+    "match_count",
     "output_panel",
     "render_panel",
     "render_report",
@@ -138,6 +139,14 @@ class Tolerance:
     gate: bool = True
     """Whether G1 turns on this row. A row outside the gate is reported and not gating —
     used where the anchor measures something the simulator only partly corresponds to."""
+    calibrated: bool = False
+    """Whether a simulator input was **fitted to this very anchor column**.
+
+    Such a row is not evidence: it says the fit converged, not that the simulator agrees
+    with a measurement it was not shown. It is still reported — the fit could have failed,
+    and a large residual would be a real finding — but it is labelled ``calibrated to
+    anchor`` rather than ``pass`` and :func:`match_count` excludes it, so it can never be
+    counted as one of the anchor matches (the lead's ruling M1, 2026-09-04)."""
 
     def check(self, generated: float, anchor: float) -> bool:
         """Whether a measured pair is inside this bound."""
@@ -274,9 +283,15 @@ TOLERANCES: tuple[Tolerance, ...] = (
         "kg CaCO3/m3",
         "relative",
         0.35,
-        "alkalinity follows the feed's inorganic carbon and cation load, which the "
-        "catalogue carries as design values (`s_ic`, `S_cat`) rather than fits; a third is "
-        "the band inside which the simulated digester is buffering like the plant",
+        "CALIBRATED TO THIS COLUMN, so it is not an independent match. The bound was "
+        "declared when the feed's cation load was a design value; under the lead's ruling 3 "
+        "(2026-09-03) the Muscatine feeds' `S_cat` was then fitted to this very statistic, "
+        "and the earlier rationale - that alkalinity follows design values `s_ic` and "
+        "`S_cat` 'rather than fits' - became false. The row is kept and reported because a "
+        "large residual would still be a finding (the fit could have failed, or moved with "
+        "a later change), and excluded from the anchor-match count because agreeing with "
+        "the column you were fitted to is not evidence",
+        calibrated=True,
     ),
     Tolerance(
         "vfa_median",
@@ -583,6 +598,22 @@ def anchor_available(path: Path = DAILY_FILE) -> bool:
     return Path(path).is_file()
 
 
+def match_count(comparisons: Sequence[Comparison]) -> tuple[int, int, int]:
+    """How many rows the simulator matched **without having been fitted to them**.
+
+    Args:
+        comparisons: The measured rows.
+
+    Returns:
+        ``(matched, independent, calibrated)``: how many independent rows are inside their
+        bound, how many independent rows there are, and how many were excluded because a
+        simulator input was calibrated to the anchor column they compare against.
+    """
+    independent = [c for c in comparisons if not c.tolerance.calibrated]
+    calibrated = len(comparisons) - len(independent)
+    return sum(1 for c in independent if c.passed), len(independent), calibrated
+
+
 def render_report(
     comparisons: Sequence[Comparison], extra: Mapping[str, float] | None = None
 ) -> str:
@@ -602,12 +633,25 @@ def render_report(
     ]
     for c in comparisons:
         ratio = "-" if not math.isfinite(c.ratio) else f"{c.ratio:.2f}"
-        result = "pass" if c.passed else "**FAIL**"
+        if c.tolerance.calibrated:
+            # never "pass": a simulator input was fitted to this very column
+            result = "calibrated to anchor" if c.passed else "**FAIL (calibrated)**"
+        else:
+            result = "pass" if c.passed else "**FAIL**"
         gate = "" if c.tolerance.gate else " (not gating)"
         lines.append(
             f"| `{c.name}` | {c.unit} | {c.generated:.4g} | {c.anchor:.4g} | {ratio} | "
             f"{c.tolerance.describe()}{gate} | {result} |"
         )
+    matched, independent, calibrated = match_count(comparisons)
+    plural = "row was" if calibrated == 1 else "rows were"
+    lines += [
+        "",
+        f"**{matched} of {independent} independent rows are inside their declared "
+        f"tolerance.** A further {calibrated} {plural} calibrated to the very anchor "
+        "column it is compared against, and is excluded from that count: agreeing with a "
+        "column you were fitted to is not evidence.",
+    ]
     if extra:
         lines += [
             "",

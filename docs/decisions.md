@@ -2403,3 +2403,267 @@ Recorded so the approval is on the record with the things it approves: the redac
 manifest; the opaque run id; Level-8 rows carrying an underlying fault; Plant A's ammonia
 rows running at all three tiers; and the per-level budget bands. All five stand as
 implemented and described in their own entries above.
+
+---
+
+## 2026-09-04 — RULING H1 (the lead): hidden truth becomes structurally unreachable
+
+**What was broken.** The G1 review demonstrated two live bypasses of `state/run_view.py` on
+a real generated run, neither of which writes the string `truth`, so the AST checker of
+`tests/test_truth_isolation.py` was blind to both:
+
+1. `view.root` was a public dataclass field, so `view.root / "truth" / "parameters.json"`
+   read the true parameters outright — no traversal, no forbidden literal.
+2. `view.path(".")` was accepted, because the containment guard read
+   `resolved != base and base not in resolved.parents` and `"."` resolves *to* `base`. It
+   returned the observations directory, whose `.parent` is the run root.
+
+**Decision (by the lead). Structural, not a patch.** Hidden truth moves to a **separate
+top-level tree**, `truth_store/<run_id>/`, a sibling of `runs/`. `runs/<run_id>/` contains
+the observations, the **redacted** manifest and `calls.jsonl`, and nothing else. A workflow
+rooted there has nothing to escape *to*: the worst a containment bug can hand it is its own
+run directory. Two consequences follow from the same reasoning and are applied:
+
+* **The complete manifest is hidden truth** and moves with it. It names the scenario, every
+  seed and the declared fault layers, so it is written to `truth_store/<id>/manifest.json`
+  and `runs/<id>/manifest.json` carries only `PublicManifest`. The redaction now happens at
+  **write** time; the file a workflow can open never carried the answer.
+* **`index.jsonl` moves too**, from `runs/index.jsonl` to `truth_store/index.jsonl`. It maps
+  every opaque run id back to its scenario, which is the answer key, and it sat one level
+  above a directory a workflow is handed.
+
+**Defence in depth, all of it, because this module must not depend on the layout.** The run
+root is private (`_root`); every accessor returns **file contents**, never a `Path`, since a
+path is a capability and handing one out re-creates the field the ruling removed; the
+resolver rejects `""`, `"."`, `"./"`, whitespace, absolute paths, traversal and symlinks out
+of the tree. `RunView.path` no longer exists.
+
+**The AST checker stays** as the second layer — it covers code that is never executed, which
+no runtime sandbox can — widened to `truth_store`.
+
+**The test.** An adversarial bypass suite drives every route: the attribute route (it walks
+every public attribute and no-argument method of the view and asserts none yields a `Path`),
+`"."`, `""`, `".."`, absolute paths, a directory symlink and a file symlink, plus a layout
+test asserting the truth tree is not under the run directory. It carries a **negative
+control** — a legitimate read of `sensors.json` and `feed_log.csv` that must still succeed —
+because a sandbox that refuses everything passes every refusal test ever written.
+
+**One rule and its corollary, recorded because it bit immediately.** The truth store is the
+run store's sibling (`truth_store_for(runs_root) = runs_root.parent / "truth_store"`), which
+means **a parent directory holds one run store**: two stores sharing a parent share a truth
+store, and two runs of the same cell would overwrite each other's truth. Each test now gives
+its store its own parent (`<tmp>/runs`). `RunPaths.for_run` takes an explicit `truth_store`
+for anything that needs to break the rule.
+
+**Residual, flagged, not changed.** `runs/<id>/calls.jsonl` stays where CLAUDE.md rule 3
+puts it. It carries argument *fingerprints* and no values, so it leaks nothing directly, but
+the harness's own entries include one `sim.simulate_truth_segment` record per integration
+segment, and the number of segments is one bit about whether a parameter fault has an onset.
+`RunView` cannot reach it. Moving the harness's own calls to the truth store would trespass
+on rule 3's wording, so it is reported rather than done.
+
+**Alternatives.** Patch the guard again and keep truth under the run (rejected by the lead:
+this is the third containment fix, and each one left the secret one directory away); keep
+returning `Path` from a private resolver only (rejected: `feed_log()` and `feed_assays()`
+would still have to hand one to a reader, so the readers take a stream instead); make the
+run root a name-mangled attribute rather than a single underscore (rejected: mangling is
+obfuscation, not a boundary — the boundary is that nothing returns a path).
+
+---
+
+## 2026-09-04 — RULING H3 (the lead): each sensor's stream is derived from its own identity
+
+**What was broken.** `observe()` consumed one serial `numpy.random.default_rng(seed)` over
+`sorted(tier.sensors)`. Tiers carry different sensor sets, so a shared instrument's position
+in that queue changed with the tier and it got a different realisation. Measured at one
+observation seed: tier A's `gas_flow` began 3212.4, nan, 5413.4 and tier C's 3065.9, 5927.2,
+5515.3 — the same instrument on the same digester, with tier A losing a sample tier C kept.
+`sim/run/seeds.py` documents the opposite ("the same observation stream, so that every
+difference between two tiers' records comes from the tier's own policy"), and §6.4's tier
+comparison was confounded by it.
+
+**Decision.** Each sensor's stream is
+`numpy.random.default_rng(SeedSequence([observation_seed, sensor_stream_key(name)]))`, where
+`sensor_stream_key` is the first 8 bytes of SHA-256 of the domain-separated sensor name.
+Python's `hash()` is salted per process and would break CLAUDE.md rule 4. A sensor's draws
+now depend on its own identity and on nothing else: not on which other sensors the tier
+carries, not on whether a subset was requested. **The historian stream stays plant-level**,
+shared across a tier's online sensors, as ruled — that is what it models.
+
+**The test generates the tiers separately.** The old test compared one shared object with
+itself, which is why it passed. `test_a_sensor_reads_the_same_whichever_tier_carries_it`
+makes three `observe` calls, holds the declared tier policies equal so that only the sensor
+*set* differs, asserts the shared sensors array-equal in value **and** in missingness, and
+carries a **different-seed control** that must differ — otherwise a model that had stopped
+drawing anything would satisfy the equality. It also asserts the sets differ in the way that
+broke the old scheme (tier C carries sensors sorting *before* a shared one).
+
+**Two further checks.** `sensor_stream_key` is pinned to golden values, since changing the
+derivation changes every archived run's observations. And the historian's grid — the finest
+online sampling interval — is asserted equal at every tier, so no second confound sits behind
+the one just removed (it is 1 d everywhere today; only `rate_by_tier` differs, which is
+declared policy).
+
+**Three existing tests asserted a realisation rather than a property, and are re-expressed
+rather than relaxed.** The drift-reset check was "smaller than the sample before it, or below
+0.02" at four boundaries of one draw — a boundary step of 0.032 after a quiet 0.0009 is a
+correct reset and failed it; it is now a ratio of magnitudes over every boundary and eight
+seeds (~0.18 when reset, ~1.0 when not, bound 0.4). The flatline hold ran one seed on a
+process whose occupancy is the anchor's 0.00077, so whether an episode occurred at all was a
+coin toss; it is pooled over twelve seeds. The conditional-missingness check compared the
+calm-window rate against the *per-sensor* 0.04 when an online sensor also passes through the
+historian and actually loses 0.0448 — it passed only because 12 % sat inside a 15 %
+tolerance; both expectations are now derived from the config as composites.
+
+**No generated number moved.** The observation stream changes how a *sensor* is realised, not
+what the digester does, and the G1 report's block is byte-identical apart from the M1
+relabelling.
+
+**Alternatives.** Derive the stream from `(seed, tier, name)` (rejected: that is the confound,
+written down); keep the serial stream and reorder it to a fixed global sensor list (rejected:
+a sensor's draws would still move when a sensor is added to the catalogue, and the property
+wanted is independence, not a longer-lived accident).
+
+---
+
+## 2026-09-04 — RULING H2 (the lead): the blend tank's guard starts guarding
+
+**What was broken.** `tests/test_equalisation.py::test_the_tank_conserves_mass_to_machine_precision`
+asserted, per component, `sum(a) - sum(b) == sum(a - b)`. That is an identity of addition: it
+holds for **any** `load_out` whatsoever — a pass-through, zeros, a scrambled series. The tank
+sits between the frozen influent generator and the truth model on every Plant B cell, and the
+one guard on its component balance could not see it stop working.
+
+**Decision.** Replaced with a per-component comparison against the **closed-form solution** of
+`dV/dt = q − V/τ`, written out from the ODE rather than from the implementation — which
+computes the outflow as the balance `in − (level change)`, so the two agree only if the
+balance it keeps is the balance the equation describes. Three hold-ups (0.5, 4, 12 d), three
+components. The mass-balance test's per-component half is likewise reconstructed from the
+analytical relaxation instead of from the returned series.
+
+**The implementation is correct and is unchanged.** An independent Radau integration of the
+same ODE (`scipy.solve_ivp`, rtol 1e-12) agrees to 1.2e-13 on the flow and 2.5e-13 on the
+loads. This is a guard that starts guarding, not a bug fix.
+
+**Confirmed by mutation, as the ruling asked.** `load_out[t] = load_in[t]` now fails four
+tests — the three parametrised cases and the mass balance — and failed none before. A
+negative-control test asserts the same thing from inside the suite (the pass-through is off by
+more than 4 % of the mean load at a 4-day hold-up), so the comparison cannot quietly lose its
+teeth again.
+
+---
+
+## 2026-09-04 — RULING M1 (the lead): the alkalinity row is a calibration, not a match
+
+**Decision.** `Tolerance` gains a `calibrated` flag; `alkalinity_median` sets it. The row is
+rendered **"calibrated to anchor"** rather than "pass", it is **excluded from the
+anchor-match count** (`anchor.compare_generated.match_count`, and the generated block now
+states that count explicitly), and its rationale is corrected. The old rationale — "alkalinity
+follows the feed's inorganic carbon and cation load, which the catalogue carries as design
+values (`s_ic`, `S_cat`) rather than fits" — was written before ruling 3 of 2026-09-03 fitted
+the Muscatine feeds' `S_cat` to this very column, and became false at that moment.
+
+The row is kept and reported rather than dropped: a large residual would still be a finding,
+because the fit could have failed or could drift under a later change. What it cannot be is
+evidence. `tests/test_g1_anchor.py::test_a_row_calibrated_to_the_anchor_is_never_counted_as_a_match`
+asserts the label, the exclusion, and that the superseded rationale cannot come back.
+
+**The pH corroboration claim is withdrawn.** The report read alkalinity 5.12 and pH 7.29
+landing together against the plant's 5.04 and 7.27 as "the sign that the calibration is
+physically coherent rather than a fitted offset". In a bicarbonate-buffered digester pH is a
+function of alkalinity and pCO₂: fixing the alkalinity to a measured value and then observing
+that the pH comes out right is one measurement reported as two.
+
+**Recorded as a finding: one stream supplies almost all of the digester's buffering.**
+Measured three ways on Plant B (base seed 1000, 180 d, settled from d 30):
+
+| Basis | High-strength waste | The two sludges | FOG |
+|---|---:|---:|---:|
+| share of the blend's net strong-cation excess (flow-weighted) | 78 % | 22 % | 0 % |
+| share of the `S_cat` increment the calibration added | 91 % | 9 % | 0 % |
+| share of the digester alkalinity the calibration added (5.63 with, 3.65 without) | 86 % | 15 % | 0 % |
+
+**The ruling states this share as ~95 %; none of the three bases reproduces that**, the
+closest being the `S_cat` increment at 91 %. The measurement method is written out in
+`docs/g1_anchor_report.md` §3.2 so the basis can be settled rather than argued. Reported, not
+resolved here. Two consequences are for the lead: Plant C is fed the sludges alone, so it
+inherits only the 15 % share and its alkalinity has no anchor behind it at all; and a Level-3
+fault that alters the high-strength waste moves the digester's whole buffer capacity.
+
+---
+
+## 2026-09-04 — RULING M7 (the lead): the gap list is merged, and the branch is caught up
+
+**Decision.** `origin/claude/vfa-gap-list` is merged into `claude/g1-scenario-generation`, so
+the citation of `docs/vfa_gap.md` in `docs/g1_anchor_report.md` §6 and in
+`anchor/compare_generated.py`'s `vfa_median` rationale resolves in the same tree that makes it.
+
+The branch was `main` plus that one document, so the merge also brings this branch up to
+`main`: PR #13's offline SCADA anchor and PR #14's plant-level historian dropout arrive with
+it (five tests, 300 → 305 before this session's own work). The only conflicts were the two
+append-only documents, `docs/decisions.md` and `docs/milestones.md`, resolved by keeping both
+sides in chronological order.
+
+---
+
+## 2026-09-04 — Four defects found by the review and not ruled on (M5, M6, L7, L2)
+
+Pure test and correctness work, fixed as marked in the remediation brief.
+
+**M5 — nothing pinned the seed derivation or the run ids.** Every existing test asserted the
+derivation was *self-consistent*: same input same output, different input different output.
+All of that stays true if `STREAM_ORDER` is reversed or `_ID_SALT` is edited — and then every
+archived run's geometry seed is silently some other stream's, and every run directory is
+somewhere else. `test_the_seed_derivation_and_the_run_id_are_pinned` pins the stream order,
+the golden seed tuple for two cells, and three run ids including
+`run_id("S2-03", "B", "A", 1023) == "run_8bfeca8497d4"`.
+
+**M6 — no end-to-end determinism regression.** Two tests. The first generates one cell twice
+from scratch and asserts the truth trajectory, the channels, the hidden geometry, the
+observations and the four written observation files are bit-identical, and that the two
+manifests differ only in `created_utc` and `git_sha`. The second runs the same cell in a
+**subprocess under two different `PYTHONHASHSEED` values** and compares the fingerprints with
+the in-process one: `hash()` is salted per process, so anything that derived a stream, an
+ordering or a key from it would be invisible to an in-process check. Verified by mutation —
+making `sensor_stream_key` use `hash(name)` fails the subprocess test and nothing else.
+
+**L7 — `write_index_entry` appended a duplicate line when a cell was regenerated.** A run id
+is a hash of its cell, so regenerating a cell overwrites its own directories; the index alone
+accumulated, and an evaluator counting its lines would over-count every regenerated cell. It
+now keeps one line per run id, replaced in place.
+
+**L2 — stale numbers.** `docs/g1_anchor_report.md` §7 said the output panel was base seeds
+1000–1011 when it is 1000–1023 (24 runs); `docs/milestones.md` carried the first-pass biogas
+ratio 1.37 where the post-ruling figure is 1.41, and a test count that the session's own later
+work had moved. Corrected, with the correction marked in place rather than silently applied.
+
+---
+
+## 2026-09-04 — Three review findings referred to the lead, unchanged (M2, M3, M4)
+
+Reported here so they are on the record with the rulings they were found alongside. **Nothing
+in the code or the configuration was changed for any of them.**
+
+**M2 — the feed's visible alkalinity assay and its `s_cat` charge disagree by ~490× on the
+high-strength waste.** Independently re-measured here and confirmed: the assay a workflow can
+read is the *bicarbonate* alkalinity of `s_ic` at the feed's pH, 0.0214 kg CaCO₃ m⁻³, while
+the net strong-cation charge the simulator feeds the digester is 10.26 kg CaCO₃ m⁻³ — a factor
+of **480**. The other streams are consistent (thickened WAS 1.0×, primary sludge 2.4×), so
+this is specifically the stream ruling 3 of 2026-09-03 raised from 0.03 to 0.225 kmol m⁻³. The
+assay and the charge describe the same stream to a workflow and to the simulator respectively,
+and after that calibration they no longer correspond.
+
+**M3 — `observations/sensors.json` carries the injected flatline window in `flatlined`.**
+Confirmed on a generated S2-02 cell: the record a workflow reads flags the methane analyser as
+`flatlined` on exactly the six samples the injected fault produced, and on nothing else. The
+flag is meant to be an instrument's own self-report, and here it is also the answer key for
+that row.
+
+**M4 — the adversarial note's `author="process_engineer"` is a perfect tell for the Level-8
+row.** Confirmed on a generated S8-02 cell: the notes file carries one `operator` entry and
+one `process_engineer` entry, and the `process_engineer` one is the false note. Every benign
+note in the catalogue is an operator's, so the field alone identifies the adversarial note
+without reading it.
+
+All three are design questions about what the visible record may contain, which is the lead's
+to answer.

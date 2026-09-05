@@ -888,7 +888,9 @@ generated statistics with the Muscatine anchor inside tolerances declared in adv
   13 min wall-clock, 40 MB. 96 factorial cells on B and C, 18 on Plant A.
 - **`docs/g1_anchor_report.md`** plus `anchor/compare_generated.py` and
   `tests/test_g1_anchor.py`, which recomputes the report's generated block verbatim.
-- Tests 233 → **296**.
+- Tests 233 → **296** at the time this entry was first written; the entry's own numbers
+  were left at their first-pass values and are corrected below (L2 of the 2026-09-04
+  review).
 
 **Gate G1: the stated criterion is met, and there is a blocking finding underneath it**
 
@@ -896,7 +898,9 @@ generated statistics with the Muscatine anchor inside tolerances declared in adv
 unreachable through the workflow API; **every influent statistic is inside its declared
 tolerance** — per-stream delivery medians (ratios 0.95–1.00), spreads (1.01–1.08), zero
 fractions, total feed flow (1.08), the VS fractions, the HSW COD and the organic loading
-rate (1.13). Biogas is 1.37× the plant's measured mean, inside the inherited 0.6–1.5 band.
+rate (1.13). Biogas is **1.41×** the plant's measured mean, inside the inherited 0.6–1.5
+band. *(This entry originally said 1.37×, the first-pass figure measured before the lead's
+rulings 1 and 3 of the same day moved it; corrected 2026-09-04.)*
 
 *Blocking.* **Plant B acidifies on 5 of 12 clean Level-0 seeds** (pH 4.6–5.0, 0–0.31
 methane) under the frozen configuration. It reproduces with declared geometry, the

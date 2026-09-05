@@ -465,6 +465,41 @@ def test_one_seed_per_stream_in_the_documented_order():
         RunSeeds.derive(1, "D")
 
 
+def test_the_seed_derivation_and_the_run_id_are_pinned():
+    """Golden values, because nothing else notices when the derivation moves.
+
+    Every test above says the derivation is *self-consistent*: same input, same output;
+    different input, different output. All of that stays true if the stream order is
+    reversed or the id salt is edited — and then every archived run's geometry seed is
+    silently some other stream's, and every run directory is somewhere else. The numbers
+    below are the contract with runs already on disk. If a change to `sim/run/seeds.py` or
+    `sim/run/layout.py` fails this test, that is the point: it means the change re-rolls
+    or relocates existing runs, and the record has to be updated deliberately.
+    """
+    assert STREAM_ORDER == ("geometry", "influent", "fault", "observation", "notes")
+    seeds = RunSeeds.derive(1023, "B")
+    assert tuple(getattr(seeds, name) for name in STREAM_ORDER) == (
+        3_049_135_782,
+        836_221_657,
+        1_492_633_085,
+        2_781_476_975,
+        768_714_809,
+    )
+    assert RunSeeds.derive(1000, "A").as_dict() == {
+        "base": 1000,
+        "plant": "A",
+        "replicate": 0,
+        "geometry": 4_020_735_467,
+        "influent": 1_099_728_727,
+        "fault": 396_874_550,
+        "observation": 3_216_793_928,
+        "notes": 3_960_606_638,
+    }
+    assert run_id("S2-03", "B", "A", 1023) == "run_8bfeca8497d4"
+    assert run_id("S0-01", "C", "B", 1000) == "run_3cfd8df3b48a"
+    assert run_id("S2-03", "B", "A", 1023, replicate=1) == "run_1c0de3266be8"
+
+
 def test_the_tier_is_not_part_of_the_seed_derivation(tmp_path):
     """Otherwise a tier would be a different digester, not a different window on one."""
     runs = generate_cells(
@@ -485,6 +520,111 @@ def test_a_scenario_without_a_seed_is_refused(tmp_path):
         generate_run(
             scenario, "A", plant=load_plant_config("C"), runs_root=tmp_path / "runs", write=False
         )
+
+
+# ------------------------------------------------------------ 5b. determinism, end to end
+#
+# The seed tests above check the seed *derivation*. Nothing checked that the pipeline those
+# seeds drive is itself deterministic: an unseeded `default_rng()` anywhere inside it, a
+# dependence on dictionary or set iteration order, or a `hash()` of a string would leave
+# every test above green and still make two generations of one cell differ.
+
+
+def _fingerprint(run) -> str:
+    """A hash of everything one generated run produced — truth and observations alike."""
+    import hashlib
+
+    h = hashlib.sha256()
+    truth = run.truth
+    for array in (truth.t, truth.y, truth.burn_in_state, truth.initial_state, truth.ash):
+        h.update(np.ascontiguousarray(np.asarray(array, dtype=float)).tobytes())
+    for name in truth.channels.names:
+        h.update(name.encode())
+        h.update(np.ascontiguousarray(truth.channels[name]).tobytes())
+    h.update(f"{truth.geometry.V_liq_true!r}|{truth.geometry.error_fraction!r}".encode())
+    for name in run.record.names:
+        series = run.record[name]
+        h.update(name.encode())
+        h.update(np.ascontiguousarray(np.nan_to_num(series.value, nan=-1.0)).tobytes())
+        h.update(series.missing.tobytes())
+    for note in run.notes:
+        h.update(repr(note.as_dict()).encode())
+    return h.hexdigest()
+
+
+def test_a_cell_generates_identically_twice(tmp_path):
+    """Two generations of one cell, from scratch, are bit-identical throughout."""
+    scenario = _short("S2-03")
+    plant = load_plant_config("C")
+    first = generate_run(scenario, "B", plant=plant, runs_root=tmp_path / "a", write=True)
+    second = generate_run(scenario, "B", plant=plant, runs_root=tmp_path / "b", write=True)
+
+    assert first.run_id == second.run_id
+    assert _fingerprint(first) == _fingerprint(second)
+    # and the files on disk agree byte for byte, which the objects above do not guarantee
+    for relative in ("sensors.json", "feed_log.csv", "feed_assays.csv", "operator_notes.json"):
+        assert (first.paths.observations / relative).read_bytes() == (
+            second.paths.observations / relative
+        ).read_bytes(), relative
+    # the manifest differs only in the two fields that describe *when* it was written
+    a = json.loads(first.paths.truth_manifest.read_text(encoding="utf-8"))
+    b = json.loads(second.paths.truth_manifest.read_text(encoding="utf-8"))
+    for volatile in ("created_utc", "git_sha"):
+        a.pop(volatile), b.pop(volatile)
+    assert a == b
+
+
+def test_a_cell_generates_identically_in_a_fresh_process(tmp_path):
+    """The same cell, in a subprocess, under a different string-hash salt.
+
+    ``PYTHONHASHSEED`` changes ``hash()`` for every str, bytes and frozenset in the
+    process. Anything in the pipeline that derived a stream, an ordering or a key from
+    ``hash()`` would produce a different run here and be invisible to the in-process test
+    above — which is exactly the trap ``sensor_stream_key`` exists to avoid. Two salts, so
+    the comparison is between two genuinely different hashing regimes.
+    """
+    import subprocess
+    import sys
+    import textwrap
+
+    script = textwrap.dedent(
+        """
+        import sys
+        sys.path.insert(0, %r)
+        from pathlib import Path
+        from tests.test_run_harness import _fingerprint, _short
+        from sim.plants import load_plant_config
+        from sim.run.harness import generate_run
+        run = generate_run(
+            _short("S2-03"), "B", plant=load_plant_config("C"),
+            runs_root=Path(sys.argv[1]) / "runs", write=False,
+        )
+        print(run.run_id, _fingerprint(run))
+        """
+    ) % str(REPO_ROOT)
+
+    outputs = []
+    for salt in ("0", "12345"):
+        result = subprocess.run(
+            [sys.executable, "-c", script, str(tmp_path / salt)],
+            capture_output=True,
+            text=True,
+            check=False,
+            env={"PATH": "/usr/bin:/bin:/usr/local/bin", "PYTHONHASHSEED": salt},
+            timeout=600,
+        )
+        assert result.returncode == 0, result.stderr[-4000:]
+        outputs.append(result.stdout.strip().splitlines()[-1])
+    assert outputs[0] == outputs[1], outputs
+
+    here = generate_run(
+        _short("S2-03"),
+        "B",
+        plant=load_plant_config("C"),
+        runs_root=tmp_path / "here" / "runs",
+        write=False,
+    )
+    assert outputs[0] == f"{here.run_id} {_fingerprint(here)}"
 
 
 # ------------------------------------------------------------------ 6. provenance

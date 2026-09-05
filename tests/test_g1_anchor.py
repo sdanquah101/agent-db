@@ -38,7 +38,9 @@ from anchor.compare_generated import (
     extract_block,
     generated_influent_statistics,
     generated_output_statistics,
+    match_count,
     output_panel,
+    render_report,
     report_block,
 )
 from tests.conftest import REPO_ROOT
@@ -119,6 +121,35 @@ def test_the_inherited_bounds_are_the_ones_the_other_tests_apply():
     assert by_name["biogas_mean"].bound == (0.6, 1.5)
 
 
+def test_a_row_calibrated_to_the_anchor_is_never_counted_as_a_match(comparisons):
+    """The lead's ruling M1 (2026-09-04): a fit is not evidence.
+
+    ``alkalinity_median`` is the case: under ruling 3 of 2026-09-03 the Muscatine feeds'
+    `S_cat` was fitted to this very column, so the row agreeing with it says the fit
+    converged, not that the simulator reproduces a measurement it was not shown. It stays
+    in the report — a large residual would still be a finding — but it is labelled
+    ``calibrated to anchor``, never ``pass``, and it is out of the match count.
+    """
+    calibrated = [t for t in TOLERANCES if t.calibrated]
+    assert [t.name for t in calibrated] == ["alkalinity_median"]
+    assert "CALIBRATED" in calibrated[0].rationale
+    # the superseded rationale asserted the opposite; it may be quoted as superseded, but
+    # not stated. It read "...which the catalogue carries as design values ... rather than
+    # fits", and the row must not be able to drift back to claiming that.
+    assert "which the catalogue carries as design values" not in calibrated[0].rationale
+    assert "became false" in calibrated[0].rationale
+
+    matched, independent, excluded = match_count(comparisons)
+    assert excluded == 1
+    assert independent == len(comparisons) - 1
+    assert matched == independent - 2  # vfa_median and fos_tac_median, and nothing else
+    rendered = render_report(comparisons)
+    assert "| calibrated to anchor |" in rendered
+    assert f"**{matched} of {independent} independent rows" in rendered
+    # and the count really excludes it: adding it back would change the total
+    assert matched < sum(1 for c in comparisons if c.passed)
+
+
 def test_a_tolerance_actually_bites():
     """A bound that accepted anything would make every row above meaningless."""
     by_name = {t.name: t for t in TOLERANCES}
@@ -149,7 +180,10 @@ def test_the_vfa_and_fos_tac_rows_still_fail_and_by_how_much(comparisons):
     by_name = {c.name: c for c in comparisons}
     vfa, fos = by_name["vfa_median"], by_name["fos_tac_median"]
     alkalinity = by_name["alkalinity_median"]
-    # the alkalinity half of the gap IS closed, by the calibration the lead approved
+    # the alkalinity half of the gap IS closed — but by CALIBRATION to this very column,
+    # so the residual says the fit converged and not that the simulator agrees with a
+    # measurement it was not shown (the lead's ruling M1)
+    assert alkalinity.tolerance.calibrated
     assert alkalinity.passed, (alkalinity.generated, alkalinity.anchor)
     assert not vfa.passed and not fos.passed
     assert 0.0 < vfa.ratio < 0.25, vfa.ratio  # the generated median is at most a quarter

@@ -1,10 +1,16 @@
 # Gate G1 — anchor comparison report
 
-**Date:** 2026-09-03 (revised after the lead's rulings of the same day) · **Gate:** G1
-(proposal §11) · **Status:** infrastructure criterion **met**; plant criterion **met** —
-the Plant B souring that failed the first pass is fixed and the acceptance condition is
-satisfied. Two output rows still fail their declared tolerance and are the subject of the
-coordinator's separate list; one scenario row (S6-01) is inert and needs a decision.
+**Date:** 2026-09-04 (revised after the lead's rulings of 2026-09-03 and the remediation
+rulings of 2026-09-04) · **Gate:** G1 (proposal §11) · **Status:** infrastructure criterion
+**met**; plant criterion **met** — the Plant B souring that failed the first pass is fixed
+and the acceptance condition is satisfied. Two output rows still fail their declared
+tolerance and are the subject of `docs/vfa_gap.md`; one row (`alkalinity_median`) is
+calibrated to the anchor and is reported without being counted as a match; one scenario row
+(S6-01) is inert and needs a decision.
+
+None of the numbers in the generated block moved under the remediation of 2026-09-04: the
+truth store, the loader and the per-sensor observation streams change where truth is
+written and how a *sensor* is realised, not what the digester does.
 
 > **G1.** Simulator generates all scenarios with logged truth, and influent statistics
 > match anchor within declared tolerance. *Fail → fix realism before any workflow work.*
@@ -27,7 +33,7 @@ rationale each, and most are **inherited rather than invented**:
 | total feed flow | ± 15 % | as above |
 | biogas | ratio 0.6–1.5 | the band `tests/test_plausibility.py` applies to a generator-driven run |
 | digester pH | ± 0.4 pH | ≈ twice the plant's own day-to-day spread; the probe's noise is 0.02 |
-| alkalinity | ± 35 % | alkalinity follows design values (`s_ic`, `S_cat`) rather than fits |
+| alkalinity | ± 35 % | **calibrated to this column** (ruling 3, 2026-09-03), so the row is reported and **not counted as an anchor match**. The bound was declared when `S_cat` was a design value; it is not a fit's own tolerance |
 | VFA | ratio 0.25–4.0 | deliberately generous: residual VFA is the least identifiable ADM1 output |
 | FOS/TAC | ratio 0.5–2.0 | a factor of two, the natural band for a dimensionless ratio |
 
@@ -124,8 +130,18 @@ The anchor measures the digester's own alkalinity — median 5.04 kg CaCO₃ m�
 simulator was producing 2.78. An under-buffered digester is exactly one that acidifies
 under a load pulse, so this was the same finding from the other side. Calibrating the feed's
 strong-cation content to that column lands alkalinity at **5.12** and pH at **7.29**
-against the plant's **7.27**: both anchored quantities fall into place together, which is
-the sign that the calibration is physically coherent rather than a fitted offset.
+against the plant's **7.27**.
+
+**That pH agreement is not independent corroboration, and this report no longer claims it
+is** (the lead's ruling M1, 2026-09-04). An earlier draft read the two landing together as
+"the sign that the calibration is physically coherent rather than a fitted offset". In a
+bicarbonate-buffered digester pH is a function of alkalinity and the partial pressure of
+CO₂; fixing the alkalinity to a measured value and then observing that the pH comes out
+right is one measurement reported as two. The alkalinity row is likewise **excluded from
+the anchor-match count** and labelled *calibrated to anchor* rather than *pass* in §4: it
+says the fit converged, not that the simulator reproduces a measurement it was not shown.
+It is still reported, because a large residual would still be a finding — the fit could
+fail, or drift under a later change.
 
 The anchor constrains only the **flow-weighted** cation excess of the blend, not its split
 between streams, and the split is an assumption stated as such: nothing on the FOG, a
@@ -134,6 +150,29 @@ liquor), and the remainder on the high-strength waste (0.03 → 0.225), on the g
 clean-in-place caustic is the usual source of alkalinity in food and beverage industrial
 waste and that this stream carries 137 kg COD m⁻³. **Inert-N was left alone**: S_cat alone
 reaches the anchor, and inert-N carries the deliberate truth/fitted mismatch of 2026-09-02.
+
+**Finding: one stream now supplies almost all of the digester's buffering.** The
+calibration is flow-weighted, but the weight it puts on the industrial stream is extreme,
+and that is a property of the plant model worth stating rather than a consequence to be
+inherited quietly. Measured three ways (Plant B, base seed 1000, 180 d, settled from d 30):
+
+| Basis | High-strength waste | The two sludges | FOG |
+|---|---:|---:|---:|
+| share of the blend's net strong-cation excess (flow-weighted, medians of §4) | **78 %** | 22 % | 0 % |
+| share of the `S_cat` **increment** the calibration added | **91 %** | 9 % | 0 % |
+| share of the digester alkalinity the calibration added (5.63 with, 3.65 without any of it) | **86 %** (5.63 → 3.92 when HSW alone is reverted) | 15 % (5.63 → 5.34) | 0 % |
+
+So the anchor's alkalinity column is, in this model, very nearly a measurement of one
+trucked industrial stream's caustic load. Two consequences follow and are for the lead:
+**Plant C is fed the sludges alone**, so it inherits only the 15 % share and its alkalinity
+is an assumption with no anchor behind it at all; and a Level-3 fault that alters the
+high-strength waste moves the digester's whole buffer capacity, which may make those rows
+easier than intended.
+
+**The ruling states this share as ~95 %.** The three bases above give 78 %, 91 % and 86 %,
+and none of them reproduces 95 %; the closest is the share of the `S_cat` increment. The
+measurement method is written out above so the basis can be settled rather than argued.
+Reported, not resolved here.
 
 **One difference from the coordinator's own calibration sweep, flagged for checking.** That
 sweep varied `S_cat` *uniformly* across the Muscatine feeds and found +0.05 kmol m⁻³ hits
@@ -172,9 +211,11 @@ no output anchor, so this is a judgement rather than a fit, and it is recorded a
 | `organic_loading_rate` | kg VS/m3/d | 2.131 | 1.885 | 1.13 | +/- 30 % | pass |
 | `biogas_mean` | m3/d per digester at the meter's conditions | 2984 | 2111 | 1.41 | ratio in [0.6, 1.5] | pass |
 | `digester_pH_median` | pH units | 7.293 | 7.27 | 1.00 | +/- 0.4 pH units | pass |
-| `alkalinity_median` | kg CaCO3/m3 | 5.12 | 5.043 | 1.02 | +/- 35 % | pass |
+| `alkalinity_median` | kg CaCO3/m3 | 5.12 | 5.043 | 1.02 | +/- 35 % | calibrated to anchor |
 | `vfa_median` | kg/m3 as acetic acid | 0.06717 | 1.178 | 0.06 | ratio in [0.25, 4] | **FAIL** |
 | `fos_tac_median` | - (VFA as acetic over alkalinity as CaCO3) | 0.01302 | 0.2323 | 0.06 | ratio in [0.5, 2] | **FAIL** |
+
+**20 of 22 independent rows are inside their declared tolerance.** A further 1 row was calibrated to the very anchor column it is compared against, and is excluded from that count: agreeing with a column you were fitted to is not evidence.
 
 | Generated statistic with no anchor row | Value |
 |---|---:|
@@ -220,9 +261,10 @@ no output anchor, so this is a judgement rather than a fit, and it is recorded a
 
 ## 5. Reading the failures
 
-**Every influent row passes**, and so now do **biogas, pH and alkalinity**. Two rows fail,
-and they are **one finding**: a converged ADM1 carries far less residual VFA than a real
-digester.
+**Every influent row passes**, and so do **biogas and pH**; **alkalinity is inside its
+bound but is a calibrated row, not a match** (§3.2). Twenty of the twenty-two independent
+rows are inside their declared tolerance. The two that fail are **one finding**: a
+converged ADM1 carries far less residual VFA than a real digester.
 
 * **`vfa_median` 0.067 against 1.178 kg m⁻³ (ratio 0.06).** A converged ADM1 steady state
   holds VFA as a small difference between large production and consumption terms, and it
@@ -232,8 +274,11 @@ digester.
   this ratio got *worse* than the first pass (0.09), and that is a good sign rather than a
   bad one: the denominator is now right, so the discrepancy is no longer split between two
   causes and sits entirely where it belongs, in the numerator.
-* **`alkalinity_median` now PASSES** at 5.12 against 5.043 (was 2.78, ratio 0.55). The
-  calibration the lead approved closed this half of the gap outright.
+* **`alkalinity_median` is inside its bound** at 5.12 against 5.043 (was 2.78, ratio 0.55)
+  — but it is **not a pass and not an anchor match**, because the feed's `S_cat` was fitted
+  to this column (§3.2). The calibration the lead approved closed this half of the gap by
+  construction; what the row now reports is that the fit converged and has stayed
+  converged.
 
 **The consequence, and it costs the benchmark a scenario.** The overload flag fires when
 FOS/TAC exceeds 0.40. Across the twenty-four sound runs the median run raises it on **no
@@ -294,5 +339,5 @@ the benchmark card, for the lead to weigh against whatever the convention questi
 | Report generator | `python scripts/g1_report.py` |
 | Test that recomputes it | `tests/test_g1_anchor.py` |
 | Influent draw | seed 7, 730 d, Plant B |
-| Output panel | base seeds 1000–1011, 180 d, Plant B, clean Level-0 |
-| Related decisions | `docs/decisions.md`, entries of 2026-09-03 |
+| Output panel | base seeds 1000–1023 (24 runs), 180 d, Plant B, clean Level-0 |
+| Related decisions | `docs/decisions.md`, entries of 2026-09-03 and 2026-09-04 |
