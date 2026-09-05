@@ -1081,6 +1081,15 @@ previous session left them, and no generated number moved.
   derived from the config.
 - Tests 305 → **339** (327 in the default suite, 12 in the `g1` panel, 2 skipped without the
   git-ignored SCADA parent).
+- **The matrix regenerates end to end into the new layout: 114 of 114 cells, 114 of 114
+  sound**, 44 truth integrations, 19 min wall-clock, 25 MB under `runs/` and 17 MB under
+  `truth_store/`. Verified on the generated store rather than asserted: every `runs/<id>/`
+  contains exactly `observations/`, `manifest.json` and `calls.jsonl`; no visible manifest
+  carries a redacted field; `index.jsonl` is in the truth store with 114 unique lines and no
+  duplicates.
+- **The G1 report's generated block is byte-identical apart from the M1 relabelling and the
+  new match-count line.** The remediation changed where truth is written and how a sensor is
+  realised, not what the digester does.
 
 **Referred to the lead, unchanged — all three independently re-measured and confirmed**
 

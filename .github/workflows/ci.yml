@@ -50,9 +50,12 @@ jobs:
         run: pytest -q
 
   # The gate-G1 anchor comparison is deselected from the run above by the `g1` marker
-  # (pyproject.toml): it is twelve 180-day Level-0 runs plus a two-year generator draw,
-  # ~3 min, and it only tells you something when the simulator has changed. So it runs
-  # nightly, and on any pull request that touches sim/ (lead's ruling, 2026-09-03).
+  # (pyproject.toml): it is twenty-four 180-day Level-0 runs plus a two-year generator
+  # draw, ~9 min, and it only tells you something when the simulator has changed. So it
+  # runs nightly, and on any pull request that touches sim/ (lead's ruling, 2026-09-03).
+  # (The panel was twelve runs and ~3 min when this job was written; the lead's ruling 1
+  # of the same day made "zero souring on clean Level-0 seeds" the acceptance condition
+  # and the panel was widened to twenty-four. Number corrected 2026-09-04.)
   g1-changes:
     name: does this change touch sim/?
     runs-on: ubuntu-latest
