@@ -26,21 +26,32 @@ The **tier** supplies the missing rate, the laboratory turnaround and the recali
 cadence; the **sensor** supplies everything intrinsic to the instrument (lead's decision
 of 2026-09-02).
 
-**Randomness.** One ``numpy.random.default_rng(seed)`` stream per run (CLAUDE.md rule 4),
-consumed per sensor in **sorted sensor-name order** and, within a sensor, in a fixed
+**Randomness.** **One stream per sensor**, derived from ``(observation seed, sensor
+name)`` by :func:`sensor_rng` (CLAUDE.md rule 4), consumed within a sensor in a fixed
 order: ``n`` uniforms for flatline onsets, ``n`` uniforms for fouling onsets, ``n``
 normals for the drift walk, ``n`` normals for the relative noise, ``n`` normals for the
 absolute noise, ``n`` uniforms for missingness — every block drawn whether or not the
-sensor declares that effect, so adding a drift model to one sensor cannot change another
-sensor's noise (tested).
+sensor declares that effect, so adding a drift model to one sensor cannot change that
+sensor's own noise (tested).
 
-The **historian** is a separate stochastic component and takes its own stream, derived
-from the run seed by :data:`HISTORIAN_STREAM_OFFSET` and drawn once per run before any
-sensor: one block of ``n`` uniforms for outage onsets and one of ``n`` integers for outage
-lengths, at the finest online schedule of the tier. Deriving it by an offset rather than
-by splitting the run seed leaves every sensor's own draws bit-identical to what they were
-before the historian existed. Both streams are independent of the influent generator's: a
-run gives the observation model its own seed.
+It was one serial stream per *run*, consumed in sorted sensor-name order, and that made
+§6.4's central claim false: tiers carry different sensor sets, so a sensor's position in
+the order changed with the tier and every shared sensor got a different realisation. At
+one observation seed, tier A's ``gas_flow`` began 3212.4, nan, 5413.4 while tier C's began
+3065.9, 5927.2, 5515.3 — the *same instrument on the same digester*, with tier A losing a
+sample tier C kept. A tier is supposed to be a mask on identical truth, so a tier
+comparison must not also be a re-roll. Deriving each stream from the sensor's own identity
+makes a sensor's draws independent of which other sensors the tier happens to contain, and
+of whether a subset was requested (both tested).
+
+The **historian** stays plant-level, because that is what it models: one logging outage
+that every online sensor at the tier loses together.
+
+The historian is a separate stochastic component and takes its own stream, derived from
+the run seed by :data:`HISTORIAN_STREAM_OFFSET` and drawn once per run: one block of ``n``
+uniforms for outage onsets and one of ``n`` integers for outage lengths, at the finest
+online schedule of the tier. Every stream here is independent of the influent generator's:
+a run gives the observation model its own seed.
 
 Nothing here writes files; :class:`ObservationRecord` goes to the run layer, which owns
 ``runs/<id>/`` (CLAUDE.md rule 1).
@@ -48,6 +59,7 @@ Nothing here writes files; :class:`ObservationRecord` goes to the run layer, whi
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
@@ -72,7 +84,45 @@ __all__ = [
     "historian_outages",
     "observe",
     "sample_times",
+    "sensor_rng",
+    "sensor_stream_key",
 ]
+
+_SENSOR_STREAM_DOMAIN = "ad-agentbench/observation/sensor"
+"""Domain string mixed into :func:`sensor_stream_key`, so the sensor identities of this
+model cannot collide with any other component that hashes names into a seed sequence."""
+
+
+def sensor_stream_key(name: str) -> int:
+    """A stable 64-bit identity for a sensor name.
+
+    ``hash()`` is salted per interpreter run, so it cannot be used: a seed derived from it
+    would change between processes and break CLAUDE.md rule 4. This is SHA-256 of the
+    domain-separated name, which is stable across platforms, Python versions and numpy
+    versions.
+
+    Args:
+        name: The sensor's name.
+
+    Returns:
+        A non-negative integer, for :class:`numpy.random.SeedSequence`.
+    """
+    digest = hashlib.sha256(f"{_SENSOR_STREAM_DOMAIN}|{name}".encode()).digest()
+    return int.from_bytes(digest[:8], "big")
+
+
+def sensor_rng(seed: int, name: str) -> np.random.Generator:
+    """The stream of one sensor in one run: a function of the run seed and the name alone.
+
+    Args:
+        seed: The run's observation seed.
+        name: The sensor's name.
+
+    Returns:
+        That sensor's generator.
+    """
+    return np.random.default_rng(np.random.SeedSequence([int(seed), sensor_stream_key(name)]))
+
 
 HISTORIAN_STREAM_OFFSET = 1_000_003
 """Offset from the run seed to the plant-level historian stream (a prime, for tidiness).
@@ -402,8 +452,8 @@ def observe(
         seed: Seed of the run's observation stream.
         horizon_d: Horizon, d (default: the last channel time).
         sensors: Subset of the tier's sensors to report (default: all of them). A subset
-            never changes another sensor's values: the stream is consumed for every
-            sensor of the tier in sorted order regardless.
+            never changes another sensor's values, because each sensor's stream is derived
+            from its own name (:func:`sensor_rng`) and not from a position in a queue.
         faults: Observation-layer fault directives (:mod:`sim.faults`). They change the
             record only: the digester is untouched, and the stream is consumed
             identically, so a faulted record differs from its clean twin only by the
@@ -452,10 +502,8 @@ def observe(
         gas_median_window_d=config.conditions.gas_median_window_d,
     )
 
-    rng = np.random.default_rng(seed)
     # the plant-level outage series: ONE draw for the tier, on the finest online schedule,
-    # shared by every online sensor. Its own stream, taken before any sensor's, so every
-    # sensor's blocks stay exactly where they were.
+    # shared by every online sensor. Its own stream (rule 4).
     online = [n for n in spec_tier.sensors if config.sensors[n].kind == "online"]
     historian_t = sample_times(
         min((config.sensors[n].sampling_interval_d for n in online), default=1.0), horizon
@@ -475,15 +523,17 @@ def observe(
     if unknown_targets:
         raise ValueError(f"observation faults name unknown sensors {sorted(unknown_targets)}")
     out: dict[str, SensorSeries] = {}
-    for name in sorted(spec_tier.sensors):
+    for name in sorted(requested):
         sensor = config.sensors[name]
+        # this sensor's own stream: a function of (run seed, sensor name) and of nothing
+        # else, so which other sensors the tier carries cannot move it
         series = _sensor_series(
             sensor,
             channels,
             horizon,
             overload,
             foaming,
-            rng,
+            sensor_rng(seed, name),
             applied,
             config.missingness.model_for(tier, sensor.kind),
             spec_tier.lab_turnaround_d if sensor.kind == "lab" else 0.0,
@@ -493,6 +543,5 @@ def observe(
             if sensor.kind == "online"
             else None,
         )
-        if name in requested:
-            out[name] = series
+        out[name] = series
     return ObservationRecord(tier=tier, seed=int(seed), horizon_d=horizon, sensors=out)

@@ -33,8 +33,13 @@ What is tested and why it cannot pass vacuously:
   base missing rate, the laboratory turnaround and the recalibration cadence — are read
   from the tier and really differ between tiers, on identical truth and an identical
   sensor set;
-* one seeded stream, consumed per sensor in sorted order: same seed same record, and
-  changing one sensor's spec leaves the sensors that precede it bit-identical.
+* **one seeded stream per sensor**, derived from (run seed, sensor name): same seed same
+  record; changing one sensor's spec leaves every other sensor bit-identical; and a shared
+  instrument reads the *same* at every tier that carries it, with a different-seed control
+  so the equality cannot be satisfied by a model that stopped drawing. That last property
+  was false until 2026-09-04 — the stream was serial over `sorted(tier.sensors)`, so a
+  tier comparison was also a re-roll — and the test that missed it compared one shared
+  object with itself.
 """
 
 from __future__ import annotations
@@ -67,6 +72,7 @@ from sim.observation import (
     observe,
 )
 from sim.observation.channels import KG_CACO3_PER_KMOL_CHARGE, M_ACETIC
+from sim.observation.model import sensor_rng, sensor_stream_key
 from sim.observation.schema import (
     MissingnessModel,
     MissingnessPolicy,
@@ -864,7 +870,17 @@ def test_relative_and_absolute_noise_are_independent_draws(config, name, value, 
 
 
 def test_drift_is_bounded_and_reset_by_recalibration(config):
-    """The pH probe's random walk stays inside its bound and jumps back at recalibration."""
+    """The pH probe's random walk stays inside its bound and restarts at recalibration.
+
+    The reset is measured as a **ratio of magnitudes over every boundary and eight seeds**,
+    not asserted at four boundaries of one draw. A bounded random walk that is reset is one
+    step from zero at a boundary and ``sqrt(30)`` steps from it just before the next, so the
+    ratio is ~0.18; a walk that is *not* reset moves one step across a boundary and the
+    ratio is ~1. The 0.4 bound discriminates between the two, and no realisation of the
+    reset implementation lands near it — which the earlier "smaller than the sample before
+    it, or below 0.02" form did not: a boundary step of 0.032 after a quiet 0.0009 is a
+    correct reset and failed it.
+    """
     channels = _flat_channels(n_days=400)
     spec = config.sensors["ph"]
     assert spec.drift is not None and spec.drift.recalibrated
@@ -874,24 +890,41 @@ def test_drift_is_bounded_and_reset_by_recalibration(config):
     cfg = _without_missingness(config).model_copy(
         update={"sensors": {**config.sensors, "ph": quiet}}
     )
-    value = observe(channels, cfg, "B", seed=3)["ph"].value
-    offset = value - 7.30
-    assert np.abs(offset).max() <= spec.drift.bound + 1e-9
-    # the sample after each recalibration boundary starts again from zero
-    for boundary in (30, 60, 90, 120):
-        assert abs(offset[boundary]) < abs(offset[boundary - 1]) or abs(offset[boundary]) < 0.02
-    assert np.abs(offset).max() > 0.01  # it does drift
+    at_boundary: list[float] = []
+    just_before: list[float] = []
+    drifted = 0.0
+    for seed in range(8):
+        offset = observe(channels, cfg, "B", seed=seed)["ph"].value - 7.30
+        assert np.abs(offset).max() <= spec.drift.bound + 1e-9
+        drifted = max(drifted, float(np.abs(offset).max()))
+        for boundary in range(30, 400, 30):
+            at_boundary.append(abs(float(offset[boundary])))
+            just_before.append(abs(float(offset[boundary - 1])))
+    assert drifted > 0.01  # it does drift
+    ratio = float(np.mean(at_boundary) / np.mean(just_before))
+    assert ratio < 0.4, ratio  # ~0.18 when reset, ~1.0 when not
+    # and the first sample after a boundary is one step from zero, never a month's walk
+    step = spec.drift.sd_per_sqrt_d
+    assert np.mean(at_boundary) < 1.5 * step, (np.mean(at_boundary), step)
 
 
 def test_flatline_holds_the_previous_value_and_saturation_clips(config):
+    """Pooled over twelve seeds: the temperature probe's flatline is a rare-event process.
+
+    Its occupancy is the anchor's own 0.00077, so a single 3,000-day run contains a stuck
+    episode only some of the time and a one-seed test is a coin toss on the stream, not a
+    check of the hold.
+    """
     channels = _flat_channels(n_days=3000)
-    record = observe(channels, config, "A", seed=11)
-    temp = record["temperature"]
-    held = np.flatnonzero(temp.flatlined & ~temp.missing)
-    assert held.size > 0
-    for i in held:
-        if i > 0 and not temp.missing[i - 1]:
-            assert temp.value[i] == pytest.approx(temp.value[i - 1])
+    held_total = 0
+    for seed in range(12):
+        temp = observe(channels, config, "A", seed=seed)["temperature"]
+        held = np.flatnonzero(temp.flatlined & ~temp.missing)
+        held_total += held.size
+        for i in held:
+            if i > 0 and not temp.missing[i - 1]:
+                assert temp.value[i] == pytest.approx(temp.value[i - 1])
+    assert held_total > 0, "no flatline episode occurred at all; the hold was never exercised"
     # saturation: a channel far outside the readable range is clipped and flagged
     hot = TruthChannels(
         channels.t,
@@ -934,13 +967,18 @@ def test_a_saturation_flag_never_contradicts_its_own_reading(config):
 def test_missingness_is_conditional_on_the_process_state(config):
     """The §6.1 property: gaps cluster in the stress window, so interpolation loses information.
 
-    All three sensors here are online probes, so the expected ratio is the online overload
-    multiplier, 4. Pooled over twelve seeds, because the ratio is a ratio of two counts:
-    at Tier B each sensor loses ~1,400 samples in the 3,000 calm days and ~5,700 in the
-    3,000 overloaded ones. Per seed the estimator has sd ~0.42, so pooling twelve gives a
-    standard error near 0.12 and the 20 % tolerance (+/- 0.8) is a ~6 sd bound rather than
-    a rubber stamp. Over forty seeds it converges to 3.96 +/- 0.07 (pH), 4.12 +/- 0.07
-    (gas flow) and 3.92 +/- 0.06 (CH4), so the implementation is unbiased.
+    All three sensors here are online probes, so they also pass through the plant-level
+    historian, whose loss is **unconditional**. The expected rates are therefore the
+    composites ``1 - (1 - per_sensor)(1 - shared)``, not the per-sensor rates, and the
+    expected ratio is the ratio of two composites — 3.67 at Tier B, not the bare overload
+    multiplier of 4. Both expectations are derived from the config here rather than
+    written down, because the earlier form compared the calm-window rate with the
+    *per-sensor* 0.04 when the process actually loses 0.0448, and passed only because
+    12 % happened to sit inside a 15 % tolerance.
+
+    Pooled over twelve seeds, because the ratio is a ratio of two counts: at Tier B each
+    sensor loses ~1,400 samples in the 3,000 calm days and ~5,700 in the 3,000 overloaded
+    ones, so the pooled standard error on the calm rate is ~0.0011 (2.5 % relative).
     """
     channels = _flat_channels(n_days=6000, stress_from=3000)
     names = ("ph", "gas_flow", "ch4_fraction")
@@ -957,15 +995,30 @@ def test_missingness_is_conditional_on_the_process_state(config):
             if name == "ph":
                 seen_before += int(calm.sum())
                 seen_after += int((~calm).sum())
+    shared = config.historian.rate_by_tier["B"]
+
+    def composite(per_sensor: float) -> float:
+        """The loss an online sensor actually shows: its own, plus the shared outage."""
+        return 1.0 - (1.0 - per_sensor) * (1.0 - shared)
+
     for name in names:
         before = lost_before[name] / seen_before
         after = lost_after[name] / seen_after
         spec = config.missingness.model_for("B", config.sensors[name].kind)
-        expected = spec.stress_multipliers["overload"]
+        multiplier = spec.stress_multipliers["overload"]
+        expected_before = composite(spec.base_rate)
+        expected_after = composite(min(spec.base_rate * multiplier, 1.0))
         assert lost_before[name] > 300 and lost_after[name] > 600, (name, lost_before, lost_after)
         assert after > before, name
-        assert after / before == pytest.approx(expected, rel=0.20), (name, before, after)
-        assert before == pytest.approx(spec.base_rate, rel=0.15), name
+        assert after / before == pytest.approx(expected_after / expected_before, rel=0.20), (
+            name,
+            before,
+            after,
+        )
+        assert before == pytest.approx(expected_before, rel=0.08), (name, before, expected_before)
+        # the conditional part is what the §6.1 property is about, and it is the larger
+        # of the two: the shared outage alone could not produce a ratio anywhere near this
+        assert expected_after / expected_before > 3.0
     # a laboratory assay degrades under the same overload, but far less than an online probe
     lab = config.missingness.model_for("B", "lab")
     online = config.missingness.model_for("B", "online")
@@ -974,8 +1027,8 @@ def test_missingness_is_conditional_on_the_process_state(config):
     assert config.sensors["alkalinity"].kind == "lab"
 
 
-def test_one_seeded_stream_in_sorted_sensor_order(config):
-    """Same seed, same record; changing one sensor leaves the sensors before it untouched."""
+def test_one_seeded_stream_per_sensor(config):
+    """Same seed, same record; changing one sensor's spec leaves every other one untouched."""
     channels = _flat_channels(n_days=300)
     a = observe(channels, config, "C", seed=42)
     b = observe(channels, config, "C", seed=42)
@@ -983,16 +1036,112 @@ def test_one_seeded_stream_in_sorted_sensor_order(config):
     for name in a.names:
         np.testing.assert_array_equal(a[name].value, b[name].value)
     assert not np.array_equal(a["ph"].value, c["ph"].value)
-    # 'ph' sorts after 'gas_flow' and 'digestate_ts': changing it cannot move them
+    # a sensor's stream is its own, so a change to 'ph' moves nothing else — not the
+    # sensors that sort before it, and (unlike the serial stream this replaced) not the
+    # ones that sort after it either
     loud = config.sensors["ph"].model_copy(update={"noise": NoiseModel(cv=0.5, sd_abs=0.0)})
     cfg = config.model_copy(update={"sensors": {**config.sensors, "ph": loud}})
     d = observe(channels, cfg, "C", seed=42)
-    for earlier in ("alkalinity", "ch4_fraction", "cod_total", "digestate_ts", "gas_flow"):
-        np.testing.assert_array_equal(a[earlier].value, d[earlier].value)
+    for other in a.names:
+        if other != "ph":
+            np.testing.assert_array_equal(a[other].value, d[other].value, err_msg=other)
     assert not np.array_equal(a["ph"].value, d["ph"].value)
     # requesting a subset does not change any value either
     subset = observe(channels, config, "C", seed=42, sensors=["temperature"])
     np.testing.assert_array_equal(subset["temperature"].value, a["temperature"].value)
+
+
+def test_the_sensor_stream_key_is_stable_and_domain_separated():
+    """Golden values. ``hash()`` is salted per process; this derivation must not be.
+
+    If the derivation changes, every archived run's observations change with it, so the
+    numbers are pinned rather than merely asserted to be reproducible within one process.
+    """
+    assert sensor_stream_key("gas_flow") == 7_473_753_770_277_016_189
+    assert sensor_stream_key("ph") == 16_920_755_590_877_555_657
+    assert sensor_stream_key("gas_flow") != sensor_stream_key("gas_flow ")
+    first = sensor_rng(1000, "gas_flow").standard_normal(4)
+    np.testing.assert_allclose(first, sensor_rng(1000, "gas_flow").standard_normal(4))
+    # the seed and the name both matter, and neither alone decides the stream
+    assert not np.array_equal(first, sensor_rng(1001, "gas_flow").standard_normal(4))
+    assert not np.array_equal(first, sensor_rng(1000, "ph").standard_normal(4))
+
+
+def _equal_tier_policy(config: ObservationConfig) -> ObservationConfig:
+    """The same configuration with every *tier policy* held equal across tiers.
+
+    What remains different between tiers is then only the sensor **set**, which is what
+    §6.4 says a tier is. The recalibration cadence, the laboratory turnaround and the two
+    missing rates are declared tier properties and legitimately change a reading; holding
+    them equal is what isolates the question this test is asking.
+    """
+    quiet = _without_missingness(config)
+    tiers = {
+        t: s.model_copy(update={"recalibration_interval_d": 30.0, "lab_turnaround_d": 2.0})
+        for t, s in quiet.tiers.items()
+    }
+    return quiet.model_copy(update={"tiers": tiers})
+
+
+def test_a_sensor_reads_the_same_whichever_tier_carries_it(config):
+    """§6.4: a tier is a mask on identical truth, so it must not also be a re-roll.
+
+    The serial stream this replaced was consumed over ``sorted(tier.sensors)``, and the
+    tiers carry different sets, so a shared instrument's position in the queue changed with
+    the tier and it got a different realisation. Measured at one seed before the fix: tier
+    A's ``gas_flow`` began 3212.4, nan, 5413.4 and tier C's 3065.9, 5927.2, 5515.3 — the
+    same instrument on the same digester, tier A losing a sample tier C kept.
+
+    The three records are generated **separately**, one ``observe`` call each. The old test
+    compared one shared object with itself and could not have seen this.
+    """
+    cfg = _equal_tier_policy(config)
+    channels = _flat_channels(n_days=300)
+    records = {tier: observe(channels, cfg, tier, seed=7) for tier in "ABC"}
+
+    # the test is only meaningful if the sets really differ, and differ in the way that
+    # broke the old scheme: tier C carries sensors that sort BEFORE a shared one
+    sets = {t: set(records[t].names) for t in "ABC"}
+    assert sets["A"] < sets["B"] < sets["C"]
+    assert {"alkalinity", "ch4_fraction", "cod_total"} <= sets["C"] - sets["A"]
+    assert "gas_flow" in sets["A"] & sets["C"]
+
+    for lower, upper in (("A", "B"), ("A", "C"), ("B", "C")):
+        shared = sorted(sets[lower] & sets[upper])
+        assert shared, (lower, upper)
+        for name in shared:
+            np.testing.assert_array_equal(
+                records[lower][name].value,
+                records[upper][name].value,
+                err_msg=f"{name} differs between tiers {lower} and {upper}",
+            )
+            np.testing.assert_array_equal(
+                records[lower][name].missing, records[upper][name].missing, err_msg=name
+            )
+
+    # CONTROL: a different seed must give a different realisation, or the equality above
+    # would be satisfied by a model that had stopped drawing anything at all
+    other = observe(channels, cfg, "A", seed=8)
+    for name in sorted(sets["A"]):
+        assert not np.array_equal(records["A"][name].value, other[name].value), name
+
+
+def test_the_historian_grid_is_the_same_at_every_tier(config):
+    """The shared stream is drawn on the finest online schedule, which must not vary.
+
+    If one tier's finest online interval differed, the outage *days* would differ with it
+    and the tier comparison would carry a second confound behind the one just removed. The
+    rate is a declared tier property and may differ; the grid may not.
+    """
+    finest = {
+        tier: min(
+            config.sensors[n].sampling_interval_d
+            for n in config.tiers[tier].sensors
+            if config.sensors[n].kind == "online"
+        )
+        for tier in "ABC"
+    }
+    assert len(set(finest.values())) == 1, finest
 
 
 def test_a_run_missing_a_channel_is_refused_not_faked(config):
