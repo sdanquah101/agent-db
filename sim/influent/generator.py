@@ -63,7 +63,7 @@ long, so the horizon is **not prefix-stable**: a 100-day run is not the first 10
 a 200-day run with the same seed (the seed and the horizon together identify a run).
 
 **Hidden truth and the visible record.** :class:`InfluentTruth` is hidden truth (the run
-layer writes it to ``runs/<id>/truth/``; nothing here writes anything); the
+layer writes it to ``truth_store/<id>/``; nothing here writes anything); the
 :class:`OperatorRecord` (the feed log with its omissions and mis-logs, and the assay
 records with noise and lag) is what a workflow may see.
 
@@ -385,7 +385,7 @@ class FeedTruth:
 
 @dataclass(frozen=True)
 class InfluentTruth:
-    """The hidden truth of one generated run (the run layer writes it to ``runs/<id>/truth/``)."""
+    """The hidden truth of one generated run (the run layer writes it to ``truth_store/<id>/``)."""
 
     plant_id: str
     seed: int

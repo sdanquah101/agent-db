@@ -1,4 +1,4 @@
-"""The run harness: one scenario cell in, one ``runs/<id>/`` directory out (§6.1, gate G1).
+"""The run harness: one scenario cell in, two directories out (§6.1, gate G1).
 
 This is the layer the proposal describes in one sentence — "the simulator logs hidden truth
 alongside observations, in a separate file never exposed to workflows" — and it is where
@@ -18,17 +18,20 @@ every frozen component built so far is finally wired together:
         +-- sim.observation.observe ............... the tier's mask                [visible]
         +-- sim.run.notes ......................... the operator's log             [visible]
         |
-        +-> runs/<id>/{truth,observations}/, manifest.json, calls.jsonl
+        +-> runs/<id>/{observations/, manifest.json (redacted), calls.jsonl}
+        +-> truth_store/<id>/ ....... hidden truth and the complete manifest
 
 **Three properties this module exists to hold.**
 
 *Hidden truth is separated at the point it is produced.* Every quantity that identifies the
 answer — the true parameters, the true influent and its drift, the true fractionation, the
 realised volume error, the realised mixing structure, the state trajectory, the condition
-flags, the fault plan and its labels — is written under ``truth/``. Everything a workflow
-may read is written under ``observations/``. The two are written by different functions of
-:mod:`sim.run.artifacts` and read back by different loaders, and :mod:`state.run_view` (the
-workflow-facing one) cannot address the truth directory at all.
+flags, the fault plan and its labels, and the complete manifest — is written under
+``truth_store/<id>/``, which since the lead's ruling of 2026-09-04 is a **separate top-level
+tree** rather than a subdirectory of the run. Everything a workflow may read is written under
+``runs/<id>/``. The two are written by different functions of :mod:`sim.run.artifacts` and
+read back by different loaders, and :mod:`state.run_view` (the workflow-facing one) is rooted
+at the observations and has nothing above it to reach.
 
 *A scenario starts on a running digester.* Integrating from a textbook steady state would
 make the first weeks of every run a start-up transient that no fault caused, and Level-4's
@@ -265,7 +268,7 @@ def assess_health(channels: TruthChannels, thresholds: HealthThresholds) -> Dige
 
 @dataclass(frozen=True)
 class RunTruth:
-    """Everything hidden about one run. Written only to ``runs/<id>/truth/``."""
+    """Everything hidden about one run. Written only to ``truth_store/<id>/``."""
 
     plant_id: str
     geometry: HiddenGeometry

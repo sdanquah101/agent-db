@@ -173,7 +173,7 @@ EXTENSION_NO_SOLIDS: frozenset[str] = frozenset({"S_ca"})
 class TruthChannels:
     """Every observable channel of one run, on the truth model's output times.
 
-    Hidden truth: the run layer may write it to ``runs/<id>/truth/``; a workflow sees only
+    Hidden truth: the run layer may write it to ``truth_store/<id>/``; a workflow sees only
     what :mod:`sim.observation.model` reports through the tier mask.
     """
 

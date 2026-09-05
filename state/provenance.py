@@ -23,7 +23,7 @@ give the same hash on the same platform and different arguments practically neve
 collide. It is a fingerprint, not a serialisation: the arguments cannot be recovered from
 it, which is also why logging it leaks no hidden truth.
 
-Nothing here reads or writes ``runs/<id>/truth/``.
+Nothing here reads or writes ``truth_store/<id>/``.
 """
 
 from __future__ import annotations

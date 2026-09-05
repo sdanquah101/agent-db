@@ -5,7 +5,7 @@ consultant — declared geometry, set points, feed catalogue, the plant's anchor
 status. The parts of the plant that are deliberately wrong or unknown (the hidden
 active-volume error, imperfect mixing) are declared here only as *distributions*; their
 realisations are sampled per run with an explicit seed (:mod:`sim.plants`) and written
-by the run layer to ``runs/<id>/truth/`` (CLAUDE.md rule 1), never back into a config.
+by the run layer to ``truth_store/<id>/`` (CLAUDE.md rule 1), never back into a config.
 
 Every quantity carries an explicit unit in its description (CLAUDE.md rule 6). Anchoring
 numbers carry their source, so a reviewer can trace each statistic to the dataset or

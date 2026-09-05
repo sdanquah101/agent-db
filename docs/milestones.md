@@ -1032,3 +1032,68 @@ it is flagged in the config, the decisions log and the PR.
 PR touching `sim/`, `configs/`, `scenarios/` or the comparison module.
 
 **Next session should start on** the two open items above, then the tool registry (§6.2).
+
+---
+
+### Session 2026-09-04 (ninth session) — the G1 remediation: five rulings and four defects
+
+Continues PR #15 on `claude/g1-scenario-generation`. An independent review of the gate-G1
+work found nine defects; the lead ruled on five and left four as pure test/correctness work.
+This session applied all nine and referred three design questions back. **No plant ruling was
+redone** — the blend tank, the adapted `K_I_nh3` and the alkalinity calibration are as the
+previous session left them, and no generated number moved.
+
+**Done**
+
+- **H1 — hidden truth is structurally unreachable.** The review broke `state/run_view.py`
+  twice on a real run without writing the string `truth`, so the AST checker saw neither:
+  `view.root` was a public field, and `view.path(".")` resolved to the observations
+  directory whose `.parent` is the run root. Truth now lives in a **separate top-level
+  tree**, `truth_store/<id>/`, with the complete manifest and the run index; `runs/<id>/`
+  holds the observations, the **redacted** manifest (written redacted, not redacted on the
+  way out) and `calls.jsonl`. Defence in depth on top: private root, contents-not-paths,
+  `""`/`"."`/traversal/symlinks rejected. An adversarial bypass suite drives every route
+  including the attribute one, **with a negative control**.
+- **H3 — per-sensor RNG streams.** `observe()` consumed one serial stream over
+  `sorted(tier.sensors)`, so a shared instrument's realisation changed with the tier and
+  §6.4's tier comparison was confounded. Each sensor's stream is now derived from
+  `(observation_seed, sensor_name)`. The new test generates the tiers **separately** and
+  carries a different-seed control; the old one compared a shared object with itself.
+- **H2 — the blend tank's guard.** `sum(a) - sum(b) == sum(a - b)` is an identity of
+  addition and was true for any `load_out`. Replaced by a per-component comparison against
+  the closed-form solution of `dV/dt = q - V/tau`. The implementation is correct (Radau
+  cross-check, 1.2e-13); mutation confirms `load_out[t] = load_in[t]` now fails four tests
+  and failed none before.
+- **M1 — the alkalinity row is a calibration, not a match.** Labelled *calibrated to
+  anchor*, excluded from the anchor-match count (now stated in the report: 20 of 22
+  independent rows), rationale corrected, and the pH-corroboration claim withdrawn. Recorded
+  as a finding: the high-strength waste supplies 78 / 91 / 86 % of the buffering on three
+  different bases — the ruling's ~95 % is not reproduced on any of them.
+- **M7 — the gap list is merged**, which also brings the branch up to `main` (PR #13's
+  offline SCADA anchor and PR #14's historian dropout).
+- **M5** golden pins on the seed derivation and the run ids; **M6** two determinism
+  regressions, one in-process and one across two `PYTHONHASHSEED` values in a subprocess;
+  **L7** `write_index_entry` no longer duplicates a regenerated cell's line; **L2** stale
+  numbers corrected in the report and here, with the correction marked in place.
+- Three existing observation tests asserted a realisation rather than a property and are
+  **re-expressed, not relaxed** — the drift reset, the flatline hold and the
+  conditional-missingness rate. Each is now measured over seeds or against an expectation
+  derived from the config.
+- Tests 305 → **339** (327 in the default suite, 12 in the `g1` panel, 2 skipped without the
+  git-ignored SCADA parent).
+
+**Referred to the lead, unchanged — all three independently re-measured and confirmed**
+
+1. **M2.** The HSW's visible alkalinity assay is 0.0214 kg CaCO₃ m⁻³ while the strong-cation
+   charge the simulator feeds is 10.26 — a factor of **480**. The other streams agree to
+   within 2.4×. It is specifically the stream ruling 3 calibrated.
+2. **M3.** `observations/sensors.json` flags the methane analyser `flatlined` on exactly the
+   samples the Level-2 fault injected, so the visible record labels that row.
+3. **M4.** The adversarial note is the only entry authored by a `process_engineer`; every
+   benign note is an `operator`'s, so the field alone identifies it without reading it.
+
+**Still open from the previous session:** S6-01 is inert; the VFA gap (`docs/vfa_gap.md`);
+Plant A's baseline TAN sits above the range the ruling named.
+
+**Next session should start on** the lead's answers to M2/M3/M4 and to S6-01, then the tool
+registry (§6.2).

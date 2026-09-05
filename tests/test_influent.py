@@ -545,4 +545,5 @@ def test_truth_producing_packages_never_write_files(package, tmp_path):
     calls = [c for m in modules for c in _write_calls(m)]
     assert not calls, calls
     for m in modules:
-        assert "truth/" not in m.read_text(encoding="utf-8").replace("runs/<id>/truth/", "")
+        prose = m.read_text(encoding="utf-8").replace("truth_store/<id>/", "")
+        assert "truth/" not in prose and "truth_store/" not in prose
