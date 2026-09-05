@@ -7,10 +7,16 @@ influent generator and the truth model, so a bug here would silently change ever
 cell while every anchored delivery statistic — which describes arrivals, not what leaves
 the tank — went on passing.
 
-Four properties, each checked against something other than the implementation:
+Five properties, each checked against something other than the implementation:
 
+0. **It solves its own differential equation.** Per component, per day, against the
+   closed-form solution of ``dV/dt = q - V/tau`` written out from the ODE. This replaced
+   an assertion of the form ``sum(a) - sum(b) == sum(a - b)``, which is an identity of
+   addition and was true for *any* ``load_out`` at all — including a pass-through. A
+   negative control asserts that the new comparison rejects exactly that broken tank.
 1. **Mass is conserved**, to machine precision, against an independent balance
-   ``in - out = end level - start level`` computed from the returned series.
+   ``in - out = end level - start level`` computed from the returned series, and per
+   component against the analytical hold-up.
 2. **At zero hold-up it is a pass-through**, exactly — the degenerate case that says the
    tank is a smoother and not a distortion.
 3. **It smooths**, measured as the variance of what leaves against the variance of what
@@ -48,6 +54,82 @@ def arrivals() -> np.ndarray:
 # ------------------------------------------------------------------ 1. mass
 
 
+def _analytical_buffer(
+    q_in: np.ndarray, load_in: np.ndarray, hold_up_d: float
+) -> tuple[np.ndarray, np.ndarray]:
+    r"""The exact solution of the tank's own differential equation, written from the ODE.
+
+    Over one day the arrivals are held constant, so :math:`dm/dt = w - m/\tau` has the
+    closed-form solution :math:`m(s) = m^* + (m_0 - m^*) e^{-s/\tau}` with
+    :math:`m^* = w\tau`, and what *leaves* over the day is the integral of the draw rate:
+
+    .. math::
+
+        \int_0^1 \frac{m(s)}{\tau} ds
+          = \frac{m^*}{\tau} + (m_0 - m^*)\left(1 - e^{-1/\tau}\right)
+          = w + (m_0 - w\tau)\left(1 - e^{-1/\tau}\right)
+
+    That last line is derived from the ODE, not from
+    :func:`~sim.plants.equalisation.buffer_series`, which computes the outflow as the
+    *balance* ``in - (level change)``. The two are equal only if the balance the
+    implementation keeps is the balance this equation describes — which is the whole
+    property, and is why this is written out rather than calling the implementation twice.
+
+    Returns:
+        ``(q_out, load_out)``, the flow and the per-component load leaving each day.
+    """
+    tau = float(hold_up_d)
+    relaxed = 1.0 - np.exp(-1.0 / tau)
+    q_out = np.empty_like(q_in)
+    load_out = np.empty_like(load_in)
+    level = float(q_in.mean() * tau)  # the tank starts at its steady state for this run
+    mass = load_in.mean(axis=0) * tau
+    for t in range(q_in.size):
+        q_out[t] = q_in[t] + (level - q_in[t] * tau) * relaxed
+        load_out[t] = load_in[t] + (mass - load_in[t] * tau) * relaxed
+        level = q_in[t] * tau + (level - q_in[t] * tau) * (1.0 - relaxed)
+        mass = load_in[t] * tau + (mass - load_in[t] * tau) * (1.0 - relaxed)
+    return q_out, load_out
+
+
+@pytest.mark.parametrize("hold_up", [0.5, 4.0, 12.0])
+def test_the_tank_solves_its_own_differential_equation(arrivals, hold_up):
+    """Per component, against the analytical solution of ``dV/dt = q - V/tau``.
+
+    This replaces an assertion of the form ``sum(a) - sum(b) == sum(a - b)``, which is an
+    identity of addition and was therefore true for **any** ``load_out`` whatsoever — a
+    pass-through, a zero series, a scrambled one. The tank sits between the frozen influent
+    generator and the truth model on every Plant B cell, and that guard would not have
+    noticed if it had stopped working. The implementation is correct — an independent
+    Radau integration of the same ODE (`scipy.solve_ivp`, rtol 1e-12) agrees to 1.2e-13 on
+    the flow and 2.5e-13 on the loads — so this is a guard that starts guarding, not a bug
+    fix. Confirmed by mutation: `load_out[t] = load_in[t]` fails this test at all three
+    hold-ups and the mass balance below, and failed nothing before.
+    """
+    load = np.stack([arrivals * 2.0, arrivals * 0.5, np.full_like(arrivals, 7.0)], axis=1)
+    q_out, load_out, _ = buffer_series(arrivals, load, hold_up_d=hold_up)
+    q_expected, load_expected = _analytical_buffer(arrivals, load, hold_up)
+
+    np.testing.assert_allclose(q_out, q_expected, rtol=0, atol=1e-12)
+    for i in range(load.shape[1]):
+        np.testing.assert_allclose(load_out[:, i], load_expected[:, i], rtol=0, atol=1e-12)
+
+
+def test_that_comparison_rejects_a_pass_through(arrivals):
+    """NEGATIVE CONTROL for the test above: the broken tank it was blind to must now fail.
+
+    ``load_out[t] = load_in[t]`` — the bug the old identity could not see — is measured
+    here against the same analytical solution and is off by more than 4 % of the mean load
+    at a 4-day hold-up, so the comparison has teeth.
+    """
+    load = np.stack([arrivals * 2.0, arrivals * 0.5], axis=1)
+    _, load_expected = _analytical_buffer(arrivals, load, 4.0)
+    with pytest.raises(AssertionError):
+        np.testing.assert_allclose(load, load_expected, rtol=0, atol=1e-12)
+    worst = float(np.abs(load - load_expected).max() / np.abs(load).mean())
+    assert worst > 0.04, worst
+
+
 def test_the_tank_conserves_mass_to_machine_precision(arrivals):
     """``in - out = end level - start level``, computed from the returned series alone."""
     load = np.stack([arrivals * 2.0, arrivals * 0.5], axis=1)
@@ -58,9 +140,18 @@ def test_the_tank_conserves_mass_to_machine_precision(arrivals):
     cumulative = levels[0] + np.cumsum(arrivals - q_out)
     np.testing.assert_allclose(cumulative[:-1], levels[1:], rtol=0, atol=1e-9)
     assert arrivals.sum() - q_out.sum() == pytest.approx(cumulative[-1] - levels[0], abs=1e-9)
+    # per component: what went in, less what came out, is what the tank is still holding.
+    # The held mass is reconstructed from the ANALYTICAL relaxation, not from the returned
+    # series, so this is a balance and not the identity sum(a) - sum(b) == sum(a - b).
+    tau = 4.0
+    decay = float(np.exp(-1.0 / tau))
     for i in range(load.shape[1]):
+        held = load[:, i].mean() * tau  # the starting inventory
+        for t in range(load.shape[0]):
+            target = load[t, i] * tau
+            held = target + (held - target) * decay
         assert load[:, i].sum() - load_out[:, i].sum() == pytest.approx(
-            (load[:, i] - load_out[:, i]).sum(), abs=1e-9
+            held - load[:, i].mean() * tau, abs=1e-9
         )
     assert (q_out >= 0.0).all()  # a tank never runs backwards
     assert (levels > 0.0).all()  # ... and never runs dry
