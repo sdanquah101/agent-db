@@ -133,7 +133,7 @@ from sim.plants.mixing import (
     simulate_two_zone,
 )
 from sim.run.artifacts import write_observations, write_truth
-from sim.run.layout import INDEX_FILE, RUNS_ROOT, RunPaths, run_id
+from sim.run.layout import INDEX_FILE, RUNS_ROOT, RunPaths, run_id, truth_store_for
 from sim.run.manifest import (
     HARNESS_VERSION,
     RunManifest,
@@ -891,9 +891,12 @@ def generate_run(
     if write:
         write_truth(paths, truth, scenario)
         write_observations(paths, truth, record, notes, obs_cfg.tiers[tier_id])
-        manifest.write(paths.manifest)
+        # the complete manifest is hidden truth (it names the scenario, every seed and the
+        # declared fault layers); only the projection is written where a workflow can reach
+        manifest.write(paths.truth_manifest)
+        manifest.public().write(paths.manifest)
         write_index_entry(
-            Path(runs_root) / INDEX_FILE,
+            truth_store_for(runs_root) / INDEX_FILE,
             {
                 "run_id": rid,
                 "scenario_id": scenario.id,

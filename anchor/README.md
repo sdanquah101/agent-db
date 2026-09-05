@@ -32,7 +32,7 @@ python -m anchor.fetch --dataset iowa-muscatine-wrrf
 
 Rules:
 
-- Nothing in `anchor/` may read `runs/<id>/truth/` (CLAUDE.md rule 1).
+- Nothing in `anchor/` may read `truth_store/<id>/` (CLAUDE.md rule 1).
 - Only files whose licence permits redistribution go in the manifest's
   `datasets`; everything else is recorded under `not_fetched` with a reason.
 - Simulated inputs (for example the BSM2 influent) are never listed as

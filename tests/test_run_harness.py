@@ -73,7 +73,8 @@ def _short(scenario_id: str, days: float = SHORT_DAYS):
 @pytest.fixture(scope="module")
 def clean_run(tmp_path_factory):
     """One clean Level-0 run on Plant C (the lightest plant), written to disk."""
-    root = tmp_path_factory.mktemp("runs")
+    # the truth store is the run store's sibling, so each test gets its own parent
+    root = tmp_path_factory.mktemp("store") / "runs"
     return generate_run(_short("S0-01"), "B", plant=load_plant_config("C"), runs_root=root)
 
 
@@ -84,6 +85,7 @@ def test_the_run_directory_is_the_declared_layout(clean_run):
     paths = clean_run.paths
     for path in (
         paths.manifest,
+        paths.truth_manifest,
         paths.calls,
         paths.truth_parameters,
         paths.truth_influent,
@@ -98,7 +100,10 @@ def test_the_run_directory_is_the_declared_layout(clean_run):
         paths.operator_notes,
     ):
         assert path.is_file(), path
-    assert paths.truth.name == "truth"
+    # hidden truth is its own top-level tree, not a subdirectory of the run: a workflow
+    # rooted at the observations has nothing to escape to (the lead's ruling, 2026-09-04)
+    assert paths.truth.parent.name == "truth_store"
+    assert paths.root not in paths.truth.parents
     assert paths.observations.name == "observations"
 
 
@@ -315,7 +320,7 @@ def test_the_scenario_starts_from_the_burn_in_state(clean_run):
 def test_tiers_are_masks_on_identical_truth(tmp_path):
     """§6.4. Same digester, three windows: the channels must be bit-identical."""
     runs = generate_cells(
-        _short("S1-01"), load_plant_config("C"), ["A", "B", "C"], runs_root=tmp_path
+        _short("S1-01"), load_plant_config("C"), ["A", "B", "C"], runs_root=tmp_path / "runs"
     )
     a, b, c = runs
     for name in a.truth.channels.names:
@@ -333,7 +338,9 @@ def test_a_tiers_feed_assays_are_the_tiers_own(tmp_path):
     """The mask is applied when the observations are written, not by the generator."""
     from sim.run.artifacts import read_feed_assays
 
-    runs = generate_cells(_short("S0-01"), load_plant_config("C"), ["A", "C"], runs_root=tmp_path)
+    runs = generate_cells(
+        _short("S0-01"), load_plant_config("C"), ["A", "C"], runs_root=tmp_path / "runs"
+    )
     tier_a = {r["assay"] for r in read_feed_assays(runs[0].paths.feed_assays)}
     tier_c = {r["assay"] for r in read_feed_assays(runs[1].paths.feed_assays)}
     assert tier_a <= {"ts", "vs"}
@@ -349,7 +356,7 @@ def test_the_state_fault_scales_exactly_the_biomass_it_declares(tmp_path):
     scenario = _short("S4-01")
     magnitude = next(f.magnitude for f in scenario.faults)
     assert magnitude == 0.25  # pins the scenario file, not the applier
-    run = generate_run(scenario, "A", plant=load_plant_config("C"), runs_root=tmp_path)
+    run = generate_run(scenario, "A", plant=load_plant_config("C"), runs_root=tmp_path / "runs")
     truth = run.truth
     biomass = {"X_su", "X_aa", "X_fa", "X_c4", "X_pro", "X_ac", "X_h2", "X_sao"}
     for i, name in enumerate(truth.state_names):
@@ -415,9 +422,11 @@ def test_every_run_carries_operator_notes_and_only_one_carries_the_false_one(tmp
     """The Level-8 note must not be identifiable by the existence of a notes file."""
     from sim.run.artifacts import read_operator_notes
 
-    clean = generate_run(_short("S0-01"), "B", plant=load_plant_config("C"), runs_root=tmp_path)
+    clean = generate_run(
+        _short("S0-01"), "B", plant=load_plant_config("C"), runs_root=tmp_path / "runs"
+    )
     adversarial = generate_run(
-        _short("S8-02"), "B", plant=load_plant_config("C"), runs_root=tmp_path
+        _short("S8-02"), "B", plant=load_plant_config("C"), runs_root=tmp_path / "runs"
     )
     clean_notes = read_operator_notes(clean.paths.operator_notes)
     bad_notes = read_operator_notes(adversarial.paths.operator_notes)
@@ -430,7 +439,9 @@ def test_every_run_carries_operator_notes_and_only_one_carries_the_false_one(tmp
 
 def test_the_workflow_fault_never_reaches_the_observations(tmp_path):
     """Level 8: knowing in advance which tool will fail is the answer to that row."""
-    run = generate_run(_short("S8-01"), "B", plant=load_plant_config("C"), runs_root=tmp_path)
+    run = generate_run(
+        _short("S8-01"), "B", plant=load_plant_config("C"), runs_root=tmp_path / "runs"
+    )
     assert run.workflow_faults == (("bayes_mcmc", 1.0),)
     blob = "\n".join(
         p.read_text(encoding="utf-8") for p in run.paths.observations.rglob("*") if p.is_file()
@@ -457,7 +468,11 @@ def test_one_seed_per_stream_in_the_documented_order():
 def test_the_tier_is_not_part_of_the_seed_derivation(tmp_path):
     """Otherwise a tier would be a different digester, not a different window on one."""
     runs = generate_cells(
-        _short("S0-01"), load_plant_config("C"), ["A", "B"], runs_root=tmp_path, write=False
+        _short("S0-01"),
+        load_plant_config("C"),
+        ["A", "B"],
+        runs_root=tmp_path / "runs",
+        write=False,
     )
     assert runs[0].manifest.seeds == runs[1].manifest.seeds
     assert runs[0].truth.geometry == runs[1].truth.geometry
@@ -467,7 +482,9 @@ def test_a_scenario_without_a_seed_is_refused(tmp_path):
     """CLAUDE.md rule 4: no implicit seeds."""
     scenario = _short("S0-01").model_copy(update={"seed": None})
     with pytest.raises(ValueError, match="carries no seed"):
-        generate_run(scenario, "A", plant=load_plant_config("C"), runs_root=tmp_path, write=False)
+        generate_run(
+            scenario, "A", plant=load_plant_config("C"), runs_root=tmp_path / "runs", write=False
+        )
 
 
 # ------------------------------------------------------------------ 6. provenance
@@ -531,26 +548,53 @@ def test_the_public_manifest_carries_no_redacted_field():
 
 
 def test_the_written_manifest_round_trips_and_projects(clean_run):
-    written = RunManifest.read(clean_run.paths.manifest)
+    """Two files: the complete manifest in the truth store, the projection under runs/."""
+    written = RunManifest.read(clean_run.paths.truth_manifest)
     assert written == clean_run.manifest
+    stored = json.loads(clean_run.paths.truth_manifest.read_text(encoding="utf-8"))
+    assert stored["scenario_id"] == "S0-01"  # it is in the truth store's file...
+
     public = written.public()
-    payload = json.loads(clean_run.paths.manifest.read_text(encoding="utf-8"))
-    assert payload["scenario_id"] == "S0-01"  # it is in the file...
-    assert "scenario_id" not in public.model_dump()  # ...and not in the projection
+    visible = json.loads(clean_run.paths.manifest.read_text(encoding="utf-8"))
+    assert "scenario_id" not in visible  # ...and not in the one a workflow can open
+    assert visible == json.loads(public.model_dump_json())
     assert public.plant == "C" and public.tier == "B"
     assert public.configs.versions["observation_sensors"] >= 2
     assert public.git_sha
 
 
 def test_the_index_maps_opaque_ids_back_to_cells(clean_run):
-    index = clean_run.paths.root.parent / "index.jsonl"
+    index = clean_run.paths.truth.parent / "index.jsonl"
     entries = [json.loads(line) for line in index.read_text(encoding="utf-8").splitlines()]
     mine = [e for e in entries if e["run_id"] == clean_run.run_id]
     assert mine and mine[0]["scenario_id"] == "S0-01" and mine[0]["plant"] == "C"
+    # the index names the scenario of every run, so it belongs in the truth store, not
+    # one level above a directory a workflow is handed
+    assert not (clean_run.paths.root.parent / "index.jsonl").exists()
+
+
+def test_regenerating_a_cell_does_not_duplicate_its_index_line(tmp_path):
+    """A run id is a hash of its cell, so a regenerated cell overwrites its own directory.
+
+    An index that merely appended would carry the cell twice and an evaluator counting its
+    lines would over-count every regenerated cell.
+    """
+    from sim.run.manifest import write_index_entry
+
+    index = tmp_path / "index.jsonl"
+    write_index_entry(index, {"run_id": "run_a", "scenario_id": "S0-01", "tier": "A"})
+    write_index_entry(index, {"run_id": "run_b", "scenario_id": "S1-01", "tier": "A"})
+    write_index_entry(index, {"run_id": "run_a", "scenario_id": "S0-01", "tier": "B"})
+
+    entries = [json.loads(line) for line in index.read_text(encoding="utf-8").splitlines()]
+    assert [e["run_id"] for e in entries] == ["run_a", "run_b"], "one line per run id"
+    assert entries[0]["tier"] == "B", "and it is the latest write, not the first"
 
 
 def test_run_paths_are_declared_in_one_place(tmp_path):
-    paths = RunPaths.for_run("run_abc", tmp_path).create()
+    paths = RunPaths.for_run("run_abc", tmp_path / "runs").create()
     assert paths.truth.is_dir() and paths.observations.is_dir()
     assert paths.truth_states.parent == paths.truth
+    assert paths.truth_manifest.parent == paths.truth
     assert paths.sensors.parent == paths.observations
+    assert paths.truth == tmp_path / "truth_store" / "run_abc"

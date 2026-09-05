@@ -6,8 +6,11 @@ dependencies; oracle values from other ADM1 implementations are committed as JSO
 Two tests encode non-negotiable rules from `CLAUDE.md` rather than ordinary behaviour:
 
 - `test_truth_isolation.py` — no module under `workflows/` may import from, or reference
-  a path containing, `truth/` (rule 1). It self-checks against a synthetic violating
-  file so it cannot pass vacuously while `workflows/` is still mostly empty.
+  a path containing, `truth/` or `truth_store/` (rule 1). It self-checks against a
+  synthetic violating file so it cannot pass vacuously while `workflows/` is still mostly
+  empty, asserts the *layout* that makes hidden truth unreachable, and drives the
+  workflow-facing loader adversarially — with a negative control, so it cannot pass by
+  refusing everything.
 - `test_scenario_schema.py` — the scenario YAML contract (proposal Appendix B) loads,
   round-trips and rejects malformed input.
 
@@ -73,7 +76,7 @@ The influent generator (`sim/influent/`, `configs/influent/`):
   recipes reproduce the declared feed flows and Plant A's OLR lands in Tisocco's range;
   every entry's TKN is consistent with the ADM1 N contents under its own inert N and the
   non-sludge entries are shown inconsistent under BSM2's; nothing under `sim/influent`
-  or `sim/plants` writes files or references `truth/`.
+  or `sim/plants` writes files or references `truth/` or `truth_store/`.
 
 The run harness and the scenario library (`sim/run/`, `state/`, `scenarios/`):
 

@@ -10,7 +10,7 @@
 # share m the Dirichlet sd is sqrt(m(1-m)/(kappa+1)), so a 0.4 inert share moves from an
 # sd of 0.06 at kappa = 60 to 0.20 at kappa = 5). A batch that far from its label is a
 # genuinely different material, which is what "mislabelled" means. The realised departure
-# of each cell is written to runs/<id>/truth/fractionation.json rather than assumed, and
+# of each cell is written to truth_store/<id>/fractionation.json rather than assumed, and
 # the generation report tabulates it.
 #
 # TARGET FEED is the plant's co-substrate - the last feed each plant declares, which is

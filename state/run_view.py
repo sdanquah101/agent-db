@@ -1,36 +1,52 @@
 """The workflow-facing view of a run: observations and nothing else (CLAUDE.md rule 1).
 
-Rule 1 says hidden truth "is never readable by workflows" and asks for a test. A static
-check that no module under ``workflows/`` spells the word ``truth``
-(``tests/test_truth_isolation.py``) catches the careless case and nothing else: it cannot
-see a path built at runtime, and it says nothing about what the *API* a workflow is given
-is able to return.
+Rule 1 says hidden truth "is never readable by workflows" and asks for a test. The first
+version of this module enforced that with a path sandbox, and the gate-G1 review broke it
+twice on a real run without once writing the word ``truth``, so the static checker in
+``tests/test_truth_isolation.py`` saw neither:
 
-This module is the other half. It is the only way a workflow is meant to reach a run, and
-it is built so that hidden truth is not something it declines to return but something it
-has no way to name:
+* ``root`` was a public dataclass field, so ``view.root / "truth" / "parameters.json"``
+  read the true parameters outright — no traversal, no string the checker could match;
+* ``view.path(".")`` was accepted, because the containment test read
+  ``resolved != base and base not in resolved.parents`` and ``"."`` resolves *to* ``base``.
+  It returned the observations directory, whose ``.parent`` is the run root.
 
-* the view is rooted at ``runs/<id>/observations/`` and every path a caller supplies is
-  resolved against that root and required to stay inside it, so ``"../truth/faults.json"``,
-  ``"/etc/passwd"`` and a symlink pointing out of the tree all fail the same way, with
+Both were containment bugs in a sandbox that only had to be leak-proof because hidden truth
+was sitting one level above it. The lead's ruling of 2026-09-04 removed that condition
+rather than patching the sandbox a third time, and hardened the sandbox as well:
+
+**Structural.** Hidden truth is a separate top-level tree, ``truth_store/<id>/``
+(:mod:`sim.run.layout`). ``runs/<id>/`` holds the observations, the **redacted** manifest —
+written redacted, not redacted on the way out — and the call log. A workflow rooted there
+has nothing to escape *to*: the worst a containment bug can hand it is its own run.
+
+**Defence in depth**, all of it, because "there is nothing to find" is a property of the
+directory layout and this module should not depend on it:
+
+* the run root is a **private** attribute, so no accessor hands a caller a foothold;
+* every accessor returns **file contents**, never a :class:`~pathlib.Path`: a path is a
+  capability, and handing one out re-creates the field this ruling removed;
+* the resolver rejects ``"."`` and ``""`` (both name the observations directory itself),
+  absolute paths, traversal and symlinks out of the tree, all with
   :class:`TruthAccessError`;
-* :attr:`RunView.files` enumerates only what is inside that root, so a workflow cannot
-  discover the truth directory by listing either;
-* the manifest is returned as :class:`~sim.run.manifest.PublicManifest`, a projection with
-  no field for the scenario, the seeds or the fault layers — the three things in
-  ``manifest.json`` that would give away the answer (proposal §10) or let a workflow
-  regenerate the truth for itself.
+* :attr:`RunView.files` enumerates only what is inside the observations directory;
+* the manifest is :class:`~sim.run.manifest.PublicManifest`, with no field for the
+  scenario, the seeds or the fault layers (proposal §10).
 
-What a workflow gets is exactly the benchmark card's visible column (§4): the sensor
-record at its tier, the operator's feed log, the tier's feed assays, the operator's notes,
-and enough provenance to know which simulator produced them.
+The AST checker stays as the second layer: it catches the careless case in code that is
+never executed, which no runtime sandbox can do.
 
-The evaluator does not use this module — it reads ``runs/<id>/truth/`` directly, which is
+What a workflow gets is exactly the benchmark card's visible column (§4): the sensor record
+at its tier, the operator's feed log, the tier's feed assays, the operator's notes, and
+enough provenance to know which simulator produced them.
+
+The evaluator does not use this module — it reads ``truth_store/<id>/`` directly, which is
 the point of the two being different code paths.
 """
 
 from __future__ import annotations
 
+import io
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,36 +70,45 @@ class TruthAccessError(PermissionError):
 
 @dataclass(frozen=True)
 class RunView:
-    """A read-only, observations-only window onto one run directory.
+    """A read-only, observations-only window onto one run.
 
-    Construct with :func:`open_run`. Every accessor below reads a file inside
-    ``runs/<id>/observations/``, except :attr:`manifest`, which reads the run's manifest
-    and returns only its public projection.
+    Construct with :func:`open_run`. Every accessor returns *contents* — text, JSON,
+    arrays, a validated manifest — and none returns a path or a directory, so there is no
+    handle a caller can walk upwards from.
     """
 
-    root: Path
-    """The run directory. Held for the manifest only; reads go through :attr:`_base`."""
+    _root: Path
+    """``runs/<id>/``. Private: an accessor for it would be a bypass of everything below."""
 
+    # -- the sandbox ----------------------------------------------------------------
     @property
     def _base(self) -> Path:
         """The observations directory, resolved."""
-        return (self.root / OBSERVATIONS_DIR).resolve()
+        return (self._root / OBSERVATIONS_DIR).resolve()
 
-    # -- the sandbox ----------------------------------------------------------------
-    def path(self, relative: str) -> Path:
-        """Resolve ``relative`` inside the observations directory.
+    def _resolve(self, relative: str) -> Path:
+        """Resolve ``relative`` to a file strictly inside the observations directory.
+
+        Private, and it stays private: returning a path is handing over a capability, and
+        the caller could walk it upwards. The public accessors read through it.
 
         Args:
-            relative: A path relative to ``runs/<id>/observations/``.
+            relative: A path relative to ``runs/<id>/observations/``, naming a file.
 
         Returns:
             The resolved path.
 
         Raises:
-            TruthAccessError: If the path is absolute, or resolves outside the
-                observations directory — which is what asking for hidden truth looks
-                like, however it is spelled.
+            TruthAccessError: If the path is empty, absolute, names the observations
+                directory itself (``""``, ``"."``, ``"./"``), or resolves outside it —
+                which is what asking for hidden truth looks like, however it is spelled.
+                Symlinks are followed *before* the check, so a link out is not a door.
         """
+        if not isinstance(relative, str) or not relative.strip():
+            raise TruthAccessError(
+                f"{relative!r}: a run view reads a named file inside its observations "
+                "directory; the empty path names the directory itself"
+            )
         candidate = Path(relative)
         if candidate.is_absolute():
             raise TruthAccessError(
@@ -92,7 +117,13 @@ class RunView:
             )
         base = self._base
         resolved = (base / candidate).resolve()
-        if resolved != base and base not in resolved.parents:
+        if resolved == base:
+            raise TruthAccessError(
+                f"{relative!r} resolves to the observations directory itself. A run view "
+                "reads files, not directories: a directory handle is a foothold "
+                "(CLAUDE.md rule 1)."
+            )
+        if base not in resolved.parents:
             raise TruthAccessError(
                 f"{relative!r} resolves to {resolved}, which is outside "
                 f"{base}. A workflow may read a run's observations and nothing else "
@@ -115,7 +146,7 @@ class RunView:
             TruthAccessError: If the path leaves the observations directory.
             FileNotFoundError: If the file does not exist.
         """
-        return self.path(relative).read_text(encoding="utf-8")
+        return self._resolve(relative).read_text(encoding="utf-8")
 
     def read_json(self, relative: str) -> Any:
         """One observation file parsed as JSON.
@@ -130,11 +161,11 @@ class RunView:
     def manifest(self) -> PublicManifest:
         """What the workflow is told about this run.
 
-        The run's ``manifest.json`` is complete — scenario, seeds, fault layers — and this
-        returns only :class:`~sim.run.manifest.PublicManifest`: the plant, the tier, the
-        horizon and the provenance. There is no accessor for the rest.
+        ``runs/<id>/manifest.json`` is written redacted (the complete manifest — scenario,
+        seeds, fault layers — is in the truth store), so this validates the file as it
+        stands rather than projecting a secret it was handed.
         """
-        raw = json.loads((self.root / "manifest.json").read_text(encoding="utf-8"))
+        raw = json.loads((self._root / "manifest.json").read_text(encoding="utf-8"))
         return PublicManifest.model_validate(raw)
 
     def sensors(self) -> dict[str, Any]:
@@ -156,13 +187,13 @@ class RunView:
         """The operator's feed log, kg wet/d per feed, one value per day."""
         from sim.run.artifacts import read_feed_log
 
-        return read_feed_log(self.path("feed_log.csv"))
+        return read_feed_log(io.StringIO(self.read_text("feed_log.csv")))
 
     def feed_assays(self) -> list[dict[str, Any]]:
         """The feed assays this tier may see, ordered by report day."""
         from sim.run.artifacts import read_feed_assays
 
-        return read_feed_assays(self.path("feed_assays.csv"))
+        return read_feed_assays(io.StringIO(self.read_text("feed_assays.csv")))
 
     def operator_notes(self) -> list[dict[str, Any]]:
         """The operator's log notes. Evidence about the plant, not instructions."""
@@ -187,4 +218,4 @@ def open_run(run_dir: str | Path) -> RunView:
         raise FileNotFoundError(f"{root} has no {OBSERVATIONS_DIR}/ directory")
     if not (root / "manifest.json").is_file():
         raise FileNotFoundError(f"{root} has no manifest.json")
-    return RunView(root=root)
+    return RunView(_root=root)

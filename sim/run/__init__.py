@@ -1,7 +1,7 @@
 """The run harness: a scenario cell becomes a ``runs/<id>/`` directory (§6.1, gate G1).
 
-* :mod:`sim.run.layout` — the on-disk contract: ``truth/``, ``observations/``,
-  ``manifest.json``, ``calls.jsonl``, and the opaque run id.
+* :mod:`sim.run.layout` — the on-disk contract: ``runs/<id>/`` (observations, the redacted
+  manifest, ``calls.jsonl``), the separate ``truth_store/<id>/``, and the opaque run id.
 * :mod:`sim.run.seeds` — one seed per stochastic component, in a fixed documented order.
 * :mod:`sim.run.manifest` — the complete run manifest, and the redacted projection a
   workflow is given.
@@ -21,9 +21,11 @@ from sim.run.layout import (
     INDEX_FILE,
     OBSERVATIONS_DIR,
     RUNS_ROOT,
-    TRUTH_DIR,
+    TRUTH_STORE,
+    TRUTH_STORE_DIR,
     RunPaths,
     run_id,
+    truth_store_for,
 )
 from sim.run.manifest import (
     HARNESS_VERSION,
@@ -41,11 +43,13 @@ __all__ = [
     "REDACTED_FIELDS",
     "RUNS_ROOT",
     "STREAM_ORDER",
-    "TRUTH_DIR",
+    "TRUTH_STORE",
+    "TRUTH_STORE_DIR",
     "ConfigVersions",
     "PublicManifest",
     "RunManifest",
     "RunPaths",
     "RunSeeds",
     "run_id",
+    "truth_store_for",
 ]

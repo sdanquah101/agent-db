@@ -1,13 +1,15 @@
-"""Writing a run to disk: hidden truth under ``truth/``, everything else under ``observations/``.
+"""Writing a run to disk: hidden truth to ``truth_store/<id>/``, the rest to ``runs/<id>/``.
 
 CLAUDE.md rule 1 is a *directory* boundary, so the separation is enforced here by the
-crudest possible means: two functions, each of which can only write into one region.
-:func:`write_truth` takes the paths' ``truth`` directory and never touches
+crudest possible means: two functions, each of which can only write into one tree.
+:func:`write_truth` takes the paths' ``truth`` directory — since the lead's ruling of
+2026-09-04 a separate top-level tree, not a subdirectory of the run — and never touches
 ``observations``; :func:`write_observations` takes the ``observations`` directory and is
 handed only the objects a workflow may see. A quantity that belongs on the other side of
 the line has to be moved between functions to get there, which is a diff a reviewer sees.
 
-**What goes where** (benchmark card §4):
+**What goes where** (benchmark card §4). ``truth/`` below is ``truth_store/<id>/`` and
+``observations/`` is ``runs/<id>/observations/``:
 
 ===============================  ==========================================================
 ``truth/parameters.json``        true ADM1 parameters per segment, truth ``N_I``, the
@@ -40,7 +42,7 @@ import csv
 import json
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TextIO
 
 import numpy as np
 
@@ -73,7 +75,7 @@ def _json(path: Path, payload: object) -> None:
 
 
 def write_truth(paths: RunPaths, truth: RunTruth, scenario: Scenario) -> None:
-    """Write every hidden quantity of a run under ``runs/<id>/truth/``.
+    """Write every hidden quantity of a run under ``truth_store/<id>/``.
 
     Args:
         paths: The run's paths.
@@ -314,18 +316,29 @@ def read_observation_record(path: Path) -> dict[str, object]:
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def read_feed_log(path: Path) -> dict[str, np.ndarray]:
+def _csv_rows(source: Path | str | TextIO) -> list[dict[str, str]]:
+    """Rows of a CSV given as a path or as an already-open text stream.
+
+    :mod:`state.run_view` reads a file's *contents* and never hands out a path (the
+    workflow-facing loader must not return capabilities), so these readers take a stream as
+    readily as a path.
+    """
+    if isinstance(source, str | Path):
+        with Path(source).open(encoding="utf-8", newline="") as fh:
+            return list(csv.DictReader(fh))
+    return list(csv.DictReader(source))
+
+
+def read_feed_log(source: Path | str | TextIO) -> dict[str, np.ndarray]:
     """Read ``observations/feed_log.csv`` into one array per feed, kg wet/d."""
-    with Path(path).open(encoding="utf-8", newline="") as fh:
-        rows = list(csv.DictReader(fh))
+    rows = _csv_rows(source)
     columns = [c for c in (rows[0] if rows else {}) if c != "day_d"]
     return {c.removesuffix("_kg_wet_per_d"): np.array([float(r[c]) for r in rows]) for c in columns}
 
 
-def read_feed_assays(path: Path) -> list[dict[str, object]]:
+def read_feed_assays(source: Path | str | TextIO) -> list[dict[str, object]]:
     """Read ``observations/feed_assays.csv`` into records with numeric values."""
-    with Path(path).open(encoding="utf-8", newline="") as fh:
-        rows = list(csv.DictReader(fh))
+    rows: list[dict[str, object]] = list(_csv_rows(source))
     for row in rows:
         row["value"] = float(row["value"])
         row["report_day_d"] = int(row["report_day_d"])

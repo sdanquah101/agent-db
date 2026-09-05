@@ -1,19 +1,24 @@
 """The run manifest: everything needed to reproduce a run, and the subset a workflow sees.
 
-Two objects for one file. :class:`RunManifest` is written to ``runs/<id>/manifest.json``
-and is **complete**: the scenario it came from, every derived seed, the declared fault
-layers, the content hash of every configuration file, and the git commit. That is what
-reproducibility (§13) and evaluation (§6.7) need.
+Two objects, **two files**. :class:`RunManifest` is **complete**: the scenario it came
+from, every derived seed, the declared fault layers, the content hash of every
+configuration file, and the git commit. That is what reproducibility (§13) and evaluation
+(§6.7) need.
 
 It is also, in three of those fields, the answer key. The scenario id names the row of the
 ladder; the fault layers *are* the uncertainty class a workflow is scored on attributing
 (§6.7 B); and the seeds would let a workflow re-run the generator and read the truth off
 its own copy. Proposal §10 anticipates this — "agents leak information via prompts (e.g.
-scenario names) ... scenario IDs randomised; agents never see YAML" — so the manifest is
-not handed over as written. :class:`PublicManifest` is the projection a workflow receives
-through :mod:`state.run_view`: the run's identity, the plant and tier it is looking at,
-how long it ran, and the provenance needed to reproduce the *environment* — never the
-scenario, the seeds or the faults.
+scenario names) ... scenario IDs randomised; agents never see YAML". So the complete
+manifest is written to ``truth_store/<id>/manifest.json``, with the rest of the hidden
+truth, and ``runs/<id>/manifest.json`` holds :class:`PublicManifest` alone: the run's
+identity, the plant and tier it is looking at, how long it ran, and the provenance needed
+to reproduce the *environment* — never the scenario, the seeds or the faults.
+
+The projection was once made at read time, which meant the secret was on disk inside the
+directory a workflow was handed and a containment bug in the loader was all that stood
+between the two. Since the lead's ruling of 2026-09-04 the redaction happens at **write**
+time as well, so the file a workflow can open never carried the answer in the first place.
 
 The two are kept in one module so the redaction is one diff away from the thing it
 redacts: :data:`REDACTED_FIELDS` lists what is dropped, and a test asserts that no field
@@ -92,6 +97,15 @@ class PublicManifest(BaseModel):
     git_sha: str
     configs: ConfigVersions
 
+    def write(self, path: Path) -> None:
+        """Write the projection as indented JSON.
+
+        This is what lands at ``runs/<id>/manifest.json``. The complete
+        :class:`RunManifest` is written to the truth store instead, so the file a workflow
+        can open does not merely *omit* the answer, it never contained it.
+        """
+        path.write_text(self.model_dump_json(indent=2) + "\n", encoding="utf-8")
+
 
 class RunManifest(BaseModel):
     """The complete provenance of one run (``runs/<id>/manifest.json``)."""
@@ -142,7 +156,12 @@ class RunManifest(BaseModel):
         )
 
     def write(self, path: Path) -> None:
-        """Write the manifest as indented JSON."""
+        """Write the complete manifest as indented JSON.
+
+        Its home is ``truth_store/<id>/manifest.json``: the scenario id, the seeds and the
+        fault layers are the answer key, so the complete record lives with the rest of the
+        hidden truth and :meth:`public` is what is written under ``runs/``.
+        """
         path.write_text(self.model_dump_json(indent=2) + "\n", encoding="utf-8")
 
     @classmethod
@@ -201,12 +220,39 @@ def config_versions(paths: dict[str, Path], versions: dict[str, int]) -> ConfigV
 
 
 def write_index_entry(index_path: Path, entry: dict[str, object]) -> None:
-    """Append one line to the evaluator's ``runs/index.jsonl``.
+    """Record one run in the evaluator's ``truth_store/index.jsonl``.
 
-    The index maps an opaque run id back to its cell. It lives at the *root* of the run
-    store rather than inside any run, so handing a workflow one run directory hands it
-    nothing about the others.
+    The index maps an opaque run id back to its cell, which is why it lives in the truth
+    store rather than beside the runs: it names the scenario of every run.
+
+    **One line per run id, not one per write.** A run id is a hash of its cell
+    (:func:`sim.run.layout.run_id`), so regenerating a cell overwrites its own directories;
+    an index that merely appended would then carry the cell twice and an evaluator counting
+    its lines would over-count every regenerated cell. Any existing line for this run id is
+    replaced in place, so the index says what is on disk however often it was written.
+
+    Args:
+        index_path: The index file.
+        entry: The run's index record; its ``run_id`` is the key.
     """
     index_path.parent.mkdir(parents=True, exist_ok=True)
-    with index_path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(entry, separators=(",", ":"), sort_keys=True) + "\n")
+    line = json.dumps(entry, separators=(",", ":"), sort_keys=True)
+    run = entry.get("run_id")
+    kept: list[str] = []
+    replaced = False
+    if index_path.is_file():
+        for existing in index_path.read_text(encoding="utf-8").splitlines():
+            if not existing.strip():
+                continue
+            try:
+                same = json.loads(existing).get("run_id") == run
+            except json.JSONDecodeError:
+                same = False
+            if same:
+                kept.append(line)
+                replaced = True
+            else:
+                kept.append(existing)
+    if not replaced:
+        kept.append(line)
+    index_path.write_text("\n".join(kept) + "\n", encoding="utf-8")

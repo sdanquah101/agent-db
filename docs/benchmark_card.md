@@ -53,7 +53,7 @@ statement about what it cannot identify — from a realistic observation window.
 
 ## 4. What is generated, and what is hidden
 
-| | Visible to a workflow | Hidden truth (`runs/<id>/truth/`) |
+| | Visible to a workflow | Hidden truth (`truth_store/<id>/`) |
 |---|---|---|
 | Plant | Declared geometry, temperature set point, feed catalogue, hydraulics | Realised active-volume error, realised mixing structure |
 | Influent | Operator feed log (with unrecorded deliveries and mis-logs), scheduled assays with method noise and turnaround | True per-feed composition and its drift, true COD fractionation, true inert N |
@@ -61,40 +61,49 @@ statement about what it cannot identify — from a realistic observation window.
 | Faults | Nothing | Fault type, layer, onset, magnitude, target |
 
 CLAUDE.md rule 1 is the hard boundary: **nothing under `workflows/` may import from or
-read `runs/<id>/truth/`**, and two tests enforce it — a static scan of `workflows/`, and a
-set of tests that drive the workflow-facing loader `state.run_view.open_run` on a real
-generated run and ask it for truth by relative path, traversal, absolute path, symlink,
-listing and manifest field. Evaluation reads `runs/<id>/calls.jsonl` and the truth record;
-workflows read neither.
+read `truth_store/<id>/`**, and it is enforced three times over — by the layout, by a
+static scan of `workflows/`, and by an adversarial suite that drives the workflow-facing
+loader `state.run_view.open_run` on a real generated run and asks it for truth by relative
+path, traversal, `"."`, `""`, absolute path, symlink, listing, every public attribute it
+exposes, and manifest field. That suite carries a **negative control** — a legitimate read
+that must still succeed — because a sandbox that refuses everything passes every refusal
+test ever written. Evaluation reads `runs/<id>/calls.jsonl` and the truth store; workflows
+read neither.
 
-A generated run is laid out as:
+A generated run is **two trees**, so a workflow rooted at the first has nothing to escape
+to:
 
 ```
 runs/<id>/                     <id> is an opaque hash of the cell, not its scenario name
-  manifest.json                complete provenance: scenario, seeds, fault layers, config
-                               hashes, git SHA -- REDACTED before a workflow sees it
+  manifest.json                the REDACTED manifest: plant, tier, horizon, seasonal
+                               phase, config versions, git SHA. Written redacted.
   calls.jsonl                  one line per tool call (rule 3); append-only, shared by the
                                harness now and the tool registry later
-  truth/    parameters.json    true parameters per integration segment, truth N_I
+  observations/
+            sensors.json       the tier's record, with units, flags and report times
+            feed_log.csv       the operator's feed log (mis-logs applied)
+            feed_assays.csv    the assays the tier's mask permits
+            operator_notes.json  the operator's log, including any Level-8 false note
+
+truth_store/<id>/              a SEPARATE TOP-LEVEL TREE (lead's ruling, 2026-09-04)
+            manifest.json      complete provenance: scenario, seeds, fault layers, config
+                               hashes, git SHA
+            parameters.json    true parameters per integration segment, truth N_I
             influent.npz       true deliveries, true solids, the true influent series
             fractionation.json true COD fractionation, unrecorded and mis-logged days
             geometry.json      realised volume error, realised mixing, digester health
             states.npz         the full state trajectory and the burn-in state
             channels.npz       every observable channel and the condition flags
             faults.json        the fault plan, the truth label, the answer key
-  observations/
-            sensors.json       the tier's record, with units, flags and report times
-            feed_log.csv       the operator's feed log (mis-logs applied)
-            feed_assays.csv    the assays the tier's mask permits
-            operator_notes.json  the operator's log, including any Level-8 false note
+truth_store/index.jsonl        opaque run id -> its cell, for the evaluator
 ```
 
-**The manifest is redacted, not truncated.** `manifest.json` is written complete, because
-reproducibility and evaluation need it; `state.run_view` returns only the projection that
-describes the *environment* — plant, tier, horizon, seasonal phase, config versions, git
-SHA. The scenario id, the seeds and the declared fault layers stay out of it: the first
-would leak the row of the ladder (proposal §10), the second would let a workflow regenerate
-the truth for itself, and the third *is* the uncertainty class §6.7 B scores.
+**The manifest is redacted at write time, not at read time.** The complete manifest is
+hidden truth — the scenario id would leak the row of the ladder (proposal §10), the seeds
+would let a workflow regenerate the truth for itself, and the declared fault layers *are*
+the uncertainty class §6.7 B scores — so it is written to the truth store, and the file
+under `runs/<id>/` never carried any of the three. `truth_store/index.jsonl` is in the
+truth store for the same reason: it names the scenario of every run.
 
 **Instrumentation tiers are masks on identical truth** (§6.4). Tier C contains Tier B
 contains Tier A — the schema validates the containment and the tests check it. Two runs at
@@ -271,8 +280,9 @@ from the analysis plan are documented rather than absorbed.
   reproducible from a tag.
 - A run directory is **self-contained and deterministically named**: the id is a hash of
   (scenario, plant, tier, seed, replicate), so regenerating a cell overwrites its own
-  directory rather than accumulating copies, and `runs/index.jsonl` — at the root of the
-  store, never inside a run — maps ids back to cells for the evaluator.
+  directory rather than accumulating copies, and `truth_store/index.jsonl` — in the truth
+  store, because it names the scenario of every run — maps ids back to cells for the
+  evaluator, one line per run id however often a cell is regenerated.
 - The manifest records the **declared version and content hash of every configuration file**
   the run read, plus the git commit, marked `-dirty` when the tree was not clean.
 - Final runs execute from a tagged release; Docker image and pinned dependencies at

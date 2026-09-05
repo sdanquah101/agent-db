@@ -29,7 +29,7 @@ burn_in_output_interval_d: 10.0   # DESIGN  d; only the final state is used, so 
 # ---------------------------------------------------------------- scenario integration
 # One output per day, which is the influent's own sample-and-hold cadence and the highest
 # frequency any sensor of §6.4 reports at. A finer grid would change no observation and
-# would multiply the size of runs/<id>/truth/states.npz.
+# would multiply the size of truth_store/<id>/states.npz.
 output_interval_d: 1.0     # DESIGN  d
 
 # Extension states at the start of the burn-in. X_sao must be seeded: syntrophic acetate
