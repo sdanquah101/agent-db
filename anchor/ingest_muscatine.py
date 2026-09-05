@@ -15,17 +15,30 @@ seasonal amplitudes from monthly means, and the spread and persistence of the fe
 assays. ``tests/test_generator.py`` re-derives the configuration from this module so the
 config cannot drift from the data it claims to summarise.
 
-Pure functions over the parsed rows; the only I/O is :func:`load_daily`.
+The 1-minute SCADA file anchors the observation model's sensor statistics
+(``configs/observation/sensors.yaml``). It is 88.8 MB and git-ignored, so
+:func:`scada_noise_statistics` also reads the **committed 60-day extract**
+(:data:`SCADA_WINDOW_FILE`, gzipped) and ``tests/test_observation.py`` re-derives the
+anchored *noise* from it on a fresh clone. Two things the extract cannot do, stated
+rather than implied: the flatline occupancies are rare-event statistics that need the
+whole year, and the row-dropout rate of :func:`scada_row_gap_statistics` is measured over
+the full record. ``scripts/muscatine_scada_observation.py`` writes both artefacts.
+
+Pure functions over the parsed rows; the only I/O is :func:`load_daily`,
+:func:`scada_noise_statistics` and :func:`scada_row_gap_statistics`.
 """
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import datetime as dt
+import gzip
 import math
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TextIO
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field
@@ -34,19 +47,25 @@ __all__ = [
     "DAILY_FILE",
     "GAL_TO_M3",
     "SCADA_FILE",
+    "SCADA_WINDOW_FILE",
     "AssayStatistics",
     "DailyRecord",
     "DeliveryStatistics",
     "ScadaChannelStatistics",
+    "ScadaGapStatistics",
     "assay_statistics",
     "delivery_statistics",
     "load_daily",
     "scada_noise_statistics",
+    "scada_row_gap_statistics",
     "seasonal_amplitude_from_monthly_means",
 ]
 
 DAILY_FILE = Path(__file__).resolve().parent / "raw" / "iowa-muscatine-wrrf" / "LABS-raw.csv"
 SCADA_FILE = Path(__file__).resolve().parent / "raw" / "iowa-muscatine-wrrf" / "SCADA-raw.csv"
+SCADA_WINDOW_FILE = Path(__file__).resolve().parent / "derived" / "muscatine-scada-window.csv.gz"
+"""Committed 60-day extract of the SCADA file: the anchored noise is re-derivable from it
+without the git-ignored 88.8 MB parent (``anchor/derived/ATTRIBUTION.md``)."""
 GAL_TO_M3 = 0.00378541
 CFM_TO_M3_PER_D = 0.0283168 * 1440.0
 MG_PER_L_TO_KG_PER_M3 = 1e-3
@@ -258,6 +277,78 @@ def assay_statistics(records: Sequence[DailyRecord], field: str) -> AssayStatist
     )
 
 
+@contextlib.contextmanager
+def _open_scada(path: Path) -> Iterator[TextIO]:
+    """Open the SCADA file or the committed gzipped extract as text."""
+    if path.suffix == ".gz":
+        with gzip.open(path, "rt", encoding="utf-8-sig", newline="") as fh:
+            yield fh
+    else:
+        with path.open(encoding="utf-8-sig", newline="") as fh:
+            yield fh
+
+
+@dataclass(frozen=True)
+class ScadaGapStatistics:
+    """Rows the SCADA record is missing entirely — its dropouts.
+
+    :class:`ScadaChannelStatistics.missing_fraction` counts *cells* that will not parse,
+    and is zero for this file: the providers pre-cleaned it. Whole *rows* are a different
+    thing and are absent — the README says 485 rows assumed to be power surges were
+    deleted — and the timestamp column shows exactly where. This is therefore the dropout
+    of the *published* record, and a lower bound on what the plant's historian lost.
+    """
+
+    n_rows: int
+    span_d: float
+    """First to last timestamp, d."""
+    n_gaps: int
+    gaps_per_d: float
+    missing_minute_fraction: float
+    """Missing minutes over the minutes the record spans, - (the per-sample loss rate of a
+    minute-resolution online channel)."""
+    median_gap_min: float
+    p90_gap_min: float
+    max_gap_min: float
+
+
+def scada_row_gap_statistics(path: Path = SCADA_FILE) -> ScadaGapStatistics:
+    """Rate and length of the gaps between consecutive SCADA rows.
+
+    The file is not in chronological order (the 2023 block precedes 2022), so the
+    timestamps are sorted before the differences are taken.
+
+    Args:
+        path: The SCADA file, or the committed extract (whose gap rate is **not**
+            representative: 18 of the record's 19 gaps fall in its first 90 days).
+
+    Returns:
+        The record's dropout statistics.
+    """
+    stamps: list[dt.datetime] = []
+    with _open_scada(path) as fh:
+        reader = csv.DictReader(fh)
+        if reader.fieldnames is None or "Timestamp" not in reader.fieldnames:
+            raise KeyError(f"'Timestamp' is not a column of {path.name}")
+        for row in reader:
+            stamps.append(dt.datetime.strptime(row["Timestamp"], "%Y-%m-%d %H:%M:%S"))
+    stamps.sort()
+    minute = np.array([(s - stamps[0]).total_seconds() / 60.0 for s in stamps])
+    steps = np.diff(minute)
+    gaps = steps[steps > 1.0] - 1.0
+    span_min = float(minute[-1] - minute[0]) + 1.0
+    return ScadaGapStatistics(
+        n_rows=len(stamps),
+        span_d=span_min / 1440.0,
+        n_gaps=int(gaps.size),
+        gaps_per_d=float(gaps.size) / (span_min / 1440.0),
+        missing_minute_fraction=float(gaps.sum()) / span_min,
+        median_gap_min=float(np.median(gaps)) if gaps.size else 0.0,
+        p90_gap_min=float(np.percentile(gaps, 90)) if gaps.size else 0.0,
+        max_gap_min=float(gaps.max()) if gaps.size else 0.0,
+    )
+
+
 @dataclass(frozen=True)
 class ScadaChannelStatistics:
     """Sensor statistics of one 1-minute SCADA channel (the observation model's anchor).
@@ -301,7 +392,7 @@ def scada_noise_statistics(
     """
     values: list[float] = []
     n_rows = n_missing = 0
-    with path.open(encoding="utf-8-sig", newline="") as fh:
+    with _open_scada(path) as fh:
         reader = csv.DictReader(fh)
         if reader.fieldnames is None or column not in reader.fieldnames:
             raise KeyError(f"{column!r} is not a column of {path.name}")

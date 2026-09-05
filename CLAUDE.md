@@ -1,10 +1,46 @@
 # AD-AgentBench — standing instructions for Claude Code
 
+## FIRST ACTION, before anything else
+
+**Read `docs/coordinator.md` and confirm you are not the coordinator.** It names the one
+session that coordinates this project, by ID. Compare it with your own session ID and say
+which you are, in your first message, before you read another file or run another command.
+
+If you are **not** the coordinator — you almost certainly are not — then: do not spawn
+sessions, do not create scheduled routines beyond a check-in on your own PR, do not merge
+anything including your own PR, and route every question through the coordinator rather
+than sideways to another session. Then list the open PRs before you write any code: if one
+already covers your component, stop and say so.
+
+Three of the first six components here were built twice by sessions that did not know
+about each other. `docs/coordinator.md` says what that cost and why this check is the
+first line of this file.
+
 ## What this repository is
 An open, reproducible benchmark for agent-supported calibration and discrepancy
 diagnosis of anaerobic-digestion (AD) process models. Full design in
 `docs/proposal.md` — read it before any non-trivial task. Section numbers
 below refer to that document.
+
+## Who starts a component session (read this before starting work)
+
+**The daily routine never launches a component session.** It reviews, subscribes,
+reports and salvages, and nothing else. A component session is started **only** when the
+lead sends `launch: <component>` to the coordinating session, and the lead sends it after
+the previous component's PR has merged.
+
+Everything the lead writes as a "reply to paste" goes to the coordinating session; if a
+child session has a question, the coordinator relays it. A child session never spawns
+another session.
+
+**Why (2026-09-03).** Three of the first six components were built twice — the ADM1 core
+(PR #2 vs #4), the plant layer (#6 vs #7) and the observation model with fault injection
+(#11 vs #12). Every collision had the same shape: the routine launched a component
+because its plan said so, while a session was already building it because a decision had
+reached that session directly. Adding "check the open PRs" to this file did not stop it,
+because the duplicate work had usually already started by the time anyone looked.
+Removing the routine's launch authority removes the failure mode; it costs the lead one
+message per component.
 
 ## Non-negotiable rules
 1. **Hidden truth is never readable by workflows.** Simulator ground truth
@@ -49,7 +85,11 @@ tests/
   (`gh`/GitHub: list open PRs and check `docs/milestones.md` on `main` against the
   open PR list). If it is not merged, branch from the predecessor's branch, not from
   `main`, and say so in the PR description. Never re-implement a component that an
-  open PR already contains (decision of 2026-09-02, "Duplicate ADM1 core").
+  open PR already contains (decision of 2026-09-02, "Duplicate ADM1 core"). This check
+  is a backstop, not the defence: the defence is that only the lead launches a component
+  session (see "Who starts a component session" above). Listing the open PRs is still
+  the first thing a session does, and it lists *all* of them — checking only that the
+  named predecessor merged is what let PR #12 duplicate PR #11.
 - Prefer boring, well-tested libraries (SciPy, NumPy, Pydantic) over clever ones.
 - Numerical tolerances and solver settings live in `configs/`, never hard-coded.
 

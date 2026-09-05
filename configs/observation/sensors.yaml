@@ -14,8 +14,14 @@
 #   * total biogas flow: 1-minute noise sigma 2.35 cfm on a mean of 112.8 cfm = 2.1 %
 #     relative; stuck-value runs of >= 10 min are 0.0144 % of the time (both fractions
 #     re-measured after an off-by-one in the run marker was fixed; see the decisions log).
-#   * MISSINGNESS CANNOT BE ANCHORED: the provider pre-cleaned the SCADA file and the two
-#     columns are 100 % finite, so every rate below is the lead's design value.
+#   * ROW DROPOUTS: the file's CELLS are 100 % finite (the provider pre-cleaned it), but
+#     whole ROWS are absent - 19 gaps in 347.8 d, 0.0966 % of its minutes, median 2 min,
+#     longest 421 min. That measures the Tier C ONLINE base missing rate and nothing else;
+#     the Tier A/B rates and every laboratory rate stay the lead's design values.
+#   * The anchored NOISE above is re-derived on a fresh clone from the committed 60-day
+#     extract anchor/derived/muscatine-scada-window.csv.gz; the flatline occupancies and
+#     the dropout rate are rare-event statistics that need the whole year and are checked
+#     against anchor/derived/muscatine-scada-sensor-statistics.json instead.
 #
 # WHAT BELONGS TO THE TIER, NOT THE SENSOR (lead's decision 2026-09-02). A tier is a
 # plant's monitoring capability, so it carries: the base missing rate, the laboratory
@@ -61,8 +67,8 @@ conditions:
   source: "fos_tac_overload APPROVED by the lead, ANCHORED to muscatine_daily Dig1-FOS-TAC; the foaming rule is ASSUMED"
 
 # Conditional missingness (proposal §6.1). Base rate by TIER, stress multipliers by
-# instrument KIND. Lead's decision 2026-09-02; every value ASSUMED (no dropout statistics
-# exist in the anchor - the SCADA file is pre-cleaned and 100 % finite).
+# instrument KIND (lead's decision 2026-09-02). One rate is MEASURED - Tier C online, from
+# the SCADA record's own row dropouts - and every other value is ASSUMED.
 missingness:
   base_rate_by_tier:
     A: 0.08                   # DESIGN  -; ASSUMED: the constrained plant loses most
@@ -76,7 +82,69 @@ missingness:
       overload: 1.5           # DESIGN  -; ASSUMED: a grab sample is far less affected
       foaming: 1.5            # DESIGN  -; ASSUMED: the lead gave one figure for lab assays,
                               # applied to both flags (recorded in the decisions log)
-  source: "ASSUMED throughout (lead's decision 2026-09-02); the anchor carries no dropouts"
+  source: >-
+    Tier C online MEASURED from the muscatine_scada row dropouts; every other rate and
+    every stress multiplier ASSUMED (lead's decision 2026-09-02, amended 2026-09-03). The
+    earlier "the anchor carries no dropouts" was true of the file's CELLS, which are
+    100 % finite, and false of its ROWS, which are not.
+
+
+# Plant-level LOGGING OUTAGES (lead's ruling 2026-09-03). This is the second missingness
+# process and it is CORRELATED: an outage takes out every online instrument at the tier at
+# once, where the block above takes out one sensor at a time, independently. The two are
+# additive - an instrument can fail while the historian is up, and the historian can fall
+# over while every instrument is healthy.
+#
+# WHY THE SEPARATION. The Muscatine SCADA file is 100 % finite in its CELLS, which is why
+# missingness was first recorded here as unanchorable. That was checking the wrong thing:
+# whole ROWS are absent. Because whole rows go, both online channels lose exactly the same
+# minutes. Applied as an independent per-sensor rate p, two online sensors would lose the
+# same sample with probability p^2 = 9.3e-7; in the record it is 1. So the measurement
+# drives the process it actually describes, and the per-sensor rates above are unchanged.
+# EFFECTIVE ONLINE LOSS (accepted by the lead 2026-09-03, recorded and NOT renormalised).
+# The two processes compose independently, so an online sensor's unconditional loss rate is
+# 1 - (1 - per_sensor)(1 - shared):
+#
+#     Tier A   0.08   + 0.010    -> 8.92 %
+#     Tier B   0.04   + 0.005    -> 4.48 %
+#     Tier C   0.02   + 0.000966 -> 2.09 %
+#
+# The per-sensor rates above stay at the frozen 8/4/2 %; the totals are higher because a
+# second, real failure mode was added, not because a rate was re-tuned. The lead's ruling
+# is explicit that they are NOT renormalised back to 8/4/2 %: doing so would make the
+# historian free, which is the opposite of modelling it. Laboratory assays never pass
+# through the historian, so their loss stays exactly the per-sensor tier rate.
+# Pinned by tests/test_observation.py::test_the_effective_online_loss_is_the_recorded_composite.
+historian:
+  rate_by_tier:
+    A: 0.010                  # DESIGN  -; ASSUMED. Tier A has no historian: its online
+                              # readings are written down by hand, so the shared failure is
+                              # "nobody logged the readings that day". Coarser and rarer
+                              # than a per-instrument fault, hence well below the 8 %
+                              # per-sensor rate. FLAGGED: no data anchors this.
+    B: 0.005                  # DESIGN  -; ASSUMED: as A, at a better-run plant.
+    C: 0.000966               # MEASURED -; ANCHORED: the Muscatine record is missing 484 of
+                              # its 500,884 minutes - 19 gaps in 347.8 d, 0.0966 %
+                              # (anchor.ingest_muscatine.scada_row_gap_statistics; recorded
+                              # in anchor/derived/muscatine-scada-sensor-statistics.json).
+                              # Two caveats, stated not buried: the providers deleted 485
+                              # rows they assumed were power surges, so this is the
+                              # PUBLISHED record's dropout and a LOWER BOUND on the plant's;
+                              # and these sensors report a daily mean of the 1-minute
+                              # record, which survives a partial-day gap, so as a per-sample
+                              # loss rate it is conservative in the same direction.
+  gap_lengths_min:            # MEASURED min; the 19 observed outages, shortest first. The
+                              # distribution is carried rather than collapsed to a mean
+                              # because it decides how many samples one outage costs: every
+                              # one of these is under a day, so on the daily schedule an
+                              # outage costs exactly the sample it lands on. On a finer
+                              # schedule the 421-minute outage would cost several.
+    [1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 4, 4, 5, 7, 9, 13, 421]
+  measured_tiers: [C]         # only Tier C's rate is measured; A and B are ASSUMED
+  source: >-
+    Tier C ANCHORED to muscatine_scada row gaps (19 gaps, 484 min, 0.0966 % of 347.8 d);
+    Tiers A and B ASSUMED (no historian at a manually logged plant, so no data exists);
+    the gap-length distribution is the record's own 19 observed outages.
 
 sensors:
   # ------------------------------------------------------------------ Tier A (online)
@@ -111,8 +179,12 @@ sensors:
                                 # under one daily sample: at this schedule a flatline is a
                                 # single held reading.
       source: "muscatine_scada: consecutive identical D1_TEMPERATURE values"
-    saturation: {low: 273.15, high: 353.15}   # DESIGN  K; ASSUMED: the SCADA dictionary's
-                                              # acceptable range is 85-150 degF (302-339 K)
+    saturation: {low: 302.594, high: 338.706}  # DESIGN  K; ANCHORED: the SCADA data
+                                # dictionary's acceptable range for D1/D2_TEMPERATURE is
+                                # 85-150 degF, and the FLOOR is reached - the record sits
+                                # at 85 degF on 0.066 % of its minutes - so it is an
+                                # observed limit, not an assumed one (lead's ruling
+                                # 2026-09-03; was an assumed 273.15-353.15 K).
     source: "noise and flatline ANCHORED to muscatine_scada; drift ASSUMED"
 
   ph:

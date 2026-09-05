@@ -1,0 +1,69 @@
+{
+  "full_record": {
+    "channels": {
+      "Biogas": {
+        "flatline_fraction": 0.00014388489208633093,
+        "longest_flatline_samples": 72,
+        "mean": 112.83107756917231,
+        "missing_fraction": 0.0,
+        "n": 500400,
+        "noise_cv": 0.020825166790262275,
+        "noise_sd": 2.349726009503034
+      },
+      "D1_TEMPERATURE": {
+        "flatline_fraction": 0.0007653876898481215,
+        "longest_flatline_samples": 149,
+        "mean": 95.98101836530776,
+        "missing_fraction": 0.0,
+        "n": 500400,
+        "noise_cv": 0.0005461270007560386,
+        "noise_sd": 0.05241782568935578
+      }
+    },
+    "row_gaps": {
+      "gaps_per_d": 0.054623425783215274,
+      "max_gap_min": 421.0,
+      "median_gap_min": 2.0,
+      "missing_minute_fraction": 0.0009662915964574632,
+      "n_gaps": 19,
+      "n_rows": 500400,
+      "p90_gap_min": 9.799999999999997,
+      "span_d": 347.8361111111111
+    }
+  },
+  "schema_version": 1,
+  "source": {
+    "citation": "Schroer, H. W. and Just, C. L. (2024). Laboratory, operational, and SCADA datasets for anaerobic co-digestion at the Muscatine, IA Water Resource Recovery Facility. University of Iowa. https://doi.org/10.25820/data.006715",
+    "dataset": "iowa-muscatine-wrrf",
+    "file": "SCADA-raw.csv",
+    "licence": "Open Data Commons Attribution (ODC-By) v1.0",
+    "sha256": "8d56ac54f9a692cebd4ca6c98598411ce2aae0bd02d9631da69ed1bf53004440"
+  },
+  "window": {
+    "channels": {
+      "Biogas": {
+        "flatline_fraction": 0.0,
+        "longest_flatline_samples": 6,
+        "mean": 118.42553087962963,
+        "missing_fraction": 0.0,
+        "n": 86400,
+        "noise_cv": 0.02213113392864475,
+        "noise_sd": 2.620891284467938
+      },
+      "D1_TEMPERATURE": {
+        "flatline_fraction": 0.0,
+        "longest_flatline_samples": 7,
+        "mean": 96.01742314814814,
+        "missing_fraction": 0.0,
+        "n": 86400,
+        "noise_cv": 0.000545919937972911,
+        "noise_sd": 0.05241782568935578
+      }
+    },
+    "days": 60,
+    "file": "anchor/derived/muscatine-scada-window.csv.gz",
+    "note": "Days 240-300 of the record; the biogas column is rounded to 1e-3 cfm before compression. Committed so the anchored NOISE values can be re-derived offline. It does NOT reproduce the flatline occupancies (a rare-event statistic: this window contains no stuck run of 10+ minutes) or the dropout rate (18 of the record's 19 gaps fall in its first 90 days), which stay full-record figures.",
+    "sha256": "87c68249aa25502365ff9a4898f2c3e5252c13586f89ec225c6bffadca9a28a2",
+    "start_day": 240
+  }
+}

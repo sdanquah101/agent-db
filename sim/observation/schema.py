@@ -169,8 +169,13 @@ class MissingnessPolicy(_Frozen):
     a scheduled sample is simply lost belongs to the tier (a constrained Tier-A plant
     loses more), while how much worse it gets under stress belongs to the kind of
     instrument (an online probe in a foaming digester fails far more often than a grab
-    sample sent to a laboratory). Every value is ASSUMED: the anchor's SCADA file is
-    pre-cleaned, so no dropout statistics exist to fit.
+    sample sent to a laboratory).
+
+    Every rate here is ASSUMED and per-sensor **independent**. The one *measured* dropout
+    the anchor carries is not one of these: it is a plant-level, correlated process and
+    lives in :class:`HistorianDropout` (lead's ruling of 2026-09-03). Keeping the two apart
+    is the point — a rate that is measured on a correlated process and then applied as an
+    independent per-sensor rate imports the number and discards the structure.
     """
 
     base_rate_by_tier: dict[Literal["A", "B", "C"], _Frac] = Field(
@@ -195,6 +200,70 @@ class MissingnessPolicy(_Frozen):
             base_rate=self.base_rate_by_tier[tier],  # type: ignore[index]
             stress_multipliers=dict(self.stress_multipliers_by_kind[kind]),  # type: ignore[index]
         )
+
+
+class HistorianDropout(_Frozen):
+    """A **plant-level** logging outage: every online instrument loses the same samples.
+
+    Lead's ruling of 2026-09-03, on the finding that the measured SCADA dropout is a
+    correlated process and had been applied as an independent per-sensor rate.
+
+    **What the anchor actually shows.** The Muscatine 1-minute file is 100 % finite in its
+    *cells* — which is why the dropout was first recorded as unanchorable — but whole
+    **rows** are absent: 19 gaps over 347.8 d, 484 minutes missing, **0.0966 %** of the
+    record, lengths 1 to 421 min (median 2, p90 9.8). Because whole rows go, every online
+    channel loses exactly the same minutes together. Modelled as an independent per-sensor
+    rate ``p``, two online sensors would lose the same sample with probability ``p^2``
+    (9.3e-7 at this rate); in the record it is 1. That is a difference of six orders of
+    magnitude in exactly the structure §6.1 is about, so the process is modelled as what it
+    is: one outage series per tier, applied to every online sensor.
+
+    **The analogue at Tiers A and B.** Those plants have no SCADA historian — their online
+    readings are logged by hand — so the shared failure is "nobody wrote the readings down
+    that day", coarser and rarer than a per-instrument fault. Same structure, ASSUMED rates.
+
+    **This is additive to, not a replacement for, per-sensor missingness**
+    (:class:`MissingnessPolicy`), which stays exactly as the lead froze it: an instrument
+    can fail on its own while the historian is up, and the historian can fall over while
+    every instrument is healthy.
+
+    Laboratory assays are untouched: a grab sample does not go through the historian.
+    """
+
+    rate_by_tier: dict[Literal["A", "B", "C"], _Frac] = Field(
+        description="Fraction of scheduled online samples lost to a shared outage, by tier, -"
+    )
+    gap_lengths_min: tuple[_Pos, ...] = Field(
+        description=(
+            "Empirical outage lengths in minutes, the distribution an outage is drawn from; "
+            "the anchor's 19 observed gaps for the measured tier"
+        )
+    )
+    measured_tiers: tuple[Literal["A", "B", "C"], ...] = Field(
+        default=(),
+        description="Tiers whose rate is measured rather than assumed (CLAUDE.md rule 6)",
+    )
+    source: str = ""
+
+    @model_validator(mode="after")
+    def _complete(self) -> HistorianDropout:
+        if set(self.rate_by_tier) != {"A", "B", "C"}:
+            raise ValueError("rate_by_tier must cover tiers A, B and C")
+        if not self.gap_lengths_min:
+            raise ValueError("gap_lengths_min must carry at least one observed outage length")
+        unknown = set(self.measured_tiers) - set(self.rate_by_tier)
+        if unknown:
+            raise ValueError(f"measured_tiers names unknown tiers {sorted(unknown)}")
+        return self
+
+    @property
+    def mean_gap_min(self) -> float:
+        """Mean outage length, min."""
+        return float(sum(self.gap_lengths_min) / len(self.gap_lengths_min))
+
+    def spans_multiple_samples(self, sampling_interval_d: float) -> bool:
+        """Whether the longest observed outage can cover more than one scheduled sample."""
+        return max(self.gap_lengths_min) / 1440.0 >= sampling_interval_d
 
 
 class SensorSpec(_Frozen):
@@ -326,6 +395,7 @@ class ObservationConfig(_Frozen):
     version: int
     conditions: ConditionThresholds
     missingness: MissingnessPolicy
+    historian: HistorianDropout
     sensors: dict[str, SensorSpec]
     tiers: dict[Literal["A", "B", "C"], TierSpec]
 

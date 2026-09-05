@@ -1697,6 +1697,194 @@ each test; the three findings that mattered most came from exactly that instruct
 
 ---
 
+## 2026-09-03 — Duplicate observation model and fault injection: PR #11 canonical, PR #12 closed, three items salvaged
+
+**What happened.** The observation model and the fault-injection API were built twice in
+parallel: PR #11 (`claude/milestone-2-observation-fault-injection`, merged at b469317) and
+PR #12 (`claude/milestone-2-observation-faults`, `sim/observe/` + `sim/faults/`, CI green,
+closed unmerged). The second session branched from `main` at 2204dcf after confirming that
+its stated predecessor (PR #10) had merged, and did not list the *other* open PRs. This is
+the third collision of the same kind after "Duplicate ADM1 core" (#2 vs #4) and "Duplicate
+plant layer" (#6 vs #7).
+
+**Decision (by the lead).** PR #11 is canonical: it is merged and its configuration already
+carries the lead's answers. PR #12 is closed. No design is re-decided. Three things it had
+that `main` did not are salvaged into a small follow-on PR, adapted to #11's contract:
+
+1. **The anchored sensor values are re-derivable on a fresh clone.**
+   `tests/test_observation.py::test_anchored_sensor_values_are_rederived_from_the_scada_file`
+   skips unless the git-ignored 88.8 MB `SCADA-raw.csv` is present — an anchor that only
+   holds for whoever fetched it. `anchor/derived/muscatine-scada-window.csv.gz` (days
+   240-300, three columns, biogas rounded to 1e-3 cfm, 629 KB, ODC-By with attribution and
+   the parent's SHA-256) plus `anchor/derived/muscatine-scada-sensor-statistics.json` make
+   the anchored **noise** re-derivable offline, and the config checkable against a
+   committed derivation always. `scripts/muscatine_scada_observation.py` writes both.
+2. **The Tier C online missing rate is measured, not assumed.**
+3. **The temperature saturation range is the data dictionary's, and its floor is reached.**
+
+**On (1), the window was chosen by measurement.** Candidate 60/90/120-day windows were
+scored against the full year on the two anchored statistics using the tolerances the
+existing test already applies. Days 240-300 reproduce the temperature noise *exactly*
+(0.052418 degF -> 0.02912 K) and the gas cv to 0.0013 (0.0221 against 0.0208, tolerance
+0.003). **What the window cannot carry is stated rather than smoothed over:** the flatline
+occupancies are rare-event statistics — this window contains no stuck run of ten minutes
+or more, and no 60-day window reproduces 0.00077 within 25 % — and the dropout rate is
+unrepresentative over 60 days (18 of the record's 19 gaps fall in the first 90). Both stay
+full-record figures in the JSON, checked against the parent when it is present.
+
+**On (2), what "the anchor carries no dropouts" got wrong.** `sensors.yaml` and
+`MissingnessPolicy` said missingness could not be anchored because the SCADA file is
+pre-cleaned and "100 % finite". That is true of the file's *cells* and false of its *rows*:
+`anchor.ingest_muscatine.scada_row_gap_statistics` finds **19 gaps in 347.8 d, 0.0966 % of
+minutes missing, median 2 min, p90 9.8 min, longest 421 min**. The lead's ruling: that
+measures **Tier C online and nothing else** — it is what a SCADA-equipped plant's online
+instruments lose. Tier A and B (8 % and 4 %, manual logging) and every laboratory rate stay
+assumed, and the tier structure stays. Implemented as a narrow
+`MissingnessPolicy.base_rate_overrides[tier][kind]` consulted by `model_for`, so
+`base_rate_by_tier` remains the contract and the exception is visible; a test asserts that
+`("C", "online")` is the *only* cell that departs from its tier rate.
+
+Two caveats are recorded beside the value: the providers deleted 485 rows they assumed
+were power surges, so 0.097 % is the *published* record's dropout and a lower bound on the
+plant's; and these sensors report a daily mean of the 1-minute record, which survives a
+partial-day gap, so as a per-sample loss rate it is conservative in the same direction.
+
+**On (3).** The range was assumed at 273.15-353.15 K while the file's data dictionary gives
+85-150 degF for `D1/D2_TEMPERATURE`. The record sits **at** the 85 degF floor on 0.066 % of
+its minutes, so the dictionary range is an observed limit, not a hypothetical one; the
+config now carries 302.594-338.706 K.
+
+**Consequences for #11's tests.** Two assertions changed with the contract, not around it:
+the tier-property test now asserts exactly one measured exception rather than none, and the
+observed-ordering test asserts the online A/C ratio is now more than 20x (it was 4x) while
+the *laboratory* B/C ratio still carries the assumed 4 %/2 % structure. The
+"without missingness" helper also clears the override, or Tier C online would keep losing
+0.1 % of its samples in tests that ask for none.
+
+**Alternatives.** Resolve #12's conflict and keep both (rejected: two observation packages
+and two fault schemas); re-open the design questions #11 settled (rejected: the lead had
+already answered them there); apply the measured dropout to every tier (rejected by the
+lead: it is a SCADA-equipped plant's online figure and says nothing about manual logging
+at a constrained plant).
+
+---
+
+## 2026-09-03 — The daily routine no longer launches component sessions
+
+**Decision (by the lead).** The routine's launch authority is removed. It reviews,
+subscribes, reports and salvages; it launches nothing. A component session starts only when
+the lead sends `launch: <component>` to the coordinating session, after the previous
+component's PR has merged. Every "reply to paste" goes to the coordinator, and the
+coordinator relays a child session's questions. Recorded in `CLAUDE.md` under "Who starts a
+component session", which is now the first section of the file.
+
+**Reason.** Three of the first six components were built twice (#2/#4, #6/#7, #11/#12).
+Each collision had the same shape: the routine launched a component because its plan said
+so, while a session was already building it because a decision had reached that session
+directly. The mitigation added after the first collision — "check the open PRs" in
+`CLAUDE.md` — did not stop the third, because by the time anyone looks the duplicate work
+has usually started. Removing the authority removes the failure mode at a cost of one
+message per component.
+
+**Alternatives.** A stronger check in the session brief (rejected: it is the same
+mitigation that already failed twice); a lock file or a registry of in-flight components
+(rejected: more machinery than a one-line message, and it would still depend on every
+launcher consulting it).
+
+---
+
+## 2026-09-03 — The measured dropout is a plant-level process, not a per-sensor rate
+
+**Decision (by the lead), on the coordinator's finding.** PR #13 carried the Muscatine
+row-dropout measurement into `MissingnessPolicy.base_rate_overrides[C][online]`, i.e. as
+an independent per-sensor rate. That imports the *number* and discards the *structure*.
+A plant-level historian dropout process is added instead, shared across all online sensors
+at a tier; **per-sensor independent missingness is unchanged**, and the two compose.
+
+### What the anchor actually shows, and why the shape matters
+
+The SCADA file is 100 % finite in its **cells** — which is why missingness was first
+recorded as unanchorable — but whole **rows** are absent. Measured independently by the
+coordinator before the ruling, and again here:
+
+| | |
+|---|---|
+| gaps | **19** over 347.8 d |
+| minutes missing | **484** = **0.0966 %** of the record |
+| lengths | median 2 min, p90 9.8 min, longest **421 min**; all 19: 1,1,1,1,1,2,2,2,2,2,3,3,4,4,5,7,9,13,421 |
+| blank cells in either channel | **0** — every dropout is a whole row |
+
+Because whole rows go, both online channels lose **exactly the same minutes**. As an
+independent per-sensor rate `p`, two online sensors lose the same sample with probability
+`p² = 9.3e-7`; in the record it is `1`. Six orders of magnitude, in exactly the structure
+§6.1 exists to test — a workflow that sees every online channel drop out together learns
+something quite different from one seeing scattered independent gaps.
+
+### The design
+
+`HistorianDropout` (`sim/observation/schema.py`), declared in `configs/observation/sensors.yaml`:
+
+- **`rate_by_tier`** — C **0.000966** (MEASURED, `measured_tiers: [C]`); A **0.010** and
+  B **0.005** (ASSUMED). Tiers A and B have no historian: their online readings are logged
+  by hand, so the shared failure is "nobody wrote the readings down that day" — coarser and
+  rarer than a per-instrument fault, hence well below the 8 %/4 % per-sensor rates.
+  **FLAGGED: nothing anchors the A and B figures.**
+- **`gap_lengths_min`** — the record's own 19 outages. Carried rather than collapsed to a
+  mean because it decides how many samples one outage costs: every observed outage is under
+  a day, so on the daily schedule an outage costs exactly the sample it lands on and the
+  realised loss fraction equals the declared rate. On an hourly schedule the 421-minute
+  outage would cost seven samples, and `spans_multiple_samples()` says so.
+- **Laboratory assays are untouched** — a grab sample does not pass through the historian.
+- **Additive, not a replacement.** An instrument can fail while the historian is up, and
+  the historian can fall over while every instrument is healthy. Online loss at a tier is
+  `1 − (1−per_sensor)(1−shared)`: **8.92 % / 4.48 % / 2.10 %** at A/B/C against the frozen
+  per-sensor 8 / 4 / 2 %. **FLAGGED: this moves the frozen totals, by design.**
+
+**Its own random stream** (rule 4), derived from the run seed by `HISTORIAN_STREAM_OFFSET`
+and drawn once per run before any sensor, on the tier's finest online schedule. Deriving it
+by an offset rather than by splitting the run seed leaves every sensor's own draws
+bit-identical to what they were before the historian existed — an archived run is not
+silently re-rolled by adding a component.
+
+### Consequences
+
+`base_rate_overrides` is removed: with the measurement in its proper home there is no
+exception to the tier structure, and `model_for` is a plain lookup again. Four of #13's
+tests move back with it — the tier-property test asserts no cell departs from its tier
+rate, and the observed A/C ordering is the composition `4.25`, not the bare `4.0` and not
+`>20`. Two new tests carry the property that motivated all this: with only the shared
+process active, `temperature.missing` and `gas_flow.missing` are asserted **array-equal**
+(the same days, not merely the same rate), the laboratory assay loses nothing, and the
+joint loss rate is >100× what independence would give.
+
+**Alternatives.** Keep the override as well as the process (rejected: double-counts, and
+preserves the misattribution); model the outage as a per-sensor rate with a correlation
+parameter (rejected: one shared series is the physical object, and a correlation
+coefficient would be a free parameter nothing anchors); give Tiers A and B no shared
+process at all (rejected: manual logging fails in exactly this correlated way, and
+declaring the rate zero would assert something stronger than "unmeasured").
+
+**Addendum, same day — the composite totals are ACCEPTED as the effective online loss.**
+The lead's answer on the two items flagged with the ruling: the Tier A and B shared rates
+(0.010 and 0.005) **stay as assumed**, and the composite totals are **accepted and recorded
+as the effective online loss, with no renormalisation**:
+
+| Tier | per-sensor (frozen) | shared | **effective online loss** |
+|---|---|---|---|
+| A | 0.08 | 0.010 | **8.92 %** |
+| B | 0.04 | 0.005 | **4.48 %** |
+| C | 0.02 | 0.000966 | **2.09 %** |
+
+The per-sensor rates are unchanged at the frozen 8/4/2 %. The totals are higher because a
+second, real failure mode was added — not because a rate was re-tuned — and renormalising
+them back to 8/4/2 % would make the historian free, which is the opposite of modelling it.
+Laboratory assays never pass through the historian, so their loss remains exactly the
+per-sensor tier rate. Recorded in `configs/observation/sensors.yaml` beside the process and
+pinned by `test_the_effective_online_loss_is_the_recorded_composite`, which asserts both
+the declared inputs and the loss a 6,000-day run actually shows.
+
+---
+
 ## 2026-09-03 — The run harness: `runs/<id>/`, the redacted manifest, and where the code lives
 
 **Decision.** `sim/run/` builds a run and writes it; `state/` reads one back for a
