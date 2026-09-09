@@ -41,23 +41,40 @@ version: 2
 
 # When the condition flags that drive missingness are raised.
 conditions:
-  fos_tac_overload: 0.40      # DESIGN  -; APPROVED by the lead 2026-09-02. ANCHORED: the
-                              # Muscatine daily file's own FOS/TAC (Dig1-FOS-TAC, n = 861)
-                              # has median 0.23, p90 0.37, p95 0.44, max 0.93, so 0.40 is
-                              # the ~92nd percentile: an overload flag raised on roughly
-                              # 8 % of days at a real co-digestion plant. Our channel is
-                              # the same ratio on the same units (kg/m3 over kg CaCO3/m3):
-                              # feeding the plant's own VFA and alkalinity through the
-                              # channel formula returns the plant's own FOS/TAC column
-                              # (tested). NOTE this describes the ANCHOR's distribution,
-                              # not ours: a healthy simulated digester sits at FOS/TAC
-                              # 0.01-0.07 against the plant's median 0.23, because a
-                              # converged ADM1 steady state carries far less residual VFA
-                              # than a real plant and a titrimetric FOS over-reads. The
-                              # threshold is reachable under load (VFA 1.0 kg/m3 at the
-                              # anchor's median alkalinity crosses it, and the anchor
-                              # exceeds that VFA on a third of its days) but it will fire
-                              # on fewer simulated days than on the plant's. FLAGGED.
+  fos_tac_overload: 0.40      # DESIGN  -; PERCENTILE-MATCHED to the anchor (lead's ruling 4,
+                              # 2026-09-09), not a transferred absolute value. The lead's
+                              # rule was "0.40 if the anchor's 92nd percentile lands near it
+                              # under the titrimetric convention, else the simulated
+                              # titrimetric 92nd percentile". The anchor's FOS/TAC column IS
+                              # titrimetric, so no conversion is needed on the anchor side,
+                              # and the percentile was measured on
+                              # anchor/raw/iowa-muscatine-wrrf/LABS-raw.csv (n = 861 per
+                              # digester, verified independently by the G1 session):
+                              #
+                              #   Dig1  p50 0.232  p90 0.371  p92 0.402  p95 0.439  max 0.930
+                              #   Dig2  p50 0.231  p90 0.390  p92 0.408  p95 0.453  max 0.636
+                              #
+                              # The anchor's 92nd percentile is 0.402 and 0.408, i.e. 0.40
+                              # within 0.01 on both digesters (Dig1 rounds to 0.40, Dig2 to
+                              # 0.41), so the threshold stands and is now DEMONSTRABLY
+                              # percentile-matched rather than merely transferred. Days above
+                              # 0.40: 8.25 % (Dig1), 9.18 % (Dig2). The 92nd is also the
+                              # CLOSEST percentile to 0.40 of any in 50-99, which is what
+                              # tests/test_observation.py pins -- a band would have admitted
+                              # 0.35 or 0.45 equally.
+                              #
+                              # THE TWO CONVENTIONS STILL DIFFER, and that is the open half.
+                              # Our fos_tac channel is computed from TRUE VFA; the anchor's
+                              # is computed from a titrimetric FOS that over-reads it. A
+                              # healthy simulated digester therefore sits far below this
+                              # threshold and the flag fires on almost no day of a sound
+                              # Plant B run. A titrimetric transfer function on the
+                              # vfa_total SENSOR is APPROVED IN PRINCIPLE (lead's ruling 3,
+                              # 2026-09-09) and is NOT YET IMPLEMENTED: the lead asked the
+                              # coordinator to bring its form and band with measurements
+                              # first. Until it lands, fos_tac is a true-VFA ratio and this
+                              # threshold is matched to a titrimetric percentile — the
+                              # mismatch is recorded, not resolved. See docs/vfa_gap.md.
   fos_tac_foaming: 0.30       # DESIGN  -; ASSUMED: the ~78th percentile of the same column;
                               # foaming needs acidification AND a gas surge, so its FOS/TAC
                               # threshold is lower than the overload one.

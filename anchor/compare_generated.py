@@ -663,10 +663,19 @@ def render_report(
 
 
 def render_panel(panel: Sequence[PanelRun]) -> str:
-    """The per-seed health table: which Level-0 runs are working digesters and which are not."""
+    """The per-seed health table: which Level-0 runs are working digesters and which are not.
+
+    The overload column is reported **per run and pooled** because the lead's ruling 4 of
+    2026-09-09 requires it: the Level-4 ``informative_missingness`` row scales this flag, so
+    how often it fires on a *healthy* digester is what says whether that row has anything to
+    act on. It is reported under whichever FOS/TAC convention is in force when the panel is
+    generated — today a true-VFA ratio against a titrimetric threshold (benchmark card
+    §5.3), which is exactly why the number is small.
+    """
     lines = [
-        "| Base seed | Verdict | median pH | mean CH4 | median VFA (kg/m3) | median FOS/TAC |",
-        "|---|---|---:|---:|---:|---:|",
+        "| Base seed | Verdict | median pH | mean CH4 | median VFA (kg/m3) | median FOS/TAC "
+        "| overload days |",
+        "|---|---|---:|---:|---:|---:|---:|",
     ]
     for run in panel:
         verdict = "sound" if run.sound else "**soured**"
@@ -674,11 +683,26 @@ def render_panel(panel: Sequence[PanelRun]) -> str:
         lines.append(
             f"| {run.seed} | {verdict} | {s['digester_pH_median']:.2f} | "
             f"{s['ch4_fraction_median']:.3f} | {s['vfa_median']:.3f} | "
-            f"{s['fos_tac_median']:.3f} |"
+            f"{s['fos_tac_median']:.3f} | {s['overload_day_fraction'] * 100:.2f} % |"
         )
-    sound = sum(1 for r in panel if r.sound)
+    sound = [r for r in panel if r.sound]
     lines.append("")
-    lines.append(f"**{sound} of {len(panel)} runs are working digesters.**")
+    lines.append(f"**{len(sound)} of {len(panel)} runs are working digesters.**")
+    if sound:
+        rates = [float(r.statistics["overload_day_fraction"]) for r in sound]
+        pooled = sum(rates) / len(rates)
+        firing = sum(1 for r in rates if r > 0.0)
+        lines += [
+            "",
+            f"**Overload flag across the {len(sound)} SOUND runs**: pooled "
+            f"{pooled * 100:.2f} % of days, per-run min {min(rates) * 100:.2f} %, max "
+            f"{max(rates) * 100:.2f} %; it fires on at least one day in {firing} of "
+            f"{len(sound)} runs. The anchor's own exceedance is 8.25 % (Dig1) and 9.18 % "
+            "(Dig2). The simulated figure is low because `fos_tac` is a true-VFA ratio "
+            "measured against a threshold percentile-matched to a *titrimetric* column; "
+            "the transfer function that would reconcile them is approved and not yet "
+            "implemented (benchmark card §5.3).",
+        ]
     return "\n".join(lines)
 
 

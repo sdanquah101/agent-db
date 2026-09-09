@@ -248,6 +248,40 @@ class Adaptation(_Frozen):
     note: str = ""
 
 
+class Baseline(_Frozen):
+    """One **declared** steady state a scenario may be staged on (lead's ruling 1, 2026-09-09).
+
+    A plant can be a different digester depending on how its community has acclimated, and
+    the difference is not a fault — it is what the plant *is*. Plant A has two such states:
+    an **adapted** one, acetoclastic, where a loss of adaptation is the thing a scenario
+    injects; and an **unadapted** one at the ADM1 default constant, where the acetoclasts
+    have washed out and syntrophic acetate oxidation carries the whole acetate flux.
+
+    They exist as named, declared variants rather than as a burn-in length or an implicit
+    consequence of a config edit, because a Level-6 structural row is only meaningful if the
+    pathway the fitted model omits is actually carrying flux in the truth — and which state
+    the plant is in decides that. A workflow is told which baseline it is looking at, in the
+    same way it is told the digester's volume; what stays hidden is the run's realised
+    parameters.
+
+    ``expected_digestate_tan`` is the band the variant is **measured** to sit in, recorded
+    so the declaration can be checked against what the simulator actually does rather than
+    asserted.
+    """
+
+    name: str = Field(description="Identifier a scenario selects with its `baseline` field")
+    adaptation: Adaptation | None = Field(
+        default=None,
+        description="The community adaptation of this baseline; None keeps ADM1's defaults",
+    )
+    expected_digestate_tan: PositiveStatistic | None = Field(
+        default=None,
+        description="Measured digestate total ammonia of this baseline, kg N/m3",
+    )
+    description: str = Field(description="What kind of digester this baseline is")
+    note: str = ""
+
+
 class FeedStream(_Frozen):
     """One entry of a plant's feed catalogue (identity and delivery pattern only).
 
@@ -357,9 +391,15 @@ class PlantConfig(_Frozen):
     temperature: Temperature
     hydraulics: Hydraulics
     mixing: Mixing
-    adaptation: Adaptation | None = Field(
+    baselines: tuple[Baseline, ...] = Field(
+        default=(),
+        description="Declared steady states a scenario may be staged on. A plant with none "
+        "has exactly one, the ADM1 defaults.",
+    )
+    default_baseline: str | None = Field(
         default=None,
-        description="Truth-model constants this plant's community has adapted to, if any",
+        description="Which baseline a scenario that names none is staged on. Required when "
+        "the plant declares more than one.",
     )
     equalisation: Equalisation | None = Field(
         default=None,
@@ -372,9 +412,58 @@ class PlantConfig(_Frozen):
         default=(), description="Design points not yet settled by the lead"
     )
 
+    def baseline(self, name: str | None = None) -> Baseline | None:
+        """The named declared baseline, or the plant's default one.
+
+        Args:
+            name: Baseline name, or None for :attr:`default_baseline`.
+
+        Returns:
+            The baseline, or None for a plant that declares none (the ADM1 defaults).
+
+        Raises:
+            ValueError: If the plant does not declare a baseline of that name. A scenario
+                naming a baseline its plant does not have is a broken scenario, not a
+                request to fall back to the default.
+        """
+        wanted = name if name is not None else self.default_baseline
+        if wanted is None:
+            return None
+        for candidate in self.baselines:
+            if candidate.name == wanted:
+                return candidate
+        raise ValueError(
+            f"plant {self.id} declares no baseline {wanted!r}; "
+            f"it has {sorted(b.name for b in self.baselines)}"
+        )
+
+    @property
+    def adaptation(self) -> Adaptation | None:
+        """The default baseline's community adaptation, if it has one.
+
+        Derived rather than declared separately: two places to say which constant this
+        plant's community carries would be two places to disagree.
+        """
+        base = self.baseline()
+        return base.adaptation if base is not None else None
+
     @model_validator(mode="after")
     def _consistent(self) -> PlantConfig:
         keys = {c.key for c in self.anchor_sources}
+        names = [b.name for b in self.baselines]
+        if len(set(names)) != len(names):
+            raise ValueError("baseline names must be unique")
+        if self.default_baseline is not None and self.default_baseline not in names:
+            raise ValueError(
+                f"default_baseline {self.default_baseline!r} is not one of {sorted(names)}"
+            )
+        if len(self.baselines) > 1 and self.default_baseline is None:
+            raise ValueError(
+                f"plant {self.id} declares {len(self.baselines)} baselines and must say "
+                "which is the default; a scenario that names none must not get an arbitrary one"
+            )
+        if self.baselines and self.default_baseline is None:
+            raise ValueError("a plant that declares a baseline must name the default one")
         if len(keys) != len(self.anchor_sources):
             raise ValueError("anchor_sources keys must be unique")
         if not self.feeds:

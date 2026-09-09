@@ -734,6 +734,46 @@ def test_fos_tac_is_on_the_anchor_s_own_scale_and_its_thresholds_are_reachable(c
     assert float((vfa > 1.0).mean()) > 0.3
 
 
+def test_the_overload_threshold_is_the_anchors_own_92nd_percentile(config):
+    """The lead's ruling 4 (2026-09-09): 0.40 is percentile-matched, not transferred.
+
+    The threshold used to be defended as "0.40 is about the 92nd percentile", which the test
+    above checks only as a band (5-15 % of days above it) — a band wide enough that 0.35 or
+    0.45 would also pass. The ruling makes the percentile itself the definition, so this
+    recomputes it from the committed anchor file and pins it on **both** digesters.
+
+    The anchor's FOS/TAC is titrimetric, which is the convention the threshold is matched
+    in; our own `fos_tac` channel is a true-VFA ratio until the transfer function of ruling 3
+    lands. That mismatch is the recorded open item, not something this test can close.
+
+    Measured: Dig1 p92 = 0.402, Dig2 p92 = 0.408. The bound is 0.01, which is what the two
+    digesters actually bracket — not the 0.005 a "to two decimal places" reading of the
+    ruling would imply, because Dig2's 0.408 rounds to 0.41. Setting the bound to the
+    measurement rather than to the claim is the point of having the test at all.
+    """
+    records = load_daily()
+    for digester in (1, 2):
+        v = np.array([getattr(r, f"dig{digester}_vfa_kg_m3") for r in records], dtype=float)
+        a = np.array([getattr(r, f"dig{digester}_alk_kg_caco3_m3") for r in records], dtype=float)
+        ok = np.isfinite(v) & np.isfinite(a) & (a > 0.0)
+        assert int(ok.sum()) == 861, (digester, int(ok.sum()))
+        ratios = v[ok] / a[ok]
+        p92 = float(np.percentile(ratios, 92))
+        assert p92 == pytest.approx(config.conditions.fos_tac_overload, abs=0.01), (
+            digester,
+            p92,
+        )
+    # the match is to the 92nd specifically: neighbouring percentiles are further away, so
+    # this cannot be satisfied by any threshold that happens to sit in the distribution
+    v = np.array([r.dig1_vfa_kg_m3 for r in records], dtype=float)
+    a = np.array([r.dig1_alk_kg_caco3_m3 for r in records], dtype=float)
+    ok = np.isfinite(v) & np.isfinite(a) & (a > 0.0)
+    ratios = v[ok] / a[ok]
+    target = config.conditions.fos_tac_overload
+    best = min(range(50, 100), key=lambda q: abs(float(np.percentile(ratios, q)) - target))
+    assert best == 92, best
+
+
 def test_the_trailing_median_matches_its_own_definition_on_an_irregular_grid():
     """The windowed median is computed by binary search; it must equal the plain definition.
 

@@ -51,10 +51,20 @@ HARNESS_VERSION = "1.0"
 """Version of the run harness itself. Bump when the on-disk contract changes."""
 
 REDACTED_FIELDS: frozenset[str] = frozenset(
-    {"scenario_id", "level", "seeds", "fault_layers", "target_feed", "notes_seeded"}
+    {"scenario_id", "level", "seeds", "fault_layers", "target_feed", "notes_seeded", "baseline"}
 )
 """Manifest fields a workflow must never see: they name the scenario, its faults, or the
-seeds that would let a workflow regenerate the hidden truth for itself."""
+seeds that would let a workflow regenerate the hidden truth for itself.
+
+``baseline`` is the one that needs an argument, because the plant *contract* declares both
+of Plant A's baselines and a workflow is told they exist (lead's ruling 1, 2026-09-09). What
+it is not told is **which one this run is staged on**, and the reason is arithmetic rather
+than principle: only S6-01 runs on the ``unadapted`` baseline, so the field would name the
+scenario outright — exactly the §10 leak the opaque run id and the redacted scenario id
+exist to prevent. Which baseline the digester is in is legible from the run's own record
+(acetate an order of magnitude apart, at the same gas rate), and working that out is the
+diagnostic task, not a thing to be handed over. If a later matrix runs several scenarios on
+each baseline the argument weakens and this can be revisited."""
 
 
 class ConfigVersions(BaseModel):
@@ -127,6 +137,9 @@ class RunManifest(BaseModel):
     )
     target_feed: str | None = Field(
         default=None, description="REDACTED: the feed an influent fault acts on"
+    )
+    baseline: str | None = Field(
+        default=None, description="REDACTED: the declared plant baseline this run is staged on"
     )
     notes_seeded: int = Field(default=0, description="REDACTED: number of operator notes placed")
     created_utc: str

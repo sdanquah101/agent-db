@@ -205,6 +205,14 @@ class Scenario(BaseModel):
     )
     correct_conclusion: CorrectConclusion = Field(description="What a workflow ought to conclude.")
     budget: Budget = Field(description="Simulator, wall-clock and assay budget.")
+    baseline: str | None = Field(
+        default=None,
+        description="Declared plant baseline this scenario is staged on "
+        "(sim.plants.schema.Baseline). None means the plant's `default_baseline`. A "
+        "Level-6 structural row is only meaningful if the omitted pathway carries flux in "
+        "the truth, and which baseline the plant is in decides that (lead's ruling 1, "
+        "2026-09-09).",
+    )
     seed: int | None = Field(
         default=None,
         description="Base seed for this scenario. None means the seed is supplied by "

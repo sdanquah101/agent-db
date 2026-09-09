@@ -69,10 +69,52 @@ mixing:
 #     frozen magnitude range can express a full de-adaptation.
 #
 # tests/test_plants.py pins the exclusion threshold and this consequence.
-adaptation:
-  K_I_nh3: 0.02            # DESIGN  kmol N/m3; lead's ruling 2 range 0.02-0.05, bottom
-  source: "lead's ruling 2 of 2026-09-03 on the evidence of Tisocco et al. 2024 (AFBI digestate TAN 2.3-4.3 kg N/m3 with stable production); ADM1/BSM2 default is 0.0018"
-  note: "Plants B and C carry no adaptation block and keep the ADM1 default: Muscatine's free ammonia is an order of magnitude below the pathway-shift window."
+#
+# TWO DECLARED BASELINES (lead's ruling 1, 2026-09-09). Which community this digester
+# carries decides whether a Level-6 structural row means anything, so it is declared here
+# and named by the scenario rather than left implicit in a burn-in length.
+#
+# MEASURED, at the 400-d burn-in and a 180-d horizon at seed 1000, through the full harness:
+#
+#   baseline     X_ac      X_sao     SAO share   acetate      TAN median   pH     CH4
+#   adapted      1.129     6.9e-05   0.000       0.038 kg/m3  3.695        7.80   0.688
+#   unadapted    9.9e-05   0.910     1.000       0.240 kg/m3  3.605        7.79   0.692
+#
+# Both are SOUND digesters; they are two different ones. In the adapted baseline syntrophic
+# acetate oxidation carries no flux, which is why omitting it from the fitted model produced
+# no residual and S6-01 was inert. In the unadapted baseline it carries all of it.
+default_baseline: adapted
+baselines:
+  - name: adapted
+    description: >-
+      The acclimated community AFBI's stable operation at a digestate TAN of 2.3-4.3
+      kg N/m3 evidences. Acetoclastic: X_ac 1.13 against X_sao 7e-5, so the syntrophic
+      pathway is present but carries no flux. S5-01 and S7-02 are staged here, because a
+      LOSS of adaptation is what those rows inject.
+    adaptation:
+      K_I_nh3: 0.02        # DESIGN  kmol N/m3; lead's ruling 2 range 0.02-0.05, bottom
+      source: "lead's ruling 2 of 2026-09-03 on the evidence of Tisocco et al. 2024 (AFBI digestate TAN 2.3-4.3 kg N/m3 with stable production); ADM1/BSM2 default is 0.0018"
+      note: "Plants B and C declare no adaptation and keep the ADM1 default: Muscatine's free ammonia is an order of magnitude below the pathway-shift window."
+    expected_digestate_tan:
+      median: 3.695        # MEASURED  kg N/m3; 180-d run, seed 1000, settled from d30
+      p10: 3.588
+      p90: 3.788
+      unit: "kg N/m3"
+      source: "measured through sim.run.harness.simulate_truth; inside Tisocco et al. 2024's published 2.3-4.3"
+  - name: unadapted
+    description: >-
+      The same plant with an UNACCLIMATED acetoclastic community: ADM1's default
+      K_I_nh3, at which the acetoclasts wash out (X_ac 9.9e-5) and syntrophic acetate
+      oxidation carries the entire acetate flux (X_sao 0.91). Still a sound digester --
+      pH 7.79, CH4 0.692 -- but a structurally different one, and the baseline S6-01 is
+      staged on so that omitting SAO from the fitted model actually bites.
+    adaptation: null       # the ADM1/BSM2 default K_I_nh3 = 0.0018 kmol N/m3
+    expected_digestate_tan:
+      median: 3.605        # MEASURED  kg N/m3; 180-d run, seed 1000, settled from d30
+      p10: 3.505
+      p90: 3.689
+      unit: "kg N/m3"
+      source: "measured as above. FLAGGED: the ruling named 3.7-4.3 for this variant; the unadapted constant does not raise TAN (it is slightly LOWER than the adapted baseline's, because the pathway change does not add nitrogen), and reaching 3.7-4.3 would need the frozen Plant A feed nitrogen to move. Not done; with the coordinator."
 feeds:
   - name: cattle_slurry
     kind: slurry

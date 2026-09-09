@@ -2667,3 +2667,154 @@ without reading it.
 
 All three are design questions about what the visible record may contain, which is the lead's
 to answer.
+
+---
+
+## 2026-09-09 — RULING 1 (the lead): Plant A declares two baselines; S6-01 bites, S6-04 abstains
+
+**Decision.** Plant A's contract declares **two named baselines** and every scenario staged
+on Plant A names the one its answer key assumes:
+
+| baseline | `K_I_nh3` | X_ac | X_sao | acetate | pH | CH4 | rows |
+|---|---|---:|---:|---:|---:|---:|---|
+| `adapted` | 0.02 kmol N/m³ | 1.129 | 6.9e-05 | 0.038 kg/m³ | 7.80 | 0.688 | S5-01, S7-02, S6-04 |
+| `unadapted` | ADM1 default (0.0018) | 9.9e-05 | 0.910 | 0.240 kg/m³ | 7.79 | 0.692 | S6-01 |
+
+Measured through the full harness at the 400-d burn-in, 180 d, seed 1000. **Both are sound
+digesters; they are two different ones.** A second row, **S6-04**, is added: the same SAO
+omission on the `adapted` baseline, scored on **abstention**.
+
+**Reason.** S6-01 was inert. Acetoclasts and syntrophic oxidisers compete for one substrate,
+so one always excludes the other; at Plant A's adapted constant the acetoclasts win, the
+truth model's SAO pathway carries no flux, and denying it to the fitted model produced no
+residual at all. The fix is a **plant property**, not a scenario edit: at the ADM1 default
+the acetoclasts wash out and syntrophic oxidation carries the entire acetate flux, so the
+omission becomes unmissable. Acetate is 6× higher on the unadapted baseline at the same gas
+rate, which is what makes the row diagnosable rather than merely different.
+
+**The pair is the point, and it is why option (c) was kept as its own row rather than as a
+replacement.** A benchmark that only ever asks "find the structural fault" rewards a
+workflow that always answers "structural", and §6.7 B cannot then separate a diagnosis from
+a reflex. S6-01 and S6-04 inject the *same* fault on the *same* plant and differ in one
+declared property; their answer keys are opposite (`recommend_structural_review` true and
+false). `tests/test_scenarios_library.py` pins both the pairing and the single declared
+exception to "every structural row asks for a structural review".
+
+**Declared, not implicit.** The baselines are in the plant contract with their measured
+digestate-TAN bands, so a workflow is told the plant has two possible communities, in the
+same way it is told the digester's volume. `PlantConfig.adaptation` is now *derived* from
+the default baseline rather than declared separately — two places to say which constant a
+community carries would be two places to disagree.
+
+**Which baseline a run is on is REDACTED.** Only S6-01 uses `unadapted`, so a visible
+`baseline` field would name the scenario outright — the §10 leak the opaque run id exists to
+prevent. It is in the complete manifest and not in the projection. Which state the digester
+is in is legible from the run's own record (acetate an order of magnitude apart at the same
+gas rate) and working that out is the diagnostic task. If a later matrix runs several
+scenarios per baseline the argument weakens and this can be revisited.
+
+**The X_sao = 1e-4 feed trace is APPROVED** as a realism choice and is recorded as approved
+rather than flagged (it was flagged on 2026-09-03). ADM1 has no immigration term, so a
+population at exactly zero can never return however favourable conditions become.
+
+**Matrix.** S6-04 runs on Plant A at all three tiers, as the other ammonia rows do: 114 →
+**117 cells**, Plant A 18 → 21. `scenarios/README.md` and the library tests updated.
+
+### Two departures from the ruling as written, both flagged
+
+1. **The row is filed as `S6-04`, not `S6-01b`.** The frozen scenario id pattern is
+   `^S\d+-\d{2}$` — `S<level>-<index>`, two digits, no letter suffix — so `S6-01b` is not a
+   loadable id, and the id feeds the opaque run-id hash. Relaxing the pattern to
+   `^S\d+-\d{2}[a-z]?$` is a one-line change plus a rename if the lead wants the literal id;
+   not done unilaterally. The pairing is stated in the scenario file, the README and here.
+2. **The unadapted baseline's digestate TAN is 3.5–3.7, not the ruled 3.7–4.3.** Measured:
+   median 3.605 (p10 3.505, p90 3.689), *slightly lower* than the adapted baseline's 3.695.
+   The unadapted constant does not raise TAN — the pathway change adds no nitrogen — and
+   reaching 3.7–4.3 would require moving Plant A's frozen feed nitrogen. Not done. The
+   causal mechanism the ruling needs (an SAO-dominated steady state) is delivered in full by
+   the unadapted constant alone, and both bands sit inside Tisocco et al. 2024's published
+   2.3–4.3.
+
+**Alternatives.** Set the adapted `K_I` to the ~0.003 exchange point so both pathways are
+live (rejected: outside the ruled range and structurally fragile — it is the knife edge of a
+competitive exclusion); give S6-01 the same transition as S7-02 (rejected: it would
+duplicate S7-02 and change the row's label to `structural + parameter`); replace S6-01 with
+the abstention row (rejected by the ruling: the pair is worth more than either row).
+
+---
+
+## 2026-09-09 — RULING 2 (the lead): Plant A's baseline TAN of 3.1–3.7 is accepted
+
+**Decision.** The measured baseline digestate TAN of **3.1–3.7 kg N/m³ is ACCEPTED**. The
+lead's earlier 2.3–2.8 is **WITHDRAWN**. `K_I_nh3 = 0.02` stands, on the reasoning already
+recorded: the frozen `ammonia_inhibition_shift` range is 0.1–10, and 0.02 × 0.1 = 0.002
+clears the ~0.003 exchange point while the midpoint of the ruled range does not, so 0.02 is
+the only part of that range from which the frozen magnitude range can express a full
+de-adaptation.
+
+**Nothing changes in code.** This entry exists so the ruling and the plant stop disagreeing:
+a withdrawn number that is not recorded as withdrawn is a trap for the next session, which
+would find the config outside a range the log still asserts and "fix" the config.
+
+---
+
+## 2026-09-09 — RULING 3 (the lead): the titrimetric VFA convention is approved in principle and NOT implemented
+
+**Decision.** A declared, `ASSUMED` **Nordmann-type titrimetric transfer function including
+bicarbonate carry-over** on the `vfa_total` **sensor**, with `fos_tac` computed from the
+titrimetric reading as it is at the plant, is **approved in principle**. True VFA stays the
+hidden channel. The benchmark card carries a statement on the two conventions.
+
+**It is NOT implemented and `sim/observation/channels.py` is unchanged.** The lead has asked
+the coordinator to bring the transfer function's **form and band with measurements** before
+it is built. Implementing a guessed transfer function now and correcting it later would
+silently move every generated FOS/TAC twice.
+
+**What is in force meanwhile, stated plainly** because every FOS/TAC number in this
+repository depends on it: `fos_tac` is a **true-VFA ratio** measured against a threshold
+**percentile-matched to a titrimetric column**. The two are different assays (benchmark card
+§5.3), a titrimetric FOS over-reads true VFA by 2–5× at low true VFA, and the consequence is
+that the overload flag fires on almost no day of a healthy simulated run. Recorded, not
+resolved.
+
+---
+
+## 2026-09-09 — RULING 4 (the lead): the gap is a finding; the 0.40 threshold is percentile-matched
+
+**Decision.** Options (a) and (b) of `docs/vfa_gap.md` both, with (a) deferred by ruling 3.
+**No kinetic parameter moves** — `k_m_ac`, `k_hyd` and everything else stay frozen.
+
+**The bistability is recorded for the paper as a finding, not a defect.** Residual VFA jumps
+from 0.183 to 10.08 kg m⁻³ and the digester sours from pH 6.95 to 4.60 between `k_m_ac` ×0.40
+and ×0.35, so the anchor's 1.18 lies in the *gap between the two branches* and no
+single-parameter move reaches it; `k_hyd` at ×2 and ×4 moves residual VFA not at all. It
+stays in `docs/vfa_gap.md` and is referenced from the G1 report and the benchmark card as a
+property of the model.
+
+**The 0.40 overload threshold stands and is now demonstrably percentile-matched.** The
+lead's rule was "0.40 if the anchor's 92nd percentile lands near it under the titrimetric
+convention, else the simulated titrimetric 92nd percentile". The anchor's FOS/TAC column *is*
+titrimetric, so no conversion is needed on the anchor side. **Re-measured independently here**
+on `anchor/raw/iowa-muscatine-wrrf/LABS-raw.csv`, n = 861 per digester:
+
+| | p50 | p90 | **p92** | p95 | max | days > 0.40 |
+|---|---:|---:|---:|---:|---:|---:|
+| Digester 1 | 0.232 | 0.371 | **0.402** | 0.439 | 0.930 | 8.25 % |
+| Digester 2 | 0.231 | 0.390 | **0.408** | 0.453 | 0.636 | 9.18 % |
+
+The 92nd percentile is 0.40 **within 0.01 on both digesters**, and the 92nd is the *closest*
+percentile to 0.40 of any between the 50th and the 99th —
+`tests/test_observation.py::test_the_overload_threshold_is_the_anchors_own_92nd_percentile`
+pins that, where the previous guard only required 5–15 % of days above the threshold, a band
+0.35 and 0.45 would also have passed. The benchmark card now says "the anchor's 92nd
+percentile of titrimetric FOS/TAC" rather than quoting a design value.
+
+**Two of the relayed numbers did not reproduce, and the difference is recorded rather than
+adopted.** The relay gave Digester 2's max as 0.80 (measured: 0.636) and the exceedance
+fractions as 7.78 % / 8.59 % (measured: 8.25 % / 9.18 %), on the same n = 861. The
+percentiles that the ruling turns on agree to the third decimal, so the ruling is unaffected;
+the discrepancy is reported to the coordinator rather than silently resolved either way.
+
+**The overload firing rate on SOUND runs is now reported per-run and pooled** in the G1
+report's generated block, under whichever convention is in force when the panel is
+generated, as the ruling requires.

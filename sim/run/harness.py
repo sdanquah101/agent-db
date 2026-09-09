@@ -441,17 +441,28 @@ def _ash_concentration(ash_load: Mapping[str, np.ndarray], q: np.ndarray) -> np.
     return out
 
 
-def apply_adaptation(params: ADM1Parameters, plant: PlantConfig) -> ADM1Parameters:
-    """Apply the plant's declared community adaptation to the truth parameters.
+def apply_adaptation(
+    params: ADM1Parameters, plant: PlantConfig, baseline: str | None = None
+) -> ADM1Parameters:
+    """Apply a declared baseline's community adaptation to the truth parameters.
 
-    A plant whose contract declares no adaptation keeps the ADM1 defaults untouched, which
-    is Plants B and C.
+    A plant whose contract declares no adaptation for the selected baseline keeps the ADM1
+    defaults untouched — Plants B and C always, and Plant A's ``unadapted`` baseline, which
+    is the state its Level-6 structural row is staged on (lead's ruling 1, 2026-09-09).
+
+    Args:
+        params: The truth parameters before adaptation.
+        plant: The plant configuration.
+        baseline: Declared baseline to stage on, or None for the plant's default.
+
+    Returns:
+        The parameters this baseline's community carries.
 
     Raises:
-        ValueError: If the contract names an adapted constant this function does not know
-            how to apply — better than silently ignoring it.
+        ValueError: If the plant declares no baseline of that name.
     """
-    block = plant.adaptation
+    declared = plant.baseline(baseline)
+    block = declared.adaptation if declared is not None else None
     if block is None or block.K_I_nh3 is None:
         return params
     kinetics = params.kinetics.model_copy(update={"K_I_nh3": float(block.K_I_nh3)})
@@ -632,7 +643,7 @@ def simulate_truth(
     )
     truth_frac = generated.truth.fractionations.fractionations
     truth_params = truth_parameters(params, catalogue, generated.truth.mean_recipe_kg_d, truth_frac)
-    truth_params = apply_adaptation(truth_params, plant)
+    truth_params = apply_adaptation(truth_params, plant, scenario.baseline)
     # the adaptation is applied BEFORE the segments, so a Level-5 ammonia fault multiplies
     # the constant this community actually has rather than the sludge default it does not:
     # that is what makes a multiplier below 1 a *loss of adaptation* (lead's ruling 2)
@@ -884,6 +895,9 @@ def generate_run(
         seeds=seeds.as_dict(),
         fault_layers=declared_faults(scenario),
         target_feed=target_feed,
+        baseline=plant_cfg.baseline(scenario.baseline).name
+        if plant_cfg.baseline(scenario.baseline) is not None
+        else None,
         notes_seeded=len(notes),
         created_utc=datetime.now(UTC).isoformat(timespec="seconds"),
         harness_version=HARNESS_VERSION,

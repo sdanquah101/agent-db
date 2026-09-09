@@ -22,6 +22,9 @@
 # ONSET day 120 of 240: four months of the adapted regime and four of the transition.
 id: S5-01
 plant: A
+# stated rather than inherited from the plant's default: this row injects a LOSS
+# of adaptation, so it only means anything staged on the adapted baseline
+baseline: adapted
 tier: B
 level: 5
 duration_days: 240

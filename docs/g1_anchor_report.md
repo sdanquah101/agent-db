@@ -1,16 +1,20 @@
 # Gate G1 — anchor comparison report
 
-**Date:** 2026-09-04 (revised after the lead's rulings of 2026-09-03 and the remediation
-rulings of 2026-09-04) · **Gate:** G1 (proposal §11) · **Status:** infrastructure criterion
+**Date:** 2026-09-09 (revised after the lead's rulings of 2026-09-03, the remediation
+rulings of 2026-09-04 and the four rulings of 2026-09-09) · **Gate:** G1 (proposal §11) ·
+**Status:** infrastructure criterion
 **met**; plant criterion **met** — the Plant B souring that failed the first pass is fixed
 and the acceptance condition is satisfied. Two output rows still fail their declared
 tolerance and are the subject of `docs/vfa_gap.md`; one row (`alkalinity_median`) is
 calibrated to the anchor and is reported without being counted as a match; one scenario row
 (S6-01) is inert and needs a decision.
 
-None of the numbers in the generated block moved under the remediation of 2026-09-04: the
-truth store, the loader and the per-sensor observation streams change where truth is
-written and how a *sensor* is realised, not what the digester does.
+None of the numbers in the generated block moved under the remediation of 2026-09-04 or the
+rulings of 2026-09-09: the truth store, the loader, the per-sensor observation streams and
+Plant A's second baseline change where truth is written, how a *sensor* is realised and what
+Plant A's Level-6 row is staged on — not what Plant B's digester does. The generated block
+gained one column and one paragraph: the overload firing rate on sound runs, per-run and
+pooled, which ruling 4 requires be reported explicitly.
 
 > **G1.** Simulator generates all scenarios with logged truth, and influent statistics
 > match anchor within declared tolerance. *Fail → fix realism before any workflow work.*
@@ -228,34 +232,36 @@ no output anchor, so this is a judgement rather than a fit, and it is recorded a
 
 ### The output panel, run by run
 
-| Base seed | Verdict | median pH | mean CH4 | median VFA (kg/m3) | median FOS/TAC |
-|---|---|---:|---:|---:|---:|
-| 1000 | sound | 7.33 | 0.712 | 0.088 | 0.015 |
-| 1001 | sound | 7.29 | 0.727 | 0.073 | 0.015 |
-| 1002 | sound | 7.32 | 0.725 | 0.078 | 0.015 |
-| 1003 | sound | 7.29 | 0.711 | 0.083 | 0.016 |
-| 1004 | sound | 7.28 | 0.725 | 0.058 | 0.012 |
-| 1005 | sound | 7.24 | 0.718 | 0.058 | 0.013 |
-| 1006 | sound | 7.26 | 0.725 | 0.054 | 0.012 |
-| 1007 | sound | 7.26 | 0.701 | 0.059 | 0.012 |
-| 1008 | sound | 7.27 | 0.707 | 0.058 | 0.012 |
-| 1009 | sound | 7.30 | 0.711 | 0.063 | 0.012 |
-| 1010 | sound | 7.32 | 0.720 | 0.071 | 0.013 |
-| 1011 | sound | 7.37 | 0.730 | 0.071 | 0.012 |
-| 1012 | sound | 7.40 | 0.730 | 0.074 | 0.012 |
-| 1013 | sound | 7.25 | 0.701 | 0.062 | 0.013 |
-| 1014 | sound | 7.30 | 0.723 | 0.062 | 0.012 |
-| 1015 | sound | 7.34 | 0.722 | 0.083 | 0.015 |
-| 1016 | sound | 7.29 | 0.711 | 0.063 | 0.013 |
-| 1017 | sound | 7.32 | 0.731 | 0.072 | 0.014 |
-| 1018 | sound | 7.39 | 0.728 | 0.100 | 0.016 |
-| 1019 | sound | 7.24 | 0.725 | 0.058 | 0.013 |
-| 1020 | sound | 7.29 | 0.705 | 0.063 | 0.012 |
-| 1021 | sound | 7.25 | 0.704 | 0.054 | 0.011 |
-| 1022 | sound | 7.24 | 0.723 | 0.072 | 0.017 |
-| 1023 | sound | 7.36 | 0.723 | 0.097 | 0.017 |
+| Base seed | Verdict | median pH | mean CH4 | median VFA (kg/m3) | median FOS/TAC | overload days |
+|---|---|---:|---:|---:|---:|---:|
+| 1000 | sound | 7.33 | 0.712 | 0.088 | 0.015 | 0.00 % |
+| 1001 | sound | 7.29 | 0.727 | 0.073 | 0.015 | 0.00 % |
+| 1002 | sound | 7.32 | 0.725 | 0.078 | 0.015 | 0.00 % |
+| 1003 | sound | 7.29 | 0.711 | 0.083 | 0.016 | 0.00 % |
+| 1004 | sound | 7.28 | 0.725 | 0.058 | 0.012 | 0.00 % |
+| 1005 | sound | 7.24 | 0.718 | 0.058 | 0.013 | 0.00 % |
+| 1006 | sound | 7.26 | 0.725 | 0.054 | 0.012 | 0.00 % |
+| 1007 | sound | 7.26 | 0.701 | 0.059 | 0.012 | 0.00 % |
+| 1008 | sound | 7.27 | 0.707 | 0.058 | 0.012 | 0.00 % |
+| 1009 | sound | 7.30 | 0.711 | 0.063 | 0.012 | 0.00 % |
+| 1010 | sound | 7.32 | 0.720 | 0.071 | 0.013 | 0.00 % |
+| 1011 | sound | 7.37 | 0.730 | 0.071 | 0.012 | 0.00 % |
+| 1012 | sound | 7.40 | 0.730 | 0.074 | 0.012 | 0.00 % |
+| 1013 | sound | 7.25 | 0.701 | 0.062 | 0.013 | 0.00 % |
+| 1014 | sound | 7.30 | 0.723 | 0.062 | 0.012 | 0.00 % |
+| 1015 | sound | 7.34 | 0.722 | 0.083 | 0.015 | 0.00 % |
+| 1016 | sound | 7.29 | 0.711 | 0.063 | 0.013 | 0.00 % |
+| 1017 | sound | 7.32 | 0.731 | 0.072 | 0.014 | 0.00 % |
+| 1018 | sound | 7.39 | 0.728 | 0.100 | 0.016 | 0.00 % |
+| 1019 | sound | 7.24 | 0.725 | 0.058 | 0.013 | 0.00 % |
+| 1020 | sound | 7.29 | 0.705 | 0.063 | 0.012 | 0.00 % |
+| 1021 | sound | 7.25 | 0.704 | 0.054 | 0.011 | 3.31 % |
+| 1022 | sound | 7.24 | 0.723 | 0.072 | 0.017 | 0.00 % |
+| 1023 | sound | 7.36 | 0.723 | 0.097 | 0.017 | 0.00 % |
 
 **24 of 24 runs are working digesters.**
+
+**Overload flag across the 24 SOUND runs**: pooled 0.14 % of days, per-run min 0.00 %, max 3.31 %; it fires on at least one day in 1 of 24 runs. The anchor's own exceedance is 8.25 % (Dig1) and 9.18 % (Dig2). The simulated figure is low because `fos_tac` is a true-VFA ratio measured against a threshold percentile-matched to a *titrimetric* column; the transfer function that would reconcile them is approved and not yet implemented (benchmark card §5.3).
 
 <!-- END GENERATED: g1 anchor comparison -->
 
@@ -281,13 +287,24 @@ converged ADM1 carries far less residual VFA than a real digester.
   converged.
 
 **The consequence, and it costs the benchmark a scenario.** The overload flag fires when
-FOS/TAC exceeds 0.40. Across the twenty-four sound runs the median run raises it on **no
-day at all**, most runs never raise it, and the worst raises it on **3.3 %** of days —
-against ~8 % of the plant's own days. Conditional missingness — the §6.1 property that
-"instruments are more likely to fail during foaming and overload", and the entire subject
-of the Level-4 `informative_missingness` row (S4-02) — therefore has **almost nothing to
-act on on a healthy Plant B**, and S4-02 is close to a duplicate of Level 1. Pinned by
+FOS/TAC exceeds 0.40. Across the twenty-four sound runs it fires on **0.14 % of days
+pooled**, on **no day at all in 23 of the 24 runs**, and on 3.31 % in the single run that
+raises it — against the plant's own **8.25 %** (Dig1) and **9.18 %** (Dig2). The per-run and
+pooled figures are in the generated block above, as the lead's ruling 4 of 2026-09-09
+requires. Conditional missingness — the §6.1 property that "instruments are more likely to
+fail during foaming and overload", and the entire subject of the Level-4
+`informative_missingness` row (S4-02) — therefore has **almost nothing to act on on a
+healthy Plant B**, and S4-02 is close to a duplicate of Level 1. Pinned by
 `tests/test_g1_anchor.py::test_the_overload_flag_never_fires_on_a_healthy_plant_b`.
+
+**The threshold is not what is wrong.** It is percentile-matched to the anchor's own
+titrimetric FOS/TAC — its 92nd percentile is 0.402 and 0.408 on the two digesters, and the
+92nd is the closest percentile to 0.40 of any between the 50th and the 99th. What differs is
+the *convention on our side of the comparison*: `fos_tac` here is computed from **true VFA**
+and the anchor's from a **titrimetric FOS** that over-reads it. The transfer function that
+would reconcile the two is approved in principle and deliberately not yet implemented
+(lead's ruling 3, 2026-09-09); until it lands this row compares two different assays, and
+says so. See the benchmark card §5.3.
 
 In the first pass this was masked: the flag fired on 63–100 % of days in the *soured* runs
 and on 0–9 % of the sound ones, so the panel looked bimodal. With no soured runs left, the
@@ -295,9 +312,12 @@ picture is unambiguous.
 
 ## 6. What closing the VFA gap would take — the list exists, and it rules out kinetics
 
-**The list is `docs/vfa_gap.md` (branch `claude/vfa-gap-list`), written by the coordinator
-under the lead's ruling 3. It supersedes what this section previously speculated.** No
-kinetic parameter has been touched here, and on the list's evidence none should be.
+**The list is `docs/vfa_gap.md`, written by the coordinator under the lead's ruling 3 of
+2026-09-03 and merged into this branch. It supersedes what this section previously
+speculated.** No kinetic parameter has been touched here, and on the list's evidence none
+should be — which the lead's ruling 4 of 2026-09-09 confirms: `k_m_ac`, `k_hyd` and
+everything else stay frozen, and **the bistability below is recorded as a finding about the
+model rather than as a defect to be patched.**
 
 Its findings that bear on this report:
 

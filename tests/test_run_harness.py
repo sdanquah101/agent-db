@@ -295,6 +295,58 @@ def test_plant_a_is_a_stable_adapted_digester_and_the_pathways_exclude(adm1_para
     assert unadapted_ac < 0.1 * adapted_ac, (unadapted_ac, adapted_ac)
 
 
+def test_plant_a_declares_two_baselines_and_they_are_different_digesters():
+    """The lead's ruling 1 of 2026-09-09, and the property S6-01 now rests on.
+
+    S6-01 was inert: the omitted SAO pathway carried no flux at Plant A's adapted,
+    acetoclastic baseline, so denying it to the fitted model produced no residual. The fix
+    is a **declared second baseline**, not a burn-in length and not a scenario edit — so
+    what has to hold is that the two baselines really are different digesters and that each
+    scenario is staged on the one its answer key assumes.
+
+    Measured here rather than restated: on the unadapted baseline syntrophic oxidation
+    carries the acetate flux, on the adapted one the acetoclasts do, and the acetate
+    concentrations differ by nearly an order of magnitude while both stay sound.
+    """
+    plant = load_plant_config("A")
+    names = {b.name for b in plant.baselines}
+    assert names == {"adapted", "unadapted"}, names
+    assert plant.default_baseline == "adapted"
+    assert plant.baseline("adapted").adaptation.K_I_nh3 == pytest.approx(0.02)
+    assert plant.baseline("unadapted").adaptation is None  # the ADM1 default
+    with pytest.raises(ValueError, match="declares no baseline"):
+        plant.baseline("no-such-baseline")
+
+    # the scenarios are staged where their answer keys assume
+    staged = {load_scenario(SCENARIOS / f"{s}.yaml").baseline for s in ("S5-01", "S7-02")}
+    assert staged == {"adapted"}, staged
+    assert load_scenario(SCENARIOS / "S6-01.yaml").baseline == "unadapted"
+    assert load_scenario(SCENARIOS / "S6-04.yaml").baseline == "adapted"
+
+    # ... and they really are two digesters
+    measured = {}
+    for name in ("adapted", "unadapted"):
+        scenario = _short("S0-01", days=60.0).model_copy(update={"plant": "A", "baseline": name})
+        truth = simulate_truth(scenario, plant, RunSeeds.derive(1000, "A"))
+        idx = {s: truth.state_names.index(s) for s in ("X_ac", "X_sao")}
+        settled = truth.channels.t >= 20.0
+        measured[name] = {
+            "X_ac": float(truth.y[idx["X_ac"], -1]),
+            "X_sao": float(truth.y[idx["X_sao"], -1]),
+            "acetate": float(np.median(truth.channels["vfa_ac"][settled])),
+            "sound": truth.health.sound,
+        }
+
+    adapted, unadapted = measured["adapted"], measured["unadapted"]
+    assert adapted["sound"] and unadapted["sound"], measured  # two working digesters
+    # the adapted one is acetoclastic: the pathway S6-04 omits carries nothing
+    assert adapted["X_ac"] > 100.0 * adapted["X_sao"], adapted
+    # the unadapted one is SAO-dominated: the pathway S6-01 omits carries everything
+    assert unadapted["X_sao"] > 100.0 * unadapted["X_ac"], unadapted
+    # and the difference is visible in the record, which is what makes S6-01 diagnosable
+    assert unadapted["acetate"] > 3.0 * adapted["acetate"], measured
+
+
 def test_the_feed_reseeds_syntrophic_oxidisers_so_a_washed_out_pathway_can_return():
     """ADM1 has no immigration, and a population at exactly zero can never come back.
 

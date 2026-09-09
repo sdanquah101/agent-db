@@ -24,6 +24,9 @@
 # which is what `abstain_on` pins down.
 id: S7-02
 plant: A
+# stated rather than inherited from the plant's default: this row injects a LOSS
+# of adaptation, so it only means anything staged on the adapted baseline
+baseline: adapted
 tier: C
 level: 7
 duration_days: 240

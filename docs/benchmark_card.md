@@ -131,8 +131,8 @@ are anchored to the Muscatine 1-minute SCADA file and re-derived by
 `tests/test_observation.py`. **Everything else in the observation model is a design value
 marked `ASSUMED`**, including every missingness rate: the provider pre-cleaned the SCADA
 file, whose two channels are 100 % finite, so no dropout statistics exist to fit. The
-FOS/TAC overload threshold (0.40) is anchored — it is the ~92nd percentile of the plant's
-own FOS/TAC column — but the foaming rule is assumed.
+FOS/TAC overload threshold (0.40) is **percentile-matched** to the anchor — see §5.2 — but
+the foaming rule is assumed.
 
 Every configuration value in `configs/` carries `# DESIGN` and a source, or the marker
 `ASSUMED` with the reason. A number without a source is a bug.
@@ -165,23 +165,72 @@ made on the lead's rulings, and **either one alone is sufficient**:
   **declared contract** (`sim/plants/equalisation.py`), visible to workflows.
 - **The feed's strong cations, calibrated to the anchor's own digester alkalinity.**
   Simulated alkalinity went 2.78 → **5.12** kg CaCO₃ m⁻³ against the plant's 5.04, and pH
-  to **7.29** against 7.27 — both anchored quantities landing together.
+  to **7.29** against 7.27. The pH is *not* independent corroboration and this card no
+  longer reads it as such: in a bicarbonate-buffered digester pH is a function of
+  alkalinity and pCO₂, so fixing one and observing the other land is one measurement
+  reported as two. The alkalinity row is reported as **calibrated to anchor** and excluded
+  from the anchor-match count.
 
-On a twenty-four-seed panel with both in place, **24 of 24 runs are sound** and all 114
+On a twenty-four-seed panel with both in place, **24 of 24 runs are sound** and all 117
 matrix cells are sound. The sound/soured labelling stays as instrumentation.
 
 **Still open**, and stated because it bears on what the benchmark can be used for:
 
 - **The simulated residual VFA is far below the plant's** — 0.067 against 1.178 kg m⁻³, so
   FOS/TAC is 0.013 against 0.232. The alkalinity half of that gap is closed; the VFA half
-  is a truth-model question reserved to a separate review, and **no kinetic parameter has
-  been changed**. The consequence: the overload flag fires on no day at all in most sound
-  runs (3.3 % in the worst, against the plant's ~8 %), so conditional missingness — and
-  with it the Level-4 `informative_missingness` row — has almost nothing to act on.
-- **`S6-01` (omitted SAO) is inert.** Plant A now declares an adapted acetoclastic
-  inhibition constant and is acetoclastic at baseline, so a fitted model that omits the
-  syntrophic pathway omits one carrying no flux. The row generates and currently tests
-  nothing; three ways out are written into the scenario file, awaiting a decision.
+  is **two different measurements of two different things** (§5.3), and **no kinetic
+  parameter has been changed**. `docs/vfa_gap.md` measured that none can be: the model is
+  bistable in `k_m_ac` and the anchor's value lies between the branches. The consequence:
+  the overload flag fires on almost no day of a sound run, so conditional missingness — and
+  with it the Level-4 `informative_missingness` row — has little to act on until the
+  titrimetric convention of §5.3 lands.
+- **`S6-01` (omitted SAO) is no longer inert** (lead's ruling 1, 2026-09-09). Plant A
+  declares **two baselines**: `adapted`, acetoclastic, where the omitted syntrophic pathway
+  carries no flux; and `unadapted`, at ADM1's default constant, where the acetoclasts have
+  washed out and syntrophic oxidation carries the entire acetate flux. S6-01 is staged on
+  the second, where the omission bites. `S6-04` is the same omission on the first, scored on
+  **abstention** — the correct conclusion is that no structural residual is detectable — so
+  the pair distinguishes a diagnosis from a workflow that always answers "structural".
+
+### 5.3 Two FOS/TAC conventions, and which one each number is in
+
+**This is the most important caveat in the card for anyone comparing a simulated FOS/TAC
+with a plant's.** The two are not the same measurement.
+
+| | what it is | where it appears |
+|---|---|---|
+| **True VFA** | the sum of the model's volatile fatty acids, as acetic acid | the hidden `vfa_total` channel, and — **today** — the `vfa_total` sensor and the `fos_tac` channel derived from it |
+| **Titrimetric FOS** | the FOS half of a two-point Nordmann/Kapp titration | the anchor's `Dig1-VFA_mgL` column and the plant's own FOS/TAC |
+
+A titrimetric FOS systematically **over-reads** true VFA: it counts bicarbonate carry-over,
+lactate, phenols and other titratable species, and is calibrated against an empirical
+formula rather than against acetic acid. Over-reads of 2–5× at low true VFA are routine in
+the literature. So a simulated FOS/TAC of 0.013 and a plant's 0.232 are not necessarily a
+factor of eighteen apart in the process — they are, in part, two different assays.
+
+`docs/vfa_gap.md` establishes that this cannot be closed by fitting: **the model is bistable
+in `k_m_ac`** — at ×0.40 residual VFA is 0.183 kg m⁻³ at pH 6.95, at ×0.35 it is 10.08 at
+pH 4.60, and the anchor's 1.18 lies in the gap between the two branches — so no value of
+that parameter gives a healthy digester carrying the anchor's residual VFA. `k_hyd` at ×2
+and ×4 moves it not at all. That is recorded as a **finding about the model**, not as a
+defect to be patched, and **no kinetic parameter has been changed** (lead's ruling 4,
+2026-09-09).
+
+**Where this leaves the threshold.** The 0.40 overload threshold is **percentile-matched**
+to the anchor rather than transferred as an absolute value: the anchor's FOS/TAC column is
+itself titrimetric, and its 92nd percentile is 0.402 (Digester 1) and 0.408 (Digester 2),
+n = 861 each. The 92nd is the closest percentile to 0.40 of any between the 50th and the
+99th, which `tests/test_observation.py` pins. Days above 0.40 at the plant: 8.25 % and
+9.18 %.
+
+**What is approved and not yet built.** A declared, `ASSUMED` titrimetric transfer function
+on the `vfa_total` **sensor** — including bicarbonate carry-over — with `fos_tac` computed
+from the titrimetric reading as it is at the plant, is **approved in principle** (lead's
+ruling 3, 2026-09-09) and **is not implemented**: its form and band go to the lead with
+measurements first. True VFA stays the hidden channel either way. Until it lands, every
+simulated FOS/TAC in this repository is a **true-VFA ratio compared against a titrimetric
+threshold**, and the flag consequently fires on almost no day of a healthy run. That is a
+known, recorded mismatch, not an accident.
 
 ## 6. Scenario ladder (§6.3)
 

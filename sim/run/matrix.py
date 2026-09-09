@@ -51,8 +51,15 @@ __all__ = [
 
 SCENARIO_DIR = Path(__file__).resolve().parents[2] / "scenarios"
 
-AMMONIA_SCENARIOS: tuple[str, ...] = ("S5-01", "S6-01", "S7-02")
-"""The three rows that run on Plant A alone (§6.3, §7)."""
+AMMONIA_SCENARIOS: tuple[str, ...] = ("S5-01", "S6-01", "S6-04", "S7-02")
+"""The rows that run on Plant A alone (§6.3, §7).
+
+``S6-04`` is the lead's "S6-01b" (ruling 1, 2026-09-09): the same SAO omission as S6-01 on
+Plant A's *adapted* baseline, where the omitted pathway carries no flux and the correct
+conclusion is that no structural residual is detectable. It belongs here for the same
+reason the other three do — it is staged on a declared Plant A baseline and there is no
+Muscatine equivalent — and it runs at all three tiers as they do, adding 3 cells.
+"""
 
 FACTORIAL_PLANTS: tuple[str, ...] = ("B", "C")
 """The dataset-anchored pair that carries the factorial (§8)."""
