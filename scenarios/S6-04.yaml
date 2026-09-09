@@ -1,13 +1,12 @@
 # Level 6 — the omitted SAO pathway that carries no flux. The ABSTENTION row.
 #
-# THE LEAD NAMED THIS ROW "S6-01b" (ruling 1, 2026-09-09). It is filed as S6-04 because
-# the FROZEN scenario id pattern is `^S\d+-\d{2}$` — `S<level>-<index>`, two digits, no
-# letter suffix — so `S6-01b` is not a loadable id. Nothing else about the row changes, and
-# the pairing with S6-01 is what the ruling is about, so it is stated here, in
-# `scenarios/README.md` and in the decisions log rather than carried by the filename. If the
-# lead wants the literal id, relaxing the pattern to `^S\d+-\d{2}[a-z]?$` is a one-line
-# change to `scenarios/schema.py` and this file is renamed; FLAGGED to the coordinator
-# rather than done unilaterally, because the id feeds the opaque run-id hash.
+# THE LEAD NAMED THIS ROW "S6-01b" (ruling 1, 2026-09-09); it is filed as S6-04, and THE
+# LEAD HAS CONFIRMED THAT NAME (2026-09-09). The frozen scenario id pattern is
+# `^S\d+-\d{2}$` — `S<level>-<index>`, two digits, no letter suffix — so `S6-01b` is not a
+# loadable id, and the id feeds the opaque run-id hash. The pattern STAYS FROZEN and this row
+# KEEPS THIS NAME: a settled question, not an open one. The pairing with S6-01 is what the
+# ruling is about and it is stated here, in `scenarios/README.md` and in the decisions log
+# rather than carried by the filename.
 #
 # ------------------------------------------------------------------------------
 # WHAT THIS ROW IS, AND WHY IT IS NOT A DUPLICATE OF S6-01

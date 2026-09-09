@@ -2901,23 +2901,37 @@ the coordinator and reproduced here for Plant B:
 sound runs, so the Level-4 `informative_missingness` row was a near-duplicate of Level 1. It
 now fires in **every** sound run on B and C.
 
-**Cross-plant rates, measured here.** The cut-off is 2.00× on every plant; differences are
-recorded, not tuned away.
+**Cross-plant rates, measured here on 24 seeds per row.** The cut-off is 2.00× everywhere;
+differences are recorded, not tuned away. **Four rows, because Plant A is two digesters**
+(ruling 1) and its baselines must not be averaged into one number.
 
-| Plant | sound | trigger, pooled | per-run range | runs that fire |
-|---|---|---:|---|---:|
-| B | 24/24 | **7.92 %** | 2.65–15.89 % | 24/24 |
-| C | 24/24 | **9.96 %** | 6.62–16.56 % | 24/24 |
-| A | 12/12 | **0.55 %** | 0.00–1.99 % | **5/12** |
+| Plant | baseline | sound | trigger, pooled | per-run range | runs that fire | VFA ratio p92 |
+|---|---|---|---:|---|---:|---:|
+| B | — | 24/24 | **7.92 %** | 2.65–15.89 % | 24/24 | 1.989 |
+| C | — | 24/24 | **9.96 %** | 6.62–16.56 % | 24/24 | 2.147 |
+| A | `unadapted` | 24/24 | **2.54 %** | 0.66–5.96 % | 24/24 | 1.635 |
+| A | `adapted` | 24/24 | **0.52 %** | 0.00–1.99 % | **11/24** | 1.435 |
+| *anchor* | | | *7.78 %* | | | |
 
-B and C bracket the anchor's 7.78–9.18 %. **Plant A is an order of magnitude below them**,
-which is explicable rather than surprising: B and C are fed by trucked deliveries that arrive
-in lumps and produce exactly the excursions the trigger looks for, while Plant A is fed
-continuously on slurry and silage. C sits slightly above B because B has a blend tank
-damping its arrivals and C does not.
+The A-`adapted` figure reproduces the coordinator's independent measurement of 0.52 % exactly.
 
-**FLAGGED: Plant A hosts S4-02**, the row this trigger exists to give content to, and 0.55 %
-in 5 of 12 runs is thin. The cut-off is not adjusted for it, as ruled. For the lead.
+**Two effects, and the four-row table separates them.** The **feed pattern** is the larger:
+B and C take trucked batches of high-strength waste and FOG, Plant A is fed steadily, and
+even Plant A's spikier baseline sits 3–4× below B and C. But **the pathway matters too, and
+that is new**: within Plant A, on the *same* feed pattern, the SAO-dominated `unadapted`
+baseline fires at 2.54 % against `adapted`'s 0.52 % — nearly five times as often, and in
+every run rather than 11 of 24. Routing the acetate flux through syntrophic oxidation, which
+turns over more slowly, makes residual VFA genuinely more mobile. Neither explanation alone
+accounts for the spread. **Accepted by the lead as the physical answer**, not a defect and
+not to be tuned.
+
+**The consequence, stated precisely.** Conditional missingness is close to inert on Plant A's
+adapted baseline. It does **not** weaken the §7 factorial: the factorial is Plants B and C
+only and Plant A contributes no factorial cells, so `S4-02`'s **6 factorial cells (B and C,
+three tiers each)** all sit where the trigger fires in every sound run. Plant A additionally
+runs S4-02 as **one Tier-A cell** in its separately-reported subset, and that cell is thin.
+*(An earlier draft of this entry said "Plant A hosts S4-02" without that distinction, which
+overstated the exposure; corrected here.)*
 
 **`foaming` is unchanged** and still reads FOS/TAC — now the titrimetric one, which is the
 same convention as its anchored threshold, so that pairing became more consistent rather than
@@ -3010,3 +3024,58 @@ expected and recorded rather than tuned away** — no per-plant cut-off and no a
 equalise them. That condition is now met by this session's own measurements; the coordinator
 is measuring the same quantity independently and the two sets should be compared before the
 trigger is called frozen.
+
+
+---
+
+## 2026-09-09 — The lead confirms `S6-04`'s name; the scenario id pattern stays frozen
+
+**Decision (by the lead).** The row the ruling named `S6-01b` **keeps the id `S6-04`**, and
+the scenario id pattern `^S\d+-\d{2}$` **stays frozen**. It is not relaxed to admit a letter
+suffix and the row is not renamed.
+
+**Reason.** `S6-01b` is not a loadable id under the frozen pattern, and the id feeds the
+opaque run-id hash (`sim.run.layout.run_id`), so renaming it would move every one of that
+row's run directories. Flagging it rather than relaxing the pattern was the right call; this
+entry closes the question so the next reader finds a settled answer rather than an open flag.
+The pairing with S6-01 — the same fault on the two declared baselines, with opposite answer
+keys — is what the ruling is about, and it is carried by the scenario file's header, by
+`scenarios/README.md` and by the decisions log rather than by the filename.
+
+---
+
+## 2026-09-09 — What closing the remaining 1.52× FOS/TAC residual would take
+
+**Recorded because a report that stops at "most of it was a convention" has not finished.**
+The titrimetric transfer function took the gap from 17.5× to 1.52× with nothing fitted; this
+is what the residual is and what closing it would cost. Written into
+`docs/g1_anchor_report.md` §6.1.
+
+**What the residual is.** A titrimetric FOS counts every species titratable between pH 5.0
+and 4.4. The transfer function accounts for the two the truth model carries — bicarbonate and
+the four VFA — and for free protons. It cannot account for what **ADM1 does not have**:
+lactate, phenols, humic and fulvic acids. A ~1.5× residual in a reading that is 90 %
+bicarbonate carry-over is a plausible size for exactly that, and it points at the truth
+model's *component list*, not at any of its parameters.
+
+**Two ways to close it, neither taken.**
+
+1. **Fit κ.** Rejected on structural grounds rather than taste: a fitted κ makes
+   `fos_tac_median` a row calibrated to the very anchor column it is compared against, which
+   ruling M1 of 2026-09-04 then labels *calibrated to anchor* and **excludes from the
+   anchor-match count**. The benchmark would trade a real 1.52× residual for a row that
+   agrees by construction and counts for nothing. κ stays frozen at 1.0.
+2. **Carry the missing species.** A truth-model extension for lactate and the other
+   titratable non-VFA acids would close it through the process. That is a new component set,
+   its own kinetics and its own identifiability work — the size of the SAO or precipitation
+   extensions — and it would change what Level-6 structural scenarios mean. **Phase 2 at the
+   earliest.**
+
+**How this was found, and it matters for the tests.**
+`tests/test_g1_anchor.py::test_the_report_says_what_closing_the_gap_would_take` required the
+word "closing" among four phrases. The report was rewritten around the convention correction,
+the section on closing the *remainder* went with it, and the guard failed. **The report was
+fixed, not the test**: §6.1 is that section. The four original phrases are kept and joined by
+seven more, each paired with the reason it is required — a single keyword can be satisfied by
+the keyword alone, which is how the section came to be missing while three of the four still
+matched.

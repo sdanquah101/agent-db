@@ -64,11 +64,10 @@ three tiers and nowhere but Plant A (`sim/run/matrix.py`, and the decisions entr
 
 ## Known gaps, recorded rather than worked around
 
-* **`S6-01b` is filed as `S6-04`.** The lead named the new row `S6-01b`; the frozen id
-  pattern is `^S\d+-\d{2}$` and admits no letter suffix, and the id feeds the opaque
-  run-id hash, so the row is filed under the next free Level-6 index rather than relaxing
-  the pattern unilaterally. Flagged to the coordinator; renaming is a one-line schema
-  change plus a file rename if the lead wants the literal id.
+* **`S6-01b` is filed as `S6-04`, and the lead has confirmed it** (2026-09-09). The frozen
+  id pattern `^S\d+-\d{2}$` admits no letter suffix and the id feeds the opaque run-id
+  hash, so the row took the next free Level-6 index. **The pattern stays frozen and the row
+  keeps this name.** Settled, not open.
 * **There is one answer key per scenario, not one per tier.** `S2-02` flatlines a Tier-B
   instrument, so at Tier A there is nothing to observe and its `correct_conclusion` is
   the Tier-B/C answer. Flagged for the lead in `docs/decisions.md`.

@@ -336,26 +336,37 @@ def test_the_report_exists_and_its_generated_block_is_current(comparisons, panel
     )
 
 
-def test_the_report_explains_the_gap_rather_than_only_recording_it():
+def test_the_report_says_what_closing_the_gap_would_take():
     """The task of a report is not only to record a number.
 
-    This used to look for the word "closing", from the section heading "What closing the VFA
-    gap would take". That section was rewritten when the gap turned out to be a convention
-    mismatch rather than something to close, and a test that matched the old heading would
-    have been satisfied by the word alone. It now asks for the substance a reader needs:
-    where the tolerances came from, which convention each number is in, why the remaining gap
-    cannot be fitted away, and that nothing was fitted.
+    **This guard caught a real omission and the report was fixed, not the test.** The
+    original required "declared before anything was measured", "fos/tac", "sour" and
+    "closing". The titrimetric convention of 2026-09-09 took the gap from 17.5x to 1.52x,
+    the report was rewritten around that, and the section on what closing the REMAINDER
+    would take went with it — so "closing" disappeared and this failed. The report now has
+    §6.1, which says what the residual is (non-VFA titratable species ADM1 does not carry)
+    and what closing it would take (a fitted kappa, rejected because ruling M1 would then
+    exclude the row from the match count; or a new extension, Phase 2 at the earliest).
+
+    The four original phrases are **kept**, because relaxing an assertion to make a rewrite
+    pass is the one thing this guard exists to prevent. They are joined by the substance a
+    reader now needs, each paired with the reason it is required — a single keyword can be
+    satisfied by the keyword alone, which is how the section came to be missing while three
+    of the four phrases still matched.
     """
     text = REPORT.read_text(encoding="utf-8").lower()
     required = {
+        # the four the guard has always required
         "the tolerances are declared in advance": "declared before anything was measured",
-        "the souring history is kept": "sour",
         "the ratio is named": "fos/tac",
+        "the souring history is kept": "sour",
+        "what closing the gap would take is stated": "closing",
+        # and the substance the rewrite made necessary
         "the two conventions are named": "titrimetric",
         "the reading is mostly bicarbonate": "carry-over",
         "the residual gap is quantified": "1.52",
         "kinetics are shown not to close it": "bistable",
-        "and the discipline is stated": "no kinetic parameter",
+        "the discipline is stated": "no kinetic parameter",
         "the gap list is cited": "vfa_gap.md",
         "the threshold's basis is given": "92nd percentile",
     }

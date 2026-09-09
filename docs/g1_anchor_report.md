@@ -365,29 +365,41 @@ Their equivalent 7.8 % cut-offs would be gas > 1.796× trailing and OLR > 1.871�
 **Cross-plant firing rates.** The cut-off is 2.00× on **every** plant: differences between
 plants are to be recorded, not tuned away, and there is no per-plant cut-off.
 
-Measured here on clean Level-0 panels, at the same 2.00× cut-off on every plant. The
-coordinator is measuring the same quantity independently; where the two disagree, both
-numbers should be looked at rather than either adopted.
+Measured on clean Level-0 panels of 24 seeds each, at the same 2.00× cut-off everywhere.
+**Four rows, because Plant A is two digesters** (ruling 1): its `adapted` and `unadapted`
+baselines are not the same plant and must not be averaged into one number.
 
-| Plant | panel | sound | trigger, pooled | per-run range | runs that fire | operator FOS/TAC > 0.40 |
-|---|---|---|---:|---|---:|---:|
-| B | seeds 1000–1023, 180 d | 24 / 24 | **7.92 %** | 2.65 – 15.89 % | 24 / 24 | 0.17 % |
-| C | seeds 1000–1023, 180 d | 24 / 24 | **9.96 %** | 6.62 – 16.56 % | 24 / 24 | 0.00 % |
-| A | seeds 1000–1011, 180 d | 12 / 12 | **0.55 %** | 0.00 – 1.99 % | **5 / 12** | 0.00 % |
+| Plant | baseline | sound | trigger, pooled | per-run range | runs that fire | VFA ratio p92 | operator FOS/TAC > 0.40 |
+|---|---|---|---:|---|---:|---:|---:|
+| **B** | — | 24/24 | **7.92 %** | 2.65 – 15.89 % | 24/24 | 1.989 | 0.17 % |
+| **C** | — | 24/24 | **9.96 %** | 6.62 – 16.56 % | 24/24 | 2.147 | 0.00 % |
+| **A** | `unadapted` | 24/24 | **2.54 %** | 0.66 – 5.96 % | 24/24 | 1.635 | 0.00 % |
+| **A** | `adapted` | 24/24 | **0.52 %** | 0.00 – 1.99 % | **11/24** | 1.435 | 0.00 % |
+| *anchor* | | | *7.78 %* | | | | *8.25 – 9.18 %* |
 
-**Plants B and C bracket the anchor's 7.78–9.18 %; Plant A is an order of magnitude below
-them, and that difference is recorded rather than tuned away** (the lead). It is not a
-surprise once stated: B and C are fed by **trucked deliveries**, which arrive in lumps and
-produce exactly the VFA excursions the trigger is looking for, while Plant A is fed
-continuously on slurry and silage and its VFA is correspondingly smooth. C is slightly above
-B because it has no blend tank — the tank exists on B precisely to damp those arrivals — so
-its excursions reach the biomass less smoothed.
+**B and C bracket the anchor. Plant A is well below it, and the difference is the finding**
+(the lead: differences between plants are to be recorded, not tuned away; there is no
+per-plant cut-off and 2.00× stands on all four rows).
 
-**FLAGGED, because it has a scoring consequence.** On Plant A the trigger fires on 0.55 % of
-days and in only 5 of 12 runs, so conditional missingness has little to act on there. Plant
-A hosts the Level-2–5 Tier-A subset, which includes **S4-02, the `informative_missingness`
-row** — the row this trigger exists to give content to. It now works on B and C and is still
-thin on A. The cut-off is not adjusted for it, as ruled; the observation is for the lead.
+**Two things drive it, and the four-row table separates them.**
+
+* **The feed pattern.** B and C take high-strength waste and FOG in **trucked batches**, so
+  load and residual VFA are spiky. Plant A is fed steadily on slurry and silage. This is the
+  larger effect: even Plant A's spikier baseline sits 3–4× below B and C.
+* **The pathway, and this is new.** Within Plant A, on the *same* feed pattern, the
+  `unadapted` (SAO-dominated) baseline fires at **2.54 %** against `adapted`'s **0.52 %** —
+  nearly five times as often, and in **every** run rather than 11 of 24. Its VFA ratio p92 is
+  1.635 against 1.435. So the excursions are not only a feed property: routing the acetate
+  flux through syntrophic oxidation, which turns over more slowly, makes the digester's
+  residual VFA genuinely more mobile. Neither explanation alone accounts for the spread.
+
+**The consequence, stated so the low numbers are not misread as a defect in the ladder.**
+Conditional missingness is close to inert on Plant A's adapted baseline — well under 1 % of
+days. **It does not weaken the §7 factorial**: the factorial is Plants B and C only, Plant A
+contributes no factorial cells, and `S4-02` has **6 factorial cells on B and C** (three tiers
+each) where the trigger fires in every sound run. Plant A additionally runs S4-02 as **one
+Tier-A cell** in its separately-reported subset, and that single cell is thin. That is the
+whole of the exposure, and it is reported rather than tuned.
 
 ### 5.5 The operator-visible threshold is a different thing
 
@@ -422,6 +434,40 @@ Its central measurement is now recorded **for the paper as a property of the mod
 
 **No kinetic parameter was touched at any point**, and the declared VFA tolerance was never
 widened. What moved is which quantity the row measures.
+
+### 6.1 What closing the remaining 1.52x would take
+
+The convention correction took the FOS/TAC gap from 17.5x to **1.52x** with nothing fitted.
+This section is about the residual, because a report that stops at "most of it was a
+convention" has not said what the rest is.
+
+**What the residual is.** A titrimetric FOS counts every species titratable between pH 5.0
+and pH 4.4. The transfer function accounts for the two the truth model carries — bicarbonate
+and the four VFA — and for free protons. It cannot account for what **ADM1 does not have**:
+lactate, phenols, humic and fulvic acids, and the other weak organic acids a real digestate
+carries. A residual of ~1.5x in a quantity that is 90 % bicarbonate carry-over is a plausible
+size for exactly that, and it points at the truth model's component list rather than at any
+of its parameters.
+
+**The two ways to close it, and why neither is taken now.**
+
+1. **Fit kappa.** One number would absorb the residual immediately. It is rejected, and the
+   reason is structural rather than aesthetic: a fitted kappa makes `fos_tac_median` a row
+   **calibrated to the very anchor column it is compared against**, which the lead's ruling
+   M1 of 2026-09-04 requires be labelled *calibrated to anchor* and **excluded from the
+   anchor-match count**. The benchmark would trade a real 1.52x residual for a row that
+   agrees by construction and counts for nothing. kappa stays frozen at 1.0.
+2. **Carry the missing species.** A truth-model extension for lactate and the other
+   titratable non-VFA acids would close it *through the process* rather than through a
+   conversion. That is a new component set, its own kinetics and its own identifiability
+   work — the same size as the SAO or precipitation extensions — and it would change what
+   Level-6 structural scenarios mean. **Phase 2 at the earliest.**
+
+**So the residual stays, reported and pinned.** `tests/test_g1_anchor.py` bounds it in both
+directions, exactly as it bounded the 17.5x failure before it, so it can neither grow nor be
+quietly tuned to 1.0. And it is worth keeping in proportion: 1.52x on a titration whose
+reading is 90 % carry-over is a far smaller claim than the 17.5x it replaced, and it was
+reached without touching a single parameter of the model.
 
 ## 7. Provenance
 

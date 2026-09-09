@@ -1191,8 +1191,15 @@ brings its form and band, the still-open M2/M3/M4 findings, and then the tool re
   just as hard.
 - **Ruling B — conditional missingness triggers on the hidden state**: true VFA > 2.00× its
   30-day trailing median, the window excluding the current day. Measured **7.92 %** of days
-  on 24 sound Plant B runs against the anchor's 7.78 %, nothing tuned. Cross-plant, same
-  cut-off: **B 7.92 %, C 9.96 %, A 0.55 %** — recorded, not tuned away.
+  on 24 sound Plant B runs against the anchor's 7.78 %, nothing tuned. Cross-plant on
+  24 seeds per row, same cut-off, **four rows because Plant A is two digesters**: **B 7.92 %,
+  C 9.96 %, A-`unadapted` 2.54 %, A-`adapted` 0.52 %** — the last reproducing the
+  coordinator's independent figure exactly. Recorded, not tuned away, and accepted by the
+  lead as the physical answer.
+- **The four-row table separates two effects.** The feed pattern is the larger — B and C take
+  trucked batches, Plant A is fed steadily — but **within Plant A, on the same feed, the
+  SAO-dominated baseline fires nearly five times as often** (2.54 % in 24/24 runs against
+  0.52 % in 11/24). The pathway matters, not only the feed.
 - **S4-02 is given back** on B and C: the flag now fires in every sound run, where before it
   fired on no day at all in 23 of 24.
 - **Ruling C** — FOS/TAC > 0.40 stays operator-facing only; both rates are reported in one
@@ -1206,13 +1213,24 @@ brings its form and band, the still-open M2/M3/M4 findings, and then the tool re
   a read would refuse.
 - Tests 342 → **349** (336 default + 13 in the `g1` panel, 2 skipped).
 
-**Flagged to the coordinator**
+**Settled since**
 
-1. **Plant A's trigger rate is 0.55 %**, an order of magnitude below B and C, because it is
-   fed continuously while they take trucked deliveries. Plant A hosts **S4-02**, the row this
-   trigger exists to give content to. The cut-off is not adjusted, as ruled.
-2. Carried forward and still open: the `S6-01b`/`S6-04` id, the unadapted baseline's TAN
-   band, the two relayed anchor numbers that did not reproduce, and M2/M3/M4.
+- **`S6-04` keeps its name and the id pattern stays frozen** (the lead, 2026-09-09). The flag
+  was the right call; the question is closed in the scenario header, `scenarios/README.md`
+  and the decisions log.
+- **Plant A's low trigger rate is accepted as the physical answer.** Its exposure is smaller
+  than an earlier draft of this entry implied: the §7 factorial is B and C only, so `S4-02`'s
+  six factorial cells all sit where the trigger fires in every run. Plant A runs S4-02 as one
+  Tier-A cell in its separately-reported subset, and that cell is thin.
+- **`docs/g1_anchor_report.md` §6.1 now says what closing the remaining 1.52× would take** —
+  non-VFA titratable species ADM1 does not carry; a fitted κ (rejected: ruling M1 would then
+  exclude the row from the match count) or a new extension (Phase 2). The g1 guard caught
+  that this was missing after the rewrite; **the report was fixed, not the test**.
+
+**Still open**
+
+- The unadapted baseline's TAN band (3.5–3.7 measured against the ruling's 3.7–4.3), the two
+  relayed anchor numbers that did not reproduce, and M2/M3/M4.
 
 **Recorded as a follow-up for the next session that touches the plant configs**: Plants B and
 C need a **declared design organic loading rate** from Muscatine's design or permit figures.
