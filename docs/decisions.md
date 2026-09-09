@@ -3236,6 +3236,30 @@ tidy-up, and it belongs to the lead.
 
 ## 2026-09-09 — RULING ON M2 (the lead): an AMENDMENT TO RULING 3 of 2026-09-03
 
+> **M2 IS NOT CLOSED.** An independent review of this fix (2026-09-09) found three defects
+> in it. **B3 is fixed** — see the addendum at the end of this entry. **B1 and B2 are open
+> and with the lead**, and nothing has been changed for either: both would move the
+> influent again, and B1's honest fix may require redistributing the sludge streams, which
+> is a further change to a frozen config only the lead can approve.
+>
+> * **B1 — the charge side omits the fed calcium.** `feed_cation_charge` leaves out
+>   `2 × S_ca`, which `sim/adm1/physchem_ext.py::_residual` carries, `configs/adm1/extensions.yaml`
+>   declares with charge 2, all three plants enable, and `sim/run/harness.py` feeds. Counted
+>   properly, **four of seven streams breach 1.5×**: primary sludge 2.94, thickened WAS
+>   2.71, cattle slurry 1.83, grass silage 1.69. **M2 is reduced from 503× to about 2.9×,
+>   not closed**, and the residual was hidden because the guard was written against a charge
+>   definition that leaves out a cation the digester is fed.
+> * **B2 — the invariant holds at catalogue TS only.** The assay's acetate term scales with
+>   a delivery's solids; the charge side does not scale at all, and the guard is called at
+>   catalogue TS, so it never sees the quantity a workflow actually reads. On real assay
+>   records the HSW's reported alkalinity ranges 6.1–38.0 against a fed charge of 10.75;
+>   primary sludge is outside 1.5× on 45 % of records, cattle slurry on 27 %. **The identity
+>   stated flatly below is true of the catalogue row and false of the generated stream.**
+> * **B3 — the guard was vacuous. Fixed.** See the addendum.
+>
+> Everything else in this entry was independently recomputed by the review and confirmed.
+
+
 **Read this with the ruling-3 entry of 2026-09-03 ("The feed's strong cations are calibrated
 to the anchor's alkalinity"), which it amends.** Ruling 3 raised the high-strength waste's
 `S_cat` from 0.03 to 0.225 kmol m⁻³ to reach the anchor's digester alkalinity. M2 (review
@@ -3275,11 +3299,17 @@ comparing them, and a guard watching only the stream that had already broken wou
 next calibration break a different one.
 
 **What the guard catches, measured, and what it does not.** Perturbing `s_cat` by ±50 % on
-any of the five streams a plant feeds fails it — 10 mutations out of 10, which is the case
-that matters, since `s_cat` is what a calibration moves. Perturbing `s_ic` or the declared
-pH is caught where a stream sits near the edge of the band and **not** where it has slack
-inside it: 1.5× is a band, not an equality. Recorded rather than glossed, because a guard
-described as tighter than it is would be worse than the 1.5× it honestly enforces.
+the **six** streams a plant feeds gives 12 mutants: **10 fail, 1 is skipped by the floor**
+(FOG, which carries no liquor) **and 1 survives** — cattle slurry at half its cations moves
+1.39× to 1.11×, *towards* the centre of the band. Perturbing `s_ic` or the declared pH is
+caught where a stream sits near the edge of the band and **not** where it has slack inside
+it: 1.5× is a band, not an equality.
+
+> **CORRECTED 2026-09-09.** This entry first said "10 mutations out of 10" on "five"
+> streams. Both were wrong: it is 9 of 10 on the five non-FOG streams, and FOG is a Plant B
+> feed so there are six. The review of 2026-09-09 caught it. A claim stated as a
+> measurement has to be reproducible, and that one was not — which is the same failure the
+> claim itself was warning about.
 
 **`food_waste` was fixed too**, since the ruling is on every stream: at 0.05 kmol m⁻³ of
 cations it carried 0.152 kmol m⁻³ of acetate **anion** at its cited pH 5.1 with nothing to
@@ -3352,3 +3382,90 @@ assay alone and document the discrepancy (rejected by the ruling, and it would l
 workflow reading a number 503× away from the buffering the digester actually has).
 
 **Still with the lead: M3 and M4**, unchanged.
+
+---
+
+## 2026-09-09 — ADDENDUM to the M2 ruling: B3 fixed, B1 and B2 open
+
+**Read with the M2 entry above, which this corrects.** An independent fresh-context review
+of the M2 fix found three defects. This addendum records the one that is fixed and pins the
+two that are not, so that nothing in this log reads as settled while they are open.
+
+### B3 — the ratio guard was vacuous. FIXED.
+
+**The defect, demonstrated rather than argued.** Two mutants were built and run against the
+whole suite:
+
+* `total_alkalinity` and `feed_cation_charge` both returning `0.0` — **337 passed**. Every
+  stream falls under `ASSAY_VS_CHARGE_FLOOR = 0.10` and is skipped.
+* `total_alkalinity` returning `feed_cation_charge(...)` — **337 passed**. That is exactly
+  the strong-ion-difference definition the M2 entry's *Alternatives* rejects on the grounds
+  that a test of it "could not fail"; as written, the test could not tell whether precisely
+  that had been implemented.
+
+Nothing anywhere pinned the absolute value of the feed alkalinity assay, so nothing could
+distinguish a correct implementation from a constant.
+
+**The fix.** `tests/test_generator.py::test_the_feed_alkalinity_assay_is_pinned_and_the_two_quantities_are_independent`
+asserts three properties, each killing one class of mutant:
+
+1. **Committed absolute values** for both quantities on every stream
+   (`COMMITTED_FEED_ALKALINITY`), which are the numbers `docs/g1_anchor_report.md` §3.3
+   quotes — so the report and the code cannot drift apart. Kills zero, a constant, and a
+   silent formula change.
+2. **The two read different fields**: `s_ic` moves the assay and not the charge, `s_cat`
+   moves the charge and not the assay. Kills the copy mutant — if the assay *were* the
+   strong-ion difference, `s_cat` would move both.
+3. **One stream reproduced from the ADM1 constants** without calling the implementation,
+   with an assertion that those literals still match `physchem`. Kills a wrong equilibrium
+   constant or a dropped term.
+
+Both mutants were rebuilt after the fix and **both now fail**. The ratio guard's docstring
+now says plainly that it is not sufficient alone and names this test as part of it.
+
+### B1 — the fed calcium is missing from the charge. OPEN, with the lead.
+
+Independently reproduced here. `sim/adm1/physchem_ext.py::_residual` carries `+ 2.0 * tot.ca`;
+`configs/adm1/extensions.yaml` declares `S_ca` with `charge: 2`; **all three plants enable
+the `precipitation` extension**; `sim/run/harness.py` feeds `S_ca`. `feed_cation_charge`
+computes `50 × (S_cat − S_an + [NH₄⁺])` and omits it, so the guard's "what the simulator is
+handed" is not what the simulator is handed.
+
+| stream | ratio as shipped | ratio with `+ 2 × S_ca` |
+|---|---:|---:|
+| `primary_sludge` | 1.47 | **2.94** |
+| `thickened_was` | 1.35 | **2.71** |
+| `cattle_slurry` | 1.39 | **1.83** |
+| `grass_silage` | 1.16 | **1.69** |
+| `high_strength_waste` | 1.00 | 1.09 |
+| `food_waste` | 1.00 | 1.20 |
+
+**So M2 is reduced from 503× to about 2.9×, not closed.** Nothing has been changed: the
+correct definition breaches the band on four streams, and closing those would mean either
+redistributing the sludge streams' composition or revisiting their declared pH — a further
+change to a frozen config, which is the lead's to approve. Recorded here so the next session
+cannot read the M2 entry as finished.
+
+### B2 — the invariant holds at catalogue TS, not for the reported assay. OPEN, with the lead.
+
+`total_alkalinity`'s acetate term scales with a delivery's solids (its COD does); the charge
+side does not scale at all, because the dissolved liquor stays at the catalogue value by the
+generator's own moisture convention. The guard is called at catalogue TS, so it never sees
+the quantity a workflow reads. Measured on real `AssayRecord`s (4 seeds × 400 d, Plants A
+and B): the high-strength waste's reported alkalinity ranges **6.1 to 38.0** kg CaCO₃/m³
+against a fed charge of 10.75; `primary_sludge` is outside 1.5× on **45 %** of records,
+`cattle_slurry` on **27 %**.
+
+This is a real inconsistency in the generator, not only in the claim: as a delivery gets
+drier, more free acetate anion is fed with no more cations to balance it. The M2 entry, the
+report and the commit message all state the identity flatly, and it is true of the catalogue
+row and false of the generated stream. Nothing has been changed — a fix moves the influent
+again — and it is with the lead.
+
+### Also corrected
+
+The M2 entry's mutation claim was wrong twice over and is fixed in place: **10 of 12 on six
+fed streams** (10 fail, FOG is skipped by the floor, cattle slurry at half its cations
+survives by moving towards the centre of the band), not "10 of 10 on five". `primary_sludge`
+at 1.470 against the 1.5 limit — 2 % of margin — is now named in the report as a row to
+watch, beside `biogas_mean` at 1.45.

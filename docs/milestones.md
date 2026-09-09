@@ -1315,9 +1315,11 @@ The merge and the tag are the coordinator's; this session does neither.
 - **The guard covers every stream**, names the stream and both numbers on failure, and was
   **checked against the pre-fix catalogue first**: it fails there on `high_strength_waste`
   (4.00×, and 503× against the pre-ruling assay) and on `food_waste` (0.33×, the same defect
-  with the sign reversed). Mutation-measured: 10 of 10 ±50 % `s_cat` perturbations on the five
-  fed streams fail it; `s_ic` and pH perturbations are caught only near the band edge, and
-  that limit is written into the test rather than glossed.
+  with the sign reversed). Mutation-measured: of the 12 ±50 % `s_cat` perturbations on the
+  **six** fed streams, **10 fail, 1 is skipped by the floor and 1 survives** (cattle slurry
+  at half its cations moves towards the centre of the band); `s_ic` and pH perturbations are
+  caught only near the band edge. **This entry first claimed "10 of 10 on five streams" and
+  the review of 2026-09-09 corrected it** — it was 9 of 10 on five, and there are six.
 - **Part 2 — the HSW's implied pH was 13.04**, so the ruling's condition was met and the
   redistribution was made: `S_IC` 0.01 → **0.1607** kmol C m⁻³, declared pH 5.0 → **7.0**,
   **`S_cat` unchanged at 0.225**. `S_IC` is not fitted — it is the carbon that closes the
@@ -1352,3 +1354,45 @@ did not reproduce. Plants B and C still need a declared design organic loading r
 
 **Next**: the matrix regeneration at the final head once the review clears, then the tool
 registry (§6.2) in a later session.
+
+---
+
+### Session 2026-09-09 (M2 review) — M2 is NOT closed; B3 fixed, B1 and B2 with the lead
+
+An independent fresh-context review of the M2 fix (`d5fe13c`) found **three blockers**. The
+coordinator confirmed every other number in that commit by independent recomputation. The
+matrix regeneration and the merge are **held**.
+
+**Fixed here: B3 — the M2 ratio guard was vacuous.** Two mutants were built and run, not
+reasoned about, and both passed the whole 337-test suite: both functions returning `0.0`
+(every stream falls under the guard's floor and is skipped), and `total_alkalinity`
+returning `feed_cation_charge(...)` — which is exactly the strong-ion-difference definition
+the decisions entry claims to reject because a test of it "could not fail". Nothing pinned
+the absolute value of the feed alkalinity assay. The new guard pins both quantities on every
+stream to the numbers the report quotes, asserts that `s_ic` moves one and `s_cat` the
+other, and reproduces one stream from the ADM1 constants without calling the implementation.
+**Both mutants were rebuilt and both now fail.**
+
+**Open, with the lead, nothing changed:**
+
+1. **B1 — `feed_cation_charge` omits the fed calcium.** The truth model's balance carries
+   `+ 2 × S_ca`, the extension declares it with charge 2, all three plants enable it and the
+   harness feeds it. Counted properly, **four of seven streams breach 1.5×** (primary sludge
+   2.94, thickened WAS 2.71, cattle slurry 1.83, grass silage 1.69). **M2 is reduced from
+   503× to about 2.9×, not closed.** The honest fix may mean redistributing the sludge
+   streams — a further change to a frozen config.
+2. **B2 — the invariant holds at catalogue TS, not for the assay a workflow reads.** The
+   acetate term scales with a delivery's solids and the charge side does not scale at all.
+   On real assay records the HSW's reported alkalinity ranges 6.1–38.0 against a fed charge
+   of 10.75; primary sludge is outside 1.5× on 45 % of records, cattle slurry on 27 %.
+
+**Also corrected, and it was this session's error:** the mutation claim "10 of 10 on five
+fed streams" is **10 of 12 on six** — FOG is a Plant B feed, and cattle slurry at half its
+cations survives by moving towards the centre of the band. Fixed in the test, the decisions
+log, this file and the report. A claim stated as a measurement has to be reproducible.
+
+`primary_sludge` at 1.470 against the 1.5 limit is now named in the report as a row to
+watch, beside `biogas_mean` at 1.45.
+
+**Next**: the lead's ruling on B1 and B2. Nothing is regenerated, merged or tagged until
+then.

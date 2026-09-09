@@ -26,6 +26,13 @@ land where ruling 3 put them; the visible consequence is 2.2 points of methane f
 traded for CO₂ and a biogas ratio of 1.45 against its 1.5 bound. Everything that moved is
 tabulated in §3.3 and nothing was tuned to compensate.
 
+**M2 is not closed.** An independent review of that fix found three defects in it; one is
+fixed and **two are open and with the lead**. Counted properly — the charge side leaves out
+the calcium the digester is fed — M2 is **reduced from 503× to about 2.9×**, and the
+identity §3.3 states holds at catalogue solids rather than for the assay a workflow reads.
+The banner at the top of §3.3 has the measurements. Nothing here should be read as settled
+until the lead has ruled on those two.
+
 > **G1.** Simulator generates all scenarios with logged truth, and influent statistics
 > match anchor within declared tolerance. *Fail → fix realism before any workflow work.*
 
@@ -208,7 +215,40 @@ fed the sludges alone: uniform would give it alkalinity 7.77, the split used her
 5.85, which is the more defensible figure for a sludge-only municipal digester. Plant C has
 no output anchor, so this is a judgement rather than a fit, and it is recorded as one.
 
-### 3.3 M2: the assay and the fed charge now describe the same stream
+### 3.3 M2: PARTLY FIXED, NOT CLOSED
+
+> **M2 IS OPEN.** An independent review of this fix on 2026-09-09 found three defects in
+> it. One is fixed (B3, below); **two are with the lead and nothing has been done about
+> them**, because both would move the influent again and one may require redistributing
+> the sludge streams — a further change to a frozen config that only the lead can approve.
+> **Read this section as "503x reduced to about 2.9x", not as "M2 closed".**
+>
+> * **B1 — the charge side omits the fed calcium.** `feed_cation_charge` computes
+>   `50 x (S_cat - S_an + [NH4+])`, but the truth model's own balance
+>   (`sim/adm1/physchem_ext.py::_residual`) carries `+ 2.0 * tot.ca`, `configs/adm1/extensions.yaml`
+>   declares `S_ca` with charge 2, **all three plants enable the precipitation extension**,
+>   and `sim/run/harness.py` feeds `S_ca`. So "what the simulator is handed" in this
+>   section is not what the simulator is handed. With calcium counted,
+>   **four of seven streams breach the 1.5x band**: primary sludge 2.94, thickened WAS
+>   2.71, cattle slurry 1.83, grass silage 1.69. Independently reproduced here.
+> * **B2 — the invariant holds at catalogue TS, not for the assay a workflow reads.**
+>   `total_alkalinity`'s acetate term scales with a delivery's solids; the charge side does
+>   not scale at all. The guard is called at catalogue TS, so it never sees the reported
+>   quantity. On real assay records (4 seeds x 400 d): the high-strength waste's reported
+>   alkalinity ranges **6.1 to 38.0** against a fed charge of 10.75, primary sludge is
+>   outside 1.5x on **45 %** of records, cattle slurry on **27 %**. The identity stated
+>   below is true of the catalogue row and false of the generated stream.
+> * **B3 — the ratio guard was vacuous, and this one is fixed.** An implementation
+>   returning 0.0 for both quantities was skipped by the guard's floor on every stream and
+>   passed the whole suite; so did `total_alkalinity` returning `feed_cation_charge(...)`.
+>   `tests/test_generator.py::test_the_feed_alkalinity_assay_is_pinned_and_the_two_quantities_are_independent`
+>   now pins both absolute values and asserts the two read different fields. Both mutants
+>   were rebuilt and both now fail.
+>
+> Also corrected: this section previously said the `s_cat` mutation check was "10 of 10 on
+> five fed streams". It is **10 of 12 on six** — FOG is a Plant B feed, and cattle slurry
+> at half its cations survives, moving 1.39x to 1.11x, towards the centre of the band.
+
 
 The review of 2026-09-04 found that ruling 3's calibration had pulled the high-strength
 waste's two descriptions apart. **The lead ruled on it on 2026-09-09, as an amendment to
@@ -283,8 +323,10 @@ silage, Plant C the two sludges, and `food_waste` is fed by no plant at all.
 | missingness trigger, pooled | 7.92 % | **7.70 %** | — | anchor's own 7.78 % |
 | operator overload, pooled | 0.17 % | **0.19 %** | — | 1 of 24 runs either way |
 
-**All 23 rows stayed inside their declared bounds and no tolerance was touched.** The row to
-watch is biogas: 1.45 against an upper bound of 1.5 is the least margin anywhere in this
+**All 23 rows stayed inside their declared bounds and no tolerance was touched.** Two rows
+are worth naming as the ones to watch. `primary_sludge` sits at **1.470** against the M2
+guard's 1.5× limit — 2 % of margin — and would breach it outright once the fed calcium is
+counted (B1). And biogas: 1.45 against an upper bound of 1.5 is the least margin anywhere in this
 report, and it is stated here rather than left for someone to notice. The extra gas is CO₂,
 not methane — the methane fraction falls 0.722 → 0.700 while total gas rises — so it is the
 expected consequence of putting the missing inorganic carbon in, not a new realism problem.

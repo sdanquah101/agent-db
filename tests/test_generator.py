@@ -339,7 +339,29 @@ ASSAY_VS_CHARGE_FLOOR = 0.10
 instead. FOG carries no liquor at all -- no inorganic carbon, no ammoniacal N, equal
 strong ions -- so both sides are zero and a ratio would be 0/0. The floor is two
 orders of magnitude below the smallest real stream (primary sludge, 1.36), so it
-cannot quietly admit a stream that has buffering to report."""
+cannot quietly admit a stream that has buffering to report.
+
+**It is also the hole the ratio test alone had** (review finding B3, 2026-09-09): an
+implementation returning 0.0 for both quantities is skipped by this floor on every
+stream and passed the entire suite. :data:`COMMITTED_FEED_ALKALINITY` closes it."""
+
+COMMITTED_FEED_ALKALINITY: dict[str, tuple[float, float]] = {
+    #                          assay      charge   kg CaCO3/m3
+    "cattle_slurry": (9.0056, 12.4989),
+    "fog": (-0.0005, 0.0000),
+    "food_waste": (7.5887, 7.5999),
+    "grass_silage": (3.7803, 4.4000),
+    "high_strength_waste": (10.7469, 10.7472),
+    "primary_sludge": (1.3604, 1.9997),
+    "thickened_was": (1.4762, 1.9982),
+}
+"""Golden pins on the absolute value of both M2 quantities, kg CaCO3/m3 at catalogue TS.
+
+These are the numbers ``docs/g1_anchor_report.md`` §3.3 quotes, so the report and the
+code cannot drift apart, and **an implementation that returns a constant, a zero or a
+copy of the other quantity fails here** rather than sliding through the ratio test.
+Update them deliberately, with the reason, when a stream's declared composition moves --
+that is the mechanism, not an obstacle to it."""
 
 
 def test_every_feed_assay_describes_the_charge_the_simulator_is_fed(catalogue, adm1_params):
@@ -357,25 +379,32 @@ def test_every_feed_assay_describes_the_charge_the_simulator_is_fed(catalogue, a
     apart because nothing compared them. A guard that only watched the stream that had
     already broken would let the next calibration break a different one silently.
 
-    **Why it cannot pass vacuously.** The two sides are computed by different routes
-    from different fields: the assay from ``s_ic``, the fractionation's VFA share and
-    the declared pH through the acid-base equilibria; the charge from ``s_cat``,
-    ``s_an`` and ``tan``. They agree only because the catalogue is charge-consistent,
-    which is exactly the property being asserted. Run it against the pre-ruling
-    catalogue and it fails on two streams: the high-strength waste at **4.00x**, and
-    ``food_waste`` at **0.33x** in the other direction (more acetate anion than cations
-    to balance it). Against the pre-ruling *assay* -- bicarbonate alone -- the
-    high-strength waste is out by **503x**.
+    **What it catches.** Run it against the pre-ruling catalogue and it fails on two
+    streams: the high-strength waste at **4.00x**, and ``food_waste`` at **0.33x** in
+    the other direction (more acetate anion than cations to balance it). Against the
+    pre-ruling *assay* -- bicarbonate alone -- the high-strength waste is out by
+    **503x**.
 
-    **What it catches, measured, and what it does not.** Perturbing ``s_cat`` by +/-50 %
-    on any of the five streams a plant actually feeds fails it, 10 mutations out of 10 --
-    which is the case that matters, because ``s_cat`` is what a calibration to an anchor
-    moves and what reopened M2. Perturbing ``s_ic`` or the declared pH is caught on the
-    streams that sit near the edge of the band (primary sludge, thickened WAS, silage)
-    and **not** caught where a stream has slack inside it: this is a 1.5x band, not an
-    equality, so a small move that stays inside it is by design not a failure. Stated
-    rather than glossed, because a guard described as tighter than it is would be worse
-    than the 1.5x it honestly enforces.
+    **What it does not catch, measured rather than asserted.** Perturbing ``s_cat`` by
+    +/-50 % on the six streams a plant actually feeds gives 12 mutants; **10 fail here,
+    1 is skipped by the floor (FOG, which has no liquor) and 1 survives** -- cattle
+    slurry at half its cations moves 1.39x to 1.11x, *towards* the centre of the band.
+    Perturbing ``s_ic`` or the declared pH is caught where a stream sits near the edge
+    of the band and not where it has slack. **1.5x is a band, not an equality**, and a
+    move that stays inside it is by design not a failure.
+
+    This paragraph replaces a claim of "10 of 10 on five streams" that this session
+    wrote and the review of 2026-09-09 (finding B3) corrected: it was 9 of 10 on the
+    five non-FOG streams, and FOG is a Plant B feed, so there are six. A claim stated as
+    a measurement has to be reproducible, and that one was not.
+
+    **This test is NOT sufficient on its own** (finding B3). An implementation returning
+    0.0 for both quantities is skipped by :data:`ASSAY_VS_CHARGE_FLOOR` on every stream
+    and passed the whole suite when it was tried; so does ``total_alkalinity`` returning
+    ``feed_cation_charge(...)``, which is exactly the vacuous definition the decisions
+    entry claims to have rejected. Those two are killed by
+    :func:`test_the_feed_alkalinity_assay_is_pinned_and_the_two_quantities_are_independent`,
+    which has to be read as part of this guard rather than as a separate nicety.
     """
     from sim.influent.generator import feed_cation_charge, total_alkalinity
 
@@ -400,6 +429,70 @@ def test_every_feed_assay_describes_the_charge_the_simulator_is_fed(catalogue, a
                 f"s_cat {spec.s_cat}, s_an {spec.s_an}, tan {spec.tan})"
             )
     assert not failures, "assay and fed charge disagree:\n  " + "\n  ".join(failures)
+
+
+def test_the_feed_alkalinity_assay_is_pinned_and_the_two_quantities_are_independent(
+    catalogue, adm1_params
+):
+    """The M2 quantities have committed values and are computed from different fields.
+
+    **Written because the ratio guard alone was vacuous** (review finding B3,
+    2026-09-09). Two mutants were built and run, not reasoned about, and both passed the
+    whole 337-test suite: ``total_alkalinity`` and ``feed_cation_charge`` each returning
+    ``0.0`` (every stream then falls under :data:`ASSAY_VS_CHARGE_FLOOR` and is skipped),
+    and ``total_alkalinity`` returning ``feed_cation_charge(...)`` -- which is precisely
+    the strong-ion-difference definition the decisions entry rejects on the grounds that
+    a test of it "could not fail". Nothing anywhere pinned the absolute value of the feed
+    alkalinity assay, so nothing could tell the difference.
+
+    Three properties, each killing one class of mutant:
+
+    1. **Committed values.** :data:`COMMITTED_FEED_ALKALINITY` holds both numbers for
+       every stream, and they are the numbers ``docs/g1_anchor_report.md`` §3.3 quotes.
+       Kills zero, a constant, and a silent formula change.
+    2. **Different fields.** ``s_ic`` moves the assay and leaves the charge alone;
+       ``s_cat`` moves the charge and leaves the assay alone. Kills the copy mutant --
+       if the assay *were* the strong-ion difference, ``s_cat`` would move both.
+    3. **Reproduced from the constants**, for one stream, without calling the
+       implementation. Kills a wrong equilibrium constant or a missing term.
+    """
+    from sim.influent.generator import feed_cation_charge, total_alkalinity
+
+    physchem = adm1_params.physchem
+    assert set(COMMITTED_FEED_ALKALINITY) == set(catalogue.feeds), (
+        "a stream was added or removed; pin it here deliberately"
+    )
+
+    # 1. committed absolute values -- a zero, a constant or a copy fails here
+    for name, (assay, charge) in sorted(COMMITTED_FEED_ALKALINITY.items()):
+        spec = catalogue.feeds[name]
+        assert total_alkalinity(spec, spec.fractionation, physchem) == pytest.approx(
+            assay, abs=5e-4
+        ), name
+        assert feed_cation_charge(spec, physchem) == pytest.approx(charge, abs=5e-4), name
+
+    # 2. the two read different fields, so one cannot be the other
+    spec = catalogue.feeds["high_strength_waste"]
+    more_ic = spec.model_copy(update={"s_ic": spec.s_ic * 2.0})
+    more_cat = spec.model_copy(update={"s_cat": spec.s_cat * 2.0})
+    base_assay = total_alkalinity(spec, spec.fractionation, physchem)
+    base_charge = feed_cation_charge(spec, physchem)
+    assert total_alkalinity(more_ic, more_ic.fractionation, physchem) > base_assay * 1.5
+    assert feed_cation_charge(more_ic, physchem) == pytest.approx(base_charge)
+    assert feed_cation_charge(more_cat, physchem) > base_charge * 1.5
+    assert total_alkalinity(more_cat, more_cat.fractionation, physchem) == pytest.approx(base_assay)
+
+    # 3. one stream reproduced from the constants, independently of the implementation
+    h = 10.0**-spec.ph
+    k_co2, k_ac = 10.0**-6.35, 10.0**-4.76
+    s_ac = spec.cod_per_m3 * spec.fractionation.f_vfa / 64.0
+    expected = 50.0 * (
+        spec.s_ic * k_co2 / (k_co2 + h) + s_ac * k_ac / (k_ac + h) + 10.0**-14.0 / h - h
+    )
+    assert base_assay == pytest.approx(expected, rel=1e-9)
+    assert (10.0**-physchem.pK_a_co2_base, 10.0**-physchem.pK_a_ac) == pytest.approx(
+        (k_co2, k_ac)
+    ), "the literals above are the ADM1 base constants; if those moved, this must be re-derived"
 
 
 # ---------------------------------------------------------- truth vs operator log
