@@ -1118,3 +1118,54 @@ Plant A's baseline TAN sits above the range the ruling named.
 
 **Next session should start on** the lead's answers to M2/M3/M4 and to S6-01, then the tool
 registry (§6.2).
+
+---
+
+### Session 2026-09-09 (continued) — the lead's four rulings on S6-01, TAN, the titrimetric convention and the gap
+
+**Done**
+
+- **Ruling 1 — Plant A declares two baselines, and S6-01 bites.** The row was inert:
+  acetoclasts and syntrophic oxidisers compete for one substrate, so Plant A is one or the
+  other, and at its adapted constant it was acetoclastic with the omitted pathway carrying
+  no flux. The contract now declares `adapted` (K_I 0.02, X_ac 1.129, acetate 0.038) and
+  `unadapted` (ADM1 default, X_sao 0.910, acetate 0.240) — both sound digesters, measured —
+  and each scenario names the one its answer key assumes. **S6-04** is new: the same
+  omission on the adapted baseline, scored on **abstention**, so the pair distinguishes a
+  diagnosis from a workflow that always answers "structural". Matrix 114 → **117 cells**.
+  The X_sao feed trace is recorded as **approved**, not flagged.
+- **Ruling 2 — baseline TAN 3.1–3.7 accepted**, the earlier 2.3–2.8 recorded as withdrawn.
+- **Ruling 3 — the titrimetric transfer function is approved in principle and NOT built.**
+  `sim/observation/channels.py` is untouched pending its form and band. What is in force
+  meanwhile is stated in three places rather than left implicit.
+- **Ruling 4 — the gap is a finding, the threshold is percentile-matched.** No kinetic
+  parameter moved. The bistability stays in `docs/vfa_gap.md` and is referenced as a
+  property of the model. The 0.40 threshold is now pinned to the anchor's own 92nd
+  percentile (0.402 / 0.408, n = 861 each), and the 92nd is the *closest* percentile to
+  0.40 of any between the 50th and the 99th — the old guard only required 5–15 % of days
+  above it and would have accepted 0.35 or 0.45 equally.
+- **The overload firing rate is in the generated block**, per-run and pooled as ruling 4
+  requires: **0.14 % of days pooled, no day at all in 23 of 24 sound runs**, 3.31 % in the
+  one that fires, against the plant's 8.25 % and 9.18 %.
+- Benchmark card gains **§5.3, "Two FOS/TAC conventions, and which one each number is in"**.
+- Tests 339 → **342** (330 default + 12 in the `g1` panel, 2 skipped without the SCADA
+  parent). Matrix regenerated from a clean tree: **117 of 117 cells, 117 of 117 sound**,
+  9 min 43 s, every manifest on one clean SHA, 0 visible manifests carrying a redacted
+  field, index 117 lines / 117 unique.
+
+**Flagged to the coordinator, not decided here**
+
+1. The new row is filed as **`S6-04`, not `S6-01b`**: the frozen id pattern `^S\d+-\d{2}$`
+   admits no letter suffix and the id feeds the opaque run-id hash. A one-line schema
+   change plus a rename if the lead wants the literal id.
+2. The unadapted baseline's digestate TAN is **3.5–3.7, not the ruled 3.7–4.3**. The
+   unadapted constant does not raise TAN — it is slightly *lower* than the adapted
+   baseline's — and reaching that band would move Plant A's frozen feed nitrogen. The
+   mechanism the ruling needs is delivered in full by the constant alone.
+3. Two relayed anchor numbers did not reproduce: Dig2 max 0.80 (measured 0.636) and the
+   exceedance fractions 7.78 / 8.59 % (measured 8.25 / 9.18 %), on the same n = 861. The
+   percentiles the ruling turns on agree to the third decimal, so the ruling is unaffected.
+
+**Next session should start on** the titrimetric transfer function once the coordinator
+brings its form and band, the still-open M2/M3/M4 findings, and then the tool registry
+(§6.2).
