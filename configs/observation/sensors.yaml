@@ -57,7 +57,14 @@ conditions:
   #   OLR / mean (design proxy)             0.834    1.860   > design -> 37.20 %
   #   any of the three (OR)                                            -> 47.27 %
   #
-  # 7.92 % against the anchor's own 7.78 % exceedance, with NOTHING TUNED. The other two
+  # THAT TABLE IS THE PRE-M2 MEASUREMENT and is left as measured: all four rows come from
+  # one panel at one code version, and re-measuring only the adopted row would make them
+  # four numbers from two simulators. AFTER the M2 fix of 2026-09-09 (inorganic carbon
+  # paired to the high-strength waste's cations) the ADOPTED trigger fires on 7.70 % of the
+  # same 24 sound Plant B runs. The three rejected candidates were not re-measured; they
+  # lost by factors of 3 to 6, which a 0.2-point shift does not touch.
+  #
+  # 7.70 % against the anchor's own 7.78 % exceedance, with NOTHING TUNED. The other two
   # each overshoot alone and the OR gives 47 %, so they are NOT combined. If a combination
   # is ever wanted the equivalent 7.8 % cut-offs are gas > 1.796x trailing and
   # OLR > 1.871x mean; recorded, not used.

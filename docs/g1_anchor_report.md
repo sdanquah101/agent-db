@@ -1,7 +1,8 @@
 # Gate G1 — anchor comparison report
 
 **Date:** 2026-09-09 (revised after the lead's rulings of 2026-09-03, the remediation
-rulings of 2026-09-04 and the four rulings of 2026-09-09) · **Gate:** G1 (proposal §11) ·
+rulings of 2026-09-04, and the four rulings, the close-out rulings and the M2 ruling of
+2026-09-09) · **Gate:** G1 (proposal §11) ·
 **Status:** infrastructure criterion
 **met**; plant criterion **met** — the Plant B souring that failed the first pass is fixed
 and the acceptance condition is satisfied. **All 22 independent rows are now inside their
@@ -10,11 +11,20 @@ comparison was corrected, with no bound moved and no kinetic parameter touched (
 row (`alkalinity_median`) is calibrated to the anchor and is reported without being counted
 as a match. S6-01 is no longer inert.
 
-**The digester has not changed.** Nothing in the truth model moved under any of these
-rulings: not a kinetic parameter, not a feed value, not a plant geometry. What moved is
-where truth is written, how a *sensor* is realised, which quantity the VFA rows compare
-against the anchor, and what raises the missingness flag. Plant B's pH, gas, alkalinity and
-every influent statistic are the numbers they were on 2026-09-03.
+**No kinetic parameter has been changed at any point**, and no plant geometry. Most of what
+these rulings moved is not the model at all: where truth is written, how a *sensor* is
+realised, which quantity the VFA rows compare against the anchor, and what raises the
+missingness flag.
+
+**One feed value did move, on the lead's M2 ruling of 2026-09-09, and it is not hidden in
+this report** (§3.3). The high-strength waste's inorganic carbon was paired to the strong
+cations ruling 3 had calibrated, because the two descriptions of that stream — the assay a
+workflow reads and the charge the simulator is fed — had drifted 503× apart, and the
+composition as it stood implied a pH of 13. `S_cat` is unchanged, so the strong-ion
+difference reaching the digester is still exactly ruling 3's calibration; alkalinity and pH
+land where ruling 3 put them; the visible consequence is 2.2 points of methane fraction
+traded for CO₂ and a biogas ratio of 1.45 against its 1.5 bound. Everything that moved is
+tabulated in §3.3 and nothing was tuned to compensate.
 
 > **G1.** Simulator generates all scenarios with logged truth, and influent statistics
 > match anchor within declared tolerance. *Fail → fix realism before any workflow work.*
@@ -183,6 +193,12 @@ stated** — never as a bare percentage, and not on the absolute-charge basis, b
 three bases above genuinely differ and a number without its basis cannot be checked. The
 measurement method stays written out here so a later session can reproduce all three.
 
+The **ruled basis is unaffected by the M2 fix below**: it is arithmetic on `S_cat`, which
+that fix did not move. The other two rows are the **pre-M2 measurement** and are labelled
+so rather than silently refreshed — the third one's counterfactual has actually changed
+meaning, because "revert the calibration" now leaves behind the inorganic carbon that was
+paired to it, so re-running it would answer a different question than the one it was asked.
+
 **One difference from the coordinator's own calibration sweep, flagged for checking.** That
 sweep varied `S_cat` *uniformly* across the Muscatine feeds and found +0.05 kmol m⁻³ hits
 alkalinity 5.024 and pH 7.29. This implementation applies the same **+0.05 flow-weighted**
@@ -191,6 +207,87 @@ only the flow-weighted total reaches its digester — but **Plant C differs**, b
 fed the sludges alone: uniform would give it alkalinity 7.77, the split used here gives
 5.85, which is the more defensible figure for a sludge-only municipal digester. Plant C has
 no output anchor, so this is a judgement rather than a fit, and it is recorded as one.
+
+### 3.3 M2: the assay and the fed charge now describe the same stream
+
+The review of 2026-09-04 found that ruling 3's calibration had pulled the high-strength
+waste's two descriptions apart. **The lead ruled on it on 2026-09-09, as an amendment to
+ruling 3**, and this is what was done.
+
+**The defect.** Ruling 3 raised the stream's `S_cat` from 0.03 to 0.225 kmol m⁻³. The
+routine alkalinity assay — the number a *workflow* reads — was the bicarbonate alkalinity of
+`S_IC` alone, which the calibration never touched. So the visible record said
+**0.0214 kg CaCO₃ m⁻³** while the digester was handed **10.75** of cation charge to
+balance: a factor of **503**, on the one stream the plant's whole buffer capacity rests on.
+
+**Part 1 — the assay is computed from the full charge balance.** `total_alkalinity` now
+reports what a titration to the CO₂ end point measures at the stream's own pH — bicarbonate,
+the free acetate the fractionation carries, and water — in the same convention as the
+effluent channel `alkalinity_total`. Its pair, `feed_cation_charge`, is what ADM1's charge
+balance must balance: `S_cat − S_an + [NH₄⁺]`. Electroneutrality makes the two equal when a
+stream's declared pH is consistent with its declared composition, and
+`tests/test_generator.py::test_every_feed_assay_describes_the_charge_the_simulator_is_fed`
+asserts that on **every** catalogue stream within 1.5×, so a future calibration to any feed
+cannot reopen this quietly. Run against the pre-ruling catalogue it fails on two streams and
+names both, which is how it was checked before the fix was applied.
+
+| stream | before | after | what changed |
+|---|---:|---:|---|
+| `high_strength_waste` | **4.00×** (503× against the old assay) | **1.00×** | `S_IC` paired to `S_cat`; declared pH 5.0 → 7.0 |
+| `food_waste` | **0.33×** | **1.00×** | `S_cat` 0.05 → 0.152 kmol m⁻³ (assumed value; the cited pH is kept) |
+| `cattle_slurry` | 1.39× | 1.39× | — |
+| `thickened_was` | 1.35× | 1.35× | — |
+| `primary_sludge` | 1.47× | 1.47× | — |
+| `grass_silage` | 1.16× | 1.16× | — |
+| `fog` | 0 / 0 | 0 / 0 | carries no liquor; the guard's absolute floor |
+
+**Part 2 — the stream had to be a physically possible waste.** The ruling was conditional on
+the implied pH, so it was computed: at the declared composition the high-strength waste's
+own charge balance closes only at **pH 13.04**. 0.205 kmol m⁻³ of net strong-cation charge
+against 0.01 kmol C m⁻³ of inorganic carbon leaves nothing but hydroxide to balance it —
+that is a caustic solution, not a food or beverage waste, so the condition was met and the
+redistribution was made. Ruling 3's caustic is spent neutralising the stream's own acidity
+and arrives as sodium **bi**carbonate, so:
+
+| | before | after |
+|---|---:|---:|
+| `S_cat` | 0.225 kmol m⁻³ | **0.225 — unchanged** |
+| `S_IC` | 0.01 kmol C m⁻³ | **0.1607** |
+| declared pH | 5.0 | **7.0** |
+| implied pH | **13.04** | **7.00** |
+| visible assay | 0.0214 kg CaCO₃ m⁻³ | **10.75** |
+| fed cation charge | 10.75 kg CaCO₃ m⁻³ | **10.75 — unchanged** |
+
+`S_IC` is not fitted: it is the inorganic carbon that closes the stream's charge balance at
+the declared pH. **`S_cat` did not move**, so the strong-ion difference reaching the digester
+is exactly ruling 3's calibration; what changed is that the counter-ion is bicarbonate
+rather than nothing.
+
+**Reconfirmed where ruling 3 put the digester.** On the same twenty-four-seed panel:
+alkalinity **5.125** kg CaCO₃ m⁻³ (ruling 3's target ~5.0; it was 5.12) and median pH
+**7.262** (target ~7.3; it was 7.293). **24 of 24 runs still sound.** Alkalinity barely
+moves because it is set by the strong-ion difference, which was held fixed; the extra
+inorganic carbon leaves as CO₂ instead.
+
+**What moved, measured and not compensated for.** Only Plant B: Plant A is fed slurry and
+silage, Plant C the two sludges, and `food_waste` is fed by no plant at all.
+
+| | before M2 | after M2 | bound | |
+|---|---:|---:|---|---|
+| `biogas_mean` ratio | 1.41 | **1.45** | 0.6 – 1.5 | inside, and **closest to a bound of any row** |
+| `ch4_fraction_median` | 0.722 | **0.700** | no anchor row | the added carbon leaves as CO₂ |
+| `digester_pH_median` | 7.293 | **7.262** | ± 0.4 pH | inside |
+| `alkalinity_median` | 5.12 | **5.125** | ± 35 %, calibrated | inside |
+| `vfa_median` | 0.7753 | **0.7778** | ratio 0.25 – 4 | inside |
+| `fos_tac_median` | 0.1495 | **0.1501** | ratio 0.5 – 2 | inside |
+| missingness trigger, pooled | 7.92 % | **7.70 %** | — | anchor's own 7.78 % |
+| operator overload, pooled | 0.17 % | **0.19 %** | — | 1 of 24 runs either way |
+
+**All 23 rows stayed inside their declared bounds and no tolerance was touched.** The row to
+watch is biogas: 1.45 against an upper bound of 1.5 is the least margin anywhere in this
+report, and it is stated here rather than left for someone to notice. The extra gas is CO₂,
+not methane — the methane fraction falls 0.722 → 0.700 while total gas rises — so it is the
+expected consequence of putting the missing inorganic carbon in, not a new realism problem.
 
 ## 4. The comparison
 
@@ -218,53 +315,53 @@ no output anchor, so this is a judgement rather than a fit, and it is recorded a
 | `vs_fraction_high_strength_waste` | kg VS/kg wet | 0.06548 | 0.06485 | 1.01 | +/- 25 % | pass |
 | `hsw_cod_concentration` | kg COD/m3 | 133.3 | 136.8 | 0.97 | +/- 25 % | pass |
 | `organic_loading_rate` | kg VS/m3/d | 2.131 | 1.885 | 1.13 | +/- 30 % | pass |
-| `biogas_mean` | m3/d per digester at the meter's conditions | 2984 | 2111 | 1.41 | ratio in [0.6, 1.5] | pass |
-| `digester_pH_median` | pH units | 7.293 | 7.27 | 1.00 | +/- 0.4 pH units | pass |
-| `alkalinity_median` | kg CaCO3/m3 | 5.12 | 5.043 | 1.02 | +/- 35 % | calibrated to anchor |
-| `vfa_median` | kg/m3 as acetic acid | 0.7753 | 1.178 | 0.66 | ratio in [0.25, 4] | pass |
-| `fos_tac_median` | - (VFA as acetic over alkalinity as CaCO3) | 0.1495 | 0.2323 | 0.64 | ratio in [0.5, 2] | pass |
+| `biogas_mean` | m3/d per digester at the meter's conditions | 3070 | 2111 | 1.45 | ratio in [0.6, 1.5] | pass |
+| `digester_pH_median` | pH units | 7.262 | 7.27 | 1.00 | +/- 0.4 pH units | pass |
+| `alkalinity_median` | kg CaCO3/m3 | 5.125 | 5.043 | 1.02 | +/- 35 % | calibrated to anchor |
+| `vfa_median` | kg/m3 as acetic acid | 0.7778 | 1.178 | 0.66 | ratio in [0.25, 4] | pass |
+| `fos_tac_median` | - (VFA as acetic over alkalinity as CaCO3) | 0.1501 | 0.2323 | 0.65 | ratio in [0.5, 2] | pass |
 
 **22 of 22 independent rows are inside their declared tolerance.** A further 1 row was calibrated to the very anchor column it is compared against, and is excluded from that count: agreeing with a column you were fitted to is not evidence.
 
 | Generated statistic with no anchor row | Value |
 |---|---:|
-| `ch4_fraction_median` | 0.7223 |
+| `ch4_fraction_median` | 0.6995 |
 | `foaming_day_fraction` | 0 |
 | `fos_tac_exceedance_fraction` | 0 |
-| `fos_tac_true_vfa_median` | 0.01302 |
-| `overload_day_fraction` | 0.07285 |
+| `fos_tac_true_vfa_median` | 0.01275 |
+| `overload_day_fraction` | 0.06954 |
 | `sound_run_fraction` | 1 |
-| `vfa_true_median` | 0.06717 |
+| `vfa_true_median` | 0.06587 |
 | `vs_fraction_fog` | 0.01984 |
 
 ### The output panel, run by run
 
 | Base seed | Verdict | median pH | mean CH4 | titrimetric FOS (kg/m3) | true VFA (kg/m3) | FOS/TAC | trigger days | FOS/TAC > 0.40 days |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
-| 1000 | sound | 7.33 | 0.712 | 0.866 | 0.0879 | 0.150 | 15.23 % | 0.00 % |
-| 1001 | sound | 7.29 | 0.727 | 0.759 | 0.0733 | 0.151 | 11.92 % | 0.00 % |
-| 1002 | sound | 7.32 | 0.725 | 0.821 | 0.0780 | 0.151 | 12.58 % | 0.00 % |
-| 1003 | sound | 7.29 | 0.711 | 0.787 | 0.0826 | 0.152 | 7.95 % | 0.00 % |
-| 1004 | sound | 7.28 | 0.725 | 0.713 | 0.0584 | 0.149 | 3.97 % | 0.00 % |
-| 1005 | sound | 7.24 | 0.718 | 0.664 | 0.0579 | 0.151 | 3.97 % | 0.00 % |
-| 1006 | sound | 7.26 | 0.725 | 0.693 | 0.0543 | 0.149 | 3.31 % | 0.00 % |
-| 1007 | sound | 7.26 | 0.701 | 0.742 | 0.0593 | 0.149 | 5.96 % | 0.00 % |
-| 1008 | sound | 7.27 | 0.707 | 0.735 | 0.0580 | 0.149 | 2.65 % | 0.00 % |
-| 1009 | sound | 7.30 | 0.711 | 0.790 | 0.0628 | 0.148 | 7.28 % | 0.00 % |
-| 1010 | sound | 7.32 | 0.720 | 0.805 | 0.0710 | 0.148 | 7.28 % | 0.00 % |
-| 1011 | sound | 7.37 | 0.730 | 0.855 | 0.0712 | 0.147 | 7.95 % | 0.00 % |
-| 1012 | sound | 7.40 | 0.730 | 0.914 | 0.0740 | 0.146 | 10.60 % | 0.00 % |
-| 1013 | sound | 7.25 | 0.701 | 0.725 | 0.0618 | 0.151 | 11.26 % | 0.00 % |
-| 1014 | sound | 7.30 | 0.723 | 0.746 | 0.0618 | 0.149 | 5.96 % | 0.00 % |
-| 1015 | sound | 7.34 | 0.722 | 0.838 | 0.0835 | 0.150 | 9.27 % | 0.00 % |
-| 1016 | sound | 7.29 | 0.711 | 0.780 | 0.0633 | 0.150 | 10.60 % | 0.00 % |
-| 1017 | sound | 7.32 | 0.731 | 0.771 | 0.0715 | 0.149 | 5.96 % | 0.00 % |
-| 1018 | sound | 7.39 | 0.728 | 0.941 | 0.1001 | 0.150 | 9.27 % | 0.00 % |
-| 1019 | sound | 7.24 | 0.725 | 0.665 | 0.0584 | 0.151 | 6.62 % | 0.00 % |
-| 1020 | sound | 7.29 | 0.705 | 0.798 | 0.0630 | 0.149 | 4.64 % | 0.00 % |
-| 1021 | sound | 7.25 | 0.704 | 0.732 | 0.0543 | 0.149 | 15.89 % | 3.97 % |
-| 1022 | sound | 7.24 | 0.723 | 0.689 | 0.0719 | 0.154 | 5.96 % | 0.00 % |
-| 1023 | sound | 7.36 | 0.723 | 0.891 | 0.0973 | 0.151 | 3.97 % | 0.00 % |
+| 1000 | sound | 7.31 | 0.692 | 0.868 | 0.0855 | 0.150 | 14.57 % | 0.00 % |
+| 1001 | sound | 7.25 | 0.706 | 0.761 | 0.0715 | 0.152 | 11.26 % | 0.00 % |
+| 1002 | sound | 7.29 | 0.702 | 0.824 | 0.0766 | 0.151 | 11.92 % | 0.00 % |
+| 1003 | sound | 7.26 | 0.687 | 0.790 | 0.0805 | 0.152 | 7.28 % | 0.00 % |
+| 1004 | sound | 7.25 | 0.702 | 0.716 | 0.0580 | 0.149 | 3.97 % | 0.00 % |
+| 1005 | sound | 7.21 | 0.699 | 0.666 | 0.0572 | 0.152 | 3.97 % | 0.00 % |
+| 1006 | sound | 7.23 | 0.706 | 0.695 | 0.0539 | 0.150 | 3.31 % | 0.00 % |
+| 1007 | sound | 7.23 | 0.680 | 0.746 | 0.0588 | 0.150 | 5.30 % | 0.00 % |
+| 1008 | sound | 7.24 | 0.685 | 0.739 | 0.0570 | 0.150 | 2.65 % | 0.00 % |
+| 1009 | sound | 7.27 | 0.690 | 0.792 | 0.0621 | 0.149 | 6.62 % | 0.00 % |
+| 1010 | sound | 7.29 | 0.698 | 0.808 | 0.0699 | 0.149 | 7.28 % | 0.00 % |
+| 1011 | sound | 7.33 | 0.706 | 0.859 | 0.0692 | 0.148 | 7.28 % | 0.00 % |
+| 1012 | sound | 7.37 | 0.708 | 0.917 | 0.0721 | 0.147 | 10.60 % | 0.00 % |
+| 1013 | sound | 7.22 | 0.679 | 0.728 | 0.0613 | 0.151 | 11.26 % | 0.00 % |
+| 1014 | sound | 7.26 | 0.699 | 0.752 | 0.0610 | 0.149 | 5.96 % | 0.00 % |
+| 1015 | sound | 7.30 | 0.700 | 0.843 | 0.0817 | 0.150 | 9.93 % | 0.00 % |
+| 1016 | sound | 7.26 | 0.684 | 0.782 | 0.0625 | 0.150 | 10.60 % | 0.00 % |
+| 1017 | sound | 7.29 | 0.712 | 0.774 | 0.0702 | 0.150 | 5.30 % | 0.00 % |
+| 1018 | sound | 7.36 | 0.707 | 0.943 | 0.0967 | 0.150 | 8.61 % | 0.00 % |
+| 1019 | sound | 7.21 | 0.706 | 0.668 | 0.0579 | 0.152 | 6.62 % | 0.00 % |
+| 1020 | sound | 7.26 | 0.682 | 0.801 | 0.0616 | 0.149 | 4.64 % | 0.00 % |
+| 1021 | sound | 7.22 | 0.685 | 0.734 | 0.0536 | 0.149 | 15.89 % | 4.64 % |
+| 1022 | sound | 7.22 | 0.706 | 0.691 | 0.0710 | 0.155 | 5.96 % | 0.00 % |
+| 1023 | sound | 7.33 | 0.703 | 0.893 | 0.0940 | 0.151 | 3.97 % | 0.00 % |
 
 **24 of 24 runs are working digesters.**
 
@@ -272,8 +369,8 @@ no output anchor, so this is a judgement rather than a fit, and it is recorded a
 
 | | what it is | pooled | per-run min | per-run max | runs that fire |
 |---|---|---:|---:|---:|---:|
-| **conditional-missingness trigger** | hidden true VFA > 2.00x its 30-d trailing median | **7.92 %** | 2.65 % | 15.89 % | 24 of 24 |
-| operator-visible overload | titrimetric FOS/TAC > 0.40 | **0.17 %** | 0.00 % | 3.97 % | 1 of 24 |
+| **conditional-missingness trigger** | hidden true VFA > 2.00x its 30-d trailing median | **7.70 %** | 2.65 % | 15.89 % | 24 of 24 |
+| operator-visible overload | titrimetric FOS/TAC > 0.40 | **0.19 %** | 0.00 % | 4.64 % | 1 of 24 |
 
 The anchor's own FOS/TAC exceedance is 8.25 % (Dig1) and 9.18 % (Dig2), and its 92nd percentile is what the 0.40 threshold is matched to. The trigger is not compared with that number: it fires on the hidden state, which no plant column reports.
 
@@ -294,7 +391,7 @@ compares against the anchor's VFA column**.
 | | before 2026-09-09 | now |
 |---|---|---|
 | the anchor's `Dig1-VFA_mgL` | the FOS half of a two-point titration | unchanged |
-| our `vfa_median` | **true VFA**, 0.067 kg m⁻³ | **titrimetric FOS**, 0.775 kg m⁻³ |
+| our `vfa_median` | **true VFA**, 0.066 kg m⁻³ | **titrimetric FOS**, 0.778 kg m⁻³ |
 | ratio to the anchor | 0.06 (a factor of 17.5 out) | **0.66** |
 | our `fos_tac_median` | 0.013 | **0.150** |
 | ratio to the anchor | 0.06 | **0.64** |
@@ -318,7 +415,7 @@ the other.
 
 ### 5.2 The residual gap, pinned
 
-A gap of **1.52×** remains: 0.775 against the anchor's 1.178. It is pinned in both
+A gap of **1.51×** remains: 0.778 against the anchor's 1.178. It is pinned in both
 directions by `tests/test_g1_anchor.py`, exactly as the old failure was, so it can neither
 grow nor be quietly tuned to 1.0.
 
@@ -354,7 +451,7 @@ dynamics (§5.3). Under the lead's ruling B the trigger is
 > **true VFA above 2.00× its own 30-day trailing median**, the window excluding the current
 > day so that an excursion cannot drag its own reference up and mask itself.
 
-Measured across the twenty-four sound runs: it fires on **7.92 % of days pooled**, per-run
+Measured across the twenty-four sound runs: it fires on **7.70 % of days pooled**, per-run
 2.65–15.89 %, **in every one of the 24 runs**. The anchor's own FOS/TAC exceeds its 92nd
 percentile on 8.25 % (Dig1) and 9.18 % (Dig2) of days. Nothing was tuned to reach that
 agreement — 2.00× is the lead's cut-off as written.
@@ -376,7 +473,7 @@ baselines are not the same plant and must not be averaged into one number.
 
 | Plant | baseline | sound | trigger, pooled | per-run range | runs that fire | VFA ratio p92 | operator FOS/TAC > 0.40 |
 |---|---|---|---:|---|---:|---:|---:|
-| **B** | — | 24/24 | **7.92 %** | 2.65 – 15.89 % | 24/24 | 1.989 | 0.17 % |
+| **B** | — | 24/24 | **7.70 %** | 2.65 – 15.89 % | 24/24 | 1.989 | 0.19 % |
 | **C** | — | 24/24 | **9.96 %** | 6.62 – 16.56 % | 24/24 | 2.147 | 0.00 % |
 | **A** | `unadapted` | 24/24 | **2.54 %** | 0.66 – 5.96 % | 24/24 | 1.635 | 0.00 % |
 | **A** | `adapted` | 24/24 | **0.52 %** | 0.00 – 1.99 % | **11/24** | 1.435 | 0.00 % |
@@ -452,7 +549,7 @@ conditional missingness (ruling C). It is percentile-matched to the anchor: the 
 titrimetric FOS/TAC has its 92nd percentile at 0.402 (Dig1) and 0.408 (Dig2), n = 861 each,
 and the 92nd is the closest percentile to 0.40 of any between the 50th and the 99th.
 
-On the panel it fires on **0.17 % of days pooled**, in 1 of 24 runs — far below the plant's
+On the panel it fires on **0.19 % of days pooled**, in 1 of 24 runs — far below the plant's
 8.25 %, because the simulated titrimetric distribution still sits ~1.5× below the plant's
 (§5.2). The threshold is not moved to compensate.
 
@@ -479,9 +576,10 @@ Its central measurement is now recorded **for the paper as a property of the mod
 **No kinetic parameter was touched at any point**, and the declared VFA tolerance was never
 widened. What moved is which quantity the row measures.
 
-### 6.1 What closing the remaining 1.52x would take
+### 6.1 What closing the remaining 1.51x would take
 
-The convention correction took the FOS/TAC gap from 17.5x to **1.52x** with nothing fitted.
+The convention correction took the VFA gap from 17.5x to **1.51x** with nothing fitted (the
+FOS/TAC row's residual is 1.55x, the same story one ratio along).
 This section is about the residual, because a report that stops at "most of it was a
 convention" has not said what the rest is.
 
@@ -499,7 +597,7 @@ of its parameters.
    reason is structural rather than aesthetic: a fitted kappa makes `fos_tac_median` a row
    **calibrated to the very anchor column it is compared against**, which the lead's ruling
    M1 of 2026-09-04 requires be labelled *calibrated to anchor* and **excluded from the
-   anchor-match count**. The benchmark would trade a real 1.52x residual for a row that
+   anchor-match count**. The benchmark would trade a real 1.51x residual for a row that
    agrees by construction and counts for nothing. kappa stays frozen at 1.0.
 2. **Carry the missing species.** A truth-model extension for lactate and the other
    titratable non-VFA acids would close it *through the process* rather than through a
@@ -509,7 +607,7 @@ of its parameters.
 
 **So the residual stays, reported and pinned.** `tests/test_g1_anchor.py` bounds it in both
 directions, exactly as it bounded the 17.5x failure before it, so it can neither grow nor be
-quietly tuned to 1.0. And it is worth keeping in proportion: 1.52x on a titration whose
+quietly tuned to 1.0. And it is worth keeping in proportion: 1.51x on a titration whose
 reading is 90 % carry-over is a far smaller claim than the 17.5x it replaced, and it was
 reached without touching a single parameter of the model.
 

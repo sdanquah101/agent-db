@@ -664,7 +664,7 @@ def condition_flags(
       p92/median 2.06, the titrimetric FOS/TAC's is 1.087.
 
     Measured on 24 sound Plant B runs (3,624 settled digester-days), the adopted trigger
-    fires on 7.92 % of days against the anchor's own 7.78 % — with no tuning. The two
+    fires on 7.70 % of days against the anchor's own 7.78 % — with no tuning. The two
     rejected candidates and their equivalent cut-offs are recorded in ``docs/decisions.md``;
     they are **not** OR-ed in, which would give 47 %.
 

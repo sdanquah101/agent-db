@@ -194,7 +194,18 @@ feeds:
     tkn_tolerance: 0.15          # DESIGN  -
     inert_N_I: 0.0015  # DESIGN  kmol N/kg COD; PR #7 Plant B override: assumed, food-waste inerts (fibre) carry far less N than sludge-derived inerts (BSM2 0.00429)
     s_ic: 0.0                    # DESIGN  kmol C/m3; assumed: acidified feed carries no bicarbonate
-    s_cat: 0.05                  # DESIGN  kmol/m3; assumed: Na+/K+ of food waste
+    s_cat: 0.152                 # DESIGN  kmol/m3; assumed: Na+/K+ of food waste. RAISED from
+                                 # 0.05 by the lead's M2 ruling of 2026-09-09, applied to every
+                                 # catalogue stream. At 0.05 the stream carried 0.152 kmol/m3 of
+                                 # acetate ANION at its cited pH 5.1 and only 0.05 kmol/m3 of
+                                 # net cations to balance it -- the assay read 3.0x the charge
+                                 # the simulator would be fed, the same defect as the HSW's 503x
+                                 # with the sign reversed. The CITED pH is kept (Fisgativa et al.
+                                 # 2016 measured it; the cation content was only ever assumed)
+                                 # and 0.152 kmol/m3 is 3.5 g Na+K per litre, mid-range for food
+                                 # waste and consistent with its 14 g/L of free acetic acid.
+                                 # NO PLANT FEEDS THIS STREAM (Plant A: slurry + silage; B:
+                                 # sludges + HSW + FOG; C: sludges), so nothing generated moves.
     s_an: 0.03                   # DESIGN  kmol/m3; assumed
     s_ca: 0.015                  # DESIGN  kmol/m3; assumed: ~0.6 g Ca/L
   high_strength_waste:
@@ -213,7 +224,16 @@ feeds:
     inert_cod_equivalent: 1.42   # DESIGN  kg COD/kg VS mass; sludge-derived value (lead's freeze: the Muscatine feeds); HSW inerts are biological solids of food-processing origin, taken at the C5H7O2N 1.42
     cod_per_vs_literature: 2.234 # DESIGN  kg COD/kg VS; CHECK, MEASURED: LABS-raw means 137.6 kg COD/m3 / 61.6 kg VS/m3 (Muscatine); the fractionation below derives 2.186 (-2.2 %) at this feed's inert equivalent of 1.42
     cod_per_vs_tolerance: 0.10   # DESIGN  -
-    ph: 5.0                      # DESIGN  pH; assumed: fermenting food-processing waste; not measured at Muscatine
+    ph: 7.0                      # DESIGN  pH; assumed. RAISED from 5.0 by the lead's M2 ruling
+                                 # of 2026-09-09 (amendment to ruling 3). At the declared
+                                 # composition the charge balance of this stream closes only
+                                 # at pH 13.04 -- 0.205 kmol/m3 of net strong-cation charge
+                                 # with 0.01 kmol C/m3 of inorganic carbon leaves nothing but
+                                 # hydroxide to balance it, i.e. a caustic solution, which no
+                                 # food or beverage waste is. Ruling 3's caustic is spent
+                                 # neutralising the stream's own acidity, so it arrives as
+                                 # sodium bicarbonate: cations PAIRED with S_IC below, at a
+                                 # pH a real CIP-buffered industrial waste is delivered at.
     fractionation:               # DESIGN  kg COD/kg COD; ADJUSTED (lead's decision 2026-09-02, answer 1): PR #7's split (ch 0.20 / pr 0.10 / li 0.55 / xi 0.08 / si 0.02 / vfa 0.05) derived only 1.79 kg COD/kg VS, 20 % under the measured 2.23; the lipid COD share is raised to 0.75 (the lead's 0.7-0.75), which by the equivalents is 0.56 of the VS mass, and the carbohydrate, protein and inert shares reduced in proportion, so the derived COD/VS passes the +/- 10 % check against the measured value; composition is not measured at Muscatine
       f_ch: 0.10                 #   assumed (was 0.20)
       f_pr: 0.06                 #   assumed (was 0.10)
@@ -226,7 +246,19 @@ feeds:
     tkn: 0.076                   # DESIGN  kmol N/m3; derived from the fractionation with inert_N_I (not measured at Muscatine; was 0.127 with the old split)
     tkn_tolerance: 0.15          # DESIGN  -
     inert_N_I: 0.0015  # DESIGN  kmol N/kg COD; PR #7 Plant B override (see food_waste)
-    s_ic: 0.01                   # DESIGN  kmol C/m3; assumed
+    s_ic: 0.1607                 # DESIGN  kmol C/m3; PAIRED to s_cat by the lead's M2 ruling
+                                 # of 2026-09-09 (amendment to ruling 3). Was 0.01 (assumed).
+                                 # The value is not fitted: it is the inorganic carbon that
+                                 # balances this stream's cation charge at the declared pH 7.0,
+                                 # i.e. the amount that makes the visible alkalinity assay and
+                                 # the charge the simulator is fed describe the same stream
+                                 # (10.75 kg CaCO3/m3 either way; before the ruling the assay
+                                 # read 0.0214 against the same 10.75, a factor of 503).
+                                 # s_cat is UNCHANGED, so what reaches the digester as strong-ion
+                                 # difference is exactly ruling 3's calibration; what changes is
+                                 # that the counter-ion is now bicarbonate rather than nothing.
+                                 # Enforced by tests/test_generator.py::
+                                 # test_every_feed_assay_describes_the_charge_the_simulator_is_fed
     s_cat: 0.225                 # DESIGN  kmol/m3; CALIBRATED to the anchor's digester
                                  # alkalinity (lead's ruling 3 of 2026-09-03). The Muscatine
                                  # daily file measures alkalinity in the DIGESTER (median

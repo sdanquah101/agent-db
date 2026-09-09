@@ -353,6 +353,15 @@ def test_the_report_says_what_closing_the_gap_would_take():
     reader now needs, each paired with the reason it is required — a single keyword can be
     satisfied by the keyword alone, which is how the section came to be missing while three
     of the four phrases still matched.
+
+    **The quantified-gap phrase moved from 1.52 to 1.51 on 2026-09-09**, and that is the
+    mechanism working rather than being weakened: the M2 fix put inorganic carbon into the
+    high-strength waste, the panel's titrimetric median moved 0.7753 -> 0.7778, and the
+    residual against the anchor's 1.178 moved with it. The pin is meant to force the record
+    to be updated when a number moves; it did, so both the report and this phrase were
+    updated together. Nothing was relaxed — the bound in
+    :func:`test_the_vfa_rows_now_compare_like_with_like_and_the_residual_gap_is_pinned`
+    still holds the residual between 1.25 and 1.85 from the recomputed panel.
     """
     text = REPORT.read_text(encoding="utf-8").lower()
     required = {
@@ -364,7 +373,7 @@ def test_the_report_says_what_closing_the_gap_would_take():
         # and the substance the rewrite made necessary
         "the two conventions are named": "titrimetric",
         "the reading is mostly bicarbonate": "carry-over",
-        "the residual gap is quantified": "1.52",
+        "the residual gap is quantified": "1.51",
         "kinetics are shown not to close it": "bistable",
         "the discipline is stated": "no kinetic parameter",
         "the gap list is cited": "vfa_gap.md",

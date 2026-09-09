@@ -36,9 +36,12 @@ by ``anchor/ingest_muscatine.py`` and ``tests/test_generator.py``):
    record cannot leak it), each with its assay's noise (relative sd, or absolute for pH)
    and turnaround lag, reported with unit and solids basis (:class:`AssayRecord`). TKN
    is the per-feed one (the intentional inert-N mismatch, :mod:`sim.influent.nitrogen`).
-   Alkalinity is the bicarbonate alkalinity of the feed's inorganic carbon at its pH
-   (``50 x S_IC x K_a1 / (K_a1 + 10^-pH)`` kg CaCO3/m3, ``pK_a1`` the ADM1 base value), a
-   stated proxy for a total-alkalinity titration. **Solids vary, the liquor does not:**
+   Alkalinity is the **total** alkalinity of the feed at its own pH, from the full charge
+   balance — bicarbonate, the free acetate the fractionation carries, and water
+   (:func:`total_alkalinity`) — which is the quantity the strong ions the simulator is fed
+   have to balance (:func:`feed_cation_charge`; the lead's M2 ruling, 2026-09-09). It was
+   the bicarbonate term alone until then, which on the high-strength waste read 480x below
+   the charge the digester actually received. **Solids vary, the liquor does not:**
    the per-delivery TS scales the particulate COD and its organic N (and so COD and TKN),
    while the dissolved species per m3 (TAN, inorganic C, strong ions, calcium, pH) stay
    at the catalogue values; the reported TAN/TKN ratio therefore moves with the
@@ -83,7 +86,13 @@ from typing import Annotated, Literal
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from sim.adm1.schema import LIQUID_STATE_NAMES, ADM1Parameters, Influent
+from sim.adm1.physchem import COD_PER_KMOL_AC as COD_PER_KMOL_ACETATE
+from sim.adm1.schema import (
+    LIQUID_STATE_NAMES,
+    ADM1Parameters,
+    Influent,
+    PhysicoChemicalParameters,
+)
 from sim.faults.plan import InfluentFaults
 from sim.influent.fractionation import (
     TrueFractionations,
@@ -113,8 +122,10 @@ __all__ = [
     "PlantGenerator",
     "bicarbonate_alkalinity",
     "check_generator_against_plant",
+    "feed_cation_charge",
     "generate_influent",
     "seasonal_factor",
+    "total_alkalinity",
 ]
 
 _Frac = Annotated[float, Field(ge=0.0, le=1.0)]
@@ -467,9 +478,92 @@ def _delivery_days(model: DeliveryModel, u: np.ndarray, start_weekday: int) -> n
 
 
 def bicarbonate_alkalinity(s_ic: float, ph: float, pK_a1: float) -> float:
-    """Bicarbonate alkalinity of a feed, kg CaCO3/m3, from its inorganic carbon and pH."""
+    """Partial (bicarbonate) alkalinity of a feed, kg CaCO3/m3, from its inorganic carbon and pH.
+
+    What a titration to ~pH 5.75 sees, and **not** the routine alkalinity assay: that is
+    :func:`total_alkalinity`. Kept because partial alkalinity is a real, separately reported
+    quantity (the effluent channels report both) and because it is the bicarbonate term of
+    the total.
+    """
     k_a = 10.0**-pK_a1
     return KG_CACO3_PER_KMOL_HCO3 * s_ic * k_a / (k_a + 10.0**-ph)
+
+
+def total_alkalinity(
+    spec: FeedFractionation,
+    fractionation: CODFractionation,
+    physchem: PhysicoChemicalParameters,
+    ts: float | None = None,
+) -> float:
+    """Total alkalinity of a wet feed at its declared pH, kg CaCO3/m3.
+
+    The proton-accepting capacity a two-point titration to the CO2 end point measures:
+    every weak-base charge present at the feed's own pH, in the same convention as the
+    effluent channel ``alkalinity_total`` (bicarbonate plus the VFA anions,
+    :mod:`sim.observation.channels`)::
+
+        Alk = 50 x ( [HCO3-] + [Ac-] + [OH-] - [H+] )
+
+    **Why this and not the bicarbonate term alone** (the lead's M2 ruling, 2026-09-09, an
+    amendment to ruling 3 of 2026-09-03). The previous assay reported
+    :func:`bicarbonate_alkalinity` of ``s_ic``, which on the high-strength waste read
+    0.0214 kg CaCO3/m3 against the 10.75 kg CaCO3/m3 of cation charge the simulator was
+    actually fed — a factor of 480 between the number a workflow reads and the buffering the
+    digester gets, on the one stream ruling 3 calibrated. An assay and a fed composition that
+    describe the same stream have to be the same quantity, so the assay is now computed from
+    the **full charge balance**: strong ions are what must be balanced, and the weak-acid
+    species are what balance them.
+
+    The pair to it is :func:`feed_cation_charge`. Electroneutrality makes the two equal when
+    a stream's declared pH is consistent with its declared composition, and that identity is
+    the invariant ``tests/test_generator.py`` asserts on **every** catalogue stream — a
+    future calibration that moves a stream's ions without its inorganic carbon reopens M2,
+    and the test is there to fail when it does.
+
+    ADM1 feeds only one free acid (``S_ac``, from the fractionation's VFA share), so acetate
+    is the only organic term; it scales with the delivery's solids, as its COD does, which is
+    why ``ts`` is taken. The dissolved liquor (``s_ic``, ``tan``, the strong ions) stays at
+    the catalogue value, as everywhere else in this module. Constants are the ADM1 base
+    values, not temperature-corrected: a feed assay is run on a cooled grab sample, and
+    ``pK_a`` at ambient is what the laboratory titrates at.
+
+    Args:
+        spec: The catalogue entry.
+        fractionation: The fractionation in force (declared, true, or mislabelled).
+        physchem: ADM1 acid-base constants.
+        ts: Total solids of this delivery, kg TS/kg wet; the catalogue value if omitted.
+
+    Returns:
+        Total alkalinity, kg CaCO3/m3. **May be negative** for an acidic stream carrying no
+        base, which is physically what "no alkalinity, free acid instead" means.
+    """
+    h = 10.0**-spec.ph
+    k_co2 = 10.0**-physchem.pK_a_co2_base
+    k_ac = 10.0**-physchem.pK_a_ac
+    k_w = 10.0**-physchem.pK_w_base
+    s_ac = feed_cod_per_m3(spec, fractionation, ts) * fractionation.f_vfa / COD_PER_KMOL_ACETATE
+    hco3 = spec.s_ic * k_co2 / (k_co2 + h)
+    ac = s_ac * k_ac / (k_ac + h)
+    return KG_CACO3_PER_KMOL_HCO3 * (hco3 + ac + k_w / h - h)
+
+
+def feed_cation_charge(spec: FeedFractionation, physchem: PhysicoChemicalParameters) -> float:
+    """The cation charge of a wet feed that weak bases must balance, kg CaCO3/m3.
+
+    ADM1's charge balance is ``S_cat + S_nh4 + S_H = S_an + S_hco3 + S_vfa- + S_OH``, so the
+    left-hand side less the strong anions is what the simulator hands the digester as
+    buffering demand::
+
+        charge = 50 x ( S_cat - S_an + [NH4+] )
+
+    Ammonium is included because it is a cation in that balance and because a titration to
+    the CO2 end point leaves it protonated, so it is on the same side of the reference as
+    the strong cations. :func:`total_alkalinity` is the quantity it must equal.
+    """
+    h = 10.0**-spec.ph
+    k_in = 10.0**-physchem.pK_a_IN_base
+    nh4 = spec.tan * h / (k_in + h)
+    return KG_CACO3_PER_KMOL_HCO3 * (spec.s_cat - spec.s_an + nh4)
 
 
 def _amount_to_kg(amount: float, unit: str, spec: FeedFractionation) -> float:
@@ -496,8 +590,8 @@ def generate_influent(
         plant: The frozen plant configuration (feed identity and delivery pattern).
         catalogue: The feed-fractionation catalogue.
         config: Generator statistics (``configs/influent/generator.yaml``).
-        params: ADM1 parameters; only ``N_aa`` (assay TKN) and ``pK_a_co2_base``
-            (alkalinity proxy) are read.
+        params: ADM1 parameters; only ``N_aa`` (assay TKN) and the acid-base constants
+            (the total-alkalinity assay) are read.
         seed: Seed of the run's single ``default_rng`` stream.
         n_days: Horizon, d (one influent sample per day).
         start_doy: Day of year of day 0 (seasonal phase), d.
@@ -588,7 +682,7 @@ def generate_influent(
 
     # 7. assays
     n_aa = params.stoichiometry.N_aa
-    pk_a1 = params.physchem.pK_a_co2_base
+    physchem = params.physchem
     records: list[AssayRecord] = []
     for fid in feed_ids:
         g = gen.feeds[fid]
@@ -610,7 +704,7 @@ def generate_influent(
             unit, basis = ASSAY_UNITS[assay]
             for t in np.flatnonzero(sampled):
                 frac_t = _fractionation_at(frac, mislabelled.get(fid), windows, float(t))
-                true_value = _true_assay(assay, spec, frac_t, float(ft.ts[t]), n_aa, pk_a1)
+                true_value = _true_assay(assay, spec, frac_t, float(ft.ts[t]), n_aa, physchem)
                 noisy = true_value * (1.0 + model.cv * z[t]) + model.sd_abs * z[t]
                 records.append(
                     AssayRecord(
@@ -716,7 +810,7 @@ def _true_assay(
     frac: CODFractionation,
     ts: float,
     n_aa: float,
-    pk_a1: float,
+    physchem: PhysicoChemicalParameters,
 ) -> float:
     """The true value of one assay on a delivery with total solids ``ts``."""
     if assay == "ts":
@@ -730,7 +824,7 @@ def _true_assay(
     if assay == "tan":
         return spec.tan
     if assay == "alkalinity":
-        return bicarbonate_alkalinity(spec.s_ic, spec.ph, pk_a1)
+        return total_alkalinity(spec, frac, physchem, ts)
     if assay == "ph":
         return spec.ph
     raise ValueError(f"unknown assay {assay!r}")

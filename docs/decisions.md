@@ -2648,6 +2648,10 @@ work had moved. Corrected, with the correction marked in place rather than silen
 Reported here so they are on the record with the rulings they were found alongside. **Nothing
 in the code or the configuration was changed for any of them.**
 
+> **RULED 2026-09-09** — see "RULING ON M2 (the lead): an AMENDMENT TO RULING 3" at the end
+> of this file. Fixed: the assay is now computed from the full charge balance on every
+> stream, and the HSW's inorganic carbon is paired to its cations. M3 and M4 stay referred.
+
 **M2 — the feed's visible alkalinity assay and its `s_cat` charge disagree by ~490× on the
 high-strength waste.** Independently re-measured here and confirmed: the assay a workflow can
 read is the *bicarbonate* alkalinity of `s_ic` at the feed's pH, 0.0214 kg CaCO₃ m⁻³, while
@@ -3227,3 +3231,124 @@ fixes with an obvious shape, which is exactly why a later session would fix them
 of them change what a scenario tests — M3 is the difference between a Level-2 row that must be
 diagnosed and one that is labelled in its own metadata — so the fix is a design decision, not a
 tidy-up, and it belongs to the lead.
+
+---
+
+## 2026-09-09 — RULING ON M2 (the lead): an AMENDMENT TO RULING 3 of 2026-09-03
+
+**Read this with the ruling-3 entry of 2026-09-03 ("The feed's strong cations are calibrated
+to the anchor's alkalinity"), which it amends.** Ruling 3 raised the high-strength waste's
+`S_cat` from 0.03 to 0.225 kmol m⁻³ to reach the anchor's digester alkalinity. M2 (review
+finding of 2026-09-04) was that this pulled the stream's two descriptions apart: the routine
+alkalinity assay a **workflow** reads was the bicarbonate alkalinity of `S_IC` alone, which
+the calibration never touched, so the visible number said **0.0214 kg CaCO₃ m⁻³** while the
+**simulator** was fed **10.75** of cation charge — a factor of **503** on the one stream the
+plant's entire buffer capacity rests on. This is an **approved change to a frozen config.**
+
+### Part 1 — the assay is computed from the full charge balance, on every stream
+
+**Decision.** The workflow-visible feed alkalinity assay is total alkalinity at the stream's
+own pH, from the full charge balance — strong ions and weak-acid species — for every stream
+in the catalogue, not the bicarbonate alkalinity of `s_ic` alone.
+
+Two paired functions in `sim/influent/generator.py`:
+
+* `total_alkalinity(spec, fractionation, physchem, ts)` — what a titration to the CO₂ end
+  point measures: `50 × ([HCO₃⁻] + [Ac⁻] + [OH⁻] − [H⁺])`, the **same convention as the
+  effluent channel** `alkalinity_total`, so the feed and the digester are described in one
+  unit. Acetate is the only organic term because ADM1 feeds only one free acid (`S_ac`), and
+  it scales with the delivery's solids as its COD does.
+* `feed_cation_charge(spec, physchem)` — what ADM1's charge balance must balance:
+  `50 × (S_cat − S_an + [NH₄⁺])`. Ammonium is in it because it is a cation in that balance
+  and a titration to the CO₂ end point leaves it protonated.
+
+**Electroneutrality makes the two equal exactly when a stream's declared pH is consistent
+with its declared composition.** That is the invariant, and it is what the new test asserts.
+
+**The test** (`tests/test_generator.py::test_every_feed_assay_describes_the_charge_the_simulator_is_fed`)
+covers **every catalogue stream** within 1.5×, names the stream and both numbers on failure,
+and was **checked against the pre-fix catalogue first**: it fails there on two streams,
+`high_strength_waste` at 4.00× and `food_waste` at 0.33× — and at **503×** against the
+pre-ruling *assay*. Every stream, not just the HSW, because the failure was not a mistyped
+number; it was that two descriptions of one stream were free to drift apart with nothing
+comparing them, and a guard watching only the stream that had already broken would let the
+next calibration break a different one.
+
+**What the guard catches, measured, and what it does not.** Perturbing `s_cat` by ±50 % on
+any of the five streams a plant feeds fails it — 10 mutations out of 10, which is the case
+that matters, since `s_cat` is what a calibration moves. Perturbing `s_ic` or the declared
+pH is caught where a stream sits near the edge of the band and **not** where it has slack
+inside it: 1.5× is a band, not an equality. Recorded rather than glossed, because a guard
+described as tighter than it is would be worse than the 1.5× it honestly enforces.
+
+**`food_waste` was fixed too**, since the ruling is on every stream: at 0.05 kmol m⁻³ of
+cations it carried 0.152 kmol m⁻³ of acetate **anion** at its cited pH 5.1 with nothing to
+balance it — the same defect as the HSW's with the sign reversed. `s_cat` → 0.152 (3.5 g
+Na+K per litre, mid-range for food waste, and the only assumed field in that pair; the pH is
+Fisgativa et al. 2016's measurement and is kept). **No plant feeds this stream**, so nothing
+generated moves.
+
+### Part 2 — the HSW stream had to be a physically possible waste
+
+**The ruling was conditional on the implied pH, so it was computed first.** At the declared
+composition the stream's own charge balance closes only at **pH 13.04**: 0.205 kmol m⁻³ of
+net strong-cation charge against 0.01 kmol C m⁻³ of inorganic carbon leaves nothing but
+hydroxide to balance it. That is a caustic solution, not a food or beverage waste, so the
+condition was met and the redistribution was made. Ruling 3's caustic is spent neutralising
+the stream's own acidity and arrives as sodium **bi**carbonate:
+
+| | before | after |
+|---|---:|---:|
+| `S_cat` | 0.225 kmol m⁻³ | **0.225 — unchanged** |
+| `S_IC` | 0.01 kmol C m⁻³ | **0.1607** |
+| declared pH | 5.0 | **7.0** |
+| implied pH | 13.04 | **7.00** |
+| visible assay | 0.0214 kg CaCO₃ m⁻³ | **10.75** |
+| fed cation charge | 10.75 kg CaCO₃ m⁻³ | **10.75 — unchanged** |
+
+`S_IC` is **not fitted**: it is the inorganic carbon that closes the charge balance at the
+declared pH. **`S_cat` did not move**, so the strong-ion difference reaching the digester is
+exactly ruling 3's calibration; the counter-ion is now bicarbonate rather than nothing.
+
+**Reconfirmed where ruling 3 put the digester**, on the same 24-seed panel: alkalinity
+**5.125** kg CaCO₃ m⁻³ (target ~5.0; was 5.12), median pH **7.262** (target ~7.3; was
+7.293), **24 of 24 sound**. Alkalinity barely moves because the strong-ion difference sets
+it and that was held fixed; the extra inorganic carbon leaves as CO₂.
+
+### What moved, measured, with nothing tuned to compensate
+
+Only Plant B — Plant A is fed slurry and silage, Plant C the two sludges, and `food_waste`
+is fed by no plant.
+
+| | before | after | bound |
+|---|---:|---:|---|
+| `biogas_mean` ratio | 1.41 | **1.45** | 0.6–1.5 — **the least margin in the report** |
+| `ch4_fraction_median` | 0.722 | **0.700** | no anchor row |
+| `digester_pH_median` | 7.293 | **7.262** | ± 0.4 pH |
+| `alkalinity_median` | 5.12 | **5.125** | ± 35 %, calibrated |
+| `vfa_median` | 0.7753 | **0.7778** | ratio 0.25–4 |
+| `fos_tac_median` | 0.1495 | **0.1501** | ratio 0.5–2 |
+| residual VFA gap | 1.52× | **1.51×** | pinned 1.25–1.85 |
+| missingness trigger, pooled | 7.92 % | **7.70 %** | anchor's own 7.78 % |
+| operator overload, pooled | 0.17 % | **0.19 %** | 1 of 24 runs either way |
+
+**All 23 rows stayed inside their declared bounds; no tolerance was touched.** The extra gas
+is CO₂ and not methane — total gas up, methane fraction down 2.2 points — which is the
+expected consequence of putting the missing inorganic carbon in. **`biogas_mean` at 1.45
+against 1.5 is flagged to the lead**: it is inside, but it is the least margin anywhere in
+this report and the next thing that raises gas will breach it.
+
+**The trigger table in `configs/observation/sensors.yaml` is left as measured** and labelled
+pre-M2. All four candidate rows came from one panel at one code version; re-measuring only
+the adopted row would leave four numbers from two simulators. The adopted trigger's post-M2
+rate (7.70 %) is stated beside it. The three rejected candidates lost by factors of 3 to 6,
+which a 0.2-point shift does not touch.
+
+**Alternatives.** Report the assay as the strong-ion difference itself (rejected: the test
+would then be an identity and could not fail — the failure mode this whole remediation is
+about); lower `S_cat` instead of raising `S_IC` (rejected: that unpicks ruling 3's
+calibration and the digester would no longer land at the anchor's alkalinity); leave the
+assay alone and document the discrepancy (rejected by the ruling, and it would leave a
+workflow reading a number 503× away from the buffering the digester actually has).
+
+**Still with the lead: M3 and M4**, unchanged.

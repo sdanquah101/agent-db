@@ -320,10 +320,86 @@ def test_seasonal_and_ar1_primitives():
     assert s.max() == pytest.approx(np.exp(0.25)) and np.argmax(s) == 249
     assert s.min() == pytest.approx(np.exp(-0.25), rel=1e-3)
     assert np.all(seasonal_factor(day, 1, 0.0, 0.0) == 1.0)
-    # alkalinity proxy: all bicarbonate far above pK_a1, none far below
+    # partial (bicarbonate) alkalinity: all bicarbonate far above pK_a1, none far below
     assert bicarbonate_alkalinity(0.05, 9.0, 6.35) == pytest.approx(2.5, rel=3e-3)
     assert bicarbonate_alkalinity(0.05, 3.0, 6.35) < 0.01
     assert bicarbonate_alkalinity(0.0, 7.0, 6.35) == 0.0
+
+
+# -------------------------------------------------- the assay describes what is fed
+
+ASSAY_VS_CHARGE_RATIO = 1.5
+"""Widest accepted ratio either way between a stream's alkalinity assay and its cation
+charge (the lead's M2 ruling, 2026-09-09). Not a tuning knob: the two are the same
+quantity by electroneutrality, and the slack is for the declared pH being a rounded
+laboratory number rather than the exact root of the charge balance."""
+
+ASSAY_VS_CHARGE_FLOOR = 0.10
+"""kg CaCO3/m3 below which the ratio is meaningless and an absolute bound is used
+instead. FOG carries no liquor at all -- no inorganic carbon, no ammoniacal N, equal
+strong ions -- so both sides are zero and a ratio would be 0/0. The floor is two
+orders of magnitude below the smallest real stream (primary sludge, 1.36), so it
+cannot quietly admit a stream that has buffering to report."""
+
+
+def test_every_feed_assay_describes_the_charge_the_simulator_is_fed(catalogue, adm1_params):
+    """The visible alkalinity assay and the fed cation charge are the same quantity.
+
+    **This is M2** (review finding of 2026-09-04, ruled 2026-09-09 as an amendment to
+    ruling 3 of 2026-09-03). Ruling 3 raised the high-strength waste's ``s_cat`` from
+    0.03 to 0.225 kmol/m3 to reach the anchor's alkalinity. The assay a workflow reads
+    was the *bicarbonate* alkalinity of ``s_ic`` alone, which that calibration did not
+    touch, so the visible number said 0.0214 kg CaCO3/m3 while the digester was handed
+    10.75 -- a factor of **480** on the one stream the whole plant's buffering rests on.
+
+    **Why it is on every stream, not just the HSW.** The failure was not that someone
+    mis-typed a number; it was that two descriptions of one stream were free to drift
+    apart because nothing compared them. A guard that only watched the stream that had
+    already broken would let the next calibration break a different one silently.
+
+    **Why it cannot pass vacuously.** The two sides are computed by different routes
+    from different fields: the assay from ``s_ic``, the fractionation's VFA share and
+    the declared pH through the acid-base equilibria; the charge from ``s_cat``,
+    ``s_an`` and ``tan``. They agree only because the catalogue is charge-consistent,
+    which is exactly the property being asserted. Run it against the pre-ruling
+    catalogue and it fails on two streams: the high-strength waste at **4.00x**, and
+    ``food_waste`` at **0.33x** in the other direction (more acetate anion than cations
+    to balance it). Against the pre-ruling *assay* -- bicarbonate alone -- the
+    high-strength waste is out by **503x**.
+
+    **What it catches, measured, and what it does not.** Perturbing ``s_cat`` by +/-50 %
+    on any of the five streams a plant actually feeds fails it, 10 mutations out of 10 --
+    which is the case that matters, because ``s_cat`` is what a calibration to an anchor
+    moves and what reopened M2. Perturbing ``s_ic`` or the declared pH is caught on the
+    streams that sit near the edge of the band (primary sludge, thickened WAS, silage)
+    and **not** caught where a stream has slack inside it: this is a 1.5x band, not an
+    equality, so a small move that stays inside it is by design not a failure. Stated
+    rather than glossed, because a guard described as tighter than it is would be worse
+    than the 1.5x it honestly enforces.
+    """
+    from sim.influent.generator import feed_cation_charge, total_alkalinity
+
+    failures = []
+    for name, spec in sorted(catalogue.feeds.items()):
+        assay = total_alkalinity(spec, spec.fractionation, adm1_params.physchem)
+        charge = feed_cation_charge(spec, adm1_params.physchem)
+        if max(abs(assay), abs(charge)) < ASSAY_VS_CHARGE_FLOOR:
+            continue
+        if assay <= 0.0:
+            failures.append(
+                f"{name}: assay {assay:.4f} kg CaCO3/m3 is not positive while the "
+                f"simulator is fed {charge:.4f} kg CaCO3/m3 of cation charge"
+            )
+            continue
+        ratio = charge / assay
+        if not (1.0 / ASSAY_VS_CHARGE_RATIO <= ratio <= ASSAY_VS_CHARGE_RATIO):
+            failures.append(
+                f"{name}: assay {assay:.4f} kg CaCO3/m3 against charge "
+                f"{charge:.4f} kg CaCO3/m3 -- {ratio:.2f}x, outside "
+                f"{ASSAY_VS_CHARGE_RATIO:.1f}x (pH {spec.ph}, s_ic {spec.s_ic}, "
+                f"s_cat {spec.s_cat}, s_an {spec.s_an}, tan {spec.tan})"
+            )
+    assert not failures, "assay and fed charge disagree:\n  " + "\n  ".join(failures)
 
 
 # ---------------------------------------------------------- truth vs operator log

@@ -1294,3 +1294,61 @@ entry was written. Not merged, not tagged, no session spawned.
 
 **Next session should start on** the tool registry (§6.2), once the review comes back and the
 merge lands.
+
+---
+
+### Session 2026-09-09 (M2) — the assay and the fed charge now describe the same stream
+
+**The lead ruled on M2** as an amendment to ruling 3 of 2026-09-03, and as an approved change
+to a frozen config. Sequence set by the lead: the coordinator's fresh-context review verdict,
+then this fix, then the matrix regeneration at the final head, then the merge and the tag.
+The merge and the tag are the coordinator's; this session does neither.
+
+**Done**
+
+- **Part 1 — the feed alkalinity assay is computed from the full charge balance**, on every
+  catalogue stream. `total_alkalinity` reports what a titration to the CO₂ end point measures
+  at the stream's own pH — bicarbonate, free acetate, water — in the **same convention as the
+  effluent channel** `alkalinity_total`. Its pair `feed_cation_charge` is what ADM1's charge
+  balance must balance, `S_cat − S_an + [NH₄⁺]`. Electroneutrality makes the two equal exactly
+  when a stream's declared pH is consistent with its composition.
+- **The guard covers every stream**, names the stream and both numbers on failure, and was
+  **checked against the pre-fix catalogue first**: it fails there on `high_strength_waste`
+  (4.00×, and 503× against the pre-ruling assay) and on `food_waste` (0.33×, the same defect
+  with the sign reversed). Mutation-measured: 10 of 10 ±50 % `s_cat` perturbations on the five
+  fed streams fail it; `s_ic` and pH perturbations are caught only near the band edge, and
+  that limit is written into the test rather than glossed.
+- **Part 2 — the HSW's implied pH was 13.04**, so the ruling's condition was met and the
+  redistribution was made: `S_IC` 0.01 → **0.1607** kmol C m⁻³, declared pH 5.0 → **7.0**,
+  **`S_cat` unchanged at 0.225**. `S_IC` is not fitted — it is the carbon that closes the
+  charge balance at the declared pH. The visible assay goes 0.0214 → **10.75**, meeting the
+  fed charge of 10.75 exactly.
+- **Reconfirmed where ruling 3 put the digester**: alkalinity **5.125** (target ~5.0), median
+  pH **7.262** (target ~7.3), **24 of 24 sound**. Alkalinity barely moves because the
+  strong-ion difference sets it and that was held fixed.
+- **`food_waste` fixed too** (`s_cat` 0.05 → 0.152, the assumed field; the cited pH kept). No
+  plant feeds it, so nothing generated moves.
+- **What moved, measured, nothing tuned to compensate** — Plant B only: biogas ratio
+  1.41 → **1.45**, CH₄ fraction 0.722 → **0.700**, pH 7.293 → **7.262**, alkalinity
+  5.12 → **5.125**, `vfa_median` 0.7753 → **0.7778**, `fos_tac_median` 0.1495 → **0.1501**,
+  residual gap 1.52× → **1.51×**, trigger 7.92 % → **7.70 %**, operator overload
+  0.17 % → **0.19 %**. **All 23 rows stayed inside their declared bounds and no tolerance was
+  touched.** The report, the benchmark card, the sensor config and the channel docstring were
+  updated to the new numbers rather than left stale.
+
+**Flagged to the lead**
+
+- **`biogas_mean` is now 1.45 against an upper bound of 1.5** — inside, but the least margin
+  anywhere in the report, and the next thing that raises gas will breach it. The extra gas is
+  CO₂, not methane, which is the expected consequence of putting the missing inorganic carbon
+  in.
+- Three catalogue streams sit at 1.35–1.47× inside the 1.5× band (`thickened_was`,
+  `cattle_slurry`, `primary_sludge`). They pass as they stand and were **not** touched: their
+  pH values carry sources, and moving a frozen config value that passes is the lead's call,
+  not this session's.
+
+**Still open**: M3 and M4, unchanged and with the lead. The two relayed anchor numbers that
+did not reproduce. Plants B and C still need a declared design organic loading rate.
+
+**Next**: the matrix regeneration at the final head once the review clears, then the tool
+registry (§6.2) in a later session.
