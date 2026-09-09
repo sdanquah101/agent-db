@@ -1067,8 +1067,10 @@ previous session left them, and no generated number moved.
 - **M1 — the alkalinity row is a calibration, not a match.** Labelled *calibrated to
   anchor*, excluded from the anchor-match count (now stated in the report: 20 of 22
   independent rows), rationale corrected, and the pH-corroboration claim withdrawn. Recorded
-  as a finding: the high-strength waste supplies 78 / 91 / 86 % of the buffering on three
-  different bases — the ruling's ~95 % is not reproduced on any of them.
+  as a finding: the high-strength waste supplies **91 % of the `S_cat` increment the
+  calibration added** — the basis the lead ruled this is reported on (2026-09-09), stated
+  wherever the number appears. The other two bases (78 % of absolute cation charge, 86 % of
+  the alkalinity produced) stay in the report as the measurement record.
 - **M7 — the gap list is merged**, which also brings the branch up to `main` (PR #13's
   offline SCADA anchor and PR #14's historian dropout).
 - **M5** golden pins on the seed derivation and the run ids; **M6** two determinism
@@ -1239,3 +1241,56 @@ be invented in the meantime.
 
 **Next session should start on** the lead's answers to the flagged items, then the tool
 registry (§6.2).
+
+---
+
+### Session 2026-09-09 (close-out) — the lead's remaining rulings; G1 PASSES CONDITIONALLY
+
+**Status: G1 passes conditionally.** The lead's close-out is under way; the merge waits on an
+independent fresh-context engineering review of the branch, which was still running when this
+entry was written. Not merged, not tagged, no session spawned.
+
+**Done**
+
+- **The unadapted baseline's TAN is settled.** 3.5–3.7 kg N/m³ **accepted as measured**; the
+  earlier 3.7–4.3 **withdrawn**. `configs/plants/plant_A.yaml`'s `source:` note no longer
+  reads `FLAGGED ... with the coordinator` — it records the ruling, so the log and the plant
+  contract stop disagreeing. Same disposition, and same reason, as the adapted baseline's
+  3.1–3.7 earlier the same day. No code change.
+- **The HSW buffering share is reported on one declared basis: 91 % of the `S_cat` increment
+  the calibration added**, with the basis stated in the sentence carrying the number, in the
+  report, this file and the decisions log. Not the absolute-charge 78 %, and never a bare
+  percentage — the three bases genuinely disagree and a percentage without its basis cannot
+  be checked. The three-basis table stays as the measurement record.
+- **The pathway effect is written up as a finding**, not a table row: `docs/g1_anchor_report.md`
+  §5.4 now carries a controlled within-plant comparison. Same geometry, feed, schedule, seeds
+  and 2.00× cut-off; one declared difference (`K_I_nh3`, and so which community carries the
+  acetate flux). **2.54 % of days in 24/24 runs against 0.52 % in 11/24 — 4.9×.** Because the
+  trigger measures a *relative* excursion, this is not the SAO baseline sitting at a higher
+  VFA level: the same load fluctuations move the residual acetate pool further relative to
+  where it has been when it drains through the slower syntrophic route. It also means the
+  S6-01 / S6-04 pair differs in the observable record and not only in the answer key.
+- **§7 of the report states which commit the shipped manifests carry**: the final
+  **branch-head** SHA, not the merge commit, with the reason (the merge commit does not exist
+  until after the merge, and regenerating afterwards means regenerating on `main`) and the one
+  condition under which the record goes stale.
+- **The matrix is regenerated at the final head as the last action before the merge**, so
+  every manifest's `git_sha` is the code that produced it.
+- **M2, M3 and M4 stay referred and unchanged**, recorded as a decision so a later session
+  does not fix them on sight: M3 in particular is a design question (whether a Level-2 row is
+  labelled in its own metadata), not a tidy-up.
+- **Nothing further on H1**: the closure residual is accepted as stated.
+
+**Still open**
+
+- **M2** (the 480× between the HSW's visible alkalinity assay and its fed cation charge) — the
+  decisions entry is with the lead verbatim; they rule after reading it. **M3** and **M4**
+  likewise. Change nothing.
+- The two relayed anchor numbers that did not reproduce (Dig2 max 0.636 not 0.80; exceedance
+  8.25 / 9.18 % not 7.78 / 8.59 %). Every percentile the rulings turn on agrees to the third
+  decimal, so no ruling is affected.
+- **Plants B and C still need a declared design organic loading rate**, for the next session
+  that touches the plant configs. Nothing depends on it and none is to be invented.
+
+**Next session should start on** the tool registry (§6.2), once the review comes back and the
+merge lands.

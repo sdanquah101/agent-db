@@ -2590,6 +2590,10 @@ resolved here. Two consequences are for the lead: Plant C is fed the sludges alo
 inherits only the 15 % share and its alkalinity has no anchor behind it at all; and a Level-3
 fault that alters the high-strength waste moves the digester's whole buffer capacity.
 
+> **Settled 2026-09-09** — see "RULING: the HSW buffering share is reported on the
+> `S_cat`-increment basis" below. The share is **91 % on the `S_cat`-increment basis**, and
+> the basis is stated wherever the number appears. The ~95 % is superseded.
+
 ---
 
 ## 2026-09-04 — RULING M7 (the lead): the gap list is merged, and the branch is caught up
@@ -2734,6 +2738,9 @@ population at exactly zero can never return however favourable conditions become
    causal mechanism the ruling needs (an SAO-dominated steady state) is delivered in full by
    the unadapted constant alone, and both bands sit inside Tisocco et al. 2024's published
    2.3–4.3.
+
+   > **Settled 2026-09-09** — the measured 3.5–3.7 is **accepted** and the 3.7–4.3 is
+   > **withdrawn**; see the close-out entry below. This is no longer a departure.
 
 **Alternatives.** Set the adapted `K_I` to the ~0.003 exchange point so both pathways are
 live (rejected: outside the ruled range and structurally fragile — it is the knife edge of a
@@ -3079,3 +3086,144 @@ fixed, not the test**: §6.1 is that section. The four original phrases are kept
 seven more, each paired with the reason it is required — a single keyword can be satisfied by
 the keyword alone, which is how the section came to be missing while three of the four still
 matched.
+---
+
+## 2026-09-09 — CLOSE-OUT RULING (the lead): the unadapted baseline's TAN of 3.5–3.7 is accepted
+
+**Decision.** The measured digestate TAN of the `unadapted` baseline, **3.5–3.7 kg N/m³, is
+ACCEPTED as measured**. The lead's earlier **3.7–4.3 is WITHDRAWN**. This is the same
+disposition as ruling 2 of 2026-09-09 for the adapted baseline (3.1–3.7 accepted, 2.3–2.8
+withdrawn), and for the same reason.
+
+**Nothing changes in code.** `configs/plants/plant_A.yaml` already carries the measured band
+(median 3.605, p10 3.505, p90 3.689); what changes is that the `source:` note no longer reads
+`FLAGGED ... with the coordinator` but records the ruling. The entry exists so the ruling and
+the plant contract stop disagreeing — **a withdrawn number that is not recorded as withdrawn
+is a trap for the next session**, which would find the config outside a range this log still
+asserted and "fix" the config, moving Plant A's frozen feed nitrogen to chase a number no one
+is asking for any more.
+
+**Why the band could not have been reached.** The unadapted variant is the ADM1/BSM2 default
+`K_I_nh3`. It changes which community carries the acetate flux; it adds no nitrogen. The
+measured TAN is *slightly lower* than the adapted baseline's 3.695, not higher. Reaching
+3.7–4.3 would have required moving the feed nitrogen, which is frozen. Both bands sit inside
+Tisocco et al. 2024's published 2.3–4.3, so the plant remains evidenced.
+
+**Alternatives.** Raise the feed nitrogen to land the band (rejected: changes a frozen design
+value to satisfy a number, and would move the adapted baseline too); carry the discrepancy as
+a permanent flag (rejected by this ruling: a flag no one intends to act on is noise).
+
+---
+
+## 2026-09-09 — RULING (the lead): the HSW buffering share is reported on the `S_cat`-increment basis
+
+**Decision.** The high-strength waste's share of Plant B's buffering is reported as **91 % on
+the `S_cat`-increment basis, with the basis stated in the sentence that carries the number**.
+Not on the absolute-charge basis, and **never as a bare percentage**. The lead's earlier
+~95 % is superseded.
+
+**Why the basis is the ruling.** Three defensible bases were measured and they genuinely
+disagree — 78 % of the blend's net strong-cation excess, 91 % of the `S_cat` increment the
+calibration added, 86 % of the digester alkalinity that increment produced. They answer three
+different questions ("how much of the charge is this stream's", "how much of what we *changed*
+was this stream's", "how much of the resulting buffer"), and a percentage quoted without its
+basis cannot be checked, reproduced, or argued with. The ruled basis is the one that describes
+what the calibration did, which is the claim the finding is actually making.
+
+**Applied in** `docs/g1_anchor_report.md` §3.2: the headline sentence now names the basis, the
+ruled row of the three-basis table is marked as the ruled basis, and the Plant C consequence is
+restated on the same basis (9 % of the increment, 15 % of the alkalinity). The three-basis
+table stays: it is the measurement record, and it is what makes the ruled number checkable.
+
+**Alternatives.** Report the absolute-charge 78 % (rejected by the ruling); report all three
+every time (rejected: the finding needs one number to be a finding); drop the other two
+(rejected: without them the 91 % cannot be reproduced or challenged).
+
+---
+
+## 2026-09-09 — FINDING (ruled to be recorded as one): the methanogenic pathway drives VFA excursions, not only the feed pattern
+
+**Recorded on the lead's instruction** that this is a result about the model rather than a row
+in a panel table, and that a benchmark exists to surface exactly this kind of thing. Written
+up in `docs/g1_anchor_report.md` §5.4.
+
+**The controlled comparison.** Plant A's two baselines share geometry, feed streams, delivery
+schedule, seeds and the 2.00× cut-off. They differ in one declared property — `K_I_nh3`, and
+so which community carries the acetate flux. 24 clean Level-0 seeds each:
+
+| | `unadapted` (SAO) | `adapted` (acetoclastic) |
+|---|---:|---:|
+| hidden-state trigger, pooled days | **2.54 %** | **0.52 %** |
+| per-run range | 0.66 – 5.96 % | 0.00 – 1.99 % |
+| runs in which it fires at all | 24 / 24 | 11 / 24 |
+| VFA ratio, 92nd percentile | 1.635 | 1.435 |
+
+**4.9× on the pooled rate, and it fires in every run rather than 11 of 24.**
+
+**What it says.** The trigger is a *relative* excursion measure — true VFA against its own
+30-day trailing median — so this is not the SAO baseline sitting at a higher VFA level. The
+same load fluctuations move the residual acetate pool further, relative to where it has been,
+when that pool drains through syntrophic oxidation: SAO is the slower route, the perturbation
+takes longer to relax, and a trailing median that absorbed it on the acetoclastic baseline no
+longer does. Cross-plant, the feed pattern is the larger effect (B and C take trucked batches
+and sit 3–4× above both Plant A rows), but **neither explanation alone accounts for the
+spread**, and only this within-plant pair isolates the pathway.
+
+**Why it exists to be found at all.** It came in as an apparent defect — Plant A fires far
+below the anchor — and the obvious repair is a per-plant cut-off. The lead's ruling forbids
+that: *differences between plants are expected and are to be recorded, not tuned away*. A
+per-plant cut-off would have set both Plant A rows to ~8 % by construction and destroyed the
+comparison. The ruling is what made the finding possible, and that is worth recording next to
+the finding.
+
+**Consequences.** A workflow that reads VFA variability as evidence about the *feed* will
+misread this plant, and the correct inference is available in the record because both
+baselines run the same feed. For Level 6 it means the S6-01 / S6-04 pair differs in the
+observable record and not only in the answer key, so the abstention row is not asking a
+workflow to separate two identical datasets.
+
+---
+
+## 2026-09-09 — RULING (the lead): the matrix is regenerated at the final branch head, last
+
+**Decision.** The §7 matrix is regenerated as the **last action before the merge**, so every
+`manifest.json` carries the `git_sha` of the code that actually produced it. **Not** earlier
+followed by further commits — that is precisely what the ruling rules out, and it is what
+happened twice on this branch before (the first two regenerations produced `-dirty` SHAs, and
+a later one was overtaken by two more commits).
+
+**The nuance, stated in the report rather than left to be discovered.** The manifests carry
+the final **branch-head** SHA, not the merge-commit SHA. The merge commit does not exist until
+after the merge, and regenerating after the merge would mean regenerating on `main` — a
+different tree from the one the branch was reviewed on. `docs/g1_anchor_report.md` §7 says so
+explicitly, including what a later session should do to reproduce a cell (check out that SHA
+directly) and the one condition under which the record goes stale (`main` moving under `sim/`,
+`configs/` or `scenarios/` between the regeneration and the merge).
+
+**Alternatives.** Regenerate on `main` after the merge (rejected: it is no longer the reviewed
+tree, and it puts a generation step after the gate); record the merge SHA by hand in the
+manifests (rejected: a manifest field that is not what the generator observed is a lie in the
+provenance record, which is the one place that cannot afford one); leave the earlier
+regeneration in place (rejected by the ruling).
+
+---
+
+## 2026-09-09 — M2, M3 and M4 stay referred: change nothing
+
+**Decision (coordinator, relaying the lead's instruction).** The three findings referred on
+2026-09-04 and 2026-09-09 stay on the record **exactly as they are** while the lead reads
+them. **No code, config or scenario change for any of them in this branch.**
+
+1. **M2** — the factor of 480 between the HSW's visible bicarbonate-alkalinity assay
+   (0.0214 kg CaCO₃/m³) and the net strong-cation charge the simulator feeds (10.26). The
+   decisions entry has been sent to the lead verbatim; they rule after reading it.
+2. **M3** — `observations/sensors.json` flags the methane analyser `flatlined` on exactly the
+   samples the Level-2 fault injected, so the flag labels the row.
+3. **M4** — the adversarial Level-8 note is the only entry authored by a `process_engineer`,
+   so the author field alone identifies it without reading it.
+
+**Why this is recorded as a decision rather than left implicit.** M3 and M4 are both one-line
+fixes with an obvious shape, which is exactly why a later session would fix them on sight. Two
+of them change what a scenario tests — M3 is the difference between a Level-2 row that must be
+diagnosed and one that is labelled in its own metadata — so the fix is a design decision, not a
+tidy-up, and it belongs to the lead.

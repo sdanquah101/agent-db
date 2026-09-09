@@ -114,7 +114,7 @@ baselines:
       p10: 3.505
       p90: 3.689
       unit: "kg N/m3"
-      source: "measured as above. FLAGGED: the ruling named 3.7-4.3 for this variant; the unadapted constant does not raise TAN (it is slightly LOWER than the adapted baseline's, because the pathway change does not add nitrogen), and reaching 3.7-4.3 would need the frozen Plant A feed nitrogen to move. Not done; with the coordinator."
+      source: "measured as above. RULED 2026-09-09: the measured 3.5-3.7 is ACCEPTED and the lead's earlier 3.7-4.3 for this variant is WITHDRAWN, so ruling and plant contract now agree. The unadapted constant does not raise TAN -- it is slightly LOWER than the adapted baseline's, because the pathway change does not add nitrogen -- and reaching 3.7-4.3 would have needed the frozen Plant A feed nitrogen to move. Still inside Tisocco et al. 2024's published 2.3-4.3."
 feeds:
   - name: cattle_slurry
     kind: slurry

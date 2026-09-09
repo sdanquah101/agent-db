@@ -155,28 +155,33 @@ clean-in-place caustic is the usual source of alkalinity in food and beverage in
 waste and that this stream carries 137 kg COD m⁻³. **Inert-N was left alone**: S_cat alone
 reaches the anchor, and inert-N carries the deliberate truth/fitted mismatch of 2026-09-02.
 
-**Finding: one stream now supplies almost all of the digester's buffering.** The
-calibration is flow-weighted, but the weight it puts on the industrial stream is extreme,
-and that is a property of the plant model worth stating rather than a consequence to be
-inherited quietly. Measured three ways (Plant B, base seed 1000, 180 d, settled from d 30):
+**Finding: the high-strength waste supplies 91 % of the `S_cat` increment this calibration
+added.** That is the basis the lead ruled this share is reported on (2026-09-09), and the
+basis is stated wherever the number appears: 91 % is a share of the *increment*, not of the
+blend's absolute cation charge, and the two are different quantities that happen to be
+percentages. The calibration is flow-weighted, but the weight it puts on the industrial
+stream is extreme, and that is a property of the plant model worth stating rather than a
+consequence to be inherited quietly. Measured three ways (Plant B, base seed 1000, 180 d,
+settled from d 30), with the ruled basis in bold:
 
 | Basis | High-strength waste | The two sludges | FOG |
 |---|---:|---:|---:|
-| share of the blend's net strong-cation excess (flow-weighted, medians of §4) | **78 %** | 22 % | 0 % |
-| share of the `S_cat` **increment** the calibration added | **91 %** | 9 % | 0 % |
-| share of the digester alkalinity the calibration added (5.63 with, 3.65 without any of it) | **86 %** (5.63 → 3.92 when HSW alone is reverted) | 15 % (5.63 → 5.34) | 0 % |
+| share of the blend's net strong-cation excess (flow-weighted, medians of §4) | 78 % | 22 % | 0 % |
+| **share of the `S_cat` increment the calibration added** — *the ruled basis* | **91 %** | 9 % | 0 % |
+| share of the digester alkalinity the calibration added (5.63 with, 3.65 without any of it) | 86 % (5.63 → 3.92 when HSW alone is reverted) | 15 % (5.63 → 5.34) | 0 % |
 
 So the anchor's alkalinity column is, in this model, very nearly a measurement of one
 trucked industrial stream's caustic load. Two consequences follow and are for the lead:
-**Plant C is fed the sludges alone**, so it inherits only the 15 % share and its alkalinity
-is an assumption with no anchor behind it at all; and a Level-3 fault that alters the
-high-strength waste moves the digester's whole buffer capacity, which may make those rows
-easier than intended.
+**Plant C is fed the sludges alone**, so it inherits only the 9 % share of the increment
+(15 % of the alkalinity the calibration added) and its alkalinity is an assumption with no
+anchor behind it at all; and a Level-3 fault that alters the high-strength waste moves the
+digester's whole buffer capacity, which may make those rows easier than intended.
 
-**The ruling states this share as ~95 %.** The three bases above give 78 %, 91 % and 86 %,
-and none of them reproduces 95 %; the closest is the share of the `S_cat` increment. The
-measurement method is written out above so the basis can be settled rather than argued.
-Reported, not resolved here.
+**Ruled 2026-09-09.** The lead's earlier statement of this share as ~95 % is superseded by
+the ruling that it is reported **on the `S_cat`-increment basis, 91 %, with the basis
+stated** — never as a bare percentage, and not on the absolute-charge basis, because the
+three bases above genuinely differ and a number without its basis cannot be checked. The
+measurement method stays written out here so a later session can reproduce all three.
 
 **One difference from the coordinator's own calibration sweep, flagged for checking.** That
 sweep varied `S_cat` *uniformly* across the Muscatine feeds and found +0.05 kmol m⁻³ hits
@@ -386,12 +391,51 @@ per-plant cut-off and 2.00× stands on all four rows).
 * **The feed pattern.** B and C take high-strength waste and FOG in **trucked batches**, so
   load and residual VFA are spiky. Plant A is fed steadily on slurry and silage. This is the
   larger effect: even Plant A's spikier baseline sits 3–4× below B and C.
-* **The pathway, and this is new.** Within Plant A, on the *same* feed pattern, the
-  `unadapted` (SAO-dominated) baseline fires at **2.54 %** against `adapted`'s **0.52 %** —
-  nearly five times as often, and in **every** run rather than 11 of 24. Its VFA ratio p92 is
-  1.635 against 1.435. So the excursions are not only a feed property: routing the acetate
-  flux through syntrophic oxidation, which turns over more slowly, makes the digester's
-  residual VFA genuinely more mobile. Neither explanation alone accounts for the spread.
+* **The pathway.** Within Plant A, on the *same* feed pattern, the `unadapted`
+  (SAO-dominated) baseline fires nearly five times as often as `adapted`. Neither
+  explanation alone accounts for the spread. This one is a result about the model rather
+  than a property of the panel, so it is written up on its own below.
+
+#### Finding — the methanogenic pathway, not only the feed pattern, drives VFA excursions
+
+**The comparison is controlled.** Plant A's two baselines are the same geometry, the same
+feed streams, the same delivery schedule, the same seeds and the same 2.00× cut-off. They
+differ in **one declared property**: `K_I_nh3`, and therefore which community carries the
+acetate flux — acetoclastic (`adapted`, X_ac 1.129, X_sao 6.9e-05) or syntrophic acetate
+oxidation (`unadapted`, X_sao 0.910, X_ac 9.9e-05). Everything that would otherwise explain
+a difference in VFA excursions is held fixed by construction.
+
+| Plant A, 24 seeds each | `unadapted` (SAO) | `adapted` (acetoclastic) | ratio |
+|---|---:|---:|---:|
+| trigger fires, pooled days | **2.54 %** | **0.52 %** | **4.9×** |
+| per-run range | 0.66 – 5.96 % | 0.00 – 1.99 % | |
+| runs in which it fires at all | **24 / 24** | **11 / 24** | |
+| VFA ratio, 92nd percentile | 1.635 | 1.435 | |
+| digestate TAN, median (kg N/m³) | 3.605 | 3.695 | 0.98× |
+
+**What it means.** The trigger measures how far true VFA departs from its own recent
+median — a *relative* excursion, so it is not reporting that the SAO baseline simply sits at
+a higher VFA level. It is reporting that the same load fluctuations move the residual
+acetate pool **further, relative to where it has been**, when that pool is drained through
+syntrophic oxidation. The mechanism is the turnover rate: SAO is the slower route, so the
+same perturbation takes longer to relax, and a 30-day trailing median that would have
+absorbed it on the acetoclastic baseline no longer does. The two baselines are also
+distinguishable *only* dynamically — the TAN medians differ by 2 % and both digesters are
+sound — which is the same reason S6-01 and S6-04 are a pair rather than a duplicate.
+
+**Why it is recorded rather than tuned.** It arrived as an apparent problem: Plant A fires
+the flag far below the anchor, so the obvious move is a per-plant cut-off that brings it
+into line. The lead's ruling forbids that (differences between plants are recorded, not
+tuned away), and holding the cut-off fixed is what made the comparison say something —
+a per-plant cut-off would have set both Plant A rows to ~8 % by construction and destroyed
+exactly the signal in this table.
+
+**Two consequences.** For the benchmark: a workflow that reads VFA variability as evidence
+about the *feed* will misread this plant, and the correct inference — that the pathway is
+what changed — is available in the record because the two baselines run the same feed.
+For Level 6: it means the S6-01 / S6-04 pair differs in the observable record and not only
+in the answer key, so the abstention row is not asking a workflow to distinguish two
+identical datasets.
 
 **The consequence, stated so the low numbers are not misread as a defect in the ladder.**
 Conditional missingness is close to inert on Plant A's adapted baseline — well under 1 % of
@@ -479,4 +523,21 @@ reached without touching a single parameter of the model.
 | Test that recomputes it | `tests/test_g1_anchor.py` |
 | Influent draw | seed 7, 730 d, Plant B |
 | Output panel | base seeds 1000–1023 (24 runs), 180 d, Plant B, clean Level-0 |
-| Related decisions | `docs/decisions.md`, entries of 2026-09-03 and 2026-09-04 |
+| Related decisions | `docs/decisions.md`, entries of 2026-09-03, 2026-09-04 and 2026-09-09 |
+
+### Which commit the shipped manifests carry
+
+The §7 matrix is regenerated as the **last action before the merge**, so that every
+`manifest.json` records the version of the code that actually produced it (lead's ruling,
+2026-09-09). One consequence has to be stated rather than left to be discovered:
+
+> **The `git_sha` in every manifest is the final BRANCH-HEAD commit of this pull request,
+> not the merge commit.** The merge commit does not exist until after the merge, and
+> regenerating after the merge would mean regenerating on `main` — a different tree from the
+> one the branch was reviewed on.
+
+The named SHA is an honest record of the code that ran — it is the tree the generator read.
+A later session reproducing a cell should check out that SHA directly rather than looking for
+it in `main`'s first-parent history. If `main` moves under `sim/`, `configs/` or `scenarios/`
+between this regeneration and the merge, the merge commit's tree is no longer the tree these
+manifests were produced from, and the matrix has to be regenerated again on `main`.
