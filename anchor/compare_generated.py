@@ -301,25 +301,33 @@ TOLERANCES: tuple[Tolerance, ...] = (
         "residual VFA is the least identifiable output of a converged ADM1 - it is a small "
         "difference of large production and consumption terms - and the plant's titrimetric "
         "method over-reads true VFA. A factor of four either way is deliberately generous, "
-        "so a failure here would be unambiguous. IT FAILS, and the bound is deliberately "
-        "NOT widened to accommodate that: see docs/vfa_gap.md, which measured that no value "
-        "of k_m_ac closes the gap (the model is bistable and the anchor lies between the "
-        "branches) and concluded it is a measurement-convention question",
+        "so a failure here would be unambiguous. THE BOUND HAS NEVER BEEN TOUCHED. What "
+        "changed on 2026-09-09 is the CONVENTION ON OUR SIDE of the comparison: this row "
+        "now measures the simulator's TITRIMETRIC FOS against the anchor's titrimetric VFA "
+        "column, which is like against like, where it previously measured true VFA against "
+        "a titration and was a factor of 17.5 out for that reason. The transfer function is "
+        "declared chemistry with no fitted parameter (sim.observation.channels."
+        "titrimetric_fos, kappa frozen at 1.0), so this is a measurement model being made "
+        "correct, not a gap being closed by tuning - and docs/vfa_gap.md still holds: no "
+        "value of k_m_ac closes the true-VFA gap, because the model is bistable and the "
+        "anchor lies between the branches",
     ),
     Tolerance(
         "fos_tac_median",
         "- (VFA as acetic over alkalinity as CaCO3)",
         "ratio_band",
         (0.5, 2.0),
-        "a factor of two, the natural band for a dimensionless stress ratio. THIS ROW IS "
-        "EXPECTED TO FAIL: the independent review of PR #11 recorded that a healthy "
-        "simulated digester sits at 0.01-0.07 against the plant's median 0.23. It is "
-        "declared at the same width every other ratio gets, measured, and reported as a "
-        "failure. Moving the bound to make it pass would be the one thing this module "
-        "exists to prevent. It got WORSE (0.021 -> 0.013) when the feed alkalinity was "
-        "calibrated to the anchor, which is expected and correct rather than a regression: "
-        "alkalinity is the denominator, so the discrepancy now sits wholly in the numerator "
-        "(docs/vfa_gap.md)",
+        "a factor of two, the natural band for a dimensionless stress ratio, declared at the "
+        "same width every other ratio gets. THE BOUND HAS NEVER BEEN TOUCHED and its "
+        "history is worth keeping: the PR-#11 review recorded a healthy simulated digester "
+        "at 0.01-0.07 against the plant's 0.23, and it got WORSE (0.021 -> 0.013) when the "
+        "feed alkalinity was calibrated, correctly - alkalinity is the denominator, so the "
+        "discrepancy moved wholly into the numerator. The numerator was then found to be "
+        "the wrong quantity: the plant's FOS/TAC is computed from a TITRIMETRIC FOS, and "
+        "ours was computed from true VFA. Since the lead's ruling A of 2026-09-09 both are "
+        "titrimetric and the row compares like with like. Nothing was fitted to achieve "
+        "that - kappa is frozen at 1.0 and every equilibrium constant is the truth model's "
+        "own - and no kinetic parameter has moved at any point",
     ),
 )
 
@@ -510,11 +518,22 @@ def output_panel(
                     "biogas_mean": float(np.mean(channel["q_gas_stp_dry"][settled])),
                     "digester_pH_median": float(np.median(channel["pH"][settled])),
                     "alkalinity_median": float(np.median(channel["alkalinity_total"][settled])),
-                    "vfa_median": float(np.median(channel["vfa_total"][settled])),
+                    # `vfa_median` is the TITRIMETRIC reading, because that is the
+                    # convention the anchor's own VFA column is in and the two are compared
+                    # against each other (lead's ruling A, 2026-09-09). The true-VFA median
+                    # is reported beside it so the gap between the conventions stays visible
+                    # rather than becoming invisible the moment the transfer function landed.
+                    "vfa_median": float(np.median(channel["vfa_titrimetric"][settled])),
+                    "vfa_true_median": float(np.median(channel["vfa_total"][settled])),
                     "fos_tac_median": float(np.median(channel["fos_tac"][settled])),
+                    "fos_tac_true_vfa_median": float(
+                        np.median(channel["fos_tac_true_vfa"][settled])
+                    ),
                     "ch4_fraction_median": float(np.median(channel["ch4_fraction"][settled])),
+                    # the MISSINGNESS TRIGGER: hidden true VFA above its trailing median
                     "overload_day_fraction": float(np.mean(truth.overload[settled])),
                     "foaming_day_fraction": float(np.mean(truth.foaming[settled])),
+                    # the OPERATOR-VISIBLE threshold, which is a different thing (ruling C)
                     "fos_tac_exceedance_fraction": float(
                         np.mean(channel["fos_tac"][settled] > 0.40)
                     ),
@@ -673,9 +692,9 @@ def render_panel(panel: Sequence[PanelRun]) -> str:
     §5.3), which is exactly why the number is small.
     """
     lines = [
-        "| Base seed | Verdict | median pH | mean CH4 | median VFA (kg/m3) | median FOS/TAC "
-        "| overload days |",
-        "|---|---|---:|---:|---:|---:|---:|",
+        "| Base seed | Verdict | median pH | mean CH4 | titrimetric FOS (kg/m3) | true VFA "
+        "(kg/m3) | FOS/TAC | trigger days | FOS/TAC > 0.40 days |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for run in panel:
         verdict = "sound" if run.sound else "**soured**"
@@ -683,25 +702,45 @@ def render_panel(panel: Sequence[PanelRun]) -> str:
         lines.append(
             f"| {run.seed} | {verdict} | {s['digester_pH_median']:.2f} | "
             f"{s['ch4_fraction_median']:.3f} | {s['vfa_median']:.3f} | "
-            f"{s['fos_tac_median']:.3f} | {s['overload_day_fraction'] * 100:.2f} % |"
+            f"{s['vfa_true_median']:.4f} | {s['fos_tac_median']:.3f} | "
+            f"{s['overload_day_fraction'] * 100:.2f} % | "
+            f"{s['fos_tac_exceedance_fraction'] * 100:.2f} % |"
         )
     sound = [r for r in panel if r.sound]
     lines.append("")
     lines.append(f"**{len(sound)} of {len(panel)} runs are working digesters.**")
     if sound:
-        rates = [float(r.statistics["overload_day_fraction"]) for r in sound]
-        pooled = sum(rates) / len(rates)
-        firing = sum(1 for r in rates if r > 0.0)
+
+        def _rate(key: str) -> tuple[float, float, float, int]:
+            values = [float(r.statistics[key]) for r in sound]
+            return (
+                sum(values) / len(values),
+                min(values),
+                max(values),
+                sum(1 for v in values if v > 0.0),
+            )
+
+        trig, trig_lo, trig_hi, trig_n = _rate("overload_day_fraction")
+        op, op_lo, op_hi, op_n = _rate("fos_tac_exceedance_fraction")
         lines += [
             "",
-            f"**Overload flag across the {len(sound)} SOUND runs**: pooled "
-            f"{pooled * 100:.2f} % of days, per-run min {min(rates) * 100:.2f} %, max "
-            f"{max(rates) * 100:.2f} %; it fires on at least one day in {firing} of "
-            f"{len(sound)} runs. The anchor's own exceedance is 8.25 % (Dig1) and 9.18 % "
-            "(Dig2). The simulated figure is low because `fos_tac` is a true-VFA ratio "
-            "measured against a threshold percentile-matched to a *titrimetric* column; "
-            "the transfer function that would reconcile them is approved and not yet "
-            "implemented (benchmark card §5.3).",
+            "**Two rates, and they are different things** (lead's rulings B and C, "
+            "2026-09-09). Across the "
+            f"{len(sound)} SOUND runs:",
+            "",
+            "| | what it is | pooled | per-run min | per-run max | runs that fire |",
+            "|---|---|---:|---:|---:|---:|",
+            f"| **conditional-missingness trigger** | hidden true VFA > 2.00x its 30-d "
+            f"trailing median | **{trig * 100:.2f} %** | {trig_lo * 100:.2f} % | "
+            f"{trig_hi * 100:.2f} % | {trig_n} of {len(sound)} |",
+            f"| operator-visible overload | titrimetric FOS/TAC > 0.40 | "
+            f"**{op * 100:.2f} %** | {op_lo * 100:.2f} % | {op_hi * 100:.2f} % | "
+            f"{op_n} of {len(sound)} |",
+            "",
+            "The anchor's own FOS/TAC exceedance is 8.25 % (Dig1) and 9.18 % (Dig2), and "
+            "its 92nd percentile is what the 0.40 threshold is matched to. The trigger is "
+            "not compared with that number: it fires on the hidden state, which no plant "
+            "column reports.",
         ]
     return "\n".join(lines)
 

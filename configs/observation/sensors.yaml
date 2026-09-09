@@ -41,6 +41,34 @@ version: 2
 
 # When the condition flags that drive missingness are raised.
 conditions:
+  # THE CONDITIONAL-MISSINGNESS TRIGGER (lead's ruling B, 2026-09-09). It fires on the
+  # HIDDEN PROCESS STATE, not on an instrument reading: conditional missingness is a
+  # property of the plant -- instruments fail during the transients that identify the
+  # process, whether or not anyone has read them yet -- and the reading it used to fire on
+  # is 86-90 % bicarbonate carry-over, which MASKS the VFA dynamics the flag exists to
+  # detect (true VFA's day-to-day spread is p92/median 2.06; the titrimetric FOS/TAC's is
+  # 1.087).
+  #
+  # MEASURED on 24 sound Plant B runs, 3,624 settled digester-days, by the coordinator:
+  #
+  #   signal (ratio to its own reference)   median   p92     at the cut-off
+  #   VFA / 30-d trailing median            1.002    1.989   > 2.00x  ->  7.92 %   ADOPTED
+  #   gas / 30-d trailing median            1.001    1.780   > 1.35x  -> 21.80 %
+  #   OLR / mean (design proxy)             0.834    1.860   > design -> 37.20 %
+  #   any of the three (OR)                                            -> 47.27 %
+  #
+  # 7.92 % against the anchor's own 7.78 % exceedance, with NOTHING TUNED. The other two
+  # each overshoot alone and the OR gives 47 %, so they are NOT combined. If a combination
+  # is ever wanted the equivalent 7.8 % cut-offs are gas > 1.796x trailing and
+  # OLR > 1.871x mean; recorded, not used.
+  #
+  # NOT FROZEN until its Plant C and Plant A firing rates are recorded beside Plant B's.
+  # The cut-off stays 2.00x on every plant whatever they turn out to be: differences
+  # between plants are to be RECORDED, NOT TUNED AWAY (the lead), and there is no per-plant
+  # cut-off.
+  vfa_surge_ratio: 2.00       # DESIGN  -; the lead's cut-off, unchanged from as written
+  vfa_median_window_d: 30.0   # DESIGN  d; trailing, EXCLUDING the current day, so a large
+                              # excursion cannot drag its own reference up and mask itself
   fos_tac_overload: 0.40      # DESIGN  -; PERCENTILE-MATCHED to the anchor (lead's ruling 4,
                               # 2026-09-09), not a transferred absolute value. The lead's
                               # rule was "0.40 if the anchor's 92nd percentile lands near it
@@ -302,12 +330,24 @@ sensors:
 
   vfa_total:
     name: vfa_total
-    channel: vfa_total
+    # TITRIMETRIC, not the true VFA (lead's ruling A, 2026-09-09). The plant's "VFA" column
+    # is the FOS half of a two-point Nordmann/Kapp titration, which counts everything
+    # titratable between pH 5.0 and 4.4 -- and in a digester 86-90 % of that is BICARBONATE
+    # carry-over, not volatile acid. The sensor therefore reads the `vfa_titrimetric`
+    # channel; `vfa_total` stays the hidden true-VFA channel and no sensor sees it.
+    #
+    # The transfer function (sim.observation.channels.titrimetric_fos) has NO FITTED
+    # PARAMETER: kappa is frozen at 1.0 and every equilibrium constant is the truth model's
+    # own, through sim.adm1.physchem.temperature_corrected. At Plant B's 308.48 K it gives
+    # pK_a_ac 4.760, pK_a_co2 6.305, a carry-over fraction of 0.0349 of S_IC and an implicit
+    # scale-up of 1/f_ac = 3.02 -- the Nordmann formula's own factor, derived rather than
+    # asserted.
+    channel: vfa_titrimetric
     kind: lab
-    unit: kg/m3 as acetic acid
+    unit: kg/m3 as acetic acid (titrimetric FOS; see the channel's own unit string)
     sampling_interval_d: 7.0    # DESIGN  d; §6.4 Tier B: weekly total VFA
     noise: {cv: 0.08, sd_abs: 0.0, source: "ASSUMED (lead's default)"}   # DESIGN  -
-    source: "ASSUMED (lead's default)"
+    source: "ASSUMED (lead's default) for the noise; the CHANNEL is the declared titrimetric transfer function of the lead's ruling A of 2026-09-09"
 
   tan:
     name: tan

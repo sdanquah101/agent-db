@@ -108,11 +108,25 @@ def _without_missingness(config: ObservationConfig) -> ObservationConfig:
 
 
 def _flat_channels(n_days: int = 200, stress_from: int | None = None) -> TruthChannels:
-    """A synthetic run: constant channels, optionally with a stress window."""
+    """A synthetic run: constant channels, optionally with a stress window.
+
+    ``stress_from`` raises **true VFA**, which is what the overload flag triggers on since
+    the lead's ruling B of 2026-09-09 — the hidden process state, not a reading. The
+    titrimetric channels move with it so the record stays self-consistent, but they are not
+    what the flag looks at.
+
+    The trigger is a *departure from recent history*, so a step that stays high stops
+    firing once the trailing median catches up. That is the property, not a defect: a
+    digester that has sat at a high VFA for a month is not in a transient. Tests that need
+    the flag raised throughout use :func:`_sawtooth_channels`.
+    """
     t = np.arange(float(n_days))
-    fos = np.full(t.size, 0.20)
+    vfa = np.full(t.size, 1.0)
     if stress_from is not None:
-        fos[stress_from:] = 0.60  # above the overload threshold
+        vfa[stress_from:] = 3.0  # 3x the pre-window level: well over the 2.0x trigger
+    alk = np.full(t.size, 5.0)
+    # a titrimetric FOS that moves with the true VFA plus the usual bicarbonate carry-over
+    fos_titrimetric = 0.7 + 0.3 * vfa
     return TruthChannels(
         t,
         {
@@ -120,20 +134,50 @@ def _flat_channels(n_days: int = 200, stress_from: int | None = None) -> TruthCh
             "pH": np.full(t.size, 7.30),
             "q_gas_stp_dry": np.full(t.size, 1500.0),
             "ch4_fraction": np.full(t.size, 0.62),
-            "alkalinity_total": np.full(t.size, 5.0),
-            "vfa_total": np.full(t.size, 1.0),
+            "alkalinity_total": alk,
+            "vfa_total": vfa,
             "tan": np.full(t.size, 1.2),
             "cod_total": np.full(t.size, 40.0),
-            "vfa_ac": np.full(t.size, 0.6),
-            "vfa_pro": np.full(t.size, 0.2),
-            "vfa_bu": np.full(t.size, 0.1),
-            "vfa_va": np.full(t.size, 0.05),
+            "vfa_ac": 0.6 * vfa,
+            "vfa_pro": 0.2 * vfa,
+            "vfa_bu": 0.1 * vfa,
+            "vfa_va": 0.05 * vfa,
             "h2_ppm": np.full(t.size, 12.0),
             "vs": np.full(t.size, 25.0),
             "ts": np.full(t.size, 33.0),
-            "fos_tac": fos,
+            "vfa_titrimetric": fos_titrimetric,
+            "fos_tac": fos_titrimetric / alk,
+            "fos_tac_true_vfa": vfa / alk,
         },
     )
+
+
+def _sawtooth_channels(n_days: int, period: int = 8, high: float = 3.0) -> TruthChannels:
+    """A run whose true VFA repeatedly departs from its own recent history.
+
+    A single step raises the overload flag only until the trailing median catches up. A
+    sawtooth keeps departing, so the flag fires at a steady rate over a long horizon —
+    which is what a test of the *rate* needs.
+    """
+    channels = _flat_channels(n_days)
+    t = channels.t
+    vfa = np.where((np.arange(t.size) % period) < 1, high, 1.0)
+    alk = channels["alkalinity_total"]
+    fos_titrimetric = 0.7 + 0.3 * vfa
+    series = {name: channels[name] for name in channels.names}
+    series.update(
+        {
+            "vfa_total": vfa,
+            "vfa_ac": 0.6 * vfa,
+            "vfa_pro": 0.2 * vfa,
+            "vfa_bu": 0.1 * vfa,
+            "vfa_va": 0.05 * vfa,
+            "vfa_titrimetric": fos_titrimetric,
+            "fos_tac": fos_titrimetric / alk,
+            "fos_tac_true_vfa": vfa / alk,
+        }
+    )
+    return TruthChannels(t, series)
 
 
 # ------------------------------------------------------------------ configuration
@@ -734,6 +778,76 @@ def test_fos_tac_is_on_the_anchor_s_own_scale_and_its_thresholds_are_reachable(c
     assert float((vfa > 1.0).mean()) > 0.3
 
 
+def test_the_titrimetric_transfer_function_is_declared_chemistry(config):
+    """The lead's ruling A (2026-09-09): no fitted parameter, and the constants are checkable.
+
+    Every number here is derived from the truth model's own equilibrium constants, so the
+    test states them and would fail if the transfer function quietly acquired a fitted
+    factor or a private constant of its own. The values are the ones the ruling gives.
+    """
+    import math
+
+    from sim.adm1.defaults import load_parameters
+    from sim.adm1.physchem import temperature_corrected
+    from sim.observation.channels import (
+        TITRIMETRIC_KAPPA,
+        TITRATION_pH_LOWER,
+        TITRATION_pH_UPPER,
+        _acid_fraction,
+        titrimetric_fos,
+    )
+
+    assert TITRIMETRIC_KAPPA == 1.0, "kappa is frozen: pure chemistry, nothing fitted"
+    assert (TITRATION_pH_UPPER, TITRATION_pH_LOWER) == (5.0, 4.4)
+
+    physchem = load_parameters().physchem
+    T = 308.48  # Plant B's operating temperature
+    tc = temperature_corrected(physchem, T)
+    assert -math.log10(tc.K_a_ac) == pytest.approx(4.760, abs=0.001)
+    assert -math.log10(tc.K_a_co2) == pytest.approx(6.305, abs=0.001)
+
+    f_ac = _acid_fraction(tc.K_a_ac, 5.0) - _acid_fraction(tc.K_a_ac, 4.4)
+    assert f_ac == pytest.approx(0.3309, abs=0.0002)
+    assert 1.0 / f_ac == pytest.approx(3.02, abs=0.01)  # the Nordmann formula's own scale-up
+    carry = _acid_fraction(tc.K_a_co2, 5.0) - _acid_fraction(tc.K_a_co2, 4.4)
+    assert carry == pytest.approx(0.0349, abs=0.0002)
+
+    # A healthy Plant B: S_IC ~0.15 kmol C/m3 and true acetate ~0.09 kg/m3, i.e. 0.0015
+    # kmol/m3 -- the carry-over term then dominates the reading, which is the finding.
+    n = 5
+    s_ic = np.full(n, 0.15)
+    acetate_kmol = 0.0015
+    vfa = {
+        "S_ac": np.full(n, acetate_kmol),
+        "S_pro": np.zeros(n),
+        "S_bu": np.zeros(n),
+        "S_va": np.zeros(n),
+    }
+    fos = titrimetric_fos(s_ic, vfa, T, physchem)
+    only_carry = titrimetric_fos(s_ic, {k: np.zeros(n) for k in vfa}, T, physchem)
+    share = float(only_carry[0] / fos[0])
+    assert 0.85 < share < 0.95, share  # the ruling's 86-90 %
+
+    # it over-reads true VFA severalfold, which is the whole point
+    true_vfa = acetate_kmol * M_ACETIC
+    assert fos[0] > 5.0 * true_vfa, (fos[0], true_vfa)
+
+    # and it is linear in each contribution, so a zero digester reads only the free protons
+    empty = titrimetric_fos(np.zeros(n), {k: np.zeros(n) for k in vfa}, T, physchem)
+    assert 0.0 < float(empty[0]) < 0.01, float(empty[0])
+
+
+def test_the_true_vfa_channel_is_never_what_a_sensor_reads(config):
+    """True VFA stays hidden truth (lead's ruling A): the sensor reads the titration."""
+    assert config.sensors["vfa_total"].channel == "vfa_titrimetric"
+    reading_true_vfa = [
+        name for name, spec in config.sensors.items() if spec.channel == "vfa_total"
+    ]
+    assert not reading_true_vfa, reading_true_vfa
+    # and no sensor reads the true-VFA ratio either
+    assert not [n for n, spec in config.sensors.items() if spec.channel == "fos_tac_true_vfa"]
+
+
 def test_the_overload_threshold_is_the_anchors_own_92nd_percentile(config):
     """The lead's ruling 4 (2026-09-09): 0.40 is percentile-matched, not transferred.
 
@@ -788,45 +902,118 @@ def test_the_trailing_median_matches_its_own_definition_on_an_irregular_grid():
     t[0] = 0.0
     gas = 1500.0 + 600.0 * np.sin(t / 7.0) + rng.normal(0.0, 100.0, t.size)
     fos = 0.2 + 0.3 * np.sin(t / 23.0)
-    channels = TruthChannels(t, {"fos_tac": fos, "q_gas_stp_dry": gas})
-    window = 14.0
+    vfa = 1.0 + 0.8 * np.sin(t / 11.0) + 0.3 * rng.normal(0.0, 1.0, t.size)
+    channels = TruthChannels(
+        t, {"fos_tac": fos, "q_gas_stp_dry": gas, "vfa_total": np.maximum(vfa, 0.05)}
+    )
+    window, vfa_window = 14.0, 30.0
     overload, foaming = condition_flags(
         channels,
-        fos_tac_overload=0.40,
+        vfa_surge_ratio=2.0,
+        vfa_median_window_d=vfa_window,
         fos_tac_foaming=0.30,
         gas_surge_ratio=1.35,
         gas_median_window_d=window,
     )
     trailing = np.array([np.median(gas[(t >= ti - window) & (t <= ti)]) for ti in t])
     np.testing.assert_array_equal(foaming, (fos > 0.30) & (gas > 1.35 * trailing))
-    np.testing.assert_array_equal(overload, fos > 0.40)
+    # the OVERLOAD window is trailing and EXCLUDES the current sample, so its plain
+    # definition is different from the gas one and is written out separately here
+    v = np.maximum(vfa, 0.05)
+    reference = np.array(
+        [
+            np.median(v[(t >= ti - vfa_window) & (t < ti)]) if (t < ti).any() else v[i]
+            for i, ti in enumerate(t)
+        ]
+    )
+    np.testing.assert_array_equal(overload, v > 2.0 * reference)
     assert foaming.any() and overload.any()  # both flags are exercised, not trivially empty
 
 
-def test_condition_flags_use_only_past_gas_history(config):
-    channels = _flat_channels(stress_from=100)
-    overload, foaming = condition_flags(
+def test_the_overload_reference_excludes_the_current_sample():
+    """A large excursion must not be allowed to drag its own reference up and mask itself.
+
+    With the current day included, a spike enters the median it is being compared against.
+    On a short window that is enough to hide a real transient, which is precisely the state
+    conditional missingness exists to correlate with.
+    """
+    from sim.observation.channels import trailing_median
+
+    t = np.arange(10.0)
+    values = np.ones(10)
+    values[4] = values[5] = 10.0  # a transient lasting more than one sample
+    reference = trailing_median(values, t, window_d=3.0)
+    assert reference[5] == pytest.approx(1.0), reference[5]  # the spike is not in its own median
+    assert reference[0] == pytest.approx(values[0])  # no history: its own value, ratio 1
+
+    # and this is not a distinction without a difference: with the current sample INCLUDED
+    # the reference at index 5 would be 5.5 rather than 1.0, and the excursion would be
+    # compared against itself. A one-sample spike would survive either way (it cannot move
+    # a median it is one of six values in) — a sustained transient is what self-masks, and
+    # a sustained transient is exactly what conditional missingness is about.
+    window = (t >= t[5] - 3.0) & (t <= t[5])
+    including = float(np.median(values[window]))
+    assert including == pytest.approx(5.5), including
+    assert including > 2.0 * reference[5], "inclusion would hide a 10x excursion outright"
+
+
+def _flags(channels, config):
+    """Condition flags at the configured thresholds."""
+    return condition_flags(
         channels,
-        fos_tac_overload=config.conditions.fos_tac_overload,
+        vfa_surge_ratio=config.conditions.vfa_surge_ratio,
+        vfa_median_window_d=config.conditions.vfa_median_window_d,
         fos_tac_foaming=config.conditions.fos_tac_foaming,
         gas_surge_ratio=config.conditions.gas_surge_ratio,
         gas_median_window_d=config.conditions.gas_median_window_d,
     )
-    assert not overload[:100].any() and overload[100:].all()
+
+
+def test_condition_flags_use_only_past_history(config):
+    """The overload flag is a departure from recent history, and it never sees the future."""
+    channels = _flat_channels(stress_from=100)
+    overload, foaming = _flags(channels, config)
+    assert not overload[:100].any(), "nothing departs from history before the step"
+    assert overload[100], "the step itself is a 3x departure and must fire"
+    # ... and it stops firing once the trailing median has caught up, which is the property:
+    # a digester that has sat at a high VFA for a month is no longer in a transient
+    assert not overload[-1]
     assert not foaming.any()  # a flat gas rate never surges above its own median
+
     # a real surge with elevated FOS/TAC does raise foaming
     t = channels.t
     gas = np.full(t.size, 1500.0)
     gas[150:155] = 3000.0
     surged = TruthChannels(t, {**{k: channels[k] for k in channels.names}, "q_gas_stp_dry": gas})
-    _, foaming2 = condition_flags(
-        surged,
-        fos_tac_overload=config.conditions.fos_tac_overload,
-        fos_tac_foaming=config.conditions.fos_tac_foaming,
-        gas_surge_ratio=config.conditions.gas_surge_ratio,
-        gas_median_window_d=config.conditions.gas_median_window_d,
-    )
+    _, foaming2 = _flags(surged, config)
     assert foaming2[150:155].all() and not foaming2[:150].any()
+
+
+def test_the_overload_flag_reads_the_hidden_vfa_and_not_the_reported_ratio(config):
+    """The lead's ruling B: the trigger is the process state, not the instrument reading.
+
+    Constructed so the two disagree outright — the titrimetric FOS/TAC is pinned far above
+    the operator threshold everywhere while true VFA is flat, and then true VFA surges while
+    the reported ratio is pinned far below it. A flag that read the ratio would fire in the
+    first case and not the second; the flag that reads the state does the opposite.
+    """
+    base = _flat_channels(n_days=120)
+    t = base.t
+
+    loud_reading = dict.fromkeys(())  # placeholder for clarity below
+    loud_reading = {name: base[name] for name in base.names}
+    loud_reading["fos_tac"] = np.full(t.size, 5.0)  # >> the 0.40 operator threshold
+    overload, _ = _flags(TruthChannels(t, loud_reading), config)
+    assert not overload.any(), "a reported ratio must not raise the flag by itself"
+
+    quiet_reading = {name: base[name] for name in base.names}
+    vfa = np.ones(t.size)
+    vfa[60] = 4.0  # a genuine transient in the hidden state
+    quiet_reading["vfa_total"] = vfa
+    quiet_reading["fos_tac"] = np.full(t.size, 0.001)  # << the operator threshold
+    overload2, _ = _flags(TruthChannels(t, quiet_reading), config)
+    assert overload2[60], "a hidden transient must raise the flag whatever the reading says"
+    assert overload2.sum() == 1
 
 
 # ------------------------------------------------------------------ the sensors
@@ -1016,11 +1203,30 @@ def test_missingness_is_conditional_on_the_process_state(config):
     *per-sensor* 0.04 when the process actually loses 0.0448, and passed only because
     12 % happened to sit inside a 15 % tolerance.
 
-    Pooled over twelve seeds, because the ratio is a ratio of two counts: at Tier B each
-    sensor loses ~1,400 samples in the 3,000 calm days and ~5,700 in the 3,000 overloaded
-    ones, so the pooled standard error on the calm rate is ~0.0011 (2.5 % relative).
+    Pooled over twelve seeds, because the ratio is a ratio of two counts.
+
+    **The stress window is a sawtooth, not a step.** Since the lead's ruling B of
+    2026-09-09 the flag fires on a *departure from recent history*, so a step raises it only
+    until the trailing median catches up — which is the intended behaviour (a digester that
+    has sat at a high VFA for a month is not in a transient) and useless for measuring a
+    rate. The second half of this run therefore departs repeatedly, and the calm/stressed
+    split is taken from the flag itself rather than from the day index, so the test measures
+    the loss rate *conditional on the flag* whatever fraction of days the flag happens to
+    cover.
     """
-    channels = _flat_channels(n_days=6000, stress_from=3000)
+    n_days, stress_from = 6000, 3000
+    calm_part = _flat_channels(n_days=n_days)
+    saw = _sawtooth_channels(n_days=n_days, period=8, high=3.0)
+    series = {name: calm_part[name].copy() for name in calm_part.names}
+    for name in series:
+        series[name][stress_from:] = saw[name][stress_from:]
+    channels = TruthChannels(calm_part.t, series)
+
+    overload, _ = _flags(channels, config)
+    assert not overload[:stress_from].any(), "the first half must be calm"
+    stressed_fraction = float(overload[stress_from:].mean())
+    assert 0.05 < stressed_fraction < 0.9, stressed_fraction  # the flag really fires there
+
     names = ("ph", "gas_flow", "ch4_fraction")
     lost_before = dict.fromkeys(names, 0)
     lost_after = dict.fromkeys(names, 0)
@@ -1028,13 +1234,18 @@ def test_missingness_is_conditional_on_the_process_state(config):
     for seed in range(12):
         record = observe(channels, config, "B", seed=seed)
         for name in names:
-            series = record[name]
-            calm = series.sample_t < 3000
-            lost_before[name] += int(series.missing[calm].sum())
-            lost_after[name] += int(series.missing[~calm].sum())
+            series_ = record[name]
+            idx = np.clip(
+                np.searchsorted(channels.t, series_.sample_t, side="right") - 1,
+                0,
+                channels.t.size - 1,
+            )
+            flagged = overload[idx]
+            lost_before[name] += int(series_.missing[~flagged].sum())
+            lost_after[name] += int(series_.missing[flagged].sum())
             if name == "ph":
-                seen_before += int(calm.sum())
-                seen_after += int((~calm).sum())
+                seen_before += int((~flagged).sum())
+                seen_after += int(flagged.sum())
     shared = config.historian.rate_by_tier["B"]
 
     def composite(per_sensor: float) -> float:
@@ -1048,7 +1259,7 @@ def test_missingness_is_conditional_on_the_process_state(config):
         multiplier = spec.stress_multipliers["overload"]
         expected_before = composite(spec.base_rate)
         expected_after = composite(min(spec.base_rate * multiplier, 1.0))
-        assert lost_before[name] > 300 and lost_after[name] > 600, (name, lost_before, lost_after)
+        assert lost_before[name] > 300 and lost_after[name] > 200, (name, lost_before, lost_after)
         assert after > before, name
         assert after / before == pytest.approx(expected_after / expected_before, rel=0.20), (
             name,

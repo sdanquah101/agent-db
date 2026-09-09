@@ -12,13 +12,17 @@ Three things are asserted, and the third is the awkward one:
    rationale, and the ones borrowed from existing tests really are the numbers those tests
    apply — checked against the test files themselves, so widening a bound "for consistency"
    does not go unnoticed.
-3. **The rows that fail are asserted to fail.** The simulated VFA and FOS/TAC distributions
-   sit far below the plant's; that is a recorded realism gap in the truth model
-   (``docs/decisions.md``). Pinning the failure is deliberate. A test that merely allowed
-   it would let someone "fix" the gap by widening a bound or tuning a feed value and never
-   notice; this one fails if the numbers move in *either* direction, which is the only way
-   a known-bad row stays honest. The **alkalinity** half of that gap is closed, by the
-   calibration the lead approved on 2026-09-03, and is now asserted to *pass*.
+3. **The recorded gaps are pinned in both directions.** This used to read "the rows that
+   fail are asserted to fail": the simulated VFA and FOS/TAC sat far below the plant's, and
+   the failure and its size were pinned so that nobody could "fix" the gap by widening a
+   bound or tuning a feed value without a test noticing. That worked exactly as intended —
+   the gap closed, this test failed, and the record was updated with the reason. What
+   closed it was **not** the model: our FOS/TAC was computed from true VFA and the plant's
+   from a titrimetric FOS, so the row compared two different assays. Since the lead's
+   ruling A of 2026-09-09 both sides are titrimetric (declared chemistry, no fitted
+   parameter), and what is pinned now is the **residual ~1.5x gap** that remains, in both
+   directions. The **alkalinity** row is inside its bound by calibration to that very
+   column and is never counted as a match.
 
 The panel of Level-0 runs costs ~90 s, so it is a module fixture.
 """
@@ -27,6 +31,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from anchor.compare_generated import (
@@ -142,7 +147,9 @@ def test_a_row_calibrated_to_the_anchor_is_never_counted_as_a_match(comparisons)
     matched, independent, excluded = match_count(comparisons)
     assert excluded == 1
     assert independent == len(comparisons) - 1
-    assert matched == independent - 2  # vfa_median and fos_tac_median, and nothing else
+    # every independent row is inside its bound since the VFA convention was corrected
+    # (lead's ruling A, 2026-09-09); before that, vfa_median and fos_tac_median were not
+    assert matched == independent, (matched, independent)
     rendered = render_report(comparisons)
     assert "| calibrated to anchor |" in rendered
     assert f"**{matched} of {independent} independent rows" in rendered
@@ -168,28 +175,83 @@ def test_a_tolerance_actually_bites():
 # ------------------------------------------------------------------ 3. the recorded gaps
 
 
-def test_the_vfa_and_fos_tac_rows_still_fail_and_by_how_much(comparisons):
-    """The recorded realism gap, pinned in both directions.
+def test_the_vfa_rows_now_compare_like_with_like_and_the_residual_gap_is_pinned(comparisons):
+    """The recorded realism gap, after the convention on our side was corrected.
 
-    A healthy simulated digester carries far less residual VFA than the plant, so FOS/TAC
-    is far below the plant's median. The decisions log of 2026-09-02 recorded 0.01-0.07
-    against an anchor median of 0.23. This asserts the failure *and* its size, so closing
-    the gap fails this test and forces the record to be updated rather than letting a
-    quiet tuning pass unnoticed.
+    **History, because this test used to assert the opposite.** It pinned `vfa_median` and
+    `fos_tac_median` as FAILING, and their size in both directions, so that closing the gap
+    would fail a test and force the record to be updated rather than letting a quiet tuning
+    pass unnoticed. That is exactly what happened, and this is the updated record.
+
+    What changed is **not** the model and **not** a bound. Our `fos_tac` was computed from
+    TRUE VFA and the anchor's from a TITRIMETRIC FOS, so the row compared two different
+    assays and was a factor of 17.5 out for that reason. Since the lead's ruling A of
+    2026-09-09 both sides are titrimetric. The transfer function has no fitted parameter —
+    kappa frozen at 1.0, every equilibrium constant the truth model's own — so this is a
+    measurement model being made correct, not a gap being closed by tuning.
+
+    **No kinetic parameter has moved at any point**, and `docs/vfa_gap.md` still holds: the
+    true-VFA gap cannot be closed by fitting, because the model is bistable in `k_m_ac` and
+    the anchor lies between the branches. That is now a finding about the model rather than
+    a failing row.
+
+    A residual gap of about 1.5x remains and is pinned here in both directions, so it can
+    neither grow nor be quietly tuned to 1.0.
     """
     by_name = {c.name: c for c in comparisons}
     vfa, fos = by_name["vfa_median"], by_name["fos_tac_median"]
     alkalinity = by_name["alkalinity_median"]
-    # the alkalinity half of the gap IS closed — but by CALIBRATION to this very column,
-    # so the residual says the fit converged and not that the simulator agrees with a
-    # measurement it was not shown (the lead's ruling M1)
+
+    # the alkalinity row is inside its bound by CALIBRATION to this very column, so it is
+    # reported and never counted as a match (the lead's ruling M1)
     assert alkalinity.tolerance.calibrated
     assert alkalinity.passed, (alkalinity.generated, alkalinity.anchor)
-    assert not vfa.passed and not fos.passed
-    assert 0.0 < vfa.ratio < 0.25, vfa.ratio  # the generated median is at most a quarter
-    assert 0.0 < fos.ratio < 0.5, fos.ratio
-    assert 0.005 < fos.generated < 0.05, fos.generated
-    assert 0.20 < fos.anchor < 0.26, fos.anchor  # and the anchor's own 0.23
+
+    # both VFA rows are now inside their (untouched) bounds
+    assert vfa.passed and fos.passed, (vfa.ratio, fos.ratio)
+    assert by_name["vfa_median"].tolerance.bound == (0.25, 4.0)  # never widened
+    assert by_name["fos_tac_median"].tolerance.bound == (0.5, 2.0)  # never widened
+
+    # ... and the RESIDUAL gap is pinned in both directions. It is a real remaining
+    # discrepancy, not a success: the simulator still carries less titratable acid than the
+    # plant. If it closes, or widens, the record must be updated with it.
+    assert 0.55 < vfa.ratio < 0.80, vfa.ratio
+    assert 0.50 < fos.ratio < 0.80, fos.ratio
+    residual = vfa.anchor / vfa.generated
+    assert 1.25 < residual < 1.85, residual  # ~1.5x, was 17.5x on the true-VFA convention
+
+    # the anchor is unchanged, which is what makes the ratios comparable with the record
+    assert 1.1 < vfa.anchor < 1.25, vfa.anchor
+    assert 0.20 < fos.anchor < 0.26, fos.anchor
+
+
+def test_the_titrimetric_reading_is_mostly_bicarbonate_and_that_is_the_finding(panel):
+    """The lead's ruling D: the convention MASKS the dynamics it is meant to report.
+
+    An earlier diagnosis called this a "variance deficit" in the model. That was wrong and
+    is not recorded as a model finding: true VFA is if anything MORE variable than the
+    plant's FOS/TAC. What is flat is the titrimetric reading, and it is flat *because* most
+    of it is bicarbonate carry-over tracking slowly-varying alkalinity.
+
+    This is the measurement that makes the claim checkable rather than asserted, and it is
+    also the independent justification for triggering conditional missingness on the hidden
+    state (ruling B) rather than on this reading.
+    """
+    sound = [r for r in panel if r.sound]
+    assert sound
+
+    titrimetric = np.array([r.statistics["vfa_median"] for r in sound])
+    true_vfa = np.array([r.statistics["vfa_true_median"] for r in sound])
+    # the reading is several times the true VFA, and overwhelmingly so
+    assert (titrimetric > 5.0 * true_vfa).all(), (titrimetric, true_vfa)
+
+    # the reading is flat while the process is not: the titrimetric FOS/TAC's spread across
+    # the panel is far smaller than the true-VFA ratio's
+    fos = np.array([r.statistics["fos_tac_median"] for r in sound])
+    true_ratio = np.array([r.statistics["fos_tac_true_vfa_median"] for r in sound])
+    spread = float(fos.std() / fos.mean())
+    true_spread = float(true_ratio.std() / true_ratio.mean())
+    assert spread < true_spread, (spread, true_spread)
 
 
 def test_no_clean_level_0_seed_sours(panel):
@@ -223,24 +285,41 @@ def test_no_clean_level_0_seed_sours(panel):
     assert max(ph) < 7.7, max(ph)  # ... and not over-buffered into a different plant
 
 
-def test_the_overload_flag_never_fires_on_a_healthy_plant_b(panel):
-    """The measured consequence of the VFA gap, and it costs the benchmark a scenario.
+def test_the_missingness_trigger_fires_at_about_the_anchors_own_rate(panel):
+    """The lead's ruling B (2026-09-09), and the scenario it gives back to the benchmark.
 
-    The overload flag fires when FOS/TAC exceeds 0.40. Across the whole panel of sound runs
-    it fires on **no day at all**, against ~8 % of the plant's own days. Conditional
-    missingness — the §6.1 property that instruments fail during the transients that
-    identify the process, and the entire subject of the Level-4 `informative_missingness`
-    row (S4-02) — therefore has nothing to act on anywhere on a healthy Plant B.
+    **This test used to assert the opposite** — that the overload flag fired on *no day at
+    all* on a healthy Plant B, which meant conditional missingness (§6.1) and the whole of
+    the Level-4 `informative_missingness` row (S4-02) had nothing to act on. That was
+    pinned as a real cost, and it is now paid back.
 
-    Pinned because it is a property of the truth model rather than of the missingness code,
-    and because whatever closes the VFA gap must update this record.
+    Two changes did it, neither of them to the digester. The flag triggers on the **hidden
+    process state** — true VFA above 2.00x its own 30-day trailing median — instead of on a
+    reported ratio; and the reported ratio it used to read is 86-90 % bicarbonate carry-over,
+    which *masks* the VFA dynamics the flag exists to detect. The trigger now fires on about
+    the same fraction of days the plant's own FOS/TAC column exceeds its 92nd percentile, at
+    a cut-off nobody tuned.
+
+    Both rates are pinned, because they are different things (ruling C) and either drifting
+    would matter.
     """
     assert all(r.sound for r in panel)
-    overload = sorted(r.statistics["overload_day_fraction"] for r in panel)
-    assert overload[len(overload) // 2] == 0.0, overload  # the median run: never
-    assert sum(f == 0.0 for f in overload) > 0.5 * len(overload), overload  # most runs: never
-    assert max(overload) < 0.05, overload  # the worst run: 3.3 %, against the plant's ~8 %
-    assert max(r.statistics["fos_tac_median"] for r in panel) < 0.05
+
+    trigger = sorted(r.statistics["overload_day_fraction"] for r in panel)
+    pooled = sum(trigger) / len(trigger)
+    # the anchor's own exceedance is 7.78-9.18 % depending on the digester and the filter
+    assert 0.05 < pooled < 0.11, trigger
+    assert all(f > 0.0 for f in trigger), trigger  # EVERY sound run has stressed days now
+    assert min(trigger) > 0.01 and max(trigger) < 0.25, trigger
+    # ... which is what S4-02 needs: a fault that scales this flag has something to scale
+    assert sum(f > 0.02 for f in trigger) == len(trigger), trigger
+
+    # the OPERATOR-VISIBLE threshold is a separate quantity and still fires rarely, because
+    # the simulated titrimetric FOS/TAC distribution sits ~1.5x below the plant's. That is
+    # the residual gap, recorded rather than closed by moving the threshold.
+    operator = sorted(r.statistics["fos_tac_exceedance_fraction"] for r in panel)
+    assert sum(operator) / len(operator) < 0.02, operator
+    assert pooled > 10.0 * (sum(operator) / len(operator)), (pooled, operator)
 
 
 # ------------------------------------------------------------------ the report

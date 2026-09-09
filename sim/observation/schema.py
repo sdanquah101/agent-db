@@ -363,16 +363,28 @@ class TierSpec(_Frozen):
 class ConditionThresholds(_Frozen):
     """When the condition flags that drive missingness are raised.
 
-    ``overload``: the VFA-to-alkalinity ratio (the plant's own FOS/TAC) above
-    ``fos_tac_overload``. ``foaming``: FOS/TAC above ``fos_tac_foaming`` **and** the gas
-    rate above ``gas_surge_ratio`` times its trailing median — a foaming digester is one
-    that is both acidifying and gassing hard.
+    ``overload``: **true VFA** above ``vfa_surge_ratio`` times its trailing median over
+    ``vfa_median_window_d`` days — the hidden process state, not a reading (lead's ruling B,
+    2026-09-09). ``foaming``: FOS/TAC above ``fos_tac_foaming`` **and** the gas rate above
+    ``gas_surge_ratio`` times its trailing median — a foaming digester is one that is both
+    acidifying and gassing hard.
+
+    ``fos_tac_overload`` is still here and is **no longer a trigger**: it is the
+    operator-visible overload threshold, percentile-matched to the anchor, which a workflow
+    can compute from the record it is given. The two are deliberately separate (ruling C):
+    one is what the plant *is*, the other is what an operator would *say*.
     """
 
+    vfa_surge_ratio: _Pos = Field(
+        description="True VFA over its trailing median needed for the overload flag, -"
+    )
+    vfa_median_window_d: _Pos = Field(
+        description="Trailing window of the true-VFA median, d (excludes the current day)"
+    )
     fos_tac_overload: _Pos = Field(
         description=(
-            "FOS/TAC above which the overload flag is raised, - "
-            "(kg VFA as acetic acid per kg CaCO3)"
+            "OPERATOR-VISIBLE overload threshold on the titrimetric FOS/TAC, - "
+            "(kg FOS as acetic acid per kg CaCO3). Reported, not a missingness trigger."
         )
     )
     fos_tac_foaming: _Pos = Field(description="FOS/TAC needed for the foaming flag, -")
@@ -386,6 +398,8 @@ class ConditionThresholds(_Frozen):
     def _ordered(self) -> ConditionThresholds:
         if self.gas_surge_ratio <= 1.0:
             raise ValueError("gas_surge_ratio must exceed 1 (a surge is above the median)")
+        if self.vfa_surge_ratio <= 1.0:
+            raise ValueError("vfa_surge_ratio must exceed 1 (a surge is above the median)")
         return self
 
 

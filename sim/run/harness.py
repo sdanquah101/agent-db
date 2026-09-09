@@ -731,17 +731,28 @@ def simulate_truth(
         "sim.channel_series",
         {"scenario": scenario.id, "n_times": int(result.t.size), "ideal_mixing": mixing.ideal},
         lambda: (
-            channel_series(result, T_op=geometry.T_op, inert_cod_equivalent=inert, ash=ash)
+            channel_series(
+                result,
+                T_op=geometry.T_op,
+                inert_cod_equivalent=inert,
+                ash=ash,
+                physchem=truth_params.physchem,
+            )
             if mixing.ideal
             else channels_from_two_zone(
-                result, T_op=geometry.T_op, inert_cod_equivalent=inert, ash=ash
+                result,
+                T_op=geometry.T_op,
+                inert_cod_equivalent=inert,
+                ash=ash,
+                physchem=truth_params.physchem,
             )
         ),
     )
     obs_cfg = load_observation_config()
     overload, foaming = condition_flags(
         channels,
-        fos_tac_overload=obs_cfg.conditions.fos_tac_overload,
+        vfa_surge_ratio=obs_cfg.conditions.vfa_surge_ratio,
+        vfa_median_window_d=obs_cfg.conditions.vfa_median_window_d,
         fos_tac_foaming=obs_cfg.conditions.fos_tac_foaming,
         gas_surge_ratio=obs_cfg.conditions.gas_surge_ratio,
         gas_median_window_d=obs_cfg.conditions.gas_median_window_d,

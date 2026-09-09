@@ -496,7 +496,8 @@ def observe(
 
     overload, foaming = condition_flags(
         channels,
-        fos_tac_overload=config.conditions.fos_tac_overload,
+        vfa_surge_ratio=config.conditions.vfa_surge_ratio,
+        vfa_median_window_d=config.conditions.vfa_median_window_d,
         fos_tac_foaming=config.conditions.fos_tac_foaming,
         gas_surge_ratio=config.conditions.gas_surge_ratio,
         gas_median_window_d=config.conditions.gas_median_window_d,

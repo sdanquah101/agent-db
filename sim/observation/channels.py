@@ -35,12 +35,19 @@ Pure functions; no file I/O, no randomness (the randomness is in the observation
 from __future__ import annotations
 
 from collections.abc import Mapping
+from functools import lru_cache
 from types import MappingProxyType
 
 import numpy as np
 
 from sim.adm1.extensions import ExtendedResult
-from sim.adm1.schema import LIQUID_STATE_NAMES, N_STATES, Influent
+from sim.adm1.physchem import temperature_corrected
+from sim.adm1.schema import (
+    LIQUID_STATE_NAMES,
+    N_STATES,
+    Influent,
+    PhysicoChemicalParameters,
+)
 from sim.influent.mapping import _check_rates, _feeds, feed_cod_per_m3
 from sim.influent.schema import (
     COD_EQUIVALENTS_KG_COD_PER_KG,
@@ -57,7 +64,10 @@ __all__ = [
     "EXTENSION_INORGANIC_SOLIDS",
     "EXTENSION_NO_SOLIDS",
     "KG_CACO3_PER_KMOL_CHARGE",
+    "TITRIMETRIC_KAPPA",
     "VFA_COD_PER_KMOL",
+    "TITRATION_pH_LOWER",
+    "TITRATION_pH_UPPER",
     "TruthChannels",
     "ash_trajectory",
     "channel_series",
@@ -66,6 +76,8 @@ __all__ = [
     "flags_at",
     "influent_ash_concentration",
     "influent_inert_cod_equivalent",
+    "titrimetric_fos",
+    "trailing_median",
 ]
 
 KG_CACO3_PER_KMOL_CHARGE = 50.0
@@ -83,6 +95,21 @@ M_VALERIC = 102.13
 VFA_COD_PER_KMOL: Mapping[str, float] = MappingProxyType(
     {"S_ac": 64.0, "S_pro": 112.0, "S_bu": 160.0, "S_va": 208.0}
 )
+
+TITRATION_pH_UPPER = 5.0
+TITRATION_pH_LOWER = 4.4
+"""The two end points of the Nordmann/Kapp FOS titration, pH units.
+
+The FOS half of the two-point titration is the acid consumed between them. These are the
+method's own end points, not a design choice of this benchmark."""
+
+TITRIMETRIC_KAPPA = 1.0
+"""Empirical scale on the titrimetric FOS. **FROZEN at 1.0** (lead's ruling A, 2026-09-09).
+
+There is no fitted parameter anywhere in :func:`titrimetric_fos`: 1.0 means the transfer
+function is pure declared chemistry, evaluated with the truth model's own equilibrium
+constants. It exists as a named constant so that a future decision to depart from pure
+chemistry has to change a declared value rather than an expression."""
 
 #: kg COD per kg of volatile solids for every COD-bearing liquid state. Sugars,
 #: carbohydrates and the composite are carbohydrate-like (1.19); amino acids, proteins
@@ -126,7 +153,11 @@ CHANNEL_UNITS: Mapping[str, str] = MappingProxyType(
         "h2_ppm": "ppm by volume of the dry gas",
         "alkalinity_total": "kg CaCO3/m3 (bicarbonate + VFA anions)",
         "alkalinity_partial": "kg CaCO3/m3 (bicarbonate only)",
-        "vfa_total": "kg/m3 as acetic-acid equivalent",
+        "vfa_total": "kg/m3 as acetic-acid equivalent (TRUE VFA; hidden truth)",
+        "vfa_titrimetric": (
+            "kg/m3 as acetic acid, as a two-point Nordmann/Kapp FOS titration would "
+            "report it (the plant's own convention; mostly bicarbonate carry-over)"
+        ),
         "vfa_ac": "kg/m3 as acetic acid",
         "vfa_pro": "kg/m3 as propionic acid",
         "vfa_bu": "kg/m3 as butyric acid",
@@ -139,7 +170,14 @@ CHANNEL_UNITS: Mapping[str, str] = MappingProxyType(
             "kg TS/m3 of digestate (VS + fed ash from the conserved tracer + inorganic "
             "solid formed in the reactor, e.g. calcite)"
         ),
-        "fos_tac": "- (total VFA as acetic acid over total alkalinity as CaCO3)",
+        "fos_tac": (
+            "- (TITRIMETRIC FOS over total alkalinity as CaCO3 -- the plant's own ratio, "
+            "and what the operator-visible 0.40 overload threshold applies to)"
+        ),
+        "fos_tac_true_vfa": (
+            "- (TRUE VFA over total alkalinity as CaCO3; hidden truth, kept so the two "
+            "conventions can be compared)"
+        ),
     }
 )
 
@@ -322,6 +360,90 @@ def ash_trajectory(
     return out
 
 
+@lru_cache(maxsize=1)
+def _default_physchem() -> PhysicoChemicalParameters:
+    """The truth model's physico-chemical block, for callers that do not carry one.
+
+    A fault plan can move kinetics and stoichiometry; nothing moves the physico-chemical
+    constants, so the defaults ARE the truth model's for every run generated today. The
+    harness passes its own anyway, so that this stays true by construction rather than by
+    the fact that nothing has needed to change them yet.
+    """
+    from sim.adm1.defaults import load_parameters
+
+    return load_parameters().physchem
+
+
+def _acid_fraction(K_a: float, ph: float) -> float:
+    """Dissociated fraction ``K_a / (K_a + [H+])`` of a monoprotic weak acid at ``ph``."""
+    return float(K_a / (K_a + 10.0**-ph))
+
+
+def titrimetric_fos(
+    s_ic: np.ndarray,
+    vfa_kmol: Mapping[str, np.ndarray],
+    T_op: float,
+    physchem: PhysicoChemicalParameters,
+    kappa: float = TITRIMETRIC_KAPPA,
+) -> np.ndarray:
+    r"""The FOS a two-point Nordmann/Kapp titration would report, kg/m3 as acetic acid.
+
+    **This is a measurement model, not a process model** (lead's ruling A, 2026-09-09). The
+    plant's "VFA" column is not a chromatographic VFA: it is the acid consumed between
+    pH 5.0 and pH 4.4, divided by the acetic-acid response over the same interval. Anything
+    titratable in that window is counted — and in a digester most of it is **bicarbonate**,
+    not volatile acid, which is why a titrimetric FOS over-reads true VFA severalfold.
+
+    The acid consumed between the two end points is what re-protonates over the interval,
+    plus the free protons added:
+
+    .. math::
+
+        n = S_{IC}\,[\alpha_{HCO_3}(5.0) - \alpha_{HCO_3}(4.4)]
+          + \sum_i S_i\,[\alpha_i(5.0) - \alpha_i(4.4)]
+          + ([H^+]_{4.4} - [H^+]_{5.0})
+
+    and the instrument reports it as acetic acid, so it is divided by acetic acid's own
+    response over the same interval, :math:`f_{ac} = \alpha_{HAc}(5.0) - \alpha_{HAc}(4.4)`.
+    That division is the Nordmann formula's implicit scale-up (:math:`1/f_{ac} \approx 3.0`)
+    and it is derived here rather than asserted.
+
+    **No new constants.** Every equilibrium constant comes from
+    :func:`sim.adm1.physchem.temperature_corrected` — the truth model's own — so the
+    measurement model cannot drift away from the chemistry it is measuring.
+
+    Args:
+        s_ic: Inorganic carbon, kmol C/m3, per output time.
+        vfa_kmol: Each VFA in kmol/m3, per output time, keyed as in
+            :data:`VFA_COD_PER_KMOL`.
+        T_op: Operating temperature, K.
+        physchem: The truth model's physico-chemical parameters.
+        kappa: Empirical scale, frozen at :data:`TITRIMETRIC_KAPPA` = 1.0.
+
+    Returns:
+        FOS in kg/m3 as acetic acid, on the same grid as ``s_ic``.
+    """
+    tc = temperature_corrected(physchem, float(T_op))
+    hi, lo = TITRATION_pH_UPPER, TITRATION_pH_LOWER
+    K_by_acid = {
+        "S_ac": tc.K_a_ac,
+        "S_pro": tc.K_a_pro,
+        "S_bu": tc.K_a_bu,
+        "S_va": tc.K_a_va,
+    }
+    # the acetic-acid response over the interval: what the instrument divides by
+    f_ac = _acid_fraction(tc.K_a_ac, hi) - _acid_fraction(tc.K_a_ac, lo)
+
+    carry_over = float(_acid_fraction(tc.K_a_co2, hi) - _acid_fraction(tc.K_a_co2, lo))
+    consumed = np.asarray(s_ic, dtype=float) * carry_over
+    for acid, series in vfa_kmol.items():
+        consumed = consumed + np.asarray(series, dtype=float) * (
+            _acid_fraction(K_by_acid[acid], hi) - _acid_fraction(K_by_acid[acid], lo)
+        )
+    consumed = consumed + (10.0**-lo - 10.0**-hi)
+    return float(kappa) * M_ACETIC / f_ac * consumed
+
+
 def channel_series(
     result: ExtendedResult,
     *,
@@ -330,6 +452,7 @@ def channel_series(
     ash: np.ndarray | None = None,
     effluent: np.ndarray | None = None,
     effluent_derived: Mapping[str, np.ndarray] | None = None,
+    physchem: PhysicoChemicalParameters | None = None,
 ) -> TruthChannels:
     """Every observable channel of one truth trajectory.
 
@@ -347,6 +470,9 @@ def channel_series(
             liquid as the sampled concentrations, or FOS/TAC would be a ratio of two
             different liquids. The probe channels (pH, free ammonia) and every gas channel
             stay the reactor's, because that is where the probe and the headspace are.
+        physchem: The truth model's physico-chemical parameters, used by the titrimetric
+            transfer function (:func:`titrimetric_fos`). Defaults to the ADM1 defaults,
+            which no fault plan moves.
 
     Returns:
         The channels, on ``result.t``.
@@ -376,6 +502,14 @@ def channel_series(
     )
     alk_total = KG_CACO3_PER_KMOL_CHARGE * anion_charge
     alk_partial = KG_CACO3_PER_KMOL_CHARGE * ds["S_hco3_ion"]
+    # what a two-point titration would report, from the SAMPLED liquid's own inorganic
+    # carbon and acids (see titrimetric_fos: mostly bicarbonate carry-over)
+    fos_titrimetric = titrimetric_fos(
+        liquid[idx["S_IC"]],
+        vfa_kmol,
+        T_op,
+        physchem if physchem is not None else _default_physchem(),
+    )
 
     dry = np.maximum(d["P_gas"] - d["p_h2o"], 1e-12)
     # extension components sit AFTER the gas states in the vector, so the liquid slice
@@ -404,7 +538,13 @@ def channel_series(
         "tan": liquid[idx["S_IN"]] * KG_N_PER_KMOL,
         "free_ammonia": d["S_nh3"] * KG_N_PER_KMOL,
         "cod_total": cod_total,
-        "fos_tac": vfa_total_acetic / np.maximum(alk_total, 1e-12),
+        # FOS/TAC is the PLANT's ratio, so its numerator is the plant's measurement: the
+        # titrimetric FOS, not the true VFA (lead's ruling A, 2026-09-09). The true-VFA
+        # ratio is kept beside it, as hidden truth, so the two conventions stay comparable
+        # and the gap between them stays measurable rather than becoming invisible.
+        "vfa_titrimetric": fos_titrimetric,
+        "fos_tac": fos_titrimetric / np.maximum(alk_total, 1e-12),
+        "fos_tac_true_vfa": vfa_total_acetic / np.maximum(alk_total, 1e-12),
     }
     if inert_cod_equivalent is not None:
         vs = sum(liquid[idx[s]] / e for s, e in COD_PER_VS_BY_STATE.items())
@@ -441,6 +581,7 @@ def channels_from_two_zone(
     T_op: float,
     inert_cod_equivalent: float | None = None,
     ash: np.ndarray | None = None,
+    physchem: PhysicoChemicalParameters | None = None,
 ) -> TruthChannels:
     """Channels of a two-zone run, each from where its instrument actually is.
 
@@ -461,6 +602,7 @@ def channels_from_two_zone(
     """
     return channel_series(
         result.active,
+        physchem=physchem,
         T_op=T_op,
         inert_cod_equivalent=inert_cod_equivalent,
         ash=ash,
@@ -469,36 +611,87 @@ def channels_from_two_zone(
     )
 
 
+def trailing_median(values: np.ndarray, t: np.ndarray, window_d: float) -> np.ndarray:
+    """Median of the ``window_d`` days **before** each sample, excluding the sample itself.
+
+    Excluding the current day is what makes the ratio a *departure from recent history*
+    rather than a number partly compared with itself: on a short window a large excursion
+    would otherwise drag its own reference up and mask itself. The first sample has no
+    history, so its reference is itself and the ratio is 1.
+
+    The window start is found by binary search on the (increasing) output times rather than
+    by a boolean mask per sample, which was O(n^2) and dominated the suite's runtime at the
+    horizons the missingness tests use.
+
+    Args:
+        values: The series.
+        t: Output times, d, increasing.
+        window_d: Length of the trailing window, d.
+
+    Returns:
+        The trailing median, same shape as ``values``.
+    """
+    lo = np.searchsorted(t, t - window_d, side="left")
+    out = np.empty(t.size)
+    for i in range(t.size):
+        past = values[lo[i] : i]
+        out[i] = np.median(past) if past.size else values[i]
+    return out
+
+
 def condition_flags(
     channels: TruthChannels,
     *,
-    fos_tac_overload: float,
+    vfa_surge_ratio: float,
+    vfa_median_window_d: float,
     fos_tac_foaming: float,
     gas_surge_ratio: float,
     gas_median_window_d: float,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Overload and foaming flags per output time (proposal §6.1, missingness).
 
-    ``overload``: FOS/TAC above its threshold. ``foaming``: FOS/TAC above the (lower)
-    foaming threshold **and** the gas rate above ``gas_surge_ratio`` times its trailing
-    median over ``gas_median_window_d`` days. The trailing median uses only past samples,
-    so a flag never depends on the future.
+    **``overload`` triggers on the HIDDEN STATE, not on a reading** (lead's ruling B,
+    2026-09-09): true VFA above ``vfa_surge_ratio`` times its trailing median over
+    ``vfa_median_window_d`` days. It used to be "the reported FOS/TAC exceeds 0.40", and
+    that was the wrong architecture twice over:
+
+    * an instrument reading is what a *workflow* sees, and conditional missingness is a
+      property of the **plant** — instruments fail during the transients that identify the
+      process, whether or not anyone has read them yet;
+    * the reading it used is the titrimetric FOS/TAC, and 86-90 % of that is bicarbonate
+      carry-over tracking slowly-varying alkalinity, so the convention **masks the very
+      VFA dynamics the flag is meant to detect**. Measured: true VFA's day-to-day spread is
+      p92/median 2.06, the titrimetric FOS/TAC's is 1.087.
+
+    Measured on 24 sound Plant B runs (3,624 settled digester-days), the adopted trigger
+    fires on 7.92 % of days against the anchor's own 7.78 % — with no tuning. The two
+    rejected candidates and their equivalent cut-offs are recorded in ``docs/decisions.md``;
+    they are **not** OR-ed in, which would give 47 %.
+
+    ``foaming`` is unchanged: FOS/TAC above the (lower) foaming threshold **and** the gas
+    rate above ``gas_surge_ratio`` times its trailing median. Its FOS/TAC is now the
+    titrimetric one, which is the same convention as the anchored threshold it is compared
+    against, so that pairing is more consistent than it was rather than less.
+
+    Every trailing median uses only past samples, so no flag depends on the future.
 
     Returns:
         ``(overload, foaming)`` boolean arrays.
     """
+    t = channels.t
+    # the HIDDEN true VFA, never the reported one
+    vfa = channels["vfa_total"]
+    overload = vfa > vfa_surge_ratio * trailing_median(vfa, t, vfa_median_window_d)
+
     fos_tac = channels["fos_tac"]
     gas = channels["q_gas_stp_dry"]
-    t = channels.t
-    overload = fos_tac > fos_tac_overload
-    # the window start by binary search on the (increasing) output times, rather than a
-    # full boolean mask per sample: the mask made this O(n^2) and it dominated the suite's
-    # runtime at the horizons the missingness tests need
+    # foaming keeps its own window, which includes the current sample: it is a level
+    # comparison against recent history rather than a departure from it
     lo = np.searchsorted(t, t - gas_median_window_d, side="left")
-    trailing = np.empty(t.size)
+    trailing_gas = np.empty(t.size)
     for i in range(t.size):
-        trailing[i] = np.median(gas[lo[i] : i + 1])
-    foaming = (fos_tac > fos_tac_foaming) & (gas > gas_surge_ratio * trailing)
+        trailing_gas[i] = np.median(gas[lo[i] : i + 1])
+    foaming = (fos_tac > fos_tac_foaming) & (gas > gas_surge_ratio * trailing_gas)
     return overload, foaming
 
 

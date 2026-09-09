@@ -2818,3 +2818,195 @@ the discrepancy is reported to the coordinator rather than silently resolved eit
 **The overload firing rate on SOUND runs is now reported per-run and pooled** in the G1
 report's generated block, under whichever convention is in force when the panel is
 generated, as the ruling requires.
+
+---
+
+## 2026-09-09 — RULING A (the lead): the titrimetric FOS transfer function, κ = 1.0, frozen
+
+**Decision.** The `vfa_total` **sensor** reports what a two-point Nordmann/Kapp titration
+would report, and `fos_tac` is computed from that reading as it is at the plant. **True VFA
+stays the hidden channel and no sensor sees it.**
+
+```
+FOS [kg/m3 as acetic] = (M_HAc / f_ac) * [ S_IC*(a_HCO3(5.0) - a_HCO3(4.4))
+                                         + sum_i VFA_i*(a_i(5.0) - a_i(4.4))
+                                         + ([H+]_4.4 - [H+]_5.0) ]
+f_ac = a_HAc(5.0) - a_HAc(4.4)
+```
+
+**There is no fitted parameter.** κ is frozen at 1.0 and every equilibrium constant is the
+truth model's own, through `sim.adm1.physchem.temperature_corrected` — no new constants were
+introduced. **Re-derived independently here** at Plant B's 308.48 K, and every value matches
+the relayed measurement exactly: pK_a(acetate) **4.760**, pK_a(CO₂) **6.305**, carry-over
+fraction **0.0349** of S_IC, f_ac **0.3309** so the implicit scale-up is **3.022** — the
+Nordmann formula's own ×3.02, *derived* rather than asserted.
+
+**Measured result**, also reproducing the relay: median titrimetric FOS **0.775** kg m⁻³
+against the anchor's 1.178 (the true-VFA channel gives 0.067), FOS/TAC median **0.150**
+against 0.233. The gap falls from **17.5× to 1.52×** with nothing fitted. **90 %** of the
+reading is bicarbonate carry-over.
+
+**Consequence, and it is a big one: `vfa_median` and `fos_tac_median` now PASS.** The report
+went from 20 of 22 independent rows inside their declared tolerance to **22 of 22**. This is
+not a bound being widened — neither bound has ever been touched — and it is not the model
+changing. It is the row finally comparing **like with like**: it previously measured a
+chromatographic VFA against a titration. `tests/test_g1_anchor.py` used to pin those two
+rows as *failing*, and their size in both directions, so that closing the gap would fail a
+test and force the record to be updated. That is exactly what happened; the test now pins
+the **residual 1.52× gap** in both directions instead.
+
+**Kept alongside.** `fos_tac_true_vfa` and `vfa_true_median` are reported beside the
+titrimetric ones, so the distance between the two conventions stays measurable rather than
+disappearing the moment the transfer function landed.
+
+**Alternatives.** Fit κ to the anchor (rejected by the ruling and by this session: a fitted
+κ would make the row a calibration, like `alkalinity_median`, and it is not needed — pure
+chemistry gets within 1.5×); apply the transfer function to the channel rather than the
+sensor (rejected: the channel is hidden truth and must stay the true quantity).
+
+---
+
+## 2026-09-09 — RULING B (the lead): conditional missingness triggers on the hidden state
+
+**Decision.** The overload flag that drives conditional missingness fires on **true VFA above
+2.00× its own 30-day trailing median**, the window **excluding the current day**. It used to
+fire on "the reported FOS/TAC exceeds 0.40".
+
+**Reason, and it is two separate ones.** Conditional missingness (§6.1) is a property of the
+**plant**: instruments fail during the transients that identify the process, whether or not
+anyone has taken a reading. And the reading it used to fire on is 86–90 % bicarbonate
+carry-over, which tracks slowly-varying alkalinity and therefore **masks** the VFA dynamics
+the flag exists to detect.
+
+**Excluding the current day is not a detail.** With it included, a sustained excursion enters
+the median it is compared against and can mask itself; `tests/test_observation.py` measures
+a case where inclusion would raise the reference from 1.0 to 5.5 and hide a tenfold
+excursion outright.
+
+**The measured candidates** (24 sound Plant B runs, 3,624 settled digester-days), relayed by
+the coordinator and reproduced here for Plant B:
+
+| signal | median | p92 | at the cut-off |
+|---|---:|---:|---|
+| **VFA / 30-d trailing median** | 1.002 | 1.989 | **> 2.00× → 7.92 % — ADOPTED** |
+| gas / 30-d trailing median | 1.001 | 1.780 | > 1.35× → 21.80 % |
+| OLR / mean (design proxy) | 0.834 | 1.860 | > design → 37.20 % |
+| any of the three (OR) | | | → 47.27 % |
+
+7.92 % against the anchor's own 7.78 % exceedance, **with nothing tuned**. The other two are
+**not** OR-ed in. Their equivalent 7.8 % cut-offs — gas > 1.796× trailing, OLR > 1.871× mean
+— are recorded and not used.
+
+**This gives S4-02 back.** On the old trigger the flag fired on no day at all in 23 of 24
+sound runs, so the Level-4 `informative_missingness` row was a near-duplicate of Level 1. It
+now fires in **every** sound run on B and C.
+
+**Cross-plant rates, measured here.** The cut-off is 2.00× on every plant; differences are
+recorded, not tuned away.
+
+| Plant | sound | trigger, pooled | per-run range | runs that fire |
+|---|---|---:|---|---:|
+| B | 24/24 | **7.92 %** | 2.65–15.89 % | 24/24 |
+| C | 24/24 | **9.96 %** | 6.62–16.56 % | 24/24 |
+| A | 12/12 | **0.55 %** | 0.00–1.99 % | **5/12** |
+
+B and C bracket the anchor's 7.78–9.18 %. **Plant A is an order of magnitude below them**,
+which is explicable rather than surprising: B and C are fed by trucked deliveries that arrive
+in lumps and produce exactly the excursions the trigger looks for, while Plant A is fed
+continuously on slurry and silage. C sits slightly above B because B has a blend tank
+damping its arrivals and C does not.
+
+**FLAGGED: Plant A hosts S4-02**, the row this trigger exists to give content to, and 0.55 %
+in 5 of 12 runs is thin. The cut-off is not adjusted for it, as ruled. For the lead.
+
+**`foaming` is unchanged** and still reads FOS/TAC — now the titrimetric one, which is the
+same convention as its anchored threshold, so that pairing became more consistent rather than
+less. Not part of the ruling; noted so the change is visible.
+
+---
+
+## 2026-09-09 — RULING C (the lead): the operator threshold and the trigger are separate
+
+**Decision.** Titrimetric FOS/TAC > 0.40 remains the **operator-visible** overload threshold,
+percentile-matched to the anchor, reported on the benchmark card as such. **It no longer
+drives conditional missingness.** The two are kept apart in the code
+(`ConditionThresholds.fos_tac_overload` versus `vfa_surge_ratio`/`vfa_median_window_d`), in
+the config, and in the report, which now carries **both rates in one table** so they cannot
+be confused: trigger 7.92 %, operator-visible 0.17 %, on the same 24 sound runs.
+
+The operator threshold fires rarely because the simulated titrimetric distribution still sits
+~1.5× below the plant's (ruling A). **The threshold is not moved to compensate.**
+
+---
+
+## 2026-09-09 — RULING D (the lead): the "variance deficit" was a wrong diagnosis; the convention masks the dynamics
+
+**Correction of the record.** An earlier report of a **variance deficit in the model** was
+wrong and is **not** recorded as a model finding.
+
+**Measured.** True VFA's day-to-day spread is p92/median **2.06** pooled (2.27 on the single
+run re-measured here), against the anchor's FOS/TAC spread of **1.74** — the model's VFA
+dynamics are if anything *more* variable than the plant's, not less. What is flat is the
+**titrimetric FOS/TAC**, p92/median **1.087** (1.14 re-measured), and it is flat **because**
+86–90 % of the reading is bicarbonate carry-over tracking slowly-varying alkalinity.
+
+**The finding for the paper is therefore:**
+
+> **The titrimetric convention masks the VFA dynamics it is meant to report.**
+
+A measurement-model property, not a model deficiency. It is also the independent
+justification for ruling B: a flag meant to fire on process transients must not read a
+quantity that averages them out. `tests/test_g1_anchor.py` pins it — the titrimetric reading
+is several times the true VFA on every sound run, and its spread across the panel is smaller
+than the true-VFA ratio's.
+
+---
+
+## 2026-09-09 — RULING E (the lead): the run root moves into a closure
+
+**Decision.** `state.run_view.open_run` captures the run root in **closures** and the
+`RunView` holds three callables. There is **no instance attribute at all** — not `root`, not
+`_root`, not `_base` — so the attribute route the review used does not merely become private,
+it stops existing. `tests/test_truth_isolation.py` asserts that nothing stored on the object
+is a `Path` or a string, and that the run directory does not appear as a value anywhere on
+it.
+
+**Stated rather than glossed:** a closure cell is still reachable through `__closure__` by a
+caller determined enough. This removes the *accident*, not the adversary. The layer that
+actually protects hidden truth is that it is **not under the run directory at all**
+(ruling H1 of 2026-09-04), and the module docstring says so.
+
+**The listing and the resolver now agree.** `view.files` used to list a planted symlink that
+`read_text` would then refuse, so the view advertised something it would not hand over. The
+listing now filters through the resolver. Tested with a planted symlink, plus the negative
+control that every listed file really is readable and the listing is not empty.
+
+**The coordinator's own adversarial pass on `f8bfc14` found every path route already
+blocked** — empty, `"."`, `"./"`, `".."`, `"../../"`, `"../manifest.json"`, traversal to
+`truth_store`, absolute paths, a planted file symlink and a planted directory symlink, all
+`TruthAccessError` — with both negative controls good. The AST checker is retained.
+
+---
+
+## 2026-09-09 — Open item: Plants B and C need a declared design organic loading rate
+
+**Recorded as a follow-up, not done here** (the lead, 2026-09-09). `configs/plants/plant_B.yaml`
+declares **no design OLR**, so "loading above design" has no referent in the plant contract;
+the coordinator's trigger sweep had to use the run's own mean as a proxy.
+
+**A declared design loading is to be added to Plants B and C from Muscatine's design or
+permit figures the next time a session touches the plant configs.** It is not part of PR #15
+and no design OLR is to be invented in the meantime. The conditional-missingness trigger does
+**not** use OLR (ruling B adopted the VFA signal alone), so nothing depends on this today.
+
+---
+
+## 2026-09-09 — The missingness trigger is not frozen until its cross-plant rates are on the record
+
+**Status.** The 2.00× cut-off is implemented and the three-plant firing rates are measured and
+recorded (see ruling B above): B 7.92 %, C 9.96 %, A 0.55 %. The lead's condition for freezing
+the trigger was that these be recorded beside Plant B's, with **differences between plants
+expected and recorded rather than tuned away** — no per-plant cut-off and no adjustment to
+equalise them. That condition is now met by this session's own measurements; the coordinator
+is measuring the same quantity independently and the two sets should be compared before the
+trigger is called frozen.
