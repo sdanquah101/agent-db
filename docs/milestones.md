@@ -1169,3 +1169,55 @@ registry (§6.2).
 **Next session should start on** the titrimetric transfer function once the coordinator
 brings its form and band, the still-open M2/M3/M4 findings, and then the tool registry
 (§6.2).
+
+---
+
+### Session 2026-09-09 (continued) — rulings A–E: the titrimetric convention and the hidden-state trigger
+
+**Done**
+
+- **Ruling A — the titrimetric FOS transfer function, κ frozen at 1.0.** The `vfa_total`
+  *sensor* reports what a two-point Nordmann/Kapp titration would report; `fos_tac` is
+  computed from that reading; **true VFA stays the hidden channel and no sensor sees it**.
+  No fitted parameter: every equilibrium constant is the truth model's own. Re-derived
+  independently and matching the relay exactly — pK_a(ac) 4.760, pK_a(CO₂) 6.305, carry-over
+  0.0349 of S_IC, f_ac 0.3309, scale-up ×3.022. Measured FOS 0.775 against the anchor's
+  1.178, FOS/TAC 0.150 against 0.233, **90 % of the reading bicarbonate carry-over**; the gap
+  falls **17.5× → 1.52×** with nothing fitted.
+- **The consequence is that `vfa_median` and `fos_tac_median` now PASS — 20 of 22 independent
+  rows became 22 of 22.** No bound was moved and the model did not change; the row now
+  compares like with like. The test that pinned those rows as *failing* in both directions
+  did exactly what it was written to do: it failed, and now pins the **residual 1.52× gap**
+  just as hard.
+- **Ruling B — conditional missingness triggers on the hidden state**: true VFA > 2.00× its
+  30-day trailing median, the window excluding the current day. Measured **7.92 %** of days
+  on 24 sound Plant B runs against the anchor's 7.78 %, nothing tuned. Cross-plant, same
+  cut-off: **B 7.92 %, C 9.96 %, A 0.55 %** — recorded, not tuned away.
+- **S4-02 is given back** on B and C: the flag now fires in every sound run, where before it
+  fired on no day at all in 23 of 24.
+- **Ruling C** — FOS/TAC > 0.40 stays operator-facing only; both rates are reported in one
+  table so they cannot be confused.
+- **Ruling D** — the "variance deficit" diagnosis is **withdrawn**. True VFA is *more*
+  variable than the anchor's FOS/TAC (2.06 against 1.74); what is flat is the titrimetric
+  reading, because most of it is carry-over. The paper's finding is that **the titrimetric
+  convention masks the VFA dynamics it is meant to report**.
+- **Ruling E** — the run root moves into closures; `RunView` holds no instance attribute at
+  all, and `view.files` now filters through the resolver so the listing cannot advertise what
+  a read would refuse.
+- Tests 342 → **349** (336 default + 13 in the `g1` panel, 2 skipped).
+
+**Flagged to the coordinator**
+
+1. **Plant A's trigger rate is 0.55 %**, an order of magnitude below B and C, because it is
+   fed continuously while they take trucked deliveries. Plant A hosts **S4-02**, the row this
+   trigger exists to give content to. The cut-off is not adjusted, as ruled.
+2. Carried forward and still open: the `S6-01b`/`S6-04` id, the unadapted baseline's TAN
+   band, the two relayed anchor numbers that did not reproduce, and M2/M3/M4.
+
+**Recorded as a follow-up for the next session that touches the plant configs**: Plants B and
+C need a **declared design organic loading rate** from Muscatine's design or permit figures.
+Nothing depends on it today — the trigger uses the VFA signal alone — and no design OLR is to
+be invented in the meantime.
+
+**Next session should start on** the lead's answers to the flagged items, then the tool
+registry (§6.2).
