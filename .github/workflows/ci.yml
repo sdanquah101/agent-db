@@ -13,6 +13,13 @@ concurrency:
 
 permissions:
   contents: read
+  # `dorny/paths-filter` in the g1-changes job below asks the pull-request Files API which
+  # files a PR changed. Declaring `permissions:` at all sets every scope not listed to
+  # none, so with `contents: read` alone the job died on a pull_request event with
+  # "Resource not accessible by integration" while the same job passed on the push event
+  # for the same commit — and the g1 panel was silently SKIPPED on the PR, because it is
+  # gated on that job's output. Read-only, and the workflow needs nothing else.
+  pull-requests: read
 
 jobs:
   lint:
