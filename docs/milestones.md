@@ -1082,11 +1082,23 @@ previous session left them, and no generated number moved.
 - Tests 305 → **339** (327 in the default suite, 12 in the `g1` panel, 2 skipped without the
   git-ignored SCADA parent).
 - **The matrix regenerates end to end into the new layout: 114 of 114 cells, 114 of 114
-  sound**, 44 truth integrations, 19 min wall-clock, 25 MB under `runs/` and 17 MB under
+  sound**, 44 truth integrations, ~10 min wall-clock, 25 MB under `runs/` and 17 MB under
   `truth_store/`. Verified on the generated store rather than asserted: every `runs/<id>/`
   contains exactly `observations/`, `manifest.json` and `calls.jsonl`; no visible manifest
-  carries a redacted field; `index.jsonl` is in the truth store with 114 unique lines and no
-  duplicates.
+  carries a redacted field; no truth directory lacks its complete manifest; `index.jsonl` is
+  in the truth store with 114 unique lines and no duplicates.
+- **Regenerated a second time from a clean tree**, because the first pass was not one: its
+  114 manifests carried **five different `git_sha` values, three of them `-dirty`**, having
+  been generated across three commits while docstrings were still being edited. Proposal §13
+  wants final runs from a clean tree and the manifest marks `-dirty` exactly so that is
+  visible; all 114 now carry the single clean `d57546c`. Checking one's own provenance record
+  is cheap and this is what it is for.
+- **CI: the paths filter needed `pull-requests: read`.** `does this change touch sim/?`
+  failed on every pull_request event while passing on push for the same commit —
+  `dorny/paths-filter` asks the pull-request Files API, and declaring a `permissions:` block
+  sets every unlisted scope to none. The consequence was worse than a red check: the G1 panel
+  is gated on that job's output, so it was silently **skipped** on every PR run. Fixed; both
+  event types now run the panel and all ten checks are green.
 - **The G1 report's generated block is byte-identical apart from the M1 relabelling and the
   new match-count line.** The remediation changed where truth is written and how a sensor is
   realised, not what the digester does.
