@@ -336,11 +336,31 @@ def test_the_report_exists_and_its_generated_block_is_current(comparisons, panel
     )
 
 
-def test_the_report_says_what_closing_the_gap_would_take():
-    """The task of a report is not only to record the failure."""
+def test_the_report_explains_the_gap_rather_than_only_recording_it():
+    """The task of a report is not only to record a number.
+
+    This used to look for the word "closing", from the section heading "What closing the VFA
+    gap would take". That section was rewritten when the gap turned out to be a convention
+    mismatch rather than something to close, and a test that matched the old heading would
+    have been satisfied by the word alone. It now asks for the substance a reader needs:
+    where the tolerances came from, which convention each number is in, why the remaining gap
+    cannot be fitted away, and that nothing was fitted.
+    """
     text = REPORT.read_text(encoding="utf-8").lower()
-    for phrase in ("declared before anything was measured", "fos/tac", "sour", "closing"):
-        assert phrase in text, phrase
+    required = {
+        "the tolerances are declared in advance": "declared before anything was measured",
+        "the souring history is kept": "sour",
+        "the ratio is named": "fos/tac",
+        "the two conventions are named": "titrimetric",
+        "the reading is mostly bicarbonate": "carry-over",
+        "the residual gap is quantified": "1.52",
+        "kinetics are shown not to close it": "bistable",
+        "and the discipline is stated": "no kinetic parameter",
+        "the gap list is cited": "vfa_gap.md",
+        "the threshold's basis is given": "92nd percentile",
+    }
+    missing = {why: phrase for why, phrase in required.items() if phrase not in text}
+    assert not missing, missing
 
 
 def test_the_report_is_generated_by_a_script_that_exists():
