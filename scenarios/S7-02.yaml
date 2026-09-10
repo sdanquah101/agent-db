@@ -9,13 +9,28 @@
 #   omitted_sao               from t = 0                       (as S6-01)
 #   ammonia_inhibition_shift  x0.1 on K_I_nh3 at day 120       (as S5-01)
 #
-# AND THE TWO NOW INTERACT, which is what the 2026-09-03 redesign bought (the lead's
+# AND THE TWO INTERACT, which is what the 2026-09-03 redesign was for (the lead's
 # ruling 2). Plant A starts adapted and acetoclastic. The loss of adaptation at day 120
-# takes the inhibition constant below the pathway-exchange threshold, and over the
-# following months syntrophic acetate oxidation grows in and takes over: MEASURED, X_sao
-# rises from 7e-5 to 0.60 kg COD/m3 while the acetoclasts fall from 1.2 to 0.46. The fitted
-# model has no SAO at all, so the structural error is not a static offset but one that
-# GROWS as the truth's route to methane changes underneath it.
+# takes the inhibition constant below the pathway-exchange threshold, and syntrophic
+# acetate oxidation begins to grow in behind the inhibited acetoclasts. The fitted model
+# has no SAO at all, so the structural error is not a static offset but one that grows as
+# the truth's route to methane changes underneath it -- SLOWLY, as measured:
+#
+# MEASURED (2026-09-10, the harness at this scenario's own seed, current feed; the earlier
+# claim of a completed takeover -- X_sao to 0.60, X_ac to 0.46 in 240 d -- is NOT
+# reproducible at 42bbe8e, the commit that recorded it, nor at any later commit, and
+# cannot be traced to a committed state). The loss of adaptation STARTS the shift; it
+# does not complete it inside the run:
+#
+#   horizon   SAO share of the acetate-consuming biomass at the end   acetate d119 -> end
+#   200 d     0.4 %                                                    0.03 -> 1.2 kg/m3
+#   220 d     1.0 %                                                    0.02 -> 2.0
+#   240 d     3.2 %   (X_sao 0.039 against X_ac 1.171)                 0.03 -> 0.78
+#
+# What the record shows is the acetoclasts' inhibition -- acetate up 30-100x after the
+# onset and staying there -- with syntrophic oxidation growing in slowly behind it. The
+# structural half of this row therefore rests on a pathway that carries a few per cent of
+# the flux by day 240; whether that is enough is the lead's call (docs/f2_horizon_report.md).
 #
 # WHY `kinetic_update_allowed` IS TRUE HERE and false in S6-01: the truth label carries
 # `parameter` as well as `structural`, so a bounded update of the ammonia-inhibition

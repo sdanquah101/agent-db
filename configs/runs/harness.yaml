@@ -54,8 +54,13 @@ initial_extension_states:
 # the onset day then produces NO pathway shift at all -- acetate simply accumulates to
 # 1.4 kg/m3 while nothing grows to consume it, and the Level-6/7 structural rows are inert
 # because the fitted model omits a pathway that carries no flux. With this term the same
-# transition takes X_sao from 7e-5 to 0.60 kg COD/m3 and the acetoclasts from 1.2 to 0.46
-# in 240 d: a real, observable pathway shift.
+# transition STARTS: SAO grows in behind the inhibited acetoclasts. CORRECTED 2026-09-10:
+# the figure once recorded here (X_sao to 0.60 and X_ac to 0.46 in 240 d) is not
+# reproducible at 42bbe8e, the commit that recorded it, nor at any later commit, and
+# cannot be traced to a committed state. Measured through the harness at the scenarios'
+# own seeds on the current feed, SAO reaches 9.0 % (S5-01) and 3.2 % (S7-02) of the
+# acetate-consuming biomass by day 240 (1.2 % / 0.4 % at 200 d, 3.6 % / 1.0 % at 220 d),
+# while acetate rises 30-100x after the onset. See docs/f2_horizon_report.md.
 #
 # It is physically the right correction, not a fudge: syntrophic acetate oxidisers are
 # continuously re-introduced with the substrate and in a real digester are never absent,

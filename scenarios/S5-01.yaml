@@ -20,6 +20,15 @@
 # at 0.0035, above the threshold, and nothing happens.
 #
 # ONSET day 120 of 240: four months of the adapted regime and four of the transition.
+#
+# MEASURED (2026-09-10, the harness at this seed, current feed): the transition STARTS and
+# does not complete inside the run. Acetate rises from 0.03 to 1.8 kg/m3 by day 240 (2.9 at
+# a 200-d horizon) as the acetoclasts are inhibited, and syntrophic oxidation grows in
+# behind them to 1.2 % / 3.6 % / 9.0 % of the acetate-consuming biomass at 200 / 220 /
+# 240 d (X_sao 0.092 against X_ac 0.934 at 240 d). The diagnosable signal of this row is
+# the sustained acetate accumulation after the onset, which is present at every horizon;
+# the earlier description of a completed takeover (X_sao to 0.60 in 240 d, recorded
+# 2026-09-03) is not reproducible at the commit that recorded it or any later one.
 id: S5-01
 plant: A
 # stated rather than inherited from the plant's default: this row injects a LOSS

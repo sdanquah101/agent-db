@@ -2328,6 +2328,24 @@ and in the PR.
 
 ---
 
+**Correction, 2026-09-10 (F2 check; no ruling needed, a factual correction).** The figure
+above — "the same transition takes X_sao from 7e-5 to 0.60 kg COD m⁻³ and the acetoclasts
+from 1.2 to 0.46 in 240 d" — is **not reproducible**. Run through the harness at S7-02's and
+S5-01's own seeds in worktrees of `42bbe8e` (the commit that recorded it, with the reseeding
+term in place), `9db569b`, `4a022e8`, `56aeceb`, `fd76983`, `39d0e14` and the current tree,
+each with its own package on the path, the transition ends at 240 d with X_sao 0.154 and
+X_ac 0.839 (S5-01) and X_sao 0.090, X_ac 1.129 (S7-02) on every tree through 2026-09-09,
+and X_sao 0.092 / X_ac 0.934 and X_sao 0.039 / X_ac 1.171 on the current feed. The recorded
+number cannot be traced to a committed state; a different seed, burn-in or constant at the
+time is the likely explanation. What the reseeding term does buy is real and stands: SAO
+*grows in* behind the inhibited acetoclasts (from 7e-5 to 0.04–0.15 rather than staying at
+zero), reaching 9.0 % (S5-01) and 3.2 % (S7-02) of the acetate-consuming biomass by day 240
+on the current feed — 1.2 % / 0.4 % at 200 d, 3.6 % / 1.0 % at 220 d — while acetate rises
+30–100× after the onset and stays there. The scenario headers, the harness config note and
+the truth-side Plant A record carry the measured numbers as of this date. What the S7-02
+structural half is worth at a few per cent of the flux is with the lead
+(`docs/f2_horizon_report.md`, §6 and §9).
+
 ## 2026-09-03 — RULING 3 (the lead): feed strong cations calibrated to the anchor's alkalinity
 
 **Decision.** The Muscatine feeds' `s_cat` is calibrated to the anchor's own digester
