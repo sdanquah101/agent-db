@@ -484,9 +484,9 @@ def test_random_gaps_adds_gaps_that_carry_no_information_about_the_state():
         channels,
         vfa_surge_ratio=config.conditions.vfa_surge_ratio,
         vfa_median_window_d=config.conditions.vfa_median_window_d,
-        fos_tac_foaming=config.conditions.fos_tac_foaming,
         gas_surge_ratio=config.conditions.gas_surge_ratio,
         gas_median_window_d=config.conditions.gas_median_window_d,
+        foaming_vfa_ratio=config.conditions.foaming_vfa_ratio,
     )
     assert not overload[:stress_from].any() and overload[stress_from:].any()
 
@@ -620,7 +620,7 @@ def test_two_zone_channels_come_from_where_the_instrument_is():
     sample (alkalinity, VFA, COD, TAN, solids). Taking VFA from the sample while taking
     alkalinity from the reactor — which is what happens if the effluent's speciation is not
     computed — leaves FOS/TAC a ratio across two different liquids, and FOS/TAC is what
-    raises the overload and foaming flags behind the missingness model.
+    is the operator's ratio a workflow reads off its record.
     """
     T_op = load_all_plants()["C"].temperature.setpoint_K
     # magnitude 0: no bypass, so sample and reactor are the same liquid, exactly

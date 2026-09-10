@@ -363,16 +363,23 @@ class TierSpec(_Frozen):
 class ConditionThresholds(_Frozen):
     """When the condition flags that drive missingness are raised.
 
-    ``overload``: **true VFA** above ``vfa_surge_ratio`` times its trailing median over
-    ``vfa_median_window_d`` days — the hidden process state, not a reading (lead's ruling B,
-    2026-09-09). ``foaming``: FOS/TAC above ``fos_tac_foaming`` **and** the gas rate above
-    ``gas_surge_ratio`` times its trailing median — a foaming digester is one that is both
-    acidifying and gassing hard.
+    Both triggers fire on the **hidden process state**, never on a reading. ``overload``:
+    true VFA above ``vfa_surge_ratio`` times its trailing median over
+    ``vfa_median_window_d`` days (lead's ruling B, 2026-09-09). ``foaming``: the gas rate
+    above ``gas_surge_ratio`` times its trailing median over ``gas_median_window_d`` days
+    **and** true VFA above ``foaming_vfa_ratio`` times the same trailing median the
+    overload trigger uses (lead's ruling B3, 2026-09-10) — a foaming digester is one that
+    is both gassing hard and acidifying. Every trailing median is over the samples
+    *before* the current one, current excluded.
 
-    ``fos_tac_overload`` is still here and is **no longer a trigger**: it is the
-    operator-visible overload threshold, percentile-matched to the anchor, which a workflow
-    can compute from the record it is given. The two are deliberately separate (ruling C):
-    one is what the plant *is*, the other is what an operator would *say*.
+    ``fos_tac_overload`` and ``fos_tac_foaming`` are still here and are **not triggers**:
+    they are the operator-visible thresholds on the titrimetric FOS/TAC, which a workflow
+    can compute from the record it is given. Trigger and threshold are deliberately
+    separate (ruling C): one is what the plant *is*, the other is what an operator would
+    *say*. The foaming threshold in particular is structurally dead as a trigger — the
+    titrimetric ratio has a bicarbonate floor near 0.13-0.14 and sits at 0.14-0.18 in
+    every sound run — which is a measurement-model finding, recorded in the report and the
+    card, not a reason to lower the number.
     """
 
     vfa_surge_ratio: _Pos = Field(
@@ -387,11 +394,24 @@ class ConditionThresholds(_Frozen):
             "(kg FOS as acetic acid per kg CaCO3). Reported, not a missingness trigger."
         )
     )
-    fos_tac_foaming: _Pos = Field(description="FOS/TAC needed for the foaming flag, -")
+    fos_tac_foaming: _Pos = Field(
+        description=(
+            "OPERATOR-VISIBLE foaming threshold on the titrimetric FOS/TAC, -. Reported, "
+            "not a missingness trigger, and never wired to one (ruling B3, 2026-09-10)."
+        )
+    )
     gas_surge_ratio: _Pos = Field(
         description="Gas rate over its trailing median needed for the foaming flag, -"
     )
-    gas_median_window_d: _Pos = Field(description="Trailing window of the gas median, d")
+    gas_median_window_d: _Pos = Field(
+        description="Trailing window of the gas median, d (excludes the current day)"
+    )
+    foaming_vfa_ratio: _Pos = Field(
+        description=(
+            "True VFA over its trailing median (the overload trigger's own reference) "
+            "also needed for the foaming flag, -"
+        )
+    )
     source: str = ""
 
     @model_validator(mode="after")
@@ -400,6 +420,10 @@ class ConditionThresholds(_Frozen):
             raise ValueError("gas_surge_ratio must exceed 1 (a surge is above the median)")
         if self.vfa_surge_ratio <= 1.0:
             raise ValueError("vfa_surge_ratio must exceed 1 (a surge is above the median)")
+        if self.foaming_vfa_ratio < 1.0:
+            raise ValueError(
+                "foaming_vfa_ratio must be at least 1 (foaming needs VFA ABOVE its median)"
+            )
         return self
 
 

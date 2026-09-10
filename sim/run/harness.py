@@ -769,9 +769,9 @@ def simulate_truth(
         channels,
         vfa_surge_ratio=obs_cfg.conditions.vfa_surge_ratio,
         vfa_median_window_d=obs_cfg.conditions.vfa_median_window_d,
-        fos_tac_foaming=obs_cfg.conditions.fos_tac_foaming,
         gas_surge_ratio=obs_cfg.conditions.gas_surge_ratio,
         gas_median_window_d=obs_cfg.conditions.gas_median_window_d,
+        foaming_vfa_ratio=obs_cfg.conditions.foaming_vfa_ratio,
     )
     active = result if mixing.ideal else result.active
     return RunTruth(

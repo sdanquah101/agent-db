@@ -110,13 +110,35 @@ conditions:
                               # threshold, and the flag fires on 0.17 % of sound Plant B
                               # days; the residual 1.5x gap to the anchor is in
                               # docs/g1_anchor_report.md section 6.1 and docs/vfa_gap.md.
-  fos_tac_foaming: 0.30       # DESIGN  -; ASSUMED: the ~78th percentile of the same column;
-                              # foaming needs acidification AND a gas surge, so its FOS/TAC
-                              # threshold is lower than the overload one.
-  gas_surge_ratio: 1.35       # DESIGN  -; ASSUMED: gas rate 35 % above its own trailing
-                              # median. Not anchored: Muscatine records no foaming events.
-  gas_median_window_d: 14.0   # DESIGN  d; ASSUMED: two weeks of trailing gas history.
-  source: "fos_tac_overload APPROVED by the lead, ANCHORED to muscatine_daily Dig1-FOS-TAC; the foaming rule is ASSUMED"
+  fos_tac_foaming: 0.30       # DESIGN  -; ASSUMED: the ~78th percentile of the same column.
+                              # OPERATOR-VISIBLE ONLY, NOT A TRIGGER (lead's ruling B3,
+                              # 2026-09-10). It was the foaming trigger's FOS/TAC term until
+                              # the review of 2026-09-10 found the flag had never fired in
+                              # any cell: the titrimetric ratio has a structural floor near
+                              # 0.13-0.14 (bicarbonate carry-over) and sits at 0.14-0.18 in
+                              # every sound run, so 0.30 is unreachable by a working
+                              # digester under this measurement model. That is a
+                              # MEASUREMENT-MODEL FINDING (docs/g1_anchor_report.md, the
+                              # benchmark card) and the number is kept as declared, not
+                              # lowered; it is reported beside the 0.40 overload threshold
+                              # and wired to nothing.
+  # THE FOAMING TRIGGER (lead's ruling B3, 2026-09-10) fires on the HIDDEN STATE, like the
+  # overload one: the gas rate above gas_surge_ratio x its trailing median AND true VFA
+  # above foaming_vfa_ratio x the overload trigger's own trailing median -- a digester that
+  # is gassing hard while its acids are rising. Same trailing-median convention as overload:
+  # the previous gas_median_window_d days, current sample EXCLUDED. MEASURED on the four
+  # rows (B, C, A-adapted, A-unadapted; 24 seeds each) and RECORDED, NOT TUNED: see
+  # docs/g1_anchor_report.md section 5.5.
+  gas_surge_ratio: 1.80       # DESIGN  -; the lead's cut-off (B3). Not anchored: Muscatine
+                              # records no foaming events. The pre-M2 measurement table above
+                              # put the sound-run p92 of gas / 30-d trailing median at 1.780,
+                              # so 1.80 is a top-decile gas day.
+  gas_median_window_d: 30.0   # DESIGN  d; the lead's window (B3): the same 30 trailing days
+                              # the overload trigger uses, current day excluded.
+  foaming_vfa_ratio: 1.00     # DESIGN  -; the lead's cut-off (B3): true VFA above its own
+                              # 30-d trailing median (any excess; the gas surge carries the
+                              # magnitude condition).
+  source: "fos_tac_overload APPROVED by the lead, ANCHORED to muscatine_daily Dig1-FOS-TAC; the foaming trigger is the lead's ruling B3 of 2026-09-10 on the hidden state, unanchored; fos_tac_foaming is operator-visible only"
 
 # Conditional missingness (proposal §6.1). Base rate by TIER, stress multipliers by
 # instrument KIND (lead's decision 2026-09-02). One rate is MEASURED - Tier C online, from

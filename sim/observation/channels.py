@@ -599,8 +599,8 @@ def channels_from_two_zone(
 
     That last point is not cosmetic: with a bypass the effluent's acetate can be well above
     the active zone's, so alkalinity taken from the reactor while VFA is taken from the
-    sample would misstate FOS/TAC — the quantity that also raises the overload and foaming
-    flags behind the missingness model.
+    sample would misstate FOS/TAC — the operator's ratio, which a workflow reads off the
+    record it is given (the missingness flags read the hidden state, not this ratio).
     """
     return channel_series(
         result.active,
@@ -646,16 +646,20 @@ def condition_flags(
     *,
     vfa_surge_ratio: float,
     vfa_median_window_d: float,
-    fos_tac_foaming: float,
     gas_surge_ratio: float,
     gas_median_window_d: float,
+    foaming_vfa_ratio: float,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Overload and foaming flags per output time (proposal §6.1, missingness).
 
-    **``overload`` triggers on the HIDDEN STATE, not on a reading** (lead's ruling B,
-    2026-09-09): true VFA above ``vfa_surge_ratio`` times its trailing median over
-    ``vfa_median_window_d`` days. It used to be "the reported FOS/TAC exceeds 0.40", and
-    that was the wrong architecture twice over:
+    **Both flags trigger on the HIDDEN STATE, not on a reading.** Neither reads the
+    ``fos_tac`` channel, and a channel set without it is accepted (tested): the
+    operator-visible FOS/TAC thresholds are things a workflow computes from its record,
+    never things the plant reacts to.
+
+    **``overload``** (lead's ruling B, 2026-09-09): true VFA above ``vfa_surge_ratio``
+    times its trailing median over ``vfa_median_window_d`` days. It used to be "the
+    reported FOS/TAC exceeds 0.40", and that was the wrong architecture twice over:
 
     * an instrument reading is what a *workflow* sees, and conditional missingness is a
       property of the **plant** — instruments fail during the transients that identify the
@@ -670,30 +674,33 @@ def condition_flags(
     rejected candidates and their equivalent cut-offs are recorded in ``docs/decisions.md``;
     they are **not** OR-ed in, which would give 47 %.
 
-    ``foaming`` is unchanged: FOS/TAC above the (lower) foaming threshold **and** the gas
-    rate above ``gas_surge_ratio`` times its trailing median. Its FOS/TAC is now the
-    titrimetric one, which is the same convention as the anchored threshold it is compared
-    against, so that pairing is more consistent than it was rather than less.
+    **``foaming``** (lead's ruling B3, 2026-09-10): the gas rate above ``gas_surge_ratio``
+    times its trailing median over ``gas_median_window_d`` days **and** true VFA above
+    ``foaming_vfa_ratio`` times the *same* trailing median the overload trigger uses — a
+    digester that is gassing hard while its acids are rising, which is what makes a
+    surface foam rather than a good day. It used to be "the titrimetric FOS/TAC exceeds
+    0.30 and the gas surges", and the review of 2026-09-10 found it had never fired in any
+    cell: the titrimetric ratio has a structural floor near 0.13-0.14 (the bicarbonate
+    carry-over) and sits at 0.14-0.18 in every sound run, so the threshold was unreachable
+    and the foaming stress multiplier was dead everywhere. The operator-visible 0.30
+    threshold stays declared and reported; it is **not wired here** and its deadness is
+    written up as a measurement-model finding rather than tuned away.
 
-    Every trailing median uses only past samples, so no flag depends on the future.
+    Every trailing median uses only past samples, current excluded, so no flag depends on
+    the future and no excursion can drag its own reference up and mask itself.
 
     Returns:
         ``(overload, foaming)`` boolean arrays.
     """
     t = channels.t
-    # the HIDDEN true VFA, never the reported one
+    # the HIDDEN true VFA, never the reported one; one reference serves both flags
     vfa = channels["vfa_total"]
-    overload = vfa > vfa_surge_ratio * trailing_median(vfa, t, vfa_median_window_d)
+    vfa_reference = trailing_median(vfa, t, vfa_median_window_d)
+    overload = vfa > vfa_surge_ratio * vfa_reference
 
-    fos_tac = channels["fos_tac"]
     gas = channels["q_gas_stp_dry"]
-    # foaming keeps its own window, which includes the current sample: it is a level
-    # comparison against recent history rather than a departure from it
-    lo = np.searchsorted(t, t - gas_median_window_d, side="left")
-    trailing_gas = np.empty(t.size)
-    for i in range(t.size):
-        trailing_gas[i] = np.median(gas[lo[i] : i + 1])
-    foaming = (fos_tac > fos_tac_foaming) & (gas > gas_surge_ratio * trailing_gas)
+    gas_reference = trailing_median(gas, t, gas_median_window_d)
+    foaming = (gas > gas_surge_ratio * gas_reference) & (vfa > foaming_vfa_ratio * vfa_reference)
     return overload, foaming
 
 

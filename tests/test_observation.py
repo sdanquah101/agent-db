@@ -911,23 +911,39 @@ def test_the_trailing_median_matches_its_own_definition_on_an_irregular_grid():
         channels,
         vfa_surge_ratio=2.0,
         vfa_median_window_d=vfa_window,
-        fos_tac_foaming=0.30,
         gas_surge_ratio=1.35,
         gas_median_window_d=window,
+        foaming_vfa_ratio=1.0,
     )
-    trailing = np.array([np.median(gas[(t >= ti - window) & (t <= ti)]) for ti in t])
-    np.testing.assert_array_equal(foaming, (fos > 0.30) & (gas > 1.35 * trailing))
-    # the OVERLOAD window is trailing and EXCLUDES the current sample, so its plain
-    # definition is different from the gas one and is written out separately here
+
+    # both windows are trailing and EXCLUDE the current sample (ruling B3 made the gas one
+    # match the overload one), so the plain definition is written out once for each series
+    def plain(values: np.ndarray, w: float) -> np.ndarray:
+        return np.array(
+            [
+                np.median(values[(t >= ti - w) & (t < ti)]) if (t < ti).any() else values[i]
+                for i, ti in enumerate(t)
+            ]
+        )
+
     v = np.maximum(vfa, 0.05)
-    reference = np.array(
-        [
-            np.median(v[(t >= ti - vfa_window) & (t < ti)]) if (t < ti).any() else v[i]
-            for i, ti in enumerate(t)
-        ]
-    )
-    np.testing.assert_array_equal(overload, v > 2.0 * reference)
+    vfa_reference = plain(v, vfa_window)
+    gas_reference = plain(gas, window)
+    np.testing.assert_array_equal(overload, v > 2.0 * vfa_reference)
+    np.testing.assert_array_equal(foaming, (gas > 1.35 * gas_reference) & (v > vfa_reference))
     assert foaming.any() and overload.any()  # both flags are exercised, not trivially empty
+    # and the reported ratio takes no part in either: the same flags without the channel
+    without = TruthChannels(t, {"q_gas_stp_dry": gas, "vfa_total": v})
+    again = condition_flags(
+        without,
+        vfa_surge_ratio=2.0,
+        vfa_median_window_d=vfa_window,
+        gas_surge_ratio=1.35,
+        gas_median_window_d=window,
+        foaming_vfa_ratio=1.0,
+    )
+    np.testing.assert_array_equal(again[0], overload)
+    np.testing.assert_array_equal(again[1], foaming)
 
 
 def test_the_overload_reference_excludes_the_current_sample():
@@ -963,9 +979,9 @@ def _flags(channels, config):
         channels,
         vfa_surge_ratio=config.conditions.vfa_surge_ratio,
         vfa_median_window_d=config.conditions.vfa_median_window_d,
-        fos_tac_foaming=config.conditions.fos_tac_foaming,
         gas_surge_ratio=config.conditions.gas_surge_ratio,
         gas_median_window_d=config.conditions.gas_median_window_d,
+        foaming_vfa_ratio=config.conditions.foaming_vfa_ratio,
     )
 
 
@@ -980,13 +996,69 @@ def test_condition_flags_use_only_past_history(config):
     assert not overload[-1]
     assert not foaming.any()  # a flat gas rate never surges above its own median
 
-    # a real surge with elevated FOS/TAC does raise foaming
+
+def test_the_foaming_flag_needs_a_gas_surge_and_rising_vfa_together(config):
+    """Ruling B3 (2026-09-10): foaming is a gas surge WHILE the hidden VFA is above its median.
+
+    Three windows on one record. The gas doubles while the VFA is stepping up: fires. The
+    gas doubles again a month later, when the VFA has sat at its new level long enough to
+    BE the median: does not fire, because a surge on a settled digester is a good day, not
+    a foam. And the VFA step alone, on a flat gas rate, never fires (the test above).
+    """
+    ratio = config.conditions.gas_surge_ratio
+    assert ratio == 1.80 and config.conditions.foaming_vfa_ratio == 1.00  # the ruling's values
+    channels = _flat_channels(stress_from=100)
     t = channels.t
     gas = np.full(t.size, 1500.0)
-    gas[150:155] = 3000.0
+    gas[100:105] = 3000.0  # 2.0x: above the 1.80x cut-off, while the VFA has just stepped
+    gas[150:155] = 3000.0  # the same surge, once the VFA has been high for 50 days
     surged = TruthChannels(t, {**{k: channels[k] for k in channels.names}, "q_gas_stp_dry": gas})
-    _, foaming2 = _flags(surged, config)
-    assert foaming2[150:155].all() and not foaming2[:150].any()
+    _, foaming = _flags(surged, config)
+    assert foaming[100:105].all(), "gas surge + rising VFA is the foaming state"
+    assert not foaming[:100].any()
+    assert not foaming[150:155].any(), "a gas surge on a settled VFA is not foaming"
+    assert not foaming[105:150].any()
+    # the two conditions are separately necessary: drop either and the flag goes out
+    calm_vfa = {k: surged[k] for k in surged.names}
+    calm_vfa["vfa_total"] = np.ones(t.size)
+    assert not _flags(TruthChannels(t, calm_vfa), config)[1].any()
+    weak_gas = {k: surged[k] for k in surged.names}
+    weak_gas["q_gas_stp_dry"] = np.where(gas > 1500.0, 1500.0 * (ratio - 0.01), 1500.0)
+    assert not _flags(TruthChannels(t, weak_gas), config)[1].any()
+    # the window is trailing and excludes the current day: a surge that persists past the
+    # window is its own median and stops firing, exactly as the overload flag does
+    long_gas = np.full(t.size, 1500.0)
+    long_gas[100:] = 3000.0
+    long = TruthChannels(t, {**{k: channels[k] for k in channels.names}, "q_gas_stp_dry": long_gas})
+    _, foaming_long = _flags(long, config)
+    assert foaming_long[100] and not foaming_long[-1]
+
+
+def test_the_foaming_flag_reads_the_hidden_state_and_not_the_reported_ratio(config):
+    """Ruling B3: the operator's 0.30 stays visible and unwired; the flag never reads it.
+
+    The titrimetric FOS/TAC is pinned far above 0.30 with nothing else happening: no flag.
+    Then it is pinned far below 0.30 while the gas surges and the hidden VFA rises: the flag
+    fires anyway. A flag that read the ratio would do the opposite in both cases.
+    """
+    base = _flat_channels(n_days=120)
+    t = base.t
+    loud = {name: base[name] for name in base.names}
+    loud["fos_tac"] = np.full(t.size, 5.0)
+    assert not _flags(TruthChannels(t, loud), config)[1].any()
+
+    quiet = {name: base[name] for name in base.names}
+    quiet["fos_tac"] = np.full(t.size, 0.001)
+    vfa = np.ones(t.size)
+    vfa[60:63] = 1.5  # above its median, well under the 2.0x overload cut-off
+    gas = np.full(t.size, 1500.0)
+    gas[60:63] = 3000.0
+    quiet["vfa_total"], quiet["q_gas_stp_dry"] = vfa, gas
+    overload, foaming = _flags(TruthChannels(t, quiet), config)
+    assert foaming[60:63].all() and foaming.sum() == 3
+    assert not overload.any(), "foaming does not require the overload cut-off"
+    # and the operator's threshold is still declared, for a workflow to read its record by
+    assert config.conditions.fos_tac_foaming == 0.30
 
 
 def test_the_overload_flag_reads_the_hidden_vfa_and_not_the_reported_ratio(config):

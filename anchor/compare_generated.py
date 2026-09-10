@@ -530,12 +530,17 @@ def output_panel(
                         np.median(channel["fos_tac_true_vfa"][settled])
                     ),
                     "ch4_fraction_median": float(np.median(channel["ch4_fraction"][settled])),
-                    # the MISSINGNESS TRIGGER: hidden true VFA above its trailing median
+                    # the MISSINGNESS TRIGGERS: hidden true VFA above its trailing median
+                    # (overload); a hidden gas surge while true VFA is above its median
+                    # (foaming, ruling B3 of 2026-09-10)
                     "overload_day_fraction": float(np.mean(truth.overload[settled])),
                     "foaming_day_fraction": float(np.mean(truth.foaming[settled])),
-                    # the OPERATOR-VISIBLE threshold, which is a different thing (ruling C)
+                    # the OPERATOR-VISIBLE thresholds, which are different things (ruling C)
                     "fos_tac_exceedance_fraction": float(
                         np.mean(channel["fos_tac"][settled] > 0.40)
+                    ),
+                    "fos_tac_foaming_exceedance_fraction": float(
+                        np.mean(channel["fos_tac"][settled] > 0.30)
                     ),
                 },
             )
@@ -693,8 +698,9 @@ def render_panel(panel: Sequence[PanelRun]) -> str:
     """
     lines = [
         "| Base seed | Verdict | median pH | mean CH4 | titrimetric FOS (kg/m3) | true VFA "
-        "(kg/m3) | FOS/TAC | trigger days | FOS/TAC > 0.40 days |",
-        "|---|---|---:|---:|---:|---:|---:|---:|---:|",
+        "(kg/m3) | FOS/TAC | overload days | foaming days | FOS/TAC > 0.40 days | "
+        "FOS/TAC > 0.30 days |",
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for run in panel:
         verdict = "sound" if run.sound else "**soured**"
@@ -704,7 +710,9 @@ def render_panel(panel: Sequence[PanelRun]) -> str:
             f"{s['ch4_fraction_median']:.3f} | {s['vfa_median']:.3f} | "
             f"{s['vfa_true_median']:.4f} | {s['fos_tac_median']:.3f} | "
             f"{s['overload_day_fraction'] * 100:.2f} % | "
-            f"{s['fos_tac_exceedance_fraction'] * 100:.2f} % |"
+            f"{s['foaming_day_fraction'] * 100:.2f} % | "
+            f"{s['fos_tac_exceedance_fraction'] * 100:.2f} % | "
+            f"{s['fos_tac_foaming_exceedance_fraction'] * 100:.2f} % |"
         )
     sound = [r for r in panel if r.sound]
     lines.append("")
@@ -721,26 +729,38 @@ def render_panel(panel: Sequence[PanelRun]) -> str:
             )
 
         trig, trig_lo, trig_hi, trig_n = _rate("overload_day_fraction")
+        foam, foam_lo, foam_hi, foam_n = _rate("foaming_day_fraction")
         op, op_lo, op_hi, op_n = _rate("fos_tac_exceedance_fraction")
+        opf, opf_lo, opf_hi, opf_n = _rate("fos_tac_foaming_exceedance_fraction")
         lines += [
             "",
-            "**Two rates, and they are different things** (lead's rulings B and C, "
-            "2026-09-09). Across the "
+            "**Four rates, and they are two different kinds of thing** (lead's rulings B "
+            "and C of 2026-09-09 and B3 of 2026-09-10). Across the "
             f"{len(sound)} SOUND runs:",
             "",
             "| | what it is | pooled | per-run min | per-run max | runs that fire |",
             "|---|---|---:|---:|---:|---:|",
-            f"| **conditional-missingness trigger** | hidden true VFA > 2.00x its 30-d "
-            f"trailing median | **{trig * 100:.2f} %** | {trig_lo * 100:.2f} % | "
+            f"| **overload trigger** (conditional missingness) | hidden true VFA > 2.00x "
+            f"its 30-d trailing median | **{trig * 100:.2f} %** | {trig_lo * 100:.2f} % | "
             f"{trig_hi * 100:.2f} % | {trig_n} of {len(sound)} |",
+            f"| **foaming trigger** (conditional missingness) | hidden gas > 1.80x its "
+            f"30-d trailing median AND true VFA > its 30-d trailing median | "
+            f"**{foam * 100:.2f} %** | {foam_lo * 100:.2f} % | {foam_hi * 100:.2f} % | "
+            f"{foam_n} of {len(sound)} |",
             f"| operator-visible overload | titrimetric FOS/TAC > 0.40 | "
             f"**{op * 100:.2f} %** | {op_lo * 100:.2f} % | {op_hi * 100:.2f} % | "
             f"{op_n} of {len(sound)} |",
+            f"| operator-visible foaming (unwired) | titrimetric FOS/TAC > 0.30 | "
+            f"**{opf * 100:.2f} %** | {opf_lo * 100:.2f} % | {opf_hi * 100:.2f} % | "
+            f"{opf_n} of {len(sound)} |",
             "",
             "The anchor's own FOS/TAC exceedance is 8.25 % (Dig1) and 9.18 % (Dig2), and "
-            "its 92nd percentile is what the 0.40 threshold is matched to. The trigger is "
-            "not compared with that number: it fires on the hidden state, which no plant "
-            "column reports.",
+            "its 92nd percentile is what the 0.40 threshold is matched to. The triggers are "
+            "not compared with that number: they fire on the hidden state, which no plant "
+            "column reports. The operator-visible foaming threshold is wired to nothing: "
+            "the titrimetric ratio has a bicarbonate floor near 0.13-0.14, so 0.30 is out "
+            "of a working digester's reach under this measurement model (a finding, "
+            "recorded in section 5.5 and the benchmark card, not a threshold to lower).",
         ]
     return "\n".join(lines)
 

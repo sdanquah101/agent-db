@@ -498,9 +498,9 @@ def observe(
         channels,
         vfa_surge_ratio=config.conditions.vfa_surge_ratio,
         vfa_median_window_d=config.conditions.vfa_median_window_d,
-        fos_tac_foaming=config.conditions.fos_tac_foaming,
         gas_surge_ratio=config.conditions.gas_surge_ratio,
         gas_median_window_d=config.conditions.gas_median_window_d,
+        foaming_vfa_ratio=config.conditions.foaming_vfa_ratio,
     )
 
     # the plant-level outage series: ONE draw for the tier, on the finest online schedule,
