@@ -347,13 +347,13 @@ stream and passed the entire suite. :data:`COMMITTED_FEED_ALKALINITY` closes it.
 
 COMMITTED_FEED_ALKALINITY: dict[str, tuple[float, float]] = {
     #                          assay      charge   kg CaCO3/m3
-    "cattle_slurry": (16.5000, 16.4989),
+    "cattle_slurry": (12.5030, 12.5037),
     "fog": (-0.0005, 0.0000),
-    "food_waste": (7.5887, 9.0999),
-    "grass_silage": (6.3575, 6.4000),
-    "high_strength_waste": (10.7469, 11.7472),
-    "primary_sludge": (4.0003, 3.9997),
-    "thickened_was": (3.9969, 3.9982),
+    "food_waste": (7.5887, 7.7247),
+    "grass_silage": (6.3575, 4.8990),
+    "high_strength_waste": (10.8735, 10.8720),
+    "primary_sludge": (2.5028, 2.5027),
+    "thickened_was": (2.0667, 2.0661),
 }
 """Golden pins on the absolute value of both M2 quantities, kg CaCO3/m3 at catalogue TS.
 
@@ -363,7 +363,12 @@ copy of the other quantity fails here** rather than sliding through the ratio te
 Update them deliberately, with the reason, when a stream's declared composition moves --
 that is the mechanism, not an obstacle to it.
 
-**Moved once, on 2026-09-09, and this is the reason.** The lead's B1 ruling corrected
+**Moved twice, and these are the reasons.** On 2026-09-10 the lead ruled that ``s_ca`` is
+*dissolved* calcium and is derived -- the calcite-saturated value at the declared pH,
+solved jointly with the paired ``s_ic`` -- rather than the total-calcium-sized numbers the
+catalogue had carried; every stream's charge fell with its calcium and the three derived
+streams' assays fell with their re-paired inorganic carbon. Before that, on 2026-09-09,
+the lead's B1 ruling corrected
 :func:`~sim.influent.generator.feed_cation_charge` to carry the divalent calcium the
 simulator is actually fed, which raised every charge, and approved redistributing the four
 streams that then breached the band as paired ``s_cat`` + ``s_ic``. Every assay except

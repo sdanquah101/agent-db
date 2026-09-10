@@ -188,7 +188,7 @@ matrix cells are sound. The sound/soured labelling stays as instrumentation.
 - **The consequence that used to follow from it is resolved.** Conditional missingness — and
   with it the Level-4 `informative_missingness` row — had almost nothing to act on, because
   the flag read a quantity that sits far below its threshold. Since the lead's ruling B the
-  trigger reads the hidden process state and fires on **7.70 % of days in every sound run**
+  trigger reads the hidden process state and fires on **7.67 % of days in every sound run**
   (§5.4), against the plant's own 7.78–9.18 %.
 - **`S6-01` (omitted SAO) is no longer inert** (lead's ruling 1, 2026-09-09). Plant A
   declares **two baselines**: `adapted`, acetoclastic, where the omitted syntrophic pathway
@@ -240,13 +240,13 @@ missingness triggers on the hidden state (§5.4).
 
 | | reads | fires on | used for |
 |---|---|---|---|
-| **conditional-missingness trigger** | hidden true VFA > 2.00× its 30-day trailing median | **7.70 %** of days on sound Plant B runs (per-run 2.65–15.89 %, all 24 runs) | §6.1 conditional missingness, and the Level-4 `informative_missingness` row |
-| **operator-visible overload** | titrimetric FOS/TAC > 0.40 | 0.19 % of days (1 of 24 runs) | what an operator would call an overload; reported, never a trigger |
+| **conditional-missingness trigger** | hidden true VFA > 2.00× its 30-day trailing median | **7.67 %** of days on sound Plant B runs (per-run 2.65–16.56 %, all 24 runs) | §6.1 conditional missingness, and the Level-4 `informative_missingness` row |
+| **operator-visible overload** | titrimetric FOS/TAC > 0.40 | 0.17 % of days (1 of 24 runs) | what an operator would call an overload; reported, never a trigger |
 
 The **trigger** reads the plant, not a reading: instruments fail during the transients that
 identify the process whether or not anyone has taken a measurement, and the reading it used
 to use masks those transients (§5.3). Its cut-off was not tuned — 2.00× is the lead's figure
-as written, and it lands on 7.70 % against the plant's own 7.78–9.18 % exceedance. Its
+as written, and it lands on 7.67 % against the plant's own 7.78–9.18 % exceedance. Its
 trailing window **excludes the current day**, so an excursion cannot drag its own reference
 up and mask itself. The cut-off is 2.00× on every plant: **differences between plants are
 recorded, not tuned away.**

@@ -225,7 +225,16 @@ def test_mixed_influent_is_flow_weighted_and_cod_consistent(catalogue, plants):
     assert q == pytest.approx(sum(m / catalogue.feeds[n].density for n, m in rates.items()))
     assert c[_L["S_IN"]] == pytest.approx(0.01)  # both sludges carry the BSM2 S_IN
     assert organic_loading_rate(catalogue, rates, V) > 0
-    assert extension_influent(catalogue, rates)["S_ca"] == pytest.approx(0.02)
+    # the flow-weighted calcium, derived from the catalogue rather than pinned: this line
+    # was a pin on the old 0.02 kmol/m3 and fired when the lead's ruling of 2026-09-10 made
+    # s_ca the calcite-saturated DISSOLVED calcium (primary sludge 0.00503, WAS 0.00068)
+    q_total = sum(m / catalogue.feeds[n].density for n, m in rates.items())
+    ca_expected = (
+        sum(m / catalogue.feeds[n].density * catalogue.feeds[n].s_ca for n, m in rates.items())
+        / q_total
+    )
+    assert 0.0 < ca_expected < 0.02  # the ruling was a reduction; a pin at 0.02 must not return
+    assert extension_influent(catalogue, rates)["S_ca"] == pytest.approx(ca_expected)
     # no composite: everything particulate goes to X_ch / X_pr / X_li / X_I
     assert c[_L["X_xc"]] == 0.0 and c[_L["X_ch"]] > 0 and c[_L["X_I"]] > 0
     for fn in (mix_feeds, extension_influent):

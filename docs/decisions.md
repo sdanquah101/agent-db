@@ -3236,11 +3236,11 @@ tidy-up, and it belongs to the lead.
 
 ## 2026-09-09 — RULING ON M2 (the lead): an AMENDMENT TO RULING 3 of 2026-09-03
 
-> **M2 IS NOT CLOSED.** An independent review of this fix (2026-09-09) found three defects
-> in it. **B3 is fixed** — see the addendum at the end of this entry. **B1 and B2 are open
-> and with the lead**, and nothing has been changed for either: both would move the
-> influent again, and B1's honest fix may require redistributing the sludge streams, which
-> is a further change to a frozen config only the lead can approve.
+> **M2 was NOT closed by this entry** — an independent review of this fix (2026-09-09)
+> found three defects in it, B1–B3 below. **All three are now fixed**: B3 in the addendum to
+> this entry, B2 by the liquor ruling of 2026-09-10, and B1 by the calcium ruling of
+> 2026-09-10 after a first attempt against the uncorrected calcium breached three things.
+> **M2 is closed as of the calcium entry**; the text below is the history.
 >
 > * **B1 — the charge side omits the fed calcium.** `feed_cation_charge` leaves out
 >   `2 × S_ca`, which `sim/adm1/physchem_ext.py::_residual` carries, `configs/adm1/extensions.yaml`
@@ -3423,7 +3423,7 @@ asserts three properties, each killing one class of mutant:
 Both mutants were rebuilt after the fix and **both now fail**. The ratio guard's docstring
 now says plainly that it is not sufficient alone and names this test as part of it.
 
-### B1 — the fed calcium is missing from the charge. OPEN, with the lead.
+### B1 — the fed calcium is missing from the charge. Was OPEN; closed 2026-09-10 (calcium ruling).
 
 Independently reproduced here. `sim/adm1/physchem_ext.py::_residual` carries `+ 2.0 * tot.ca`;
 `configs/adm1/extensions.yaml` declares `S_ca` with `charge: 2`; **all three plants enable
@@ -3446,7 +3446,7 @@ redistributing the sludge streams' composition or revisiting their declared pH �
 change to a frozen config, which is the lead's to approve. Recorded here so the next session
 cannot read the M2 entry as finished.
 
-### B2 — the invariant holds at catalogue TS, not for the reported assay. OPEN, with the lead.
+### B2 — the invariant holds at catalogue TS, not for the reported assay. Was OPEN; closed 2026-09-10 (liquor ruling).
 
 `total_alkalinity`'s acetate term scales with a delivery's solids (its COD does); the charge
 side does not scale at all, because the dissolved liquor stays at the catalogue value by the
@@ -3590,3 +3590,136 @@ well-preserved grass silage, which the catalogue already cites for this field.
 **Nothing the simulator is fed changes.** The declared feed pH is read only by the two visible
 assays (`ph` and `alkalinity`), never by the truth model, so this moves the operator's record
 and not the digester.
+
+---
+
+## 2026-09-10 — RULING (the lead): `s_ca` is dissolved calcium and is DERIVED, not cited
+
+**A further amendment in the ruling-3 / M2 / B1 thread, replacing the "cited sludge-liquor
+value" instruction of earlier the same day.** An approved change to a frozen config on every
+catalogue stream, and the change that let B1 land.
+
+### The unit check, done before anything was edited
+
+Ca is 40.08 g/mol and 1 mol/L is 1 kmol/m³, so g Ca/L ÷ 40.08 = kmol/m³: 0.05–0.15 g/L is
+**0.00125–0.00374 kmol/m³**. The catalogue carried 0.01–0.04 kmol/m³, i.e. **0.4–1.6 g Ca/L**
+— flow-weighted 1.51 (A), 0.51 (B), 0.80 (C) g/L. The correction is a **reduction of 10–30×**,
+confirmed independently against the coordinator's own conversion before it was applied.
+
+### Why the old values were wrong
+
+`s_ca` is declared in the schema as **dissolved** calcium. The values it held read like
+**total** calcium: cattle slurry really does carry ~1.5 g Ca per litre, but almost all of it is
+in the solids and in calcite and calcium-phosphate precipitate, not in solution. Dissolved
+calcium is capped by calcite solubility at circumneutral pH. Only the dissolved quantity
+belongs in a charge balance, and counting the total-sized number doubled the sludges'
+cation charge — which is what pushed 0.17 kmol C/m³ of extra bicarbonate into Plants B and C
+in the first B1 attempt and showed up as CO₂ in all three of its stop conditions.
+
+### The derivation
+
+For **primary sludge, thickened WAS and cattle slurry** (calcite-buffered streams), `s_ca`
+and `s_ic` are solved **jointly** at the stream's declared pH:
+
+1. electroneutrality — `total_alkalinity(s_ic) = feed_cation_charge(s_ca)`;
+2. calcite saturation — `s_ca = SS × K_sp / (γ² × [CO₃²⁻](s_ic, pH))`.
+
+`K_sp` is the truth model's own `pK_sp_calcite` (Plummer & Busenberg 1982; 8.480 at 25 °C —
+the feed is taken cold, stated rather than tuned). `pK_a2` is the shared 10.33. **γ = 1 at
+the feed is ASSUMED**; the truth model's ionic-strength correction would lower γ and raise the
+saturated calcium somewhat. **SS = 2.5 is ASSUMED**, the middle of the ruled 2–3× bracket;
+the bracket moves primary sludge's value 0.169–0.232 g/L, WAS 0.022–0.032, slurry
+0.0015–0.0023. **Mechanism**: calcite precipitation in slurry is calcium-controlled because
+carbonate is in excess — Hjorth, Christensen, Christensen & Sommer 2010, *Agron. Sustain.
+Dev.* 30:153–180 (doi:10.1051/agro/2009010), as the lead directed. The citation was verified
+to exist; the passage was not readable from this session (403), so the mechanism attribution
+is the lead's and is recorded as such.
+
+For the streams calcite does not govern the values are **declared assumptions, flagged**:
+grass silage (pH 4.28) **0.2 g Ca/L** from the ruled 0.1–0.3; high-strength waste and FOG
+**low**, 0.05 g/L and 0; `food_waste` treated as the HSW is (the ruling did not name it; no
+plant feeds it).
+
+| stream | pH | `s_ic` old → new | `s_ca` old → new, kmol/m³ (g Ca/L) | implied pH old → new | ratio |
+|---|---:|---:|---:|---:|---:|
+| `primary_sludge` | 6.0 | 0.04 → **0.1140** | 0.0200 → **0.00503** (0.80 → 0.20) | 12.16 → 6.00 | 1.000 |
+| `thickened_was` | 6.8 | 0.04 → **0.0560** | 0.0200 → **0.00068** (0.80 → 0.03) | 12.48 → 6.80 | 1.000 |
+| `cattle_slurry` | 7.5 | 0.05 → **0.1249** | 0.0400 → **0.00005** (1.60 → 0.002) | 10.05 → 7.50 | 1.000 |
+| `grass_silage` | 4.28 | 0.0 | 0.0200 → **0.00499** (0.80 → 0.20) ASSUMED | 4.28 → 4.20 | 0.771 |
+| `high_strength_waste` | 7.0 | 0.1607 → **0.1638** | 0.0100 → **0.00125** (0.40 → 0.05) ASSUMED | 7.00 | 1.000 |
+| `food_waste` | 5.1 | 0.0 | 0.0150 → **0.00125** (0.60 → 0.05) ASSUMED | — | 1.018 |
+| `fog` | 5.0 | 0.0 | 0.0 | — | floor |
+
+`s_cat` did not move on any stream. The **plausibility check** — the sewage-liquor range
+0.05–0.15 g/L — is met flow-weighted on Plant B (0.083 g/L) and Plant C (0.138); Plant A is
+below it (0.026) because slurry at pH 7.5 is carbonate-rich and calcite pins its dissolved
+calcium low, which is the mechanism working. Primary sludge alone sits just above the range
+(0.20 g/L, 0.17 at SS = 2): at pH 6.0 carbonate is scarce, so calcite allows more calcium in
+solution. Reported, not adjusted.
+
+**Silage** keeps its accepted 4.28 (ruling 3 of 2026-09-10). With the assumed calcium its
+balance would close at 4.20, and at 4.28 it now carries slightly more acetate anion than
+cations — 0.771×, inside the band. Recorded rather than moved, because the ruling named the
+pH.
+
+### B1 redone against the corrected calcium — and both of the lead's tests passed
+
+The lead set two tests of whether the correction was right: `biogas_mean` back inside its
+declared band, and the B/C loaded-and-control pair restored. Neither was tuned towards.
+
+| | before M2 | after the first B1 attempt | **after this ruling** | bound |
+|---|---:|---:|---:|---|
+| `biogas_mean` ratio | 1.45 | 1.532 ✗ | **1.489** | 0.6–1.5 — inside, 0.7 % of margin |
+| `ch4_fraction_median` | 0.700 | 0.666 | **0.680** | — |
+| `digester_pH_median` | 7.262 | 7.212 | **7.232** | ± 0.4; ruling 3's ~7.3 |
+| `alkalinity_median` | 5.125 | 5.131 | **5.116** | calibrated; ruling 3's ~5.0 |
+| `vfa_median` | 0.7778 | 0.7834 | **0.7804** | 0.25–4 |
+| `fos_tac_median` | 0.1501 | 0.1511 | **0.1507** | 0.5–2 |
+| Plant B sound | 24/24 | 24/24 | **24/24** | acceptance condition |
+| B/C pair, pH C vs B | 7.336 > 7.269 | 7.196 < 7.216 ✗ | **7.252 > 7.238** | restored |
+
+**All 23 anchored rows inside their declared bounds; no tolerance touched.** Per plant at
+the declared median feed, before → after: A pH 7.681 → 7.656, CH₄ 0.658 → 0.612; B
+7.269 → 7.238, 0.697 → 0.675; C 7.336 → 7.252, 0.687 → 0.619.
+
+**B2 band on real `AssayRecord`s** (3 plants × 8 seeds × 400 d), share outside 1.5×, original
+→ after the liquor fix → after this ruling: cattle slurry 27.2 → 0.00 → **0.00 %**; primary
+sludge 45.1 → 0.00 → **0.31 %**; thickened WAS 2.8 → 0.00 → **0.00 %**; high-strength waste
+15.2 → 9.26 → **0.88 %** (worst 1.65×). The HSW residual is the true-fractionation draw
+(previous entry); the band was not widened.
+
+**The four hidden-state trigger rows**, 24 seeds each, cut-off 2.00× everywhere:
+
+| plant | baseline | pooled | per-run | fires in | previous |
+|---|---|---:|---|---:|---:|
+| B | — | **7.67 %** | 2.65–16.56 % | 24/24 | 7.70 % |
+| C | — | **9.22 %** | 6.62–16.56 % | 24/24 | 9.96 % |
+| A | `unadapted` | **1.49 %** | 0.00–3.97 % | 21/24 | 2.54 % |
+| A | `adapted` | **0.28 %** | 0.00–1.32 % | 7/24 | 0.52 % |
+
+Both Plant A rows fell — slurry's inorganic carbon more than doubled, so its buffer is
+deeper and relative excursions rarer — and the pathway ratio between them **widened**, 4.9× →
+**5.3×**. A finding about the pathway rather than the feed should survive a change to the
+feed that moves both its numbers, and this one did. The VFA-ratio p92 column of the earlier
+table was not re-measured and is left blank in the report rather than carried over.
+
+**Not re-measured here, flagged**: Plant A's baseline tables in `configs/plants/plant_A.yaml`
+(X_ac, X_sao, acetate, the TAN bands) were measured on the old slurry feed. Both baselines
+ran 24/24 sound on this panel with pH 7.62–7.76, and nothing changed the feed nitrogen, so
+the TAN bands are not expected to move; the population numbers may have. For a later
+session before anything depends on them.
+
+### Guards and tests
+
+`COMMITTED_FEED_ALKALINITY` moved with every stream and its docstring says why.
+`tests/test_influent.py::test_mixed_influent_is_flow_weighted_and_cod_consistent` carried a
+pin on Plant C's flow-weighted `S_ca` at the old 0.02; it now derives the expectation from
+the catalogue and asserts the ruled direction (below 0.02), so it stays a test of
+flow-weighting rather than of a number. `pytest -q` 339 passed, `-m g1` 13 passed.
+
+**Alternatives.** Cite a sludge-liquor number and apply it across the catalogue (rejected by
+this ruling: three streams are not sludge, and a citation attached to a stream it does not
+describe is a false attribution); lower `s_ca` only where the balance failed (rejected: the
+field was wrong in kind everywhere, not in size on four streams); fit SS or γ to land biogas
+further from its bound (rejected: the lead's tests are of the physics, and tuning towards
+them would make them meaningless).

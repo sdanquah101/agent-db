@@ -1396,3 +1396,52 @@ watch, beside `biogas_mean` at 1.45.
 
 **Next**: the lead's ruling on B1 and B2. Nothing is regenerated, merged or tagged until
 then.
+
+---
+
+### Session 2026-09-10 — the calcium ruling; B1 closed against derived calcium; M2 closed
+
+**The lead's three rulings of 2026-09-10 are done**, on `claude/g1-b1-redistribution`; PR #15's
+head is unchanged until the coordinator confirms the pre-regeneration report. Nothing merged,
+tagged or regenerated.
+
+**Done**
+
+- **`s_ca` is dissolved calcium and is DERIVED.** Unit check first: 0.05–0.15 g Ca/L is
+  0.00125–0.00374 kmol/m³; the catalogue carried 0.4–1.6 g/L, i.e. total-calcium numbers
+  in a dissolved-calcium field — a reduction of 10–30×, confirmed against the coordinator's
+  conversion before editing. For the three calcite-buffered streams `s_ca` is the
+  calcite-saturated value at the declared pH (truth model's `pK_sp_calcite`, `pK_a2` 10.33,
+  γ = 1 ASSUMED, supersaturation 2.5× ASSUMED in the ruled 2–3×), solved jointly with the
+  `s_ic` that closes the stream's own charge balance; mechanism Hjorth et al. 2010. Silage,
+  HSW, FOG (and `food_waste`) are declared assumptions, flagged. Plausibility: Plant B 0.083
+  and Plant C 0.138 g/L inside the sewage-liquor range; Plant A 0.026, below it, as calcite
+  control at pH 7.5 predicts.
+- **B1 redone against the corrected calcium, and both of the lead's tests passed with
+  nothing tuned towards them**: `biogas_mean` **1.489** against 0.6–1.5 (was 1.532 in the
+  first attempt), and the B/C control pair **restored** (C 7.252 > B 7.238; was inverted).
+  All 23 anchored rows inside their declared bounds; Plant B 24/24 sound; alkalinity 5.116
+  and pH 7.232 where ruling 3 put them.
+- **Ruling 2 (liquor scaling) and the invariance-plus-physics guard approved as landed.** B2
+  on real assay records is now 0.00 / 0.31 / 0.00 / 0.88 % outside 1.5× (slurry, primary
+  sludge, WAS, HSW); the HSW remainder is the true-fractionation draw, a finding.
+- **Ruling 3 (silage at 4.28) recorded as accepted**; with its assumed calcium the balance
+  would close at 4.20 and at 4.28 the ratio is 0.771×, inside the band — reported, not moved.
+- **Four trigger rows re-measured**: B 7.67 %, C 9.22 %, A-unadapted 1.49 %, A-adapted
+  0.28 %. Both Plant A rows fell with the deeper slurry buffer and the pathway ratio widened
+  4.9× → 5.3×; the finding survived a feed change that moved both its numbers.
+- **M2 is closed**, and the report, the decisions log, the benchmark card, the sensor config
+  and the channel docstring say so with the numbers of this round.
+
+**Flagged, not decided here**
+
+- `biogas_mean` at **1.489** against 1.5 — 0.7 % of margin, the row to watch.
+- Primary sludge's derived calcium (0.20 g/L) sits just above the plausibility range; at
+  pH 6.0 carbonate is scarce. Reported as-is.
+- Plant A's baseline tables in `plant_A.yaml` were measured on the old slurry feed and not
+  re-measured; both baselines ran 24/24 sound with pH 7.62–7.76.
+- `S_I` still scales with the COD, not the liquor (previous entry).
+
+**Next**: the coordinator confirms the pre-regeneration report → matrix regeneration at the
+final head as the last action → the coordinator's review verdict → merge and tag by the
+coordinator. Then the tool registry (§6.2).

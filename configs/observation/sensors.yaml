@@ -60,19 +60,21 @@ conditions:
   # THAT TABLE IS THE PRE-M2 MEASUREMENT and is left as measured: all four rows come from
   # one panel at one code version, and re-measuring only the adopted row would make them
   # four numbers from two simulators. AFTER the M2 fix of 2026-09-09 (inorganic carbon
-  # paired to the high-strength waste's cations) the ADOPTED trigger fires on 7.70 % of the
-  # same 24 sound Plant B runs. The three rejected candidates were not re-measured; they
+  # paired to the high-strength waste's cations) the ADOPTED trigger fired on 7.70 % of the
+  # same 24 sound Plant B runs, and on 7.67 % after the calcium and liquor rulings of
+  # 2026-09-10. The three rejected candidates were not re-measured; they
   # lost by factors of 3 to 6, which a 0.2-point shift does not touch.
   #
-  # 7.70 % against the anchor's own 7.78 % exceedance, with NOTHING TUNED. The other two
+  # 7.67 % against the anchor's own 7.78 % exceedance, with NOTHING TUNED. The other two
   # each overshoot alone and the OR gives 47 %, so they are NOT combined. If a combination
   # is ever wanted the equivalent 7.8 % cut-offs are gas > 1.796x trailing and
   # OLR > 1.871x mean; recorded, not used.
   #
-  # NOT FROZEN until its Plant C and Plant A firing rates are recorded beside Plant B's.
-  # The cut-off stays 2.00x on every plant whatever they turn out to be: differences
-  # between plants are to be RECORDED, NOT TUNED AWAY (the lead), and there is no per-plant
-  # cut-off.
+  # The cut-off stays 2.00x on every plant: differences between plants are to be RECORDED,
+  # NOT TUNED AWAY (the lead), and there is no per-plant cut-off. All four rows are recorded
+  # (2026-09-10, after the calcium and liquor rulings, 24 seeds each): B 7.67 %, C 9.22 %,
+  # A-unadapted 1.49 %, A-adapted 0.28 %. docs/g1_anchor_report.md section 5.4 has the
+  # ranges and the pathway finding the Plant A pair carries.
   vfa_surge_ratio: 2.00       # DESIGN  -; the lead's cut-off, unchanged from as written
   vfa_median_window_d: 30.0   # DESIGN  d; trailing, EXCLUDING the current day, so a large
                               # excursion cannot drag its own reference up and mask itself
