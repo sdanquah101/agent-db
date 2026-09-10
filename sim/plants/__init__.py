@@ -22,7 +22,6 @@ import yaml
 
 from sim.adm1.schema import PlantGeometry
 from sim.plants.schema import (
-    Adaptation,
     AmmoniaEnvelope,
     Anchoring,
     Equalisation,
@@ -38,7 +37,6 @@ __all__ = [
     "KG_N_PER_KMOL",
     "PLANT_A_STATISTICS",
     "PLANT_IDS",
-    "Adaptation",
     "AmmoniaEnvelope",
     "Anchoring",
     "Equalisation",

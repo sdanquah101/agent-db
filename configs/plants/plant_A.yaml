@@ -41,91 +41,28 @@ hydraulics:
 mixing:
   model: cstr
   note: "Ideal CSTR in the plant contract; imperfect mixing is a fault-injection truth variant (answer 6)."
-# DECLARED community adaptation (lead's ruling 2, 2026-09-03). ADM1's default acetoclastic
-# free-ammonia inhibition constant (BSM2 K_I_nh3 = 0.0018 kmol N/m3, ~25 mg NH3-N/L) is for
-# a mesophilic sewage-sludge community. AFBI Hillsborough has run for years at a digestate
-# TAN of 2.3-4.3 kg N/m3 (configs/plant_a_statistics.yaml, Tisocco et al. 2024 §3.2) while
-# producing steadily, which a community at the default constant cannot do: at the default
-# the acetoclastic methanogens wash out entirely within ~800 d and the whole acetate flux
-# goes through syntrophic oxidation, leaving the Level-5/6/7 ammonia scenarios nothing to
-# act on. An adapted community is the physical explanation and the one the plant's own
-# stable operation evidences.
-#
-# The lead's ruling sets the adapted range at 0.02-0.05 kmol N/m3. The value is the BOTTOM
-# of that range, and the reason is measured rather than aesthetic (gate G1, 2026-09-03):
-#
-#   * Acetoclasts and SAO compete for one substrate, so they cannot coexist at a steady
-#     state. Whichever has the lower break-even acetate concentration excludes the other.
-#     Measured: at K_I below ~0.003 SAO wins outright, above it the acetoclasts do, and
-#     the stochastic feed does not change this. There is therefore NO adapted K_I in
-#     0.02-0.05 at which both are present -- the plant is acetoclastic at all of them.
-#   * The Level-5/6/7 rows are therefore staged as *transitions*: the run starts adapted
-#     and acetoclastic, and a loss of adaptation at the onset day takes K_I below the
-#     exclusion threshold, after which SAO grows in and takes over inside the horizon.
-#   * `ammonia_inhibition_shift` admits multipliers of 0.1 to 10 (sim/faults/schema.py,
-#     frozen). 0.02 x 0.1 = 0.002 is below the ~0.003 threshold; 0.035 x 0.1 = 0.0035 is
-#     ABOVE it, so from the midpoint the largest admissible loss of adaptation does not
-#     reach the shift at all. 0.02 is the only part of the ruled range from which the
-#     frozen magnitude range can express a full de-adaptation.
-#
-# tests/test_plants.py pins the exclusion threshold and this consequence.
-#
-# TWO DECLARED BASELINES (lead's ruling 1, 2026-09-09). Which community this digester
-# carries decides whether a Level-6 structural row means anything, so it is declared here
-# and named by the scenario rather than left implicit in a burn-in length.
-#
-# MEASURED, at the 400-d burn-in and a 180-d horizon at seed 1000, through the full harness.
-# RE-MEASURED 2026-09-10 on the current feed, after the calcium ruling (cattle slurry's
-# dissolved calcium 0.04 -> 0.00005 kmol/m3, inorganic carbon 0.05 -> 0.1249) and the
-# liquid-fraction generator fix changed what this plant is fed. Medians from day 30:
-#
-#   baseline     X_ac      X_sao     SAO share   acetate      TAN median   pH     CH4
-#   adapted      1.065     6.9e-05   0.000       0.037 kg/m3  3.703        7.73   0.629
-#   unadapted    0.0019    0.853     0.998       0.240 kg/m3  3.614        7.72   0.628
-#
-# What moved and by how much (previous 2026-09-09 values: adapted X_ac 1.129, pH 7.80,
-# CH4 0.688, TAN 3.695; unadapted X_ac 9.9e-05, X_sao 0.910, pH 7.79, CH4 0.692, TAN
-# 3.605): TAN within 0.01 on both (nothing changed the feed nitrogen); pH down 0.07 and CH4
-# down 6 points on both, because the slurry's missing inorganic carbon now arrives and
-# leaves as CO2; biomass down ~6 %. Both baselines are still the communities they declare --
-# the unadapted acetoclasts are 19x the old value but still 0.2 % of the acetate-consuming
-# biomass -- so nothing about K_I was touched (the lead's condition).
-#
-# Both are SOUND digesters; they are two different ones. In the adapted baseline syntrophic
-# acetate oxidation carries no flux, which is why omitting it from the fitted model produced
-# no residual and S6-01 was inert. In the unadapted baseline it carries all of it.
+# TWO DECLARED COMMUNITY STATES (lead's ruling 1, 2026-09-09), declared QUALITATIVELY ONLY
+# (lead's ruling B5, 2026-09-10). Which community this digester carries decides whether a
+# Level-6 structural row means anything, so the two states are declared here and named by
+# the scenario rather than left implicit in a burn-in length. What each state IS
+# numerically -- the constant its community carries, the biomass, acetate and ammonia it
+# measures at -- is truth-side (sim/plants/truth/plant_A.yaml, read by the harness) and not
+# in this file: with those numbers here, the redaction of `baseline` from the run manifest
+# hid nothing. Which state a given run is staged on is not declared anywhere a workflow can
+# read; working it out from the record is part of the diagnostic task.
 default_baseline: adapted
 baselines:
   - name: adapted
     description: >-
-      The acclimated community AFBI's stable operation at a digestate TAN of 2.3-4.3
-      kg N/m3 evidences. Acetoclastic: X_ac 1.06 against X_sao 7e-5, so the syntrophic
-      pathway is present but carries no flux. S5-01 and S7-02 are staged here, because a
-      LOSS of adaptation is what those rows inject.
-    adaptation:
-      K_I_nh3: 0.02        # DESIGN  kmol N/m3; lead's ruling 2 range 0.02-0.05, bottom
-      source: "lead's ruling 2 of 2026-09-03 on the evidence of Tisocco et al. 2024 (AFBI digestate TAN 2.3-4.3 kg N/m3 with stable production); ADM1/BSM2 default is 0.0018"
-      note: "Plants B and C declare no adaptation and keep the ADM1 default: Muscatine's free ammonia is an order of magnitude below the pathway-shift window."
-    expected_digestate_tan:
-      median: 3.703        # MEASURED  kg N/m3; 180-d run, seed 1000, settled from d30; re-measured 2026-09-10 (was 3.695)
-      p10: 3.640
-      p90: 3.771
-      unit: "kg N/m3"
-      source: "measured through sim.run.harness.simulate_truth on the current feed (2026-09-10; was 3.695 / 3.588 / 3.788 on the pre-calcium feed); inside Tisocco et al. 2024's published 2.3-4.3"
+      The community AFBI's years of stable operation at high digestate ammonia evidence:
+      acclimated to its ammonia, with the acetoclastic methanogens carrying the acetate
+      flux and the syntrophic pathway present but idle.
   - name: unadapted
     description: >-
-      The same plant with an UNACCLIMATED acetoclastic community: ADM1's default
-      K_I_nh3, at which the acetoclasts wash out (X_ac 1.9e-3) and syntrophic acetate
-      oxidation carries the entire acetate flux (X_sao 0.85). Still a sound digester --
-      pH 7.72, CH4 0.628 -- but a structurally different one, and the baseline S6-01 is
-      staged on so that omitting SAO from the fitted model actually bites.
-    adaptation: null       # the ADM1/BSM2 default K_I_nh3 = 0.0018 kmol N/m3
-    expected_digestate_tan:
-      median: 3.614        # MEASURED  kg N/m3; 180-d run, seed 1000, settled from d30; re-measured 2026-09-10 (was 3.605 / 3.505 / 3.689)
-      p10: 3.556
-      p90: 3.677
-      unit: "kg N/m3"
-      source: "measured as above. RULED 2026-09-09: the measured 3.5-3.7 is ACCEPTED and the lead's earlier 3.7-4.3 for this variant is WITHDRAWN, so ruling and plant contract now agree. The unadapted constant does not raise TAN -- it is slightly LOWER than the adapted baseline's, because the pathway change does not add nitrogen -- and reaching 3.7-4.3 would have needed the frozen Plant A feed nitrogen to move. Still inside Tisocco et al. 2024's published 2.3-4.3."
+      The same plant with a community that has NOT acclimated to its ammonia: the
+      acetoclastic methanogens are inhibited and washed out, and syntrophic acetate
+      oxidation carries the acetate flux instead. A working digester, but a structurally
+      different one.
 feeds:
   - name: cattle_slurry
     kind: slurry

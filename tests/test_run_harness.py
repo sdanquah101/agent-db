@@ -43,6 +43,7 @@ from sim.adm1 import (
 )
 from sim.influent import constant_influent, load_feed_fractionation, nominal_mass_rates
 from sim.plants import declared_geometry, load_plant_config
+from sim.plants.truth import load_plant_truth
 from sim.run.harness import (
     apply_adaptation,
     generate_cells,
@@ -272,8 +273,10 @@ def test_plant_a_is_a_stable_adapted_digester_and_the_pathways_exclude(adm1_para
     It replaces the guard on the 200-d burn-in workaround, which the same ruling removed.
     """
     plant = load_plant_config("A")
-    assert plant.adaptation is not None and plant.adaptation.K_I_nh3 is not None
-    adapted = plant.adaptation.K_I_nh3
+    record = load_plant_truth(plant)
+    block = record.baseline(plant.default_baseline).adaptation
+    assert block is not None and block.K_I_nh3 is not None
+    adapted = block.K_I_nh3
     assert 0.02 <= adapted <= 0.05, adapted  # the lead's ruled range
     assert adapted > 10.0 * adm1_params.kinetics.K_I_nh3  # far above the sludge default
 
@@ -319,10 +322,15 @@ def test_plant_a_declares_two_baselines_and_they_are_different_digesters():
     names = {b.name for b in plant.baselines}
     assert names == {"adapted", "unadapted"}, names
     assert plant.default_baseline == "adapted"
-    assert plant.baseline("adapted").adaptation.K_I_nh3 == pytest.approx(0.02)
-    assert plant.baseline("unadapted").adaptation is None  # the ADM1 default
+    # what each baseline IS lives truth-side (lead's ruling B5, 2026-09-10), keyed by the
+    # names the visible contract declares
+    record = load_plant_truth(plant)
+    assert record.baseline("adapted").adaptation.K_I_nh3 == pytest.approx(0.02)
+    assert record.baseline("unadapted").adaptation is None  # the ADM1 default
     with pytest.raises(ValueError, match="declares no baseline"):
         plant.baseline("no-such-baseline")
+    with pytest.raises(ValueError, match="has no baseline"):
+        record.baseline("no-such-baseline")
 
     # the scenarios are staged where their answer keys assume
     staged = {load_scenario(SCENARIOS / f"{s}.yaml").baseline for s in ("S5-01", "S7-02")}
@@ -655,6 +663,7 @@ def test_a_cell_generates_identically_in_a_fresh_process(tmp_path):
         from pathlib import Path
         from tests.test_run_harness import _fingerprint, _short
         from sim.plants import load_plant_config
+from sim.plants.truth import load_plant_truth
         from sim.run.harness import generate_run
         run = generate_run(
             _short("S2-03"), "B", plant=load_plant_config("C"),
@@ -947,7 +956,12 @@ def test_the_loader_has_no_route_to_the_scenario_files(clean_run):
     from state.run_view import TruthAccessError, open_run
 
     view = open_run(clean_run.paths.root)
-    for relative in ("../../scenarios/S0-01.yaml", "../../../scenarios/S0-01.yaml", "/scenarios"):
+    for relative in (
+        "../../scenarios/S0-01.yaml",
+        "../../../scenarios/S0-01.yaml",
+        "/scenarios",
+        "../../sim/plants/truth/plant_A.yaml",
+    ):
         with pytest.raises((TruthAccessError, FileNotFoundError)):
             view.read_text(relative)
     assert not any("scenario" in f.lower() for f in view.files)

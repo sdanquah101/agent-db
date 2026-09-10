@@ -135,6 +135,7 @@ from sim.plants.mixing import (
     initial_state,
     simulate_two_zone,
 )
+from sim.plants.truth import PlantTruthRecord, load_plant_truth
 from sim.run.artifacts import write_observations, write_truth
 from sim.run.layout import INDEX_FILE, RUNS_ROOT, RunPaths, run_id, store_salt, truth_store_for
 from sim.run.manifest import (
@@ -442,27 +443,41 @@ def _ash_concentration(ash_load: Mapping[str, np.ndarray], q: np.ndarray) -> np.
 
 
 def apply_adaptation(
-    params: ADM1Parameters, plant: PlantConfig, baseline: str | None = None
+    params: ADM1Parameters,
+    plant: PlantConfig,
+    baseline: str | None = None,
+    *,
+    record: PlantTruthRecord | None = None,
 ) -> ADM1Parameters:
     """Apply a declared baseline's community adaptation to the truth parameters.
 
-    A plant whose contract declares no adaptation for the selected baseline keeps the ADM1
-    defaults untouched — Plants B and C always, and Plant A's ``unadapted`` baseline, which
-    is the state its Level-6 structural row is staged on (lead's ruling 1, 2026-09-09).
+    The baseline is *named* by the visible contract and *defined* by the truth-side record
+    (:mod:`sim.plants.truth`, lead's ruling B5 of 2026-09-10): the contract says the state
+    exists, the record says what constant its community carries. A plant with no record
+    keeps the ADM1 defaults untouched — Plants B and C always — and so does a baseline the
+    record gives no adaptation, which is Plant A's ``unadapted`` one, the state its Level-6
+    structural row is staged on (lead's ruling 1, 2026-09-09).
 
     Args:
         params: The truth parameters before adaptation.
-        plant: The plant configuration.
+        plant: The plant's visible configuration.
         baseline: Declared baseline to stage on, or None for the plant's default.
+        record: The plant's truth record, if the caller already holds it; loaded otherwise.
 
     Returns:
         The parameters this baseline's community carries.
 
     Raises:
-        ValueError: If the plant declares no baseline of that name.
+        ValueError: If the plant declares no baseline of that name, or its record and
+            contract disagree about which baselines exist.
     """
     declared = plant.baseline(baseline)
-    block = declared.adaptation if declared is not None else None
+    if declared is None:
+        return params
+    truth_record = record if record is not None else load_plant_truth(plant)
+    if truth_record is None:
+        return params
+    block = truth_record.baseline(declared.name).adaptation
     if block is None or block.K_I_nh3 is None:
         return params
     kinetics = params.kinetics.model_copy(update={"K_I_nh3": float(block.K_I_nh3)})

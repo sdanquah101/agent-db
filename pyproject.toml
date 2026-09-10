@@ -43,6 +43,7 @@ packages = [
     "sim.influent",
     "sim.observation",
     "sim.plants",
+    "sim.plants.truth",
     "state",
     "tools",
     "workflows",

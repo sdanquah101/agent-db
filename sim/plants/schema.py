@@ -221,64 +221,34 @@ class Equalisation(_Frozen):
     note: str = ""
 
 
-class Adaptation(_Frozen):
-    """Truth-model constants this plant's community has adapted to (lead's ruling 2, 2026-09-03).
-
-    ADM1's kinetic defaults describe a mesophilic sewage-sludge community. A digester that
-    has run for years at high ammonia does not have that community: acetoclastic
-    methanogens acclimate, and their free-ammonia inhibition constant rises by an order of
-    magnitude. Treating that as a **plant property** rather than as a fault is what lets
-    Plant A hold a genuine steady state with both acetoclastic and syntrophic pathways
-    present — the state the Level-5/6/7 ammonia rows are supposed to start from.
-
-    Before this existed, Plant A at the ADM1 default washed its acetoclasts out entirely
-    within ~800 d, and the harness had to stop the burn-in early to keep a mixed community.
-    That workaround is gone (gate G1, 2026-09-03).
-
-    Adaptation is **declared**, not hidden: it is a property of the plant a workflow is
-    told about, like its temperature. What stays hidden is the run's realised parameters.
-    """
-
-    K_I_nh3: _Pos | None = Field(
-        default=None,
-        description="Adapted free-ammonia inhibition constant of the acetoclastic "
-        "methanogens, kmol N/m3. None keeps the ADM1 default.",
-    )
-    source: str = Field(default="", description="Evidence for the adapted value")
-    note: str = ""
-
-
 class Baseline(_Frozen):
-    """One **declared** steady state a scenario may be staged on (lead's ruling 1, 2026-09-09).
+    """One **declared** community state a scenario may be staged on (lead's ruling 1, 2026-09-09).
 
     A plant can be a different digester depending on how its community has acclimated, and
     the difference is not a fault — it is what the plant *is*. Plant A has two such states:
-    an **adapted** one, acetoclastic, where a loss of adaptation is the thing a scenario
-    injects; and an **unadapted** one at the ADM1 default constant, where the acetoclasts
-    have washed out and syntrophic acetate oxidation carries the whole acetate flux.
+    an **adapted** one, acclimated to its ammonia, where a loss of adaptation is the thing a
+    scenario injects; and an **unadapted** one, where the community has not acclimated and
+    a different pathway carries the acetate flux.
 
     They exist as named, declared variants rather than as a burn-in length or an implicit
     consequence of a config edit, because a Level-6 structural row is only meaningful if the
     pathway the fitted model omits is actually carrying flux in the truth — and which state
-    the plant is in decides that. A workflow is told which baseline it is looking at, in the
-    same way it is told the digester's volume; what stays hidden is the run's realised
-    parameters.
+    the plant is in decides that.
 
-    ``expected_digestate_tan`` is the band the variant is **measured** to sit in, recorded
-    so the declaration can be checked against what the simulator actually does rather than
-    asserted.
+    **Qualitative only** (lead's ruling B5, 2026-09-10). A workflow is told the states
+    exist and what kind of digester each is, in words; it is not told which one a run is
+    staged on (``baseline`` is redacted from the manifest) and it is not told anything
+    numeric about either — the adapted inhibition constant, the measured biomass, acetate
+    or ammonia of each state live in the truth-side record :mod:`sim.plants.truth`, which
+    the harness reads and a workflow cannot. With the numbers here, the redaction hid
+    nothing: the run's own acetate against a published table said which state it was in.
+    The schema forbids extra fields, and ``tests/test_truth_isolation.py`` asserts that no
+    number appears in these descriptions and that the visible file spells none of the
+    truth-side names.
     """
 
     name: str = Field(description="Identifier a scenario selects with its `baseline` field")
-    adaptation: Adaptation | None = Field(
-        default=None,
-        description="The community adaptation of this baseline; None keeps ADM1's defaults",
-    )
-    expected_digestate_tan: PositiveStatistic | None = Field(
-        default=None,
-        description="Measured digestate total ammonia of this baseline, kg N/m3",
-    )
-    description: str = Field(description="What kind of digester this baseline is")
+    description: str = Field(description="What kind of digester this baseline is, in words")
     note: str = ""
 
 
@@ -436,16 +406,6 @@ class PlantConfig(_Frozen):
             f"plant {self.id} declares no baseline {wanted!r}; "
             f"it has {sorted(b.name for b in self.baselines)}"
         )
-
-    @property
-    def adaptation(self) -> Adaptation | None:
-        """The default baseline's community adaptation, if it has one.
-
-        Derived rather than declared separately: two places to say which constant this
-        plant's community carries would be two places to disagree.
-        """
-        base = self.baseline()
-        return base.adaptation if base is not None else None
 
     @model_validator(mode="after")
     def _consistent(self) -> PlantConfig:
