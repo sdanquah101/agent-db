@@ -222,3 +222,91 @@ structural half is lost, and it is already close to lost at 240 d.
 | Windowed gas means | one 240-d run per seed, means over [30, H] for H = 180…240 and per 30-day month |
 | Pathway shift | `simulate_truth` on S5-01 and S7-02 at their own seeds, at 200/220/240 d on the current tree and at 240 d in worktrees of `42bbe8e`, `9db569b`, `4a022e8`, `56aeceb`, `fd76983`, `39d0e14` (each with its own package on `PYTHONPATH`) |
 | Scratch generation | `python -m sim.run.matrix --runs-root <scratchpad>/scratch240/runs`, 1282 s |
+
+## 11. Addendum — S7-02 re-staged on the `unadapted` baseline, measured, not committed
+
+*Requested by the coordinator (07:06 UTC) so the lead can choose with numbers. Nothing in
+`scenarios/S7-02.yaml` has changed; the record correction of `3be4ef9` is the only commit.*
+
+**Method.** S7-02 (SAO omitted from the fitted model from day 0; `K_I_nh3` ×0.1 at day 120)
+integrated through the full harness at its own seed on each baseline and horizon. Then an
+**SAO-less fitted model** — the truth's extensions less `sao`, the true geometry, the same
+influent, started from the truth's own burn-in state — integrated over the same grid in two
+variants: *shift known* (the fitted model is handed the true parameter trajectory, so any
+residual is purely structural) and *shift unknown* (the fitted model keeps the pre-onset
+constant, so the residual is structural plus parameter). Residuals are fitted minus truth,
+over the pre-onset window (days 30–120) and the post-onset window (120–H). Gas and CH₄ are
+relative; acetate is absolute in kg COD/m³ (S_ac).
+
+**The truth on each baseline**
+
+| baseline | H | sound | SAO share of acetate-consuming biomass, d119 → end | X_ac / X_sao at end | acetate d119 → end (peak after onset), kg COD/m³ | gas mean pre → post onset, m³/d |
+|---|---:|---|---|---:|---|---|
+| `adapted` (as it stands) | 200 | yes | 0.000 → **0.004** | 1.154 / 0.004 | 0.036 → 1.27 (2.72) | 437 → 449 |
+| `adapted` (as it stands) | 240 | yes | 0.000 → **0.032** | 1.171 / 0.039 | 0.029 → 0.84 (2.98) | 445 → 470 |
+| `unadapted` (re-staged) | 200 | yes | **0.998 → 1.000** | 0.000 / 0.963 | 0.227 → 0.23 (0.58) | 421 → 442 |
+| `unadapted` (re-staged) | 240 | yes | **0.998 → 1.000** | 0.000 / 0.983 | 0.179 → 0.25 (0.63) | 429 → 463 |
+
+On the `unadapted` baseline SAO carries the whole acetate flux from day 0 and **the
+parameter fault does nothing to the truth**: the constant it moves belongs to a population
+that is not there (X_ac ≈ 0), so acetate and gas do not react to the onset at all.
+
+**The structural residual an SAO-less fitted model sees**
+
+| baseline | H | variant | gas, post-onset: mean rel / rms rel | CH₄ fraction, post: mean rel | acetate, post-onset: mean abs / rms (kg COD/m³) | acetate at end: truth / fitted | gas at end: truth / fitted |
+|---|---:|---|---|---:|---|---|---|
+| `adapted` | 200 | shift known (structural only) | −0.000 / 0.000 | −0.0001 | **+0.006 / 0.008** | 1.27 / 1.29 | 434 / 434 |
+| `adapted` | 200 | shift unknown (structural + parameter) | +0.007 / 0.109 | +0.010 | −1.25 / 1.37 | 1.27 / 0.04 | 434 / 429 |
+| `adapted` | 240 | shift known (structural only) | −0.001 / 0.005 | −0.0008 | **+0.056 / 0.099** | 0.84 / 1.03 | 435 / 433 |
+| `adapted` | 240 | shift unknown (structural + parameter) | +0.008 / 0.102 | +0.010 | −1.65 / 1.83 | 0.84 / 0.04 | 435 / 445 |
+| `unadapted` | 200 | shift known | −0.587 / 0.614 | −0.35 | +22.6 / 24.4 | 0.23 / 32.5 | 414 / 99 |
+| `unadapted` | 200 | shift unknown | +0.035 / 0.132 | −0.014 | +1.90 / 2.00 | 0.23 / 2.02 | 414 / 427 |
+| `unadapted` | 240 | shift known | −0.612 / 0.635 | −0.50 | +25.2 / 27.0 | 0.25 / 29.7 | 436 / 137 |
+| `unadapted` | 240 | shift unknown | +0.027 / 0.116 | −0.016 | +2.43 / 2.62 | 0.25 / 2.12 | 436 / 432 |
+
+Pre-onset (days 30–120), the same fitted model: on `adapted` the residual is zero on every
+channel (the omitted pathway carries nothing); on `unadapted` it is already large — gas
++5–6 % (rms 0.14), acetate **+6.1 kg COD/m³** — because the fitted model has no route for
+the acetate the truth's SAO consumes. That is S6-01's residual, from day 0.
+
+**Reading.**
+
+- **As it stands (`adapted`), the structural half is faint.** With the parameter shift
+  known, the SAO-less model reproduces gas and CH₄ to better than 0.1 % (200 d) and 0.5 %
+  (240 d); the only structural trace is acetate, +0.006 kg COD/m³ mean over the post-onset
+  window at 200 d and +0.056 at 240 d (0.2 kg COD/m³ by the last day, where the truth's SAO
+  has started to draw acetate down). A workflow would have to detect a late, acetate-only
+  divergence of 5–20 % against a 1–3 kg COD/m³ accumulation the parameter fault itself
+  causes. The parameter half is loud (gas rms 10 %, acetate off by 1.3–1.7 kg COD/m³ if the
+  shift is not modelled). **At 200 d the row is a parameter row with a structural label on
+  it; at 240 d the structural half exists but is small.**
+- **Re-staged on `unadapted`, the halves swap.** The structural residual is large and
+  present from day 0 (gas +5 %, acetate +6 kg COD/m³ before the onset; after the onset a
+  fitted model that keeps the adapted constant is off by 2–2.4 kg COD/m³ and 12–13 % rms on
+  gas, and one that takes the shift sours outright, gas −60 %) — the S6-01 signal, properly
+  diagnosable. But the parameter fault is a phantom: it moves a constant of a population the
+  truth does not have, and no observable reacts to it. **The `parameter` label and
+  `kinetic_update_allowed: true` would then rest on nothing a workflow can see**, which
+  turns the "partial attribution, abstain on the confounded part" design into a row whose
+  correct answer is the S6-01 answer plus a fault that cannot be attributed because it has
+  no effect.
+- Either way the compound row degenerates towards a single-fault row on the current feed;
+  which half survives is the choice. Neither horizon repairs it: 200 → 240 d moves the
+  `adapted` structural residual from ~0 to small, and does nothing on `unadapted`.
+
+**Options for the lead, with the numbers above** (none taken): (a) keep S7-02 as staged
+and record in the card that its structural half is small at 240 d and that abstention on
+the pathway split is the safe answer — honest, but the row then scores mostly on S5-01's
+signal; (b) re-stage on `unadapted` and change the key to S6-01's (drop `parameter`, drop
+`kinetic_update_allowed`), which makes it a duplicate of S6-01 at Tier C with an inert
+fault attached — probably not worth a row; (c) give the transition longer or a stronger
+push (an earlier onset, or a horizon well beyond 240 d — outside F2's equalised value) so
+the shift completes on the `adapted` baseline and the compound row means what its header
+says; the time to completion on the current feed is not yet measured and would need a probe
+run off the matrix; (d) retire S7-02 from the frozen library and carry the compound
+structural-plus-parameter idea as a Level-7 row to be designed against a measured
+transition after the freeze.
+
+Provenance: `<scratchpad>/restage_s702.py`, run at `3be4ef9`; results in
+`restage_s702.json` (not committed).
+
