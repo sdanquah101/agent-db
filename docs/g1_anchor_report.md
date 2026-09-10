@@ -360,10 +360,20 @@ methane fractions are lower than before any M2 work and higher than after the fi
 attempt, which is the expected shape: the inorganic carbon the streams were missing now
 leaves as CO₂, and there is about half as much of it as the uncorrected calcium demanded.
 
-**All 23 rows are inside their declared bounds and no tolerance was touched.** The
-catalogue-side row to watch is gone — every buffered stream sits at 1.000× — and the
-anchor-side one is `biogas_mean` at 1.489. The four-row missingness table is re-measured in
-§5.4.
+**All 23 rows are inside their declared bounds and no tolerance was touched.** The rows to
+watch, as the lead ruled they be named: on the **anchor side, `biogas_mean` at 1.489** against
+its unchanged 0.6–1.5 band, the least margin anywhere in this report; on the **catalogue
+side, re-checked after the redistribution, `grass_silage` at 0.771×** — every derived stream
+sits at 1.000× and `primary_sludge`, which was the closest at 1.470× before B1, is now exactly
+on the balance, so silage is the one nearest a band edge, because its accepted pH of 4.28 was
+kept while its assumed calcium fell. The four-row missingness table is re-measured in §5.4.
+
+**Plant A's baseline tables were re-measured on this feed** (2026-09-10; the calcium and
+liquor changes altered what the plant is fed): adapted X_ac 1.129 → 1.065, unadapted X_sao
+0.910 → 0.853, pH down 0.07 and CH₄ down 6 points on both, TAN within 0.01 on both. Both
+baselines are still the communities they declare — SAO share 0.000 and 0.998 — so the lead's
+stop condition was not met and `K_I_nh3` was not touched. `configs/plants/plant_A.yaml`
+carries the numbers with the old ones beside them.
 
 ## 4. The comparison
 
@@ -588,7 +598,7 @@ a difference in VFA excursions is held fixed by construction.
 | trigger fires, pooled days | **1.49 %** | **0.28 %** | **5.3×** |
 | per-run range | 0.00 – 3.97 % | 0.00 – 1.32 % | |
 | runs in which it fires at all | **21 / 24** | **7 / 24** | |
-| digestate TAN, median (kg N/m³) | 3.605 | 3.695 | 0.98× |
+| digestate TAN, median (kg N/m³) | 3.614 | 3.703 | 0.98× |
 
 Both rows fell when cattle slurry's inorganic carbon was re-paired to its cations and its
 calcium collapsed to the calcite-saturated value (2026-09-10) — the buffer got deeper, so

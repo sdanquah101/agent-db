@@ -1445,3 +1445,33 @@ tagged or regenerated.
 **Next**: the coordinator confirms the pre-regeneration report → matrix regeneration at the
 final head as the last action → the coordinator's review verdict → merge and tag by the
 coordinator. Then the tool registry (§6.2).
+
+---
+
+### Session 2026-09-10 (final close-out) — M2 accepted closed; Plant A re-measured; rows to watch; regeneration next
+
+**The lead accepted the pre-regeneration report and closed M2 at `c8c048f`.** The side branch
+was a clean fast-forward onto PR #15's branch (merge-base `fd76983`, checked), so the PR now
+carries every ruling. Final steps in the lead's order.
+
+**Done**
+
+- **Plant A's two baseline tables re-measured on the current feed** (full harness, 400-d
+  burn-in, 180 d, seed 1000): adapted X_ac 1.129 → 1.065, X_sao unchanged, TAN 3.695 → 3.703;
+  unadapted X_sao 0.910 → 0.853, X_ac 9.9e-05 → 0.0019, TAN 3.605 → 3.614; pH down 0.07 and
+  CH₄ down 6 points on both, the slurry's newly present inorganic carbon leaving as CO₂. SAO
+  shares 0.000 and 0.998 — **both baselines are still the communities they declare**, so the
+  lead's stop condition was not met and `K_I_nh3` was not touched. `plant_A.yaml` updated
+  with the old numbers beside the new; recorded in the decisions log.
+- **The rows to watch, as ruled**: anchor side **`biogas_mean` 1.489** against its unchanged
+  0.6–1.5 band; catalogue side re-checked — **`grass_silage` at 0.771×** is now the nearest a
+  band edge (its accepted pH 4.28 kept while its assumed calcium fell); `primary_sludge` is
+  exactly on the balance. Named in the report and the log.
+
+**Next, in order**: commit and push; CI green; **regenerate the matrix at that head as the
+last action** and report the SHA, cell count, wall-clock, index line count, the four trigger
+rows and the operator-visible rate on the regenerated matrix; then **stop** — nothing pushed
+after the regeneration, so every manifest's `git_sha` matches the merged head. The
+coordinator reruns the independent whole-branch review at that head (the earlier one covered
+`f8b27c4`), the verdict goes to the lead, and the coordinator merges and tags `g1-frozen`.
+Then the tool registry (§6.2).

@@ -3723,3 +3723,64 @@ describe is a false attribution); lower `s_ca` only where the balance failed (re
 field was wrong in kind everywhere, not in size on four streams); fit SS or γ to land biogas
 further from its bound (rejected: the lead's tests are of the physics, and tuning towards
 them would make them meaningless).
+
+---
+
+## 2026-09-10 — CLOSE-OUT (the lead): Plant A's baselines re-measured on the current feed; the rows to watch
+
+**The lead accepted the pre-regeneration report and closed M2 at `c8c048f`.** Final close-out
+steps, in the lead's order: re-measure Plant A's baseline tables, fast-forward the side branch
+into PR #15's branch, record the rows to watch, regenerate the matrix at the final head as the
+last action, then stop for the independent whole-branch review at that head.
+
+### Plant A's two baseline tables, re-measured
+
+The calcium ruling (cattle slurry's dissolved calcium 0.04 → 0.00005 kmol/m³, its paired
+inorganic carbon 0.05 → 0.1249) and the liquid-fraction generator fix both changed what Plant
+A is fed, so the tables in `configs/plants/plant_A.yaml` were stale. Re-measured the way they
+were measured originally — the full harness, 400-d burn-in, 180-d horizon, seed 1000, medians
+from day 30:
+
+| baseline | | X_ac | X_sao | SAO share | acetate | pH | CH₄ | TAN p10 / median / p90 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| `adapted` | was | 1.129 | 6.9e-05 | 0.000 | 0.038 | 7.80 | 0.688 | 3.588 / 3.695 / 3.788 |
+| | **now** | **1.065** | **6.9e-05** | **0.000** | **0.037** | **7.73** | **0.629** | **3.640 / 3.703 / 3.771** |
+| `unadapted` | was | 9.9e-05 | 0.910 | 1.000 | 0.240 | 7.79 | 0.692 | 3.505 / 3.605 / 3.689 |
+| | **now** | **0.0019** | **0.853** | **0.998** | **0.240** | **7.72** | **0.628** | **3.556 / 3.614 / 3.677** |
+
+**What moved and by how much.** TAN within 0.01 on both — nothing changed the feed nitrogen,
+so the TAN bands the rulings of 2026-09-09 accepted (3.1–3.7 adapted, 3.5–3.7 unadapted) still
+hold. pH down 0.07 and CH₄ down 6 points on both: the slurry's missing inorganic carbon now
+arrives and leaves as CO₂, the same mechanism that moved Plants B and C. Biomass down about
+6 % on both. The unadapted acetoclasts are 19× the old value (0.0019 against 9.9e-05) but
+still 0.2 % of the acetate-consuming biomass — washed out, as declared.
+
+**The lead's stop condition was not met**: the adapted baseline is still acetoclastic-dominated
+and the unadapted one still SAO-dominated, so **`K_I_nh3` was not touched**. Both are sound
+digesters. The yaml carries the new numbers with the old ones beside them.
+
+### The rows to watch, as ruled
+
+**Anchor side: `biogas_mean` at 1.489 against a declared band of 0.6–1.5, band UNCHANGED.**
+Named in the G1 report as the row with the least margin. The extra gas is CO₂, not methane —
+the inorganic carbon the catalogue was missing now leaves through the gas — so it is the
+expected consequence of the correction rather than a new realism problem, and it is the first
+row the next thing that raises gas will breach.
+
+**Catalogue side: re-checked after the redistribution, and it is no longer `primary_sludge`.**
+Every derived stream sits at 1.000×; `food_waste` at 1.018×; **`grass_silage` at 0.771×** is
+now the closest to a band edge (1.5× either way), because the ruling kept its accepted pH of
+4.28 while its assumed calcium fell and its balance would close at 4.20. Inside the band,
+reported rather than moved. `primary_sludge`, which was 1.470× before B1, is exactly on the
+balance.
+
+### Sequence and what comes after
+
+The side branch was a clean fast-forward (merge-base `fd76983`, checked); the re-measure
+landed once, on the merged branch. Next: commit, push, CI green, **then regenerate the matrix
+at that head as the last action**, report the head SHA, cell count, wall-clock, the index line
+count, the four trigger rows and the operator-visible rate on the regenerated matrix — and
+stop. Nothing is pushed after the regeneration unless the coordinator asks, so every
+manifest's `git_sha` matches the head that is merged. The independent whole-branch review is
+redone at that head (the earlier one covered `f8b27c4`, before any of the M2, B1, B2 or
+calcium work), its verdict goes to the lead, and only then does the coordinator merge and tag.
