@@ -512,3 +512,109 @@ Operator FOS/TAC > 0.40 and > 0.30: 0.00 % on every row (one run on B at 220 d, 
 Nothing is committed beyond this report. The 200-d edits are held locally; no tolerance,
 tank, calibration or seed has been touched; nothing has been regenerated.
 
+## 15. The tank-initialisation fix, measured — and the real cause of the jitter
+
+*Status line: §15 pushed: tank-init fix measured; **it is not the cause** (the jitter is
+unchanged with it); the cause is the influent generator's non-prefix-stable stream layout,
+verified directly; with a prefix-stable layout the jitter collapses and `biogas_mean` lands
+**stably at 1.50–1.54, above the band at every horizon** — the row's level is set by the feed
+and calibration and the lead must rule on its basis or band; holding. Nothing committed but
+this section.*
+
+### 15.1 The tank fix alone
+
+Implemented locally in `sim/plants/equalisation.py` (one call site in the harness passes
+the window): the hold-up is set from the first 30 days of arrivals instead of the
+whole-horizon mean, and the tank's day-0 level and load from the first hold-up window. The
+14 equalisation tests pass unchanged (they call `buffer_series` with the old default).
+Plant C has no buffer (checked: only `plant_B.yaml` declares `equalisation`); Plant A
+neither.
+
+| Plant B, 24 seeds, panel generated at H | 190 d | 200 d | 210 d |
+|---|---:|---:|---:|
+| `biogas_mean` ratio, §14 (no fix) | 1.449 | 1.523 | 1.455 |
+| `biogas_mean` ratio, **tank fix** | 1.443 | 1.524 | 1.442 |
+| m³/d, tank fix | 3046 | 3218 | 3043 |
+| souring | 24/24 | 24/24 | 24/24 |
+| overload / foaming, tank fix | 8.15 % / 7.01 % | 8.60 % / 8.89 % | 7.30 % / 7.55 % |
+
+**The jitter did not collapse**: the fix moves the row by less than 1 % at every horizon and
+the ±5 % pattern between horizons ten days apart is intact. §14's attribution of the
+jitter to the tank initialisation was **wrong**; the tank contributes under a percent.
+Plant C (9.14 % / 7.43 %) and both Plant A rows are bit-identical with the fix, as they
+should be; S5-01 and S7-02 at onset 30 / 200 d reproduce §12 exactly (42.5 % / 14.0 %).
+
+### 15.2 The real cause, verified directly
+
+The influent generator draws, per feed in order, seven blocks of length `n_days` from
+**one** stream (`sim/influent/generator.py`, the "Randomness" paragraph, which states it:
+"the blocks are `n_days` long, so the horizon is not prefix-stable: a 100-day run is not the
+first 100 days of a 200-day run"). A block of a different length shifts every later block,
+so changing the horizon re-rolls every feed from day 0 — the first feed included, because
+its second block starts where its first ends. Tested: the same seed at 190 and 200 d on
+Plant B gives deliveries that differ on every feed from day 0 (relative differences of
+order 1–10¹⁴ against zero-delivery days). **Every horizon is a different 24-seed panel**, and
+the row's ±5 % "curve" is the sampling spread of a 24-seed median, not a horizon effect.
+
+### 15.3 A prefix-stable layout, measured (local, committed nowhere)
+
+Each block drawn from its own child stream keyed by `(seed, feed, block)` and each assay's
+noise by `(seed, feed, assay)`; the fractionation draw stays at the head of the main
+stream; the fault layer keeps its own seed. Verified: a 200-d run's first 190 days equal the
+190-d run on every feed's deliveries and moisture, the influent series and the
+fractionation. Measured **with the tank fix as well**:
+
+| Plant B, 24 seeds, panel generated at H | 190 d | 200 d | 210 d |
+|---|---:|---:|---:|
+| `biogas_mean`, m³/d | 3174 | 3244 | 3239 |
+| ratio to the anchor | **1.504** | **1.536** | **1.534** |
+| against [0.6, 1.5] | out by 0.004 | out | out |
+| `digester_pH_median` (band 7.27 ± 0.4) | 7.228 | 7.227 | 7.224 |
+| `alkalinity_median` (calibrated) | 4.911 | 4.912 | 4.923 |
+| `vfa_median` (ratio band 0.25–4) | 0.743 (0.63) | 0.744 (0.63) | 0.744 (0.63) |
+| `fos_tac_median` (ratio band 0.5–2) | 0.151 (0.65) | 0.151 (0.65) | 0.151 (0.65) |
+| souring | 24/24 | 24/24 | 24/24 |
+| overload trigger | 7.04 % (24/24) | 7.12 % (24/24) | 6.86 % (24/24) |
+| foaming trigger | 6.52 % (24/24) | 6.63 % (24/24) | 6.42 % (24/24) |
+| FOS/TAC > 0.40 / > 0.30 | 0 / 0 | 0 / 0 | 0 / 0 |
+
+**The jitter collapses.** The three horizons sit within 2 % of each other on every quantity
+— a smooth, small window effect, which is what a horizon change should do — and the
+trigger rates, which jumped by a point between horizons before, now move by 0.3 points.
+The layout, not the tank, was the cause.
+
+**Where the row lands.** Stably at **1.50–1.54, above the band edge at every horizon**. The
+old layout's 1.489 at 180 d and 1.449/1.455 at 190/210 d were lucky draws of a re-rolled
+panel; the level of the row is set by the feed and the calibration, and no horizon brings it
+inside. **The lead still needs to rule on the row's comparison basis or band**; the horizon
+question and this row are now decoupled.
+
+The other rows at 200 d with the prefix-stable layout (their realisations change once,
+like every cell's): Plant C 24/24 sound, overload 9.82 % (6.43–14.04 %, 24/24), foaming
+8.50 % (3.51–15.20 %, 24/24); Plant A `adapted` 24/24, 0.24 % (8/24) / 0.24 % (7/24);
+Plant A `unadapted` 24/24, 1.19 % (16/24) / 0.07 % (3/24). S5-01 at onset 30 / 200 d:
+SAO share **42.2 %**, acetate 0.04 → 3.82 → 0.62; S7-02: **20.8 %** (was 14.0 % under the
+old realisation), acetate 0.05 → 3.33 → 0.78; both sound. §12's conclusion stands and
+strengthens slightly under the new draw.
+
+### 15.4 What adopting the prefix-stable layout would mean
+
+It is a change to the influent generator at the freeze — the lead's call, like the tank:
+every cell's realisation changes once (all plants); the anchored rows are re-measured
+(above: all in band except `biogas_mean`, exactly as before); the trigger tables move (B
+~7.1 % / 6.6 % rather than ~8.9 % / 8.7 %); `tests/test_generator.py`'s determinism and
+stream-independence tests hold in form (still seeded, still ordered) but any pin on a
+realised value moves and the "Randomness" paragraph is rewritten to say the horizon *is*
+prefix-stable. It is the right property — a longer run should extend a realisation, not
+re-roll it, and it makes any future horizon change safe — and it is what would have made
+§3's windowed table a measurement rather than an estimate. The tank fix is principled and
+harmless (< 1 %) and would go with it.
+
+**Recommendation.** (1) Adopt the prefix-stable layout and the tank fix together, on the
+lead's ruling, then equalise the horizon at 200 d (or any single value; they now differ by
+under 2 %). (2) Rule on `biogas_mean`'s basis or band as a separate decision: at 1.50–1.54
+on a stable panel it is outside by 0.004–0.036, on a comparison of a 24-seed
+February–July settled mean against a three-year annual mean. (3) Rule on S7-02 (§12
+stands: onset 30 gives 21 % at 200 d under the new draw). Nothing is committed: the 200-d
+edits, the tank fix and the generator variant are all local.
+
