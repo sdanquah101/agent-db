@@ -310,3 +310,85 @@ transition after the freeze.
 Provenance: `<scratchpad>/restage_s702.py`, run at `3be4ef9`; results in
 `restage_s702.json` (not committed).
 
+## 12. Addendum — an earlier loss-of-adaptation onset: does the shift complete on `adapted`?
+
+*Requested by the coordinator (07:17 UTC) to decide between (c) make the shift complete and
+(d) retire. S7-02 and S5-01 on the `adapted` baseline as staged, with the
+`ammonia_inhibition_shift` onset moved from day 120 to day 60 and to day 30, at 200 and
+240 d. Same method as §11 (truth through the harness at each row's own seed; for S7-02 the
+SAO-less fitted model, shift known and unknown). No scenario file changed.*
+
+**S7-02 — the truth, and the structural residual with the shift known**
+
+| onset | H | sound | SAO share at end (X_ac / X_sao) | acetate onset → peak (day) → end, kg COD/m³ | structural residual, post-onset: gas mean / rms rel | acetate mean / rms abs | acetate at end, truth / fitted | gas at end, truth / fitted |
+|---:|---:|---|---|---|---|---|---|---|
+| 120 (as staged, §11) | 200 | yes | **0.4 %** (1.154 / 0.004) | 0.04 → 2.72 → 1.27 | −0.000 / 0.000 | +0.006 / 0.008 | 1.27 / 1.29 | 434 / 434 |
+| 120 (as staged, §11) | 240 | yes | **3.2 %** (1.171 / 0.039) | 0.03 → 2.98 → 0.84 | −0.001 / 0.005 | +0.056 / 0.099 | 0.84 / 1.03 | 435 / 433 |
+| 60 | 200 | yes | **4.5 %** (1.104 / 0.052) | 0.04 → 2.67 (d145) → 1.04 | −0.000 / 0.003 | +0.044 / 0.070 | 1.04 / 1.28 | 437 / 434 |
+| 60 | 240 | yes | **20.3 %** (0.926 / 0.236) | 0.05 → 2.58 (d208) → 0.53 | +0.001 / 0.030 | +0.255 / 0.492 | 0.53 / 1.03 | 444 / 433 |
+| 30 | 200 | yes | **14.0 %** (0.982 / 0.160) | 0.05 → 2.61 (d47) → 0.71 | −0.000 / 0.011 | +0.114 / 0.181 | 0.71 / 1.28 | 437 / 434 |
+| 30 | 240 | yes | **37.5 %** (0.697 / 0.419) | 0.04 → 2.62 (d61) → 0.42 | +0.002 / 0.039 | +0.408 / 0.736 | 0.42 / 1.03 | 446 / 433 |
+
+With the shift *unknown* to the fitted model (structural + parameter) every onset gives the
+same loud parameter signal as before: gas rms 10 %, CH₄ +0.6–0.8 %, acetate −1.1 to −1.2
+kg COD/m³ mean (the fitted model predicts 0.04 where the truth has 0.4–1.0).
+
+**S5-01 — the truth (key check)**
+
+| onset | H | sound | SAO share at end (X_ac / X_sao) | acetate onset → peak (day) → end, kg COD/m³ | CH₄ at end | pH at end |
+|---:|---:|---|---|---|---:|---:|
+| 120 (as staged) | 240 | yes | 9.0 % (0.934 / 0.092) | 0.03 → ~1.8 → 1.76 | — | — |
+| 60 | 200 | yes | 21.3 % (0.857 / 0.232) | 0.05 → 4.13 (d179) → 0.80 | 0.617 | 7.71 |
+| 60 | 240 | yes | 47.3 % (0.512 / 0.459) | 0.04 → 3.94 (d96) → 0.44 | 0.625 | 7.72 |
+| 30 | 200 | yes | 42.5 % (0.591 / 0.436) | 0.05 → 4.18 (d75) → 0.50 | 0.613 | 7.71 |
+| 30 | 240 | yes | **64.6 %** (0.330 / 0.604) | 0.05 → 3.98 (d96) → 0.37 | 0.626 | 7.73 |
+
+**Reading.**
+
+- **The shift does complete on `adapted` — it needs ~200 days after the onset, not 120.**
+  S5-01 with the onset at day 30 reaches X_sao 0.60 against X_ac 0.33 by day 240, which is
+  the figure the 2026-09-03 record claimed; so that measurement was almost certainly made
+  with the onset early in the run (or a longer post-onset run), and the row was later
+  staged with the onset at day 120, leaving 120 days for a transition that takes 200. The
+  record correction of `3be4ef9` stands as written (the claim is not reproducible *as the
+  rows are staged*); this addendum says why.
+- **On S7-02 the shift is slower** (a different seed, hence a different influent draw, and
+  the same seed on the same row gives 37.5 % where S5-01 gives 64.6 % at onset 30 / 240 d),
+  but at onset 30 it is well past single digits by day 240 and still climbing: X_sao 0.42
+  against X_ac 0.70, the acetoclasts down 40 % from their onset value.
+- **What the structural residual looks like when it exists.** With the shift known, the
+  SAO-less model matches gas to within 4 % rms and CH₄ to 0.3 % even at onset 30 / 240 d —
+  both pathways turn acetate into methane, so the *route* changes and the gas barely
+  does. The structural signature is **acetate only**: the SAO-less model holds acetate at
+  ~1.0 kg COD/m³ while the truth draws it down to 0.42 (onset 30) or 0.53 (onset 60) by day
+  240 — a factor of 2–2.5 by the last day, a mean gap of 0.25–0.41 kg COD/m³ over the
+  post-onset window, growing month by month. That is kg-scale on acetate, in a Tier C
+  record with weekly speciation at 8 % noise, and it is **not** tens of per cent on gas; it
+  is a different kind of signal from `unadapted`'s (+6 kg COD/m³ and +5 % gas from day 0),
+  because there the fitted model has no route at all for the acetate, while here it has
+  one that is merely being inhibited.
+- **The parameter fault still acts on a population that exists at the onset**: X_ac 1.10–1.21
+  at day 30 or 60 on every run, the acetate spike to 2.6 kg COD/m³ follows within a month,
+  and the parameter half stays loud. Nothing becomes a phantom.
+- **The cost of an early onset is the short clean baseline**: at onset 30 a workflow has
+  one month of adapted operation to learn the plant before the acetate spike; at onset 60
+  it has two, and the share at 240 d is 20 % rather than 37 %. Both runs stay sound.
+- **S5-01's key holds at every onset** and the row becomes richer, not weaker: acetate
+  rises 80–100× to ~4 kg COD/m³ within 45–70 days of the onset and then **recovers** as
+  syntrophic oxidation takes over (to 0.4–0.8 by the end). A bounded update of the
+  inhibition constant is still the correct action; the recovery is the pathway shift the
+  header describes, now actually visible in the record.
+
+**Answer to the question asked.** Yes: at onset 30, S7-02 at 240 d carries a completed-enough
+shift (37.5 % SAO share, rising) for the compound row to mean what its header says with a
+**one-field change** (`onset_day: 120 → 30`), and S5-01 moved with it reaches the takeover
+the record claimed (64.6 %). The structural residual that results is acetate-only and
+grows to a factor of ~2.5 by day 240 — unmistakable on the acetate channel, invisible on
+gas. If the lead requires a gas-scale structural residual, no onset on `adapted` provides
+it and (d) is the answer; if an acetate-scale one is acceptable, (c) with onset 30 (or 60,
+trading half the share for a two-month baseline) is viable at 240 d and marginal at 200 d
+(14 % / 4.5 %). Onset 120 as staged is not viable at either horizon.
+
+Provenance: `<scratchpad>/probe_onset.py` at `3be4ef9`; results in `probe_onset.json` (not
+committed). Nothing in `scenarios/` changed.
+
