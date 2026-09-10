@@ -20,6 +20,10 @@ htmlcov/
 # which holds the run harness's frozen settings and MUST be committed.
 /runs/
 /truth_store/
+# The per-store secret that keys the run ids (review finding B1, 2026-09-10). Already
+# inside the ignored tree above; named on its own line so it can never be un-ignored
+# by accident when that rule is next edited.
+/truth_store/salt
 
 # Real-data anchor (proposal §8): raw downloads are reproduced by `python -m anchor.fetch`
 # from anchor/MANIFEST.json. Everything under anchor/raw/ is ignored except the few files

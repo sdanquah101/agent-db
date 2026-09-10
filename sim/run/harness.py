@@ -136,7 +136,7 @@ from sim.plants.mixing import (
     simulate_two_zone,
 )
 from sim.run.artifacts import write_observations, write_truth
-from sim.run.layout import INDEX_FILE, RUNS_ROOT, RunPaths, run_id, truth_store_for
+from sim.run.layout import INDEX_FILE, RUNS_ROOT, RunPaths, run_id, store_salt, truth_store_for
 from sim.run.manifest import (
     HARNESS_VERSION,
     RunManifest,
@@ -946,7 +946,15 @@ def generate_run(
             "no stochastic component may run unseeded (CLAUDE.md rule 4)"
         )
     seeds = RunSeeds.derive(base, plant_cfg.id, replicate)
-    rid = run_id(scenario.id, plant_cfg.id, tier_id, base, replicate)
+    # keyed with the store's secret, so the id is opaque to anything without it (B1)
+    rid = run_id(
+        scenario.id,
+        plant_cfg.id,
+        tier_id,
+        base,
+        replicate,
+        key=store_salt(truth_store_for(runs_root)),
+    )
     paths = RunPaths.for_run(rid, runs_root)
     if write:
         paths.create()

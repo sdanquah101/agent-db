@@ -45,6 +45,8 @@ same pair of directories.
 from __future__ import annotations
 
 import hashlib
+import hmac
+import secrets
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,6 +58,7 @@ __all__ = [
     "TRUTH_STORE_DIR",
     "RunPaths",
     "run_id",
+    "store_salt",
     "truth_store_for",
 ]
 
@@ -98,16 +101,55 @@ def truth_store_for(runs_root: Path) -> Path:
     return Path(runs_root).parent / TRUTH_STORE_DIR
 
 
-_ID_SALT = "ad-agentbench/g1"
-"""Fixed salt, so ids are stable across machines but not guessable from a scenario id
-alone by anything that does not already have this module."""
+SALT_FILE = "salt"
+"""Name of the per-store secret under ``truth_store/``. Gitignored; never copied anywhere."""
 
 
-def run_id(scenario_id: str, plant: str, tier: str, seed: int, replicate: int = 0) -> str:
+def store_salt(truth_store: Path) -> bytes:
+    """The secret key that makes this store's run ids opaque, creating it on first use.
+
+    **Why a secret, and why per store** (review finding B1, the lead's ruling of
+    2026-09-10). The run id used to be a SHA-256 over a repository-literal salt and a fully
+    public tuple — committed scenario ids, committed seeds, and the plant and tier the
+    visible manifest states — so the space was enumerable and a 1,440-hash brute force
+    recovered ``run_6ebcad561b75 -> S6-01/unadapted``. Every redacted manifest field and the
+    answer key follow from the scenario id, so the opacity §10 relies on was not there.
+
+    The key is now 32 bytes from :func:`secrets.token_bytes`, generated when a store is first
+    written and kept **only** at ``truth_store/salt``. It is a true secret, not a seeded draw:
+    CLAUDE.md rule 4 governs the simulation, not the key, and a key derivable from anything
+    in the repository would be no key at all. Consequences, stated so nobody trips on them:
+
+    * **run ids are store-specific by design.** The same cell generated into two stores has
+      two different ids, and an id from one store means nothing in another;
+    * **the truth-side ``index.jsonl`` is the only way back** from an id to its cell;
+    * the salt must never appear in a manifest, a log, an index line or any visible file
+      (tested), and ``.gitignore`` names it explicitly.
+
+    Args:
+        truth_store: Root of the truth store (:func:`truth_store_for`).
+
+    Returns:
+        The store's key bytes.
+    """
+    path = Path(truth_store) / SALT_FILE
+    if path.is_file():
+        return path.read_bytes()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    key = secrets.token_bytes(32)
+    path.write_bytes(key)
+    return key
+
+
+def run_id(
+    scenario_id: str, plant: str, tier: str, seed: int, replicate: int = 0, *, key: bytes
+) -> str:
     """The opaque directory name of one generation cell.
 
-    Deterministic in the cell (CLAUDE.md rule 4): regenerating a cell overwrites its own
-    directory rather than accumulating copies.
+    A truncated HMAC-SHA256 over the cell's public tuple, keyed with the store's secret
+    (:func:`store_salt`). Deterministic in the cell *and the store* (CLAUDE.md rule 4 for
+    the cell): regenerating a cell into the same store overwrites its own directory rather
+    than accumulating copies; generating it into another store gives another id.
 
     Args:
         scenario_id: Scenario identifier, e.g. ``"S2-03"``.
@@ -115,12 +157,15 @@ def run_id(scenario_id: str, plant: str, tier: str, seed: int, replicate: int = 
         tier: Instrumentation tier.
         seed: The scenario's base seed for this run.
         replicate: Repeat index within the cell (the §7 seed replicates).
+        key: The store's secret salt. Required by keyword so no caller can forget it.
 
     Returns:
         ``"run_"`` followed by 12 hex characters.
     """
-    key = f"{_ID_SALT}|{scenario_id}|{plant}|{tier}|{seed}|{replicate}"
-    return "run_" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:12]
+    if not key:
+        raise ValueError("run_id needs the store's secret salt; an empty key is no key")
+    message = f"{scenario_id}|{plant}|{tier}|{seed}|{replicate}".encode()
+    return "run_" + hmac.new(key, message, hashlib.sha256).hexdigest()[:12]
 
 
 @dataclass(frozen=True)

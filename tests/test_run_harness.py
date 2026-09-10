@@ -25,6 +25,7 @@ Runs are generated at short horizons into ``tmp_path``; each costs a few seconds
 
 from __future__ import annotations
 
+import hashlib
 import json
 
 import numpy as np
@@ -49,7 +50,7 @@ from sim.run.harness import (
     load_harness_config,
     simulate_truth,
 )
-from sim.run.layout import RunPaths, run_id
+from sim.run.layout import SALT_FILE, RunPaths, run_id, store_salt, truth_store_for
 from sim.run.manifest import REDACTED_FIELDS, PublicManifest, RunManifest
 from sim.run.seeds import STREAM_ORDER, RunSeeds
 from state.provenance import CallLog, args_hash, read_calls
@@ -57,6 +58,8 @@ from tests.conftest import REPO_ROOT
 
 SCENARIOS = REPO_ROOT / "scenarios"
 SHORT_DAYS = 40.0
+TEST_SALT = bytes.fromhex("ad" * 32)
+"""A fixed store salt for the tests that pin the id derivation (finding B1)."""
 """Horizon of the runs generated here. Long enough to exercise every stage, short enough
 that the file is not the slowest in the suite."""
 
@@ -168,10 +171,14 @@ def test_no_operator_note_in_the_catalogue_could_trip_that_sweep():
 
 def test_the_run_id_is_deterministic_and_says_nothing_about_the_scenario():
     """Proposal §10 mitigates scenario-name leakage; a directory name is a name too."""
-    first = run_id("S2-03", "B", "A", 1023)
-    assert first == run_id("S2-03", "B", "A", 1023)
-    assert first != run_id("S2-03", "B", "B", 1023)
-    assert first != run_id("S2-01", "B", "A", 1023)
+    first = run_id("S2-03", "B", "A", 1023, key=TEST_SALT)
+    assert first == run_id("S2-03", "B", "A", 1023, key=TEST_SALT)
+    assert first != run_id("S2-03", "B", "B", 1023, key=TEST_SALT)
+    assert first != run_id("S2-01", "B", "A", 1023, key=TEST_SALT)
+    # and the same cell under another store's salt is another id entirely (finding B1)
+    assert first != run_id("S2-03", "B", "A", 1023, key=bytes.fromhex("42" * 32))
+    with pytest.raises(ValueError, match="no key"):
+        run_id("S2-03", "B", "A", 1023, key=b"")
     assert first.startswith("run_") and len(first) == len("run_") + 12
     for leak in ("S2-03", "s2-03", "gas", "sensor"):
         assert leak not in first
@@ -547,9 +554,11 @@ def test_the_seed_derivation_and_the_run_id_are_pinned():
         "observation": 3_216_793_928,
         "notes": 3_960_606_638,
     }
-    assert run_id("S2-03", "B", "A", 1023) == "run_8bfeca8497d4"
-    assert run_id("S0-01", "C", "B", 1000) == "run_3cfd8df3b48a"
-    assert run_id("S2-03", "B", "A", 1023, replicate=1) == "run_1c0de3266be8"
+    # golden pins under a FIXED TEST SALT: the id is a keyed HMAC since finding B1
+    # (2026-09-10), so the pins are of the derivation, not of any real store's ids
+    assert run_id("S2-03", "B", "A", 1023, key=TEST_SALT) == "run_a1a25365de1b"
+    assert run_id("S0-01", "C", "B", 1000, key=TEST_SALT) == "run_ff27b029a42d"
+    assert run_id("S2-03", "B", "A", 1023, replicate=1, key=TEST_SALT) == "run_6f9f3f9f4667"
 
 
 def test_the_tier_is_not_part_of_the_seed_derivation(tmp_path):
@@ -655,14 +664,17 @@ def test_a_cell_generates_identically_in_a_fresh_process(tmp_path):
         """
     ) % str(REPO_ROOT)
 
+    # One store for all three generations: run ids are keyed by the store's salt (finding
+    # B1, 2026-09-10), so the id is only expected to agree within a store. The record --
+    # the fingerprint -- must agree regardless.
     outputs = []
-    for salt in ("0", "12345"):
+    for hash_seed in ("0", "12345"):
         result = subprocess.run(
-            [sys.executable, "-c", script, str(tmp_path / salt)],
+            [sys.executable, "-c", script, str(tmp_path)],
             capture_output=True,
             text=True,
             check=False,
-            env={"PATH": "/usr/bin:/bin:/usr/local/bin", "PYTHONHASHSEED": salt},
+            env={"PATH": "/usr/bin:/bin:/usr/local/bin", "PYTHONHASHSEED": hash_seed},
             timeout=600,
         )
         assert result.returncode == 0, result.stderr[-4000:]
@@ -673,10 +685,20 @@ def test_a_cell_generates_identically_in_a_fresh_process(tmp_path):
         _short("S2-03"),
         "B",
         plant=load_plant_config("C"),
-        runs_root=tmp_path / "here" / "runs",
+        runs_root=tmp_path / "runs",
         write=False,
     )
     assert outputs[0] == f"{here.run_id} {_fingerprint(here)}"
+    # ... and the same cell in a different store is the same record under a different id.
+    elsewhere = generate_run(
+        _short("S2-03"),
+        "B",
+        plant=load_plant_config("C"),
+        runs_root=tmp_path / "elsewhere" / "runs",
+        write=False,
+    )
+    assert _fingerprint(elsewhere) == _fingerprint(here)
+    assert elsewhere.run_id != here.run_id
 
 
 # ------------------------------------------------------------------ 6. provenance
@@ -802,6 +824,133 @@ def test_regenerating_a_cell_starts_its_logs_over(tmp_path):
     assert len(read_calls(again.paths.root)) == n_visible
     assert len(read_calls(again.paths.truth)) == n_full
     assert [r.seq for r in read_calls(again.paths.root)] == list(range(n_visible))
+
+
+def test_faulted_and_unfaulted_visible_logs_are_indistinguishable_in_structure(clean_run, tmp_path):
+    """Finding B2, the lead's addition: the visible log must not reveal a split integration.
+
+    Same record count, same names, same field set for S0-01 and S5-01.
+    """
+    scenario = load_scenario(SCENARIOS / "S5-01.yaml")
+    onset = min(f.onset_day for f in scenario.faults)
+    faulted = generate_run(
+        scenario.model_copy(update={"duration_days": float(onset + 10)}),
+        "B",
+        runs_root=tmp_path / "runs",
+    )
+    assert len(faulted.truth.segments) >= 2 and len(clean_run.truth.segments) == 1
+    unfaulted_log = [json.loads(line) for line in clean_run.paths.calls.read_text().splitlines()]
+    faulted_log = [json.loads(line) for line in faulted.paths.calls.read_text().splitlines()]
+    assert len(faulted_log) == len(unfaulted_log)
+    assert [r["name"] for r in faulted_log] == [r["name"] for r in unfaulted_log]
+    assert [set(r) for r in faulted_log] == [set(r) for r in unfaulted_log]
+    assert not any("segment" in r["name"] for r in faulted_log)
+
+
+# ------------------------------------------------------ 7. the run id (finding B1)
+
+
+def _public_tuple_space():
+    """Every (scenario, plant, tier, seed, replicate) a committed cell could be."""
+    scenarios = [load_scenario(path) for path in sorted(SCENARIOS.glob("S*.yaml"))]
+    for sc in scenarios:
+        for plant in ("A", "B", "C"):
+            for tier in ("A", "B", "C"):
+                for replicate in range(3):
+                    yield sc.id, plant, tier, sc.seed, replicate
+
+
+def test_two_stores_give_every_cell_a_different_id():
+    """Finding B1 (a): the same cell under two salts is two ids, for every cell."""
+    salt_1, salt_2 = bytes.fromhex("11" * 32), bytes.fromhex("22" * 32)
+    cells = list(_public_tuple_space())
+    assert len(cells) > 100
+    ids_1 = [run_id(*c[:4], replicate=c[4], key=salt_1) for c in cells]
+    ids_2 = [run_id(*c[:4], replicate=c[4], key=salt_2) for c in cells]
+    assert all(a != b for a, b in zip(ids_1, ids_2, strict=True))
+    assert len(set(ids_1)) == len(cells) and len(set(ids_2)) == len(cells)  # no collisions
+
+
+def _json_keys_and_leaves(node) -> tuple[list[str], list[object]]:
+    """Every key and every leaf value of a JSON document, in document order."""
+    keys: list[str] = []
+    leaves: list[object] = []
+    stack = [node]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, dict):
+            keys.extend(item)
+            stack.extend(item.values())
+        elif isinstance(item, list):
+            stack.extend(item)
+        else:
+            leaves.append(item)
+    return keys, leaves
+
+
+def test_no_visible_file_carries_the_salt_or_the_cell(clean_run):
+    """Finding B1 (b): nothing under runs/<id>/ carries the salt, the scenario id or the seed.
+
+    The salt is looked for as bytes and as hex, the seed as any integer JSON value, and
+    "seed"/"scenario" as any key or log field -- in any form.
+    """
+    salt = store_salt(truth_store_for(clean_run.paths.root.parent))
+    assert (truth_store_for(clean_run.paths.root.parent) / SALT_FILE).is_file()
+    scenario = load_scenario(SCENARIOS / "S0-01.yaml")
+    seed = int(scenario.seed)
+    files = [f for f in clean_run.paths.root.rglob("*") if f.is_file()]
+    assert files
+    for path in files:
+        raw = path.read_bytes()
+        assert salt not in raw, path
+        text = raw.decode("utf-8", "replace")
+        assert salt.hex() not in text.lower(), path
+        assert scenario.id not in text, path
+        if path.suffix == ".json":
+            keys, values = _json_keys_and_leaves(json.loads(text))
+            assert not any("seed" in k.lower() for k in keys), (path, keys)
+            assert seed not in [v for v in values if isinstance(v, int)], path
+        elif path.suffix == ".jsonl":
+            for line in text.splitlines():
+                assert "seed" not in line.lower() and "scenario" not in line.lower(), path
+
+
+def test_the_brute_force_inversion_recovers_nothing_without_the_salt(clean_run):
+    """Finding B1 (c): the review's attack, run for real.
+
+    Enumerate the public tuple space, hash it every way an attacker without the salt
+    could, and match against a real id.
+    """
+    target = clean_run.run_id
+    cells = list(_public_tuple_space())
+    # the pre-ruling scheme: sha256 over the repository-literal salt and the tuple
+    old = {
+        "run_" + hashlib.sha256(f"ad-agentbench/g1|{s}|{p}|{t}|{d}|{r}".encode()).hexdigest()[:12]
+        for s, p, t, d, r in cells
+    }
+    assert target not in old
+    # a keyed guess without the key: every plausible wrong key recovers nothing
+    for guess in (bytes.fromhex("00" * 32), b"ad-agentbench/g1", TEST_SALT):
+        assert target not in {run_id(*c[:4], replicate=c[4], key=guess) for c in cells}
+    # negative control: WITH the store's salt the enumeration finds the cell, exactly once
+    salt = store_salt(truth_store_for(clean_run.paths.root.parent))
+    hits = [c for c in cells if run_id(*c[:4], replicate=c[4], key=salt) == target]
+    assert len(hits) == 1 and hits[0][0] == "S0-01", hits
+
+
+def test_the_loader_has_no_route_to_the_scenario_files(clean_run):
+    """Finding B5 (iii): the workflow loader has no route to scenarios/.
+
+    It is rooted at runs/<id>/observations and cannot reach the scenario files any more
+    than it can reach the truth store.
+    """
+    from state.run_view import TruthAccessError, open_run
+
+    view = open_run(clean_run.paths.root)
+    for relative in ("../../scenarios/S0-01.yaml", "../../../scenarios/S0-01.yaml", "/scenarios"):
+        with pytest.raises((TruthAccessError, FileNotFoundError)):
+            view.read_text(relative)
+    assert not any("scenario" in f.lower() for f in view.files)
 
 
 def test_a_second_writer_continues_the_sequence(tmp_path):
