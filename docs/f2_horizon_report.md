@@ -442,3 +442,73 @@ calibration or seeds. The 200-d edits (all twenty scenarios, the README, the sch
 `OUTPUT_DAYS`, the decisions entry, the regenerated report block) are held locally,
 uncommitted, until the lead rules.
 
+## 14. The true horizon curve — measured on real panels, one per horizon
+
+*Status line: 200 d NOT committed; real-panel curve below; the row's horizon dependence is
+the tank initialisation, not the season; holding for the lead.*
+
+**`biogas_mean` on the 24-seed Plant B clean panel, each panel generated at its own
+horizon** (`OUTPUT_DAYS` = H, settled from day 30, panel median of the settled mean, anchor
+2111 m³/d):
+
+| horizon (d) | 180 | 190 | 200 | 210 | 220 | 240 |
+|---|---:|---:|---:|---:|---:|---:|
+| `biogas_mean`, m³/d | 3143 | 3058 | 3216 | 3071 | 3274 | 3207 |
+| ratio to the anchor | 1.489 | **1.449** | **1.523** | **1.455** | **1.551** | 1.519 |
+| against [0.6, 1.5] | in | in | **out** | in | **out** | out |
+| sound | 24/24 | 24/24 | 24/24 | 24/24 | 24/24 | 24/24 |
+| overload trigger, pooled | 7.67 % | 7.87 % | 8.92 % | 8.13 % | 8.42 % | 8.18 % |
+| foaming trigger, pooled | 7.20 % | 6.70 % | 8.72 % | 8.29 % | 8.18 % | 8.47 % |
+
+Every other anchored row is inside its band at every horizon (§13's table for 200 d; the
+190/210/220 panels likewise: 22 of 23 rows in, only `biogas_mean` moves against its edge).
+
+**What the curve says.** It is not a curve: the row jumps by ±5 % between horizons ten
+days apart (3058 → 3216 → 3071 → 3274), with no trend. That is not the seasonal window §3
+described — a window effect is smooth and monotone over ten-day steps — it is the
+**horizon-dependent initial state**: the equalisation tank on Plant B is initialised from
+the whole-horizon mean of arrivals, so every horizon starts the digester from a different
+day-0 tank content, and the realisation the generator draws differs with `n_days` as well.
+Those two effects re-roll the early months of every run, and the settled mean over
+days 30–H carries the re-roll. The decisions log of 2026-09-10 recorded exactly this
+initialisation as "dormant-but-fault-sensitive", left for the lead because the fix
+(initialise from the first hold-up window) moves every Plant B cell. It is **not dormant**:
+it makes an anchored row horizon-sensitive by 5 %, which is more than the row's whole
+margin to its band edge. The seasonal effect of §3 is real but second order beside it.
+
+**So the row is a coin flip against its edge**, whatever the horizon: 1.449–1.551 across
+six horizons on the same feed, the same seeds and the same calibration, band edge 1.5. The
+180-d figure that was "inside by 0.7 % of its margin" was one draw of that coin.
+
+**Recommendation, third and last revision, with the reasons.**
+
+1. **The horizon does not fix this row and should not be chosen to.** Any single value
+   removes the partition; the lead's other reasons for 200 d hold at 190 or 210 as well
+   (every other row in, souring 24/24, every key that holds at 240 d holds). If the lead
+   wants a horizon that is in band *on today's panel*, **210 d** is (1.455) and keeps 90
+   post-onset days for the loss-of-adaptation rows; but the number above says that
+   choosing 210 d because it is in band is choosing the lucky draw.
+2. **The honest fix is the tank initialisation**, which is the lead's call and a change to
+   the truth model at the freeze: initialise the buffer from the first hold-up window (the
+   recorded fix), so the day-0 state stops depending on the horizon. It moves every Plant B
+   and C cell; the panel would be re-measured and every anchored row re-checked. I have not
+   touched it and will not without the ruling.
+3. **Otherwise rule on the row's basis or band**: a 24-seed 150–210-day settled mean with a
+   re-rolled head, compared to a three-year annual mean, has never been better than 0.7 %
+   inside its edge since the calcium ruling; it is a measured fact about the comparison,
+   recorded rather than tuned.
+
+**The other rows at 200 d, for completeness** (24 seeds each; 180-d values in brackets):
+
+| Plant | baseline | sound | overload pooled | per-run | runs | foaming pooled | per-run | runs |
+|---|---|---|---:|---|---:|---:|---|---:|
+| B | — | 24/24 | 8.92 % (7.67) | 4.09–16.37 % | 24/24 | 8.72 % (7.20) | 2.34–16.96 % | 24/24 |
+| C | — | 24/24 | 9.14 % (9.22) | 2.34–14.04 % | 24/24 | 7.43 % (7.67) | 2.92–12.28 % | 24/24 |
+| A | `unadapted` | 24/24 | 1.36 % (1.49) | 0.00–4.09 % | 21/24 | 0.12 % (0.14) | 0.00–2.92 % | 1/24 |
+| A | `adapted` | 24/24 | 0.29 % (0.28) | 0.00–2.34 % | 8/24 | 0.22 % (0.25) | 0.00–1.75 % | 6/24 |
+
+Operator FOS/TAC > 0.40 and > 0.30: 0.00 % on every row (one run on B at 220 d, 0.04 %).
+
+Nothing is committed beyond this report. The 200-d edits are held locally; no tolerance,
+tank, calibration or seed has been touched; nothing has been regenerated.
+
