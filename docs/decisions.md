@@ -3891,3 +3891,131 @@ import layout` and this test caught it); a module using only `open_run` must sta
   every Plant B cell and is the lead's call.
 
 `pytest -q` 345 passed, 2 skipped; `pytest -q -m g1` 13 passed; ruff clean.
+
+## 2026-09-10 — The lead's rulings on the five review blockers, applied
+
+The lead ruled on all five blockers of the whole-branch review at `f8b27c4` (relayed by the
+coordinator 03:32 UTC). Every ruling is applied on `claude/g1-review-blockers`; every new
+guard was mutation-checked by building the mutant and running the test, and the results are
+tabulated below. The four-row measurements the rulings asked for were taken at the code
+version that carries them and **recorded, not tuned**. Nothing was regenerated before the
+rulings landed; the regeneration is the last action on the branch, after CI.
+
+### B1 — the run id is a keyed HMAC over the public cell, with a per-store secret salt
+
+**Ruling.** The id stays a truncated hash over the existing public tuple, but keyed: a
+per-store secret salt generated at store creation with `secrets.token_bytes`, stored only at
+`truth_store/salt`, gitignored, never in any manifest, log, index or visible file. Run ids
+are therefore store-specific and the truth-side index is the only way back.
+
+**Done.** `sim.run.layout.store_salt` reads or creates the 32-byte salt;
+`run_id(..., key=)` is `HMAC-SHA256(salt, "scenario|plant|tier|seed|replicate")[:12]` and
+refuses an empty key; `/truth_store/salt` is gitignored explicitly; the harness keys every id
+with the salt of the store it writes to. The repository-literal salt is gone.
+
+**Tests, each of the three the lead required.** (a) Every cell of the public tuple space
+(every committed scenario × 3 plants × 3 tiers × 3 replicates, > 100 cells) gets a
+different id under two salts, with no collisions under either. (b) Every file under
+`runs/<id>/` is scanned for the salt as bytes and as hex, the scenario id as text, the seed as
+any integer JSON value, and `seed`/`scenario` as any key or log field — none is there. (c)
+The review's attack, run for real: the whole public tuple space is hashed under the old
+scheme (the repository-literal salt, which recovered two ids at review) and under three
+plausible wrong keys, and none matches a real id; the **negative control** hashes the same
+space with the store's salt and finds the cell exactly once. The fresh-process determinism
+test now runs its three generations in one store and checks the second-store case
+separately: same record, different id.
+
+**The additions to B2 the lead attached.** The visible call projection hides segment counts:
+one visible `sim.simulate_truth` record per invocation, no segment index, no per-segment
+span. Tested by generating S0-01 and S5-01 (integrated past its onset, so the truth-side log
+has ≥ 2 segment records) and asserting the visible logs have the same record count, the same
+names in the same order and the same field set.
+
+### B3 — foaming is a hidden-state trigger; the 0.30 threshold stays visible and unwired
+
+**Ruling.** Foaming fires on gas > 1.80× its 30-day trailing median **and** true VFA above
+its own 30-day trailing median, both with the overload convention (previous 30 samples,
+current excluded). Measure on all four rows, record, do not tune. The operator-visible
+FOS/TAC > 0.30 flag stays visible but unwired; its structural deadness (titrimetric floor
+~0.13–0.14) is written up as a measurement-model finding in the report and the card.
+
+**Done.** `condition_flags` takes `gas_surge_ratio`, `gas_median_window_d` and the new
+`foaming_vfa_ratio` and no longer takes `fos_tac_foaming`; it does not read the `fos_tac`
+channel at all, and a channel set without that channel is accepted (tested). One trailing
+VFA reference serves both flags. `sensors.yaml`: `gas_surge_ratio` 1.35 → **1.80**,
+`gas_median_window_d` 14 → **30**, `foaming_vfa_ratio` **1.00** (schema: ≥ 1, foaming needs
+VFA *above* its median), `fos_tac_foaming` 0.30 kept and marked operator-visible only. The
+panel reports the foaming trigger and the 0.30 exceedance beside the overload pair.
+
+**Measured, four rows, 24 seeds each, 180 d, clean Level-0, settled from day 30:**
+
+| Plant | baseline | sound | overload trigger | foaming trigger | per-run range (foaming) | runs that foam | FOS/TAC > 0.40 | FOS/TAC > 0.30 |
+|---|---|---|---:|---:|---|---:|---:|---:|
+| B | — | 24/24 | 7.67 % | **7.20 %** | 1.32 – 16.56 % | 24/24 | 0.17 % | 0.25 % |
+| C | — | 24/24 | 9.22 % | **7.67 %** | 3.97 – 11.92 % | 24/24 | 0.00 % | 0.00 % |
+| A | `unadapted` | 24/24 | 1.49 % | **0.14 %** | 0.00 – 0.66 % | 5/24 | 0.00 % | 0.00 % |
+| A | `adapted` | 24/24 | 0.28 % | **0.25 %** | 0.00 – 1.32 % | 7/24 | 0.00 % | 0.00 % |
+
+**Reading the foaming rows.** On B and C the foaming trigger fires at about the overload rate (7.20 % and 7.67 % against 7.67 % and 9.22 %), in every sound run, with per-run ranges of the same width: on a batch-fed plant a top-decile gas day is usually a day the acids are also up, because both follow the arrival of a large delivery. They are not the same days — the flags are computed separately, and the missingness model compounds the multipliers when they coincide — but they are the same kind of event. On Plant A both rows are far below B and C, as overload is, and the pathway ordering **reverses**: the `unadapted` (SAO) baseline overloads 5.3× more often than `adapted` but foams *less* often (0.14 % against 0.25 %, 5 against 7 firing runs of 24). The foaming trigger needs a gas surge, and gas surges on Plant A follow the weekday silage feeding, which is the same on both baselines; what the SAO baseline adds is VFA excursions that relax slowly *after* the load rather than gas that rises with it, so its extra overload days are not gas-surge days. Two panels of 24 runs at rates below 0.3 % are thin evidence and this is recorded as an observation, not a finding. Nothing was tuned: 1.80× and 1.00× are the lead's figures as written. identical to the overload table above to the last digit. That is the check that nothing in the B1, B3 and B5 changes moved the simulator: the run-id scheme, the foaming rule and the location of the plant record are not inputs to the truth model.
+
+**Tests.** The plain-definition check on an irregular grid covers both flags with the current
+sample excluded from both windows, and re-runs the flags on a channel set with no `fos_tac`
+at all; a gas surge while the VFA is stepping up fires, the same surge fifty days later on a
+settled VFA does not, dropping either condition puts the flag out, and a surge that persists
+past the window becomes its own median and stops; the reported ratio pinned at 5.0 raises
+nothing and pinned at 0.001 does not stop the flag.
+
+| mutant | result |
+|---|---|
+| the old rule (`fos_tac > 0.30` in place of the VFA condition) | **fails** |
+| gas surge alone, VFA condition dropped | **fails** |
+| VFA condition inclusive (`>=`) | **fails** |
+| gas window including the current sample (the old convention) | **fails** |
+| gas ratio read from the overload ratio | **fails** |
+| `foaming_vfa_ratio` ignored (overload ratio used) | **fails** |
+
+### B5 — option two: the visible-information contract
+
+**Ruling.** (i) Speciated VFA sensors stay true-plus-noise. (ii) Strip every per-baseline
+numeric table from the visible `configs/plants/plant_A.yaml`, declare the two community
+states qualitatively, move the numbers to a truth-side plant record the harness reads (not
+in `configs/`). (iii) Bar workflows from `scenarios/` with the same AST and runtime checks as
+truth. (iv) The benchmark card states what a workflow may and may not see.
+
+**Done.** (ii) `Baseline` is `name`/`description`/`note`, extra fields forbidden;
+`PlantConfig.adaptation` is gone; `sim/plants/truth/plant_A.yaml` (schema and loader in
+`sim.plants.truth`, both spelling `truth`) carries `K_I_nh3`, the expected digestate TAN and
+the measured table of each baseline, and `load_plant_truth` refuses a record whose baselines
+are not exactly the contract's, or a plant that declares baselines without a record;
+`apply_adaptation` resolves the name against the contract and the constant against the
+record. The record is deliberately not under `configs/` (the visible contract) and not under
+`truth_store/` (per-run truth): it is a property of the plant. (iii) `scenarios` joins
+`truth`/`truth_store` in the checker's module set and path regex; ten routes planted one per
+line (both import forms, the schema module, the aliased import, path literals in every
+spelling including upper case and traversal, the plant record's path, and the record's
+loader by attribute) are each flagged, while prose containing the word stays clean; the
+loader bypass suite asks for the scenario files and the plant record by traversal and is
+refused. (iv) Benchmark card §4.1.
+
+**Guards.** No visible plant file spells `K_I_nh3`, `X_ac`, `X_sao`, `expected_digestate_tan`
+or `adaptation:` anywhere — code, comment or prose; no baseline description or note carries a
+digit; the schema cannot load a table. The truth record is the negative control: it spells
+all of them and the harness reads the constant from it.
+
+| mutant | result |
+|---|---|
+| `adaptation: {K_I_nh3: 0.02}` restored in the visible file | **fails** (schema and sentinel) |
+| the measured table restored as a YAML comment | **fails** |
+| a number written into a baseline's description | **fails** |
+| `scenarios` dropped from the checker's module set | **fails** |
+| `scenarios` dropped from the checker's path regex | **fails** |
+
+### B2 and B4 — approved as prepared
+
+No change beyond the B2 addition recorded under B1.
+
+### Carried
+
+The non-blocking items (seeded execution order, atomic index writes, the two stale notes,
+the equalisation-tank initialisation recorded as dormant) were already on the branch.
+

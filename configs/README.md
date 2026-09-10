@@ -24,11 +24,13 @@ is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
   more than one extension (pK_a2). Loaded by `sim.adm1.load_extensions`; each extension
   is switchable independently.
 - `plants/plant_{A,B,C}.yaml` — the three virtual plants as *declared* to workflows,
-  including two blocks added on the lead's rulings of 2026-09-03: Plant B's `equalisation`
-  (the 65,000-gal blend tank its trucked high-strength waste passes through, without which
-  arrivals reached the biomass as acid pulses and 5 of 12 clean seeds acidified) and Plant
-  A's `adaptation` (the acetoclastic ammonia-inhibition constant its community has
-  acclimated to, 0.02 against ADM1's sewage-sludge 0.0018). Both are declared, not hidden
+  including Plant B's `equalisation` block (lead's ruling of 2026-09-03: the 65,000-gal
+  blend tank its trucked high-strength waste passes through, without which arrivals reached
+  the biomass as acid pulses and 5 of 12 clean seeds acidified) and Plant A's two declared
+  community states (`baselines`, lead's ruling 1 of 2026-09-09), declared **qualitatively
+  only**: what constant the acclimated community carries and what each state measures at
+  are in the truth-side record `sim/plants/truth/plant_A.yaml`, which the harness reads and
+  a workflow cannot (lead's ruling B5, 2026-09-10). Everything here is declared, not hidden
   (schema `sim/plants/schema.py`): geometry, temperature, feed catalogue, hydraulics,
   anchoring with sources, truth-model extensions, scenario subset, and the
   *distribution* of the hidden active-volume error (its realisation is sampled per run

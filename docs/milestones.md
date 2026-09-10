@@ -1524,3 +1524,35 @@ behaviour unchanged.
 regeneration writes) → merge the side branch into PR #15's branch → CI green → regenerate at
 that head as the last action → the review is rerun at that head → merge and tag by the
 coordinator.
+
+---
+
+### Session 2026-09-10 (rulings applied) — B1, B3, B5 landed; four rows measured; regeneration pending CI
+
+The lead's rulings on all five review blockers arrived at 03:32 UTC and are applied on
+`claude/g1-review-blockers`, mutation-checked, documented in `docs/decisions.md` ("The lead's
+rulings on the five review blockers, applied").
+
+- **B1** — run ids are HMAC-SHA256 over the public cell keyed with a per-store secret salt
+  (`truth_store/salt`, gitignored). Three required tests: two salts → different ids for every
+  cell; no visible file carries salt, scenario or seed in any form; the brute-force inversion
+  recovers nothing without the salt and finds the cell exactly once with it. Plus the lead's
+  B2 addition: S0-01 and S5-01 visible logs are indistinguishable in structure.
+- **B3** — foaming is a hidden-state trigger (gas > 1.80× its 30-d trailing median AND true
+  VFA > its 30-d trailing median, current sample excluded from both); FOS/TAC > 0.30 stays
+  visible, unwired, and its structural deadness is written up as a measurement-model finding
+  in the report (§5.4) and the card (§5.4). Six mutants killed.
+- **B5 option two** — Plant A's baseline tables and `K_I_nh3` moved to the truth-side record
+  `sim/plants/truth/plant_A.yaml`; the visible contract is qualitative (no truth-side name,
+  no digit in a baseline's prose; tested); `scenarios/` is barred by the AST checker and the
+  loader; the card's §4.1 states what a workflow may and may not see. Five mutants killed.
+- **Measured, recorded, not tuned** (24 seeds × B, C, A-adapted, A-unadapted): overload
+  7.67 % / 9.22 % / 0.28 % / 1.49 %; foaming 7.20 % / 7.67 % /
+  0.25 % / 0.14 %; operator FOS/TAC > 0.40 on Plant B 0.17 %.
+
+**Next, in order**: merge the side branch into `claude/g1-scenario-generation`; push; CI green;
+**regenerate the matrix at that head as the last action** and report the SHA, cell count,
+wall-clock, index line count, the four-row overload table, the four-row foaming table and the
+operator-visible rate; then **stop pushing**. The coordinator reruns the whole-branch review
+at that head, then merges and tags.
+

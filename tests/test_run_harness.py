@@ -663,7 +663,6 @@ def test_a_cell_generates_identically_in_a_fresh_process(tmp_path):
         from pathlib import Path
         from tests.test_run_harness import _fingerprint, _short
         from sim.plants import load_plant_config
-from sim.plants.truth import load_plant_truth
         from sim.run.harness import generate_run
         run = generate_run(
             _short("S2-03"), "B", plant=load_plant_config("C"),

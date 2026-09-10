@@ -128,7 +128,7 @@ conditions:
   # is gassing hard while its acids are rising. Same trailing-median convention as overload:
   # the previous gas_median_window_d days, current sample EXCLUDED. MEASURED on the four
   # rows (B, C, A-adapted, A-unadapted; 24 seeds each) and RECORDED, NOT TUNED: see
-  # docs/g1_anchor_report.md section 5.5.
+  # docs/g1_anchor_report.md section 5.4.
   gas_surge_ratio: 1.80       # DESIGN  -; the lead's cut-off (B3). Not anchored: Muscatine
                               # records no foaming events. The pre-M2 measurement table above
                               # put the sound-run p92 of gas / 30-d trailing median at 1.780,

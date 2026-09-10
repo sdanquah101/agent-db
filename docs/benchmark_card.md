@@ -74,7 +74,7 @@ A generated run is **two trees**, so a workflow rooted at the first has nothing 
 to:
 
 ```
-runs/<id>/                     <id> is an opaque hash of the cell, not its scenario name
+runs/<id>/                     <id> is a keyed hash of the cell (HMAC, per-store secret salt)
   manifest.json                the REDACTED manifest: plant, tier, horizon, seasonal
                                phase, config versions, git SHA. Written redacted.
   calls.jsonl                  one line per tool call (rule 3); append-only, shared by the
@@ -96,6 +96,8 @@ truth_store/<id>/              a SEPARATE TOP-LEVEL TREE (lead's ruling, 2026-09
             channels.npz       every observable channel and the condition flags
             faults.json        the fault plan, the truth label, the answer key
 truth_store/index.jsonl        opaque run id -> its cell, for the evaluator
+truth_store/salt               the store's secret salt (32 random bytes, gitignored);
+                               the only key from a public cell to its run id
 ```
 
 **The manifest is redacted at write time, not at read time.** The complete manifest is
@@ -104,6 +106,34 @@ would let a workflow regenerate the truth for itself, and the declared fault lay
 the uncertainty class §6.7 B scores — so it is written to the truth store, and the file
 under `runs/<id>/` never carried any of the three. `truth_store/index.jsonl` is in the
 truth store for the same reason: it names the scenario of every run.
+
+### 4.1 What a workflow may and may not see
+
+The visible-information contract, as ruled by the lead on 2026-09-10 (finding B5 of the
+whole-branch review). A workflow, at any tier, is given exactly this and nothing else:
+
+| A workflow **may** read | A workflow **may not** read |
+|---|---|
+| the observation record at its tier (`observations/sensors.json`: sampled, noisy, drifting, lagged, with gaps) | the truth store (`truth_store/<id>/`): true states, true parameters, true influent, the fault plan, the answer key, the complete manifest |
+| the operator's feed log and the tier's feed assays (`feed_log.csv`, `feed_assays.csv`) | the scenario files (`scenarios/*.yaml`): they name the baseline, the faults and the `correct_conclusion` of every row |
+| the operator's log notes (`operator_notes.json`) | the truth-side plant record (`sim/plants/truth/`): the adapted inhibition constant and the measured biomass, acetate and ammonia of each baseline |
+| the redacted manifest (`manifest.json`: plant, tier, horizon, seasonal phase, config versions, git SHA) | the run index (`truth_store/index.jsonl`) and the store's salt |
+| the visible call projection (`calls.jsonl`: the same calls in the same order, hashed over nothing the manifest does not state, segment integrations collapsed to one record) | the truth-side call log with real arguments and one record per integration segment |
+| the qualitative plant contract (`configs/plants/`: geometry, set point, hydraulics, feed catalogue, blend tank, that two community states exist and what kind of digester each is) | which baseline the run is staged on, and any numeric table that would let the record be read off against one |
+
+Three consequences follow, and each is enforced by a test rather than by the list:
+
+- **Run ids are store-specific.** An id is an HMAC over the public cell tuple, keyed with a
+  32-byte secret generated at store creation and kept only at `truth_store/salt`. The same
+  cell in two stores is the same record under two ids, the public tuple space cannot be
+  enumerated back to a scenario without the salt (the review's brute-force inversion is a
+  test, and recovers nothing), and the truth-side index is the only way from an id to its
+  cell.
+- **The static checker bars `scenarios/` as it bars `truth`**: an import of the package or a
+  path literal with `scenarios` as a segment is a violation in any module under `workflows/`,
+  and the loader refuses the scenario files and the plant record by traversal.
+- **The visible call log cannot tell a faulted run from a clean one**: S0-01 and S5-01
+  produce logs of the same length, the same names and the same field set.
 
 **Instrumentation tiers are masks on identical truth** (§6.4). Tier C contains Tier B
 contains Tier A — the schema validates the containment and the tests check it. Two runs at
@@ -131,8 +161,10 @@ are anchored to the Muscatine 1-minute SCADA file and re-derived by
 `tests/test_observation.py`. **Everything else in the observation model is a design value
 marked `ASSUMED`**, including every missingness rate: the provider pre-cleaned the SCADA
 file, whose two channels are 100 % finite, so no dropout statistics exist to fit. The
-FOS/TAC overload threshold (0.40) is **percentile-matched** to the anchor — see §5.2 — but
-the foaming rule is assumed.
+FOS/TAC overload threshold (0.40) is **percentile-matched** to the anchor — see §5.2. The
+two conditional-missingness triggers (overload and foaming) fire on the hidden state, not
+on any reading; their cut-offs are the lead's design values, unanchored (Muscatine records
+no foaming events), and their firing rates are measured and recorded, not tuned (§5.4).
 
 Every configuration value in `configs/` carries `# DESIGN` and a source, or the marker
 `ASSUMED` with the reason. A number without a source is a bug.
@@ -197,6 +229,8 @@ matrix cells are sound. The sound/soured labelling stays as instrumentation.
   the second, where the omission bites. `S6-04` is the same omission on the first, scored on
   **abstention** — the correct conclusion is that no structural residual is detectable — so
   the pair distinguishes a diagnosis from a workflow that always answers "structural".
+  Since the lead's ruling B5 (2026-09-10) the plant contract declares the two states
+  **qualitatively only**; what each is numerically is in the truth-side plant record (§4.1).
 
 ### 5.3 Two FOS/TAC conventions, and which one each number is in
 
@@ -240,8 +274,23 @@ missingness triggers on the hidden state (§5.4).
 
 | | reads | fires on | used for |
 |---|---|---|---|
-| **conditional-missingness trigger** | hidden true VFA > 2.00× its 30-day trailing median | **7.67 %** of days on sound Plant B runs (per-run 2.65–16.56 %, all 24 runs) | §6.1 conditional missingness, and the Level-4 `informative_missingness` row |
-| **operator-visible overload** | titrimetric FOS/TAC > 0.40 | 0.17 % of days (1 of 24 runs) | what an operator would call an overload; reported, never a trigger |
+| **overload trigger** (conditional missingness) | hidden true VFA > 2.00× its 30-day trailing median | **7.67 %** of days on sound Plant B runs (per-run 2.65 – 16.56 %, 24/24 runs) | §6.1 conditional missingness, and the Level-4 `informative_missingness` row |
+| **foaming trigger** (conditional missingness) | hidden gas > 1.80× its 30-day trailing median **and** true VFA > its 30-day trailing median | **7.20 %** of days on sound Plant B runs (per-run 1.32 – 16.56 %, 24/24 runs) | §6.1 conditional missingness (the 3× online multiplier) |
+| **operator-visible overload** | titrimetric FOS/TAC > 0.40 | 0.17 % of days (1/24 runs) | what an operator would call an overload; reported, never a trigger |
+| **operator-visible foaming** | titrimetric FOS/TAC > 0.30 | 0.25 % of days (1/24 runs) | what an operator would call foaming; reported, **structurally dead**, never a trigger |
+
+Both triggers on all four rows (B, C, A-adapted, A-unadapted; 24 seeds each, recorded and
+not tuned): overload 7.67 % / 9.22 % / 0.28 % / 1.49 %; foaming
+7.20 % / 7.67 % / 0.25 % / 0.14 % (`docs/g1_anchor_report.md` §5.4).
+
+**The foaming trigger reads the hidden state because the reading it used to read is
+structurally dead** (lead's ruling B3, 2026-09-10). Until the whole-branch review the flag
+compared the titrimetric FOS/TAC with 0.30 and had never fired in any cell: a two-point
+titration counts the bicarbonate between pH 5.0 and 4.4 as "FOS", so the ratio has a floor
+near 0.13–0.14 and sits at 0.14–0.18 in every sound run. That is a **measurement-model
+finding** — an operator watching FOS/TAC for foaming would see nothing until the digester
+was already in trouble — and the 0.30 threshold is kept as declared and reported, not
+lowered to make the flag fire.
 
 The **trigger** reads the plant, not a reading: instruments fail during the transients that
 identify the process whether or not anyone has taken a measurement, and the reading it used
@@ -336,9 +385,10 @@ from the analysis plan are documented rather than absorbed.
 - **One answer key per scenario, not one per tier.** A fault whose instrument the tier does
   not carry (the Level-2 methane-analyser flatline at Tier A) is unobservable there, while
   its `correct_conclusion` still names the instrument. Flagged for the lead.
-- **Plant A declares an adapted inhibition constant** (`adaptation.K_I_nh3`), because a
-  digester running for years above 3 kg N/m³ of ammonia does not have ADM1's sewage-sludge
-  community. It is a declared plant property, not a hidden one.
+- **Plant A's adapted baseline carries an adapted inhibition constant** (`K_I_nh3`, in the
+  truth-side plant record), because a digester running for years above 3 kg N/m³ of ammonia
+  does not have ADM1's sewage-sludge community. That the acclimated state exists is declared;
+  the constant it carries, and which state a run is in, are not (ruling B5, 2026-09-10).
 
 ## 9. Reproducibility
 
@@ -352,11 +402,14 @@ from the analysis plan are documented rather than absorbed.
   registry, not in workflows, so no workflow can grant itself more.
 - All numerical tolerances and solver settings live in `configs/`, versioned, so a run is
   reproducible from a tag.
-- A run directory is **self-contained and deterministically named**: the id is a hash of
-  (scenario, plant, tier, seed, replicate), so regenerating a cell overwrites its own
-  directory rather than accumulating copies, and `truth_store/index.jsonl` — in the truth
-  store, because it names the scenario of every run — maps ids back to cells for the
-  evaluator, one line per run id however often a cell is regenerated.
+- A run directory is **self-contained and deterministically named within its store**: the
+  id is an HMAC-SHA256 of (scenario, plant, tier, seed, replicate) keyed with the store's
+  secret salt (`truth_store/salt`, generated once, gitignored, never written anywhere
+  visible), so regenerating a cell overwrites its own directory rather than accumulating
+  copies, and `truth_store/index.jsonl` — in the truth store, because it names the scenario
+  of every run — maps ids back to cells for the evaluator, one line per run id however often
+  a cell is regenerated. **Run ids are store-specific**: reproduce a cell by its index line,
+  not by its id.
 - The manifest records the **declared version and content hash of every configuration file**
   the run read, plus the git commit, marked `-dirty` when the tree was not clean.
 - Final runs execute from a tagged release; Docker image and pinned dependencies at

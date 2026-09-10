@@ -372,8 +372,9 @@ kept while its assumed calcium fell. The four-row missingness table is re-measur
 liquor changes altered what the plant is fed): adapted X_ac 1.129 → 1.065, unadapted X_sao
 0.910 → 0.853, pH down 0.07 and CH₄ down 6 points on both, TAN within 0.01 on both. Both
 baselines are still the communities they declare — SAO share 0.000 and 0.998 — so the lead's
-stop condition was not met and `K_I_nh3` was not touched. `configs/plants/plant_A.yaml`
-carries the numbers with the old ones beside them.
+stop condition was not met and `K_I_nh3` was not touched. The truth-side plant record
+`sim/plants/truth/plant_A.yaml` carries the numbers with the old ones beside them; the
+visible contract no longer carries any of them (lead's ruling B5, 2026-09-10).
 
 ## 4. The comparison
 
@@ -412,8 +413,9 @@ carries the numbers with the old ones beside them.
 | Generated statistic with no anchor row | Value |
 |---|---:|
 | `ch4_fraction_median` | 0.6802 |
-| `foaming_day_fraction` | 0 |
+| `foaming_day_fraction` | 0.06954 |
 | `fos_tac_exceedance_fraction` | 0 |
+| `fos_tac_foaming_exceedance_fraction` | 0 |
 | `fos_tac_true_vfa_median` | 0.01255 |
 | `overload_day_fraction` | 0.06623 |
 | `sound_run_fraction` | 1 |
@@ -422,43 +424,45 @@ carries the numbers with the old ones beside them.
 
 ### The output panel, run by run
 
-| Base seed | Verdict | median pH | mean CH4 | titrimetric FOS (kg/m3) | true VFA (kg/m3) | FOS/TAC | trigger days | FOS/TAC > 0.40 days |
-|---|---|---:|---:|---:|---:|---:|---:|---:|
-| 1000 | sound | 7.26 | 0.668 | 0.872 | 0.0828 | 0.151 | 14.57 % | 0.00 % |
-| 1001 | sound | 7.22 | 0.688 | 0.759 | 0.0705 | 0.152 | 11.92 % | 0.00 % |
-| 1002 | sound | 7.25 | 0.686 | 0.821 | 0.0752 | 0.152 | 12.58 % | 0.00 % |
-| 1003 | sound | 7.23 | 0.666 | 0.790 | 0.0786 | 0.153 | 6.62 % | 0.00 % |
-| 1004 | sound | 7.22 | 0.685 | 0.713 | 0.0573 | 0.150 | 3.97 % | 0.00 % |
-| 1005 | sound | 7.18 | 0.677 | 0.671 | 0.0568 | 0.153 | 3.97 % | 0.00 % |
-| 1006 | sound | 7.20 | 0.689 | 0.694 | 0.0533 | 0.150 | 3.31 % | 0.00 % |
-| 1007 | sound | 7.21 | 0.663 | 0.742 | 0.0580 | 0.151 | 4.64 % | 0.00 % |
-| 1008 | sound | 7.21 | 0.666 | 0.741 | 0.0562 | 0.151 | 2.65 % | 0.00 % |
-| 1009 | sound | 7.24 | 0.670 | 0.791 | 0.0615 | 0.149 | 6.62 % | 0.00 % |
-| 1010 | sound | 7.26 | 0.680 | 0.803 | 0.0682 | 0.149 | 6.62 % | 0.00 % |
-| 1011 | sound | 7.30 | 0.686 | 0.861 | 0.0674 | 0.148 | 7.28 % | 0.00 % |
-| 1012 | sound | 7.33 | 0.687 | 0.916 | 0.0709 | 0.147 | 10.60 % | 0.00 % |
-| 1013 | sound | 7.18 | 0.653 | 0.732 | 0.0600 | 0.152 | 11.26 % | 0.00 % |
-| 1014 | sound | 7.23 | 0.678 | 0.757 | 0.0596 | 0.150 | 5.96 % | 0.00 % |
-| 1015 | sound | 7.27 | 0.680 | 0.842 | 0.0798 | 0.151 | 9.93 % | 0.00 % |
-| 1016 | sound | 7.23 | 0.663 | 0.786 | 0.0619 | 0.151 | 10.60 % | 0.00 % |
-| 1017 | sound | 7.26 | 0.688 | 0.775 | 0.0687 | 0.151 | 4.64 % | 0.00 % |
-| 1018 | sound | 7.33 | 0.686 | 0.946 | 0.0919 | 0.150 | 8.61 % | 0.00 % |
-| 1019 | sound | 7.18 | 0.688 | 0.668 | 0.0573 | 0.153 | 6.62 % | 0.00 % |
-| 1020 | sound | 7.23 | 0.660 | 0.803 | 0.0609 | 0.150 | 4.64 % | 0.00 % |
-| 1021 | sound | 7.18 | 0.662 | 0.736 | 0.0529 | 0.151 | 16.56 % | 3.97 % |
-| 1022 | sound | 7.19 | 0.687 | 0.693 | 0.0703 | 0.156 | 5.96 % | 0.00 % |
-| 1023 | sound | 7.30 | 0.683 | 0.892 | 0.0912 | 0.152 | 3.97 % | 0.00 % |
+| Base seed | Verdict | median pH | mean CH4 | titrimetric FOS (kg/m3) | true VFA (kg/m3) | FOS/TAC | overload days | foaming days | FOS/TAC > 0.40 days | FOS/TAC > 0.30 days |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1000 | sound | 7.26 | 0.668 | 0.872 | 0.0828 | 0.151 | 14.57 % | 11.26 % | 0.00 % | 0.00 % |
+| 1001 | sound | 7.22 | 0.688 | 0.759 | 0.0705 | 0.152 | 11.92 % | 16.56 % | 0.00 % | 0.00 % |
+| 1002 | sound | 7.25 | 0.686 | 0.821 | 0.0752 | 0.152 | 12.58 % | 14.57 % | 0.00 % | 0.00 % |
+| 1003 | sound | 7.23 | 0.666 | 0.790 | 0.0786 | 0.153 | 6.62 % | 5.30 % | 0.00 % | 0.00 % |
+| 1004 | sound | 7.22 | 0.685 | 0.713 | 0.0573 | 0.150 | 3.97 % | 5.96 % | 0.00 % | 0.00 % |
+| 1005 | sound | 7.18 | 0.677 | 0.671 | 0.0568 | 0.153 | 3.97 % | 1.99 % | 0.00 % | 0.00 % |
+| 1006 | sound | 7.20 | 0.689 | 0.694 | 0.0533 | 0.150 | 3.31 % | 1.32 % | 0.00 % | 0.00 % |
+| 1007 | sound | 7.21 | 0.663 | 0.742 | 0.0580 | 0.151 | 4.64 % | 5.30 % | 0.00 % | 0.00 % |
+| 1008 | sound | 7.21 | 0.666 | 0.741 | 0.0562 | 0.151 | 2.65 % | 2.65 % | 0.00 % | 0.00 % |
+| 1009 | sound | 7.24 | 0.670 | 0.791 | 0.0615 | 0.149 | 6.62 % | 7.95 % | 0.00 % | 0.00 % |
+| 1010 | sound | 7.26 | 0.680 | 0.803 | 0.0682 | 0.149 | 6.62 % | 4.64 % | 0.00 % | 0.00 % |
+| 1011 | sound | 7.30 | 0.686 | 0.861 | 0.0674 | 0.148 | 7.28 % | 9.27 % | 0.00 % | 0.00 % |
+| 1012 | sound | 7.33 | 0.687 | 0.916 | 0.0709 | 0.147 | 10.60 % | 4.64 % | 0.00 % | 0.00 % |
+| 1013 | sound | 7.18 | 0.653 | 0.732 | 0.0600 | 0.152 | 11.26 % | 9.93 % | 0.00 % | 0.00 % |
+| 1014 | sound | 7.23 | 0.678 | 0.757 | 0.0596 | 0.150 | 5.96 % | 8.61 % | 0.00 % | 0.00 % |
+| 1015 | sound | 7.27 | 0.680 | 0.842 | 0.0798 | 0.151 | 9.93 % | 6.62 % | 0.00 % | 0.00 % |
+| 1016 | sound | 7.23 | 0.663 | 0.786 | 0.0619 | 0.151 | 10.60 % | 11.26 % | 0.00 % | 0.00 % |
+| 1017 | sound | 7.26 | 0.688 | 0.775 | 0.0687 | 0.151 | 4.64 % | 3.31 % | 0.00 % | 0.00 % |
+| 1018 | sound | 7.33 | 0.686 | 0.946 | 0.0919 | 0.150 | 8.61 % | 8.61 % | 0.00 % | 0.00 % |
+| 1019 | sound | 7.18 | 0.688 | 0.668 | 0.0573 | 0.153 | 6.62 % | 3.31 % | 0.00 % | 0.00 % |
+| 1020 | sound | 7.23 | 0.660 | 0.803 | 0.0609 | 0.150 | 4.64 % | 9.27 % | 0.00 % | 0.00 % |
+| 1021 | sound | 7.18 | 0.662 | 0.736 | 0.0529 | 0.151 | 16.56 % | 11.26 % | 3.97 % | 5.96 % |
+| 1022 | sound | 7.19 | 0.687 | 0.693 | 0.0703 | 0.156 | 5.96 % | 7.28 % | 0.00 % | 0.00 % |
+| 1023 | sound | 7.30 | 0.683 | 0.892 | 0.0912 | 0.152 | 3.97 % | 1.99 % | 0.00 % | 0.00 % |
 
 **24 of 24 runs are working digesters.**
 
-**Two rates, and they are different things** (lead's rulings B and C, 2026-09-09). Across the 24 SOUND runs:
+**Four rates, and they are two different kinds of thing** (lead's rulings B and C of 2026-09-09 and B3 of 2026-09-10). Across the 24 SOUND runs:
 
 | | what it is | pooled | per-run min | per-run max | runs that fire |
 |---|---|---:|---:|---:|---:|
-| **conditional-missingness trigger** | hidden true VFA > 2.00x its 30-d trailing median | **7.67 %** | 2.65 % | 16.56 % | 24 of 24 |
+| **overload trigger** (conditional missingness) | hidden true VFA > 2.00x its 30-d trailing median | **7.67 %** | 2.65 % | 16.56 % | 24 of 24 |
+| **foaming trigger** (conditional missingness) | hidden gas > 1.80x its 30-d trailing median AND true VFA > its 30-d trailing median | **7.20 %** | 1.32 % | 16.56 % | 24 of 24 |
 | operator-visible overload | titrimetric FOS/TAC > 0.40 | **0.17 %** | 0.00 % | 3.97 % | 1 of 24 |
+| operator-visible foaming (unwired) | titrimetric FOS/TAC > 0.30 | **0.25 %** | 0.00 % | 5.96 % | 1 of 24 |
 
-The anchor's own FOS/TAC exceedance is 8.25 % (Dig1) and 9.18 % (Dig2), and its 92nd percentile is what the 0.40 threshold is matched to. The trigger is not compared with that number: it fires on the hidden state, which no plant column reports.
+The anchor's own FOS/TAC exceedance is 8.25 % (Dig1) and 9.18 % (Dig2), and its 92nd percentile is what the 0.40 threshold is matched to. The triggers are not compared with that number: they fire on the hidden state, which no plant column reports. The operator-visible foaming threshold is wired to nothing: the titrimetric ratio has a bicarbonate floor near 0.13-0.14, so 0.30 is out of a working digester's reach under this measurement model (a finding, recorded in section 5.5 and the benchmark card, not a threshold to lower).
 
 <!-- END GENERATED: g1 anchor comparison -->
 
@@ -639,16 +643,54 @@ each) where the trigger fires in every sound run. Plant A additionally runs S4-0
 Tier-A cell** in its separately-reported subset, and that single cell is thin. That is the
 whole of the exposure, and it is reported rather than tuned.
 
-### 5.5 The operator-visible threshold is a different thing
+#### The foaming trigger, on the same four rows
+
+**Foaming had never fired in any cell** (whole-branch review, 2026-09-10, finding B3): the
+flag compared the titrimetric FOS/TAC with 0.30, and that ratio has a structural floor near
+0.13–0.14 — the bicarbonate carry-over of the titration (§5.3) — and sits at 0.14–0.18 in
+every sound run, so 0.30 was unreachable and the foaming stress multiplier was dead
+everywhere. The lead's ruling B3 made foaming a **hidden-state trigger** like overload: the
+gas rate above **1.80×** its 30-day trailing median **and** true VFA above its own 30-day
+trailing median, both windows over the previous samples with the current one excluded. A
+digester that is gassing hard while its acids are rising. Measured on the same four panels,
+**recorded and not tuned**:
+
+| Plant | baseline | sound | foaming trigger, pooled | per-run range | runs that fire | operator FOS/TAC > 0.30 (unwired) |
+|---|---|---|---:|---|---:|---:|
+| **B** | — | 24/24 | **7.20 %** | 1.32 – 16.56 % | 24/24 | 0.25 % |
+| **C** | — | 24/24 | **7.67 %** | 3.97 – 11.92 % | 24/24 | 0.00 % |
+| **A** | `unadapted` | 24/24 | **0.14 %** | 0.00 – 0.66 % | 5/24 | 0.00 % |
+| **A** | `adapted` | 24/24 | **0.25 %** | 0.00 – 1.32 % | 7/24 | 0.00 % |
+
+The overload rows of the table above, re-measured on the same panels at the same code
+version as this table, are B 7.67 %, C 9.22 %, A-unadapted 1.49 %, A-adapted
+0.28 % — identical to the overload table above to the last digit. That is the check that nothing in the B1, B3 and B5 changes moved the simulator: the run-id scheme, the foaming rule and the location of the plant record are not inputs to the truth model.
+
+**Reading the foaming rows.** On B and C the foaming trigger fires at about the overload rate (7.20 % and 7.67 % against 7.67 % and 9.22 %), in every sound run, with per-run ranges of the same width: on a batch-fed plant a top-decile gas day is usually a day the acids are also up, because both follow the arrival of a large delivery. They are not the same days — the flags are computed separately, and the missingness model compounds the multipliers when they coincide — but they are the same kind of event. On Plant A both rows are far below B and C, as overload is, and the pathway ordering **reverses**: the `unadapted` (SAO) baseline overloads 5.3× more often than `adapted` but foams *less* often (0.14 % against 0.25 %, 5 against 7 firing runs of 24). The foaming trigger needs a gas surge, and gas surges on Plant A follow the weekday silage feeding, which is the same on both baselines; what the SAO baseline adds is VFA excursions that relax slowly *after* the load rather than gas that rises with it, so its extra overload days are not gas-surge days. Two panels of 24 runs at rates below 0.3 % are thin evidence and this is recorded as an observation, not a finding. Nothing was tuned: 1.80× and 1.00× are the lead's figures as written.
+
+**The operator-visible foaming threshold is structurally dead, and that is a
+measurement-model finding, not a threshold to lower.** FOS/TAC > 0.30 stays declared and
+reported (the last column above: it fires on 0.25 % of days on Plant B, in 1 of 24 runs, and on no day at all on C or on either Plant A baseline) and is wired to nothing. A
+two-point Nordmann/Kapp titration counts everything titratable between pH 5.0 and 4.4, and
+in a digester with 5 kg CaCO₃/m³ of alkalinity that is mostly bicarbonate: the "FOS" it
+reports is ~0.7 kg/m³ before any volatile acid is present, so the ratio has a floor of about
+0.13–0.14 that no working digester goes below and, on this feed, none goes far above. An
+operator watching that ratio for foaming would see nothing until the digester was already
+in trouble — which is a statement about the instrument, and the reason the plant's own
+trigger reads the hidden state. It is recorded in the benchmark card (§5.4).
+
+### 5.5 The operator-visible thresholds are a different thing
 
 FOS/TAC > 0.40 stays as the **operator-facing** overload threshold and no longer drives
 conditional missingness (ruling C). It is percentile-matched to the anchor: the anchor's own
 titrimetric FOS/TAC has its 92nd percentile at 0.402 (Dig1) and 0.408 (Dig2), n = 861 each,
 and the 92nd is the closest percentile to 0.40 of any between the 50th and the 99th.
 
-On the panel it fires on **0.17 % of days pooled**, in 1 of 24 runs — far below the plant's
-8.25 %, because the simulated titrimetric distribution still sits ~1.5× below the plant's
-(§5.2). The threshold is not moved to compensate.
+On the panel it fires on **0.17 % of days pooled**, in 1/24 runs — far below
+the plant's 8.25 %, because the simulated titrimetric distribution still sits ~1.5× below
+the plant's (§5.2). The threshold is not moved to compensate. FOS/TAC > 0.30, the
+operator-facing foaming threshold, is the same kind of thing and is treated the same way:
+declared, reported, never a trigger (§5.4).
 
 ## 6. `docs/vfa_gap.md`: a finding, not a defect
 
