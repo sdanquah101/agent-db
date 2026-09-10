@@ -122,7 +122,15 @@ feeds:
     tkn: 0.314                   # DESIGN  kmol N/m3; T2024 Table 1 total N (65.3 / 57.8 g N per kg TS, mean 61.6) x 71.5 g TS/kg FM = 4.40 g N/kg FM (/14.007), the value the 2024 ESM Table S2 lists as the slurry S_IN (4.35-5.95 kg N/m3); implied under inert_N_I and the fractionation: 0.286 (-9 %)
     tkn_tolerance: 0.15          # DESIGN  -; accepted gap between the declared TKN and the ADM1-implied one (tests/test_influent.py)
     inert_N_I: 0.001   # DESIGN  kmol N/kg COD; PR #7 Plant A override: assumed, lignocellulosic inerts of slurry and silage carry ~0.014 g N/g COD (BSM2 0.00429 is for sludge-derived inerts); applied by the truth model only (lead's decision)
-    s_ic: 0.05                   # DESIGN  kmol C/m3; assumed: bicarbonate of stored cattle slurry (~3 g HCO3-/L); not published
+    s_ic: 0.2105                 # DESIGN  kmol C/m3; PAIRED to the stream's cation charge by
+                                 # the lead's B1 ruling of 2026-09-09. Was 0.05 (assumed).
+                                 # Not fitted: it is the root of this stream's own charge
+                                 # balance at the declared pH 7.5, once the DIVALENT calcium
+                                 # the simulator is fed (s_ca 0.04, charge 2) is counted. At
+                                 # 0.05 the balance closed only at pH 10.05, which stored
+                                 # cattle slurry is not. Slurry alkalinity is ammonium
+                                 # bicarbonate, so bicarbonate is the physically right
+                                 # counter-ion here.: bicarbonate of stored cattle slurry (~3 g HCO3-/L); not published
     s_cat: 0.10                  # DESIGN  kmol/m3; assumed: Tisocco 2024 ESM Table S2 lists S_cat 0.2 mol/L "manually adjusted"; halved so the digester alkalinity lands at ~10 g CaCO3/L with the TAN below (PR #7 tests)
     s_an: 0.02                   # DESIGN  kmol/m3; assumed (Table S2: 0.015 mol/L, manually adjusted)
     s_ca: 0.04                   # DESIGN  kmol/m3; assumed: ~1.6 g Ca/L, order of magnitude for cattle slurry; not published
@@ -145,7 +153,16 @@ feeds:
     inert_cod_equivalent: 1.2    # DESIGN  kg COD/kg VS mass; lignocellulosic inerts (lead's freeze): silage inerts are lignin-bound fibre, ~1.2 g COD/g VS, close to the carbohydrate equivalent
     cod_per_vs_literature: 1.274 # DESIGN  kg COD/kg VS; CHECK, derived from T2024 Table 1 per kg TS: carbohydrate (XC less the acids) 0.4898 kg, protein 0.1475, lipid 0.029, acids 0.1342 kg at their own COD equivalents = 1038 g COD per kg TS over 815 g VS; the fractionation below derives 1.275 (+0.1 %)
     cod_per_vs_tolerance: 0.10   # DESIGN  -
-    ph: 4.0                      # DESIGN  pH; assumed: well-preserved grass silage 3.8-4.3 (McDonald et al. 1991); not published
+    ph: 4.28                     # DESIGN  pH; assumed: well-preserved grass silage 3.8-4.3
+                                 # (McDonald et al. 1991); not published. RAISED from 4.0 by
+                                 # the lead's B1 ruling of 2026-09-09, and it is the ONE
+                                 # breaching stream that could not be fixed by pairing s_ic:
+                                 # at pH 4 bicarbonate is four pK units below pK_a1 and no
+                                 # amount of inorganic carbon balances anything -- silage
+                                 # juice cannot hold bicarbonate, it would evolve CO2. 4.28
+                                 # is the root of its own charge balance and sits INSIDE the
+                                 # cited 3.8-4.3, so the declared pH moves rather than the
+                                 # composition. Nothing the simulator is fed changes.
     fractionation:               # DESIGN  kg COD/kg COD; RE-DERIVED on the 2024 basis (lead's freeze): raw COD shares are ch 0.578, pr 0.202, li 0.081, acids 0.139 (acetic + butyric + propionic + lactic at 1.07 / 1.82 / 1.51 / 1.07 kg COD/kg); the inert share is carved out of the carbohydrate as before
       f_ch: 0.328                #   carbohydrates (XC less the silage acids) after removing the non-degradable 0.25
       f_pr: 0.202                #   proteins, T2024 Table 1 XP (mean 147.5 g/kg TS)
@@ -354,15 +371,32 @@ feeds:
     tkn: 0.142                   # DESIGN  kmol N/m3; derived from the fractionation with the BSM2 N contents (2.0 g N/L; was 0.180 with the old split)
     tkn_tolerance: 0.15          # DESIGN  -
     inert_N_I: 0.004285714285714286   # DESIGN  kmol N/kg COD; BSM2 N_I (0.06/14): sewage sludge is what ADM1's N contents were derived for (PR #7 Plant C, no override)
-    s_ic: 0.04                   # DESIGN  kmol C/m3; BSM2 influent S_IC
+    s_ic: 0.2110                 # DESIGN  kmol C/m3; PAIRED to the stream's cation charge by
+                                 # the lead's B1 ruling of 2026-09-09. Was 0.04 (BSM2 influent
+                                 # S_IC). Not fitted: the root of this stream's charge balance
+                                 # at the declared pH 6.0 with the DIVALENT calcium counted.
+                                 # At 0.04 the balance closed only at pH 12.16.
+                                 # FLAGGED, see s_ca below: the reason this stream needs so
+                                 # much bicarbonate is its declared dissolved calcium.
     s_cat: 0.05                  # DESIGN  kmol/m3; CALIBRATED (lead's ruling 3 of
                                  # 2026-09-03), from BSM2's 0.04. Net of s_an this is
                                  # 30 meq/L, about 1,500 mg/L as CaCO3 in the sludge liquor
                                  # - the upper end of what thickened municipal sludge with
                                  # digester recycle carries, and the smaller share of the
                                  # calibration; see high_strength_waste for the split.
+                                 # NOTE (2026-09-09): that realism argument counted the
+                                 # monovalent ions only. With s_ca the stream's cation charge
+                                 # is 80 meq/L, not 30.
     s_an: 0.02                   # DESIGN  kmol/m3; BSM2 influent S_an
-    s_ca: 0.02                   # DESIGN  kmol/m3; assumed (~0.8 g Ca/L)
+    s_ca: 0.02                   # DESIGN  kmol/m3; assumed (~0.8 g Ca/L). FLAGGED TO THE LEAD
+                                 # 2026-09-09, NOT CHANGED: 0.8 g Ca/L is high for sludge
+                                 # liquor (typically 0.05-0.15), and it is 0.04 of the 0.08
+                                 # kmol/m3 of cation charge this stream carries -- so it, and
+                                 # not the bicarbonate, may be the value that is wrong. It was
+                                 # left alone because the lead's ruling names s_ic pairing, and
+                                 # because s_ca is not only a charge: it drives the CaCO3
+                                 # precipitation extension, so moving it changes what that
+                                 # extension does as well as the balance.
   thickened_was:
     feed_id: thickened_was
     kind: thickened_was
@@ -390,7 +424,13 @@ feeds:
     tkn: 0.218                   # DESIGN  kmol N/m3; derived from the fractionation with the BSM2 N contents; implied 0.236 at the derived COD/VS 1.443 (+8 %, inside tkn_tolerance)
     tkn_tolerance: 0.15          # DESIGN  -
     inert_N_I: 0.004285714285714286   # DESIGN  kmol N/kg COD; BSM2 N_I (see primary_sludge)
-    s_ic: 0.04                   # DESIGN  kmol C/m3; BSM2
+    s_ic: 0.1083                 # DESIGN  kmol C/m3; PAIRED to the stream's cation charge by
+                                 # the lead's B1 ruling of 2026-09-09. Was 0.04 (BSM2). Not
+                                 # fitted: the root of this stream's charge balance at the
+                                 # declared pH 6.8 with the DIVALENT calcium counted. At 0.04
+                                 # the balance closed only at pH 12.48. Same flag as
+                                 # primary_sludge: s_ca 0.02 is half this stream's cation
+                                 # charge and may be the value that is actually wrong.
     s_cat: 0.05                  # DESIGN  kmol/m3; CALIBRATED (see primary_sludge)
     s_an: 0.02                   # DESIGN  kmol/m3; BSM2
     s_ca: 0.02                   # DESIGN  kmol/m3; assumed

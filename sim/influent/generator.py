@@ -43,10 +43,15 @@ by ``anchor/ingest_muscatine.py`` and ``tests/test_generator.py``):
    the bicarbonate term alone until then, which on the high-strength waste read 480x below
    the charge the digester actually received. **Solids vary, the liquor does not:**
    the per-delivery TS scales the particulate COD and its organic N (and so COD and TKN),
-   while the dissolved species per m3 (TAN, inorganic C, strong ions, calcium, pH) stay
-   at the catalogue values; the reported TAN/TKN ratio therefore moves with the
+   while the *declared* dissolved species per m3 (TAN, inorganic C, strong ions, calcium,
+   pH) stay at the catalogue values; the reported TAN/TKN ratio therefore moves with the
    moisture, by construction (decisions log, "Influent generator: stochastic structure",
-   addendum).
+   addendum). **The alkalinity assay is the one exception, and since the M2 ruling it is
+   the strongest TS proxy of any assay here**: its bicarbonate term is declared liquor and
+   does not scale, but its free-acetate term comes from the COD and does, so a drier
+   delivery reports more alkalinity. That asymmetry is real -- the fed stream carries the
+   extra acetate anion with no extra cation to balance it, so the stream is exactly
+   electroneutral only at catalogue TS -- and it is the open finding B2 of 2026-09-09.
 8. The **influent series** for :mod:`sim.adm1`: one sample per day, concentrations the
    flow-weighted mix of that day's true deliveries (true fractionation, true moisture,
    derived COD/VS), ``Q`` the true daily volume, **sample-and-hold** (a day's deliveries
@@ -550,20 +555,33 @@ def total_alkalinity(
 def feed_cation_charge(spec: FeedFractionation, physchem: PhysicoChemicalParameters) -> float:
     """The cation charge of a wet feed that weak bases must balance, kg CaCO3/m3.
 
-    ADM1's charge balance is ``S_cat + S_nh4 + S_H = S_an + S_hco3 + S_vfa- + S_OH``, so the
-    left-hand side less the strong anions is what the simulator hands the digester as
-    buffering demand::
+    **The convention is the truth model's own**, read off
+    :func:`sim.adm1.physchem_ext._residual` rather than restated from ADM1's textbook form::
 
-        charge = 50 x ( S_cat - S_an + [NH4+] )
+        charge = 50 x ( S_cat + 2 S_ca - S_an + [NH4+] )
 
-    Ammonium is included because it is a cation in that balance and because a titration to
-    the CO2 end point leaves it protonated, so it is on the same side of the reference as
-    the strong cations. :func:`total_alkalinity` is the quantity it must equal.
+    Calcium is **divalent** and is in the balance because the plants put it there: every
+    plant contract enables the ``precipitation`` extension, ``configs/adm1/extensions.yaml``
+    declares ``S_ca`` with ``charge: 2``, and :mod:`sim.run.harness` feeds it. Ammonium is in
+    it because it is a cation in that balance and a titration to the CO2 end point leaves it
+    protonated, so it sits on the same side of the reference as the strong cations.
+
+    **The calcium term was missing until 2026-09-09 and that is why it is named here.** The
+    first version of this function computed ``50 x (S_cat - S_an + [NH4+])`` while its
+    docstring called the result "what the simulator hands the digester" -- a claim that was
+    false in a way nothing could see, because the guard built on it was measuring the same
+    wrong quantity on both sides of its own comparison. Counting the calcium put four streams
+    outside the 1.5x band (primary sludge 2.94x, thickened WAS 2.71x, cattle slurry 1.83x,
+    grass silage 1.69x), which is the residual of M2 that the omission had hidden. The lead's
+    ruling of 2026-09-09 corrected the definition and approved redistributing those streams.
+
+    :func:`total_alkalinity` is the quantity this must equal, and
+    ``tests/test_generator.py`` asserts that on every catalogue stream.
     """
     h = 10.0**-spec.ph
     k_in = 10.0**-physchem.pK_a_IN_base
     nh4 = spec.tan * h / (k_in + h)
-    return KG_CACO3_PER_KMOL_HCO3 * (spec.s_cat - spec.s_an + nh4)
+    return KG_CACO3_PER_KMOL_HCO3 * (spec.s_cat + 2.0 * spec.s_ca - spec.s_an + nh4)
 
 
 def _amount_to_kg(amount: float, unit: str, spec: FeedFractionation) -> float:

@@ -347,13 +347,13 @@ stream and passed the entire suite. :data:`COMMITTED_FEED_ALKALINITY` closes it.
 
 COMMITTED_FEED_ALKALINITY: dict[str, tuple[float, float]] = {
     #                          assay      charge   kg CaCO3/m3
-    "cattle_slurry": (9.0056, 12.4989),
+    "cattle_slurry": (16.5000, 16.4989),
     "fog": (-0.0005, 0.0000),
-    "food_waste": (7.5887, 7.5999),
-    "grass_silage": (3.7803, 4.4000),
-    "high_strength_waste": (10.7469, 10.7472),
-    "primary_sludge": (1.3604, 1.9997),
-    "thickened_was": (1.4762, 1.9982),
+    "food_waste": (7.5887, 9.0999),
+    "grass_silage": (6.3575, 6.4000),
+    "high_strength_waste": (10.7469, 11.7472),
+    "primary_sludge": (4.0003, 3.9997),
+    "thickened_was": (3.9969, 3.9982),
 }
 """Golden pins on the absolute value of both M2 quantities, kg CaCO3/m3 at catalogue TS.
 
@@ -361,7 +361,16 @@ These are the numbers ``docs/g1_anchor_report.md`` §3.3 quotes, so the report a
 code cannot drift apart, and **an implementation that returns a constant, a zero or a
 copy of the other quantity fails here** rather than sliding through the ratio test.
 Update them deliberately, with the reason, when a stream's declared composition moves --
-that is the mechanism, not an obstacle to it."""
+that is the mechanism, not an obstacle to it.
+
+**Moved once, on 2026-09-09, and this is the reason.** The lead's B1 ruling corrected
+:func:`~sim.influent.generator.feed_cation_charge` to carry the divalent calcium the
+simulator is actually fed, which raised every charge, and approved redistributing the four
+streams that then breached the band as paired ``s_cat`` + ``s_ic``. Every assay except
+FOG's and the high-strength waste's moved with its stream's new inorganic carbon or
+declared pH; ``food_waste`` and ``high_strength_waste`` moved on the charge side only,
+because only their calcium term changed. The pins fired exactly as intended -- the
+redistribution could not land without them being looked at."""
 
 
 def test_every_feed_assay_describes_the_charge_the_simulator_is_fed(catalogue, adm1_params):
