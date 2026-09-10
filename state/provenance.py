@@ -161,10 +161,24 @@ class CallLog:
 
     FILENAME = "calls.jsonl"
 
-    def __init__(self, run_dir: str | Path) -> None:
-        """Open (or create) the call log of a run directory."""
+    def __init__(self, run_dir: str | Path, *, fresh: bool = False) -> None:
+        """Open (or create) the call log of a run directory.
+
+        Args:
+            run_dir: The directory the log lives in.
+            fresh: Start the file over. The harness passes this at the start of a
+                generation, because a generated cell's log is the record of *that*
+                generation: before 2026-09-10 a regenerated cell appended to its previous
+                log, so one cell generated twice carried ``seq`` 0..9 while its index line
+                was de-duplicated (review finding, no ruling needed). A later writer --
+                the tool registry appending a workflow's calls -- leaves this ``False``
+                and continues the sequence, which is the behaviour the docstring above
+                promises.
+        """
         self.path = Path(run_dir) / self.FILENAME
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        if fresh and self.path.exists():
+            self.path.unlink()
         self._seq = sum(1 for _ in self.path.open(encoding="utf-8")) if self.path.exists() else 0
 
     @property

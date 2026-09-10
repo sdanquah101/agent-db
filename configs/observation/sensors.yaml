@@ -100,18 +100,16 @@ conditions:
                               # tests/test_observation.py pins -- a band would have admitted
                               # 0.35 or 0.45 equally.
                               #
-                              # THE TWO CONVENTIONS STILL DIFFER, and that is the open half.
-                              # Our fos_tac channel is computed from TRUE VFA; the anchor's
-                              # is computed from a titrimetric FOS that over-reads it. A
-                              # healthy simulated digester therefore sits far below this
-                              # threshold and the flag fires on almost no day of a sound
-                              # Plant B run. A titrimetric transfer function on the
-                              # vfa_total SENSOR is APPROVED IN PRINCIPLE (lead's ruling 3,
-                              # 2026-09-09) and is NOT YET IMPLEMENTED: the lead asked the
-                              # coordinator to bring its form and band with measurements
-                              # first. Until it lands, fos_tac is a true-VFA ratio and this
-                              # threshold is matched to a titrimetric percentile — the
-                              # mismatch is recorded, not resolved. See docs/vfa_gap.md.
+                              # THE TWO CONVENTIONS NOW MATCH (this note was stale until
+                              # 2026-09-10; the review caught it). The titrimetric transfer
+                              # function on the vfa_total SENSOR landed under the lead's
+                              # ruling A of 2026-09-09 (kappa 1.0, frozen), so the fos_tac
+                              # channel this threshold reads IS titrimetric, like the
+                              # anchor's column it was matched to. A healthy simulated
+                              # digester sits at 0.14-0.18 (24-seed panel), below the
+                              # threshold, and the flag fires on 0.17 % of sound Plant B
+                              # days; the residual 1.5x gap to the anchor is in
+                              # docs/g1_anchor_report.md section 6.1 and docs/vfa_gap.md.
   fos_tac_foaming: 0.30       # DESIGN  -; ASSUMED: the ~78th percentile of the same column;
                               # foaming needs acidification AND a gas surge, so its FOS/TAC
                               # threshold is lower than the overload one.

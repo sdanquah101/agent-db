@@ -87,6 +87,14 @@ def buffer_series(
     decay = float(np.exp(-1.0 / hold_up_d))
     # the tank starts at its own steady state for this run's mean arrivals: the plant has
     # been running, so the buffer is not empty on day 0
+    # NOTE (review, 2026-09-10; dormant today, recorded rather than changed): the tank is
+    # initialised from the WHOLE-HORIZON mean of arrivals, so a future influent fault that
+    # changes deliveries after its onset would move the day-0 outflow -- the tank would
+    # "know" about a fault that has not happened yet. No frozen scenario injects such a
+    # fault on a plant with a tank (the Level-3 rows are on the feed composition, not the
+    # delivery pattern), so nothing generated depends on it. The fix, when one is needed,
+    # is to initialise from the first hold-up window only, and it changes every Plant B
+    # cell, so it is the lead's call.
     level = float(q_in.mean() * hold_up_d)
     mass = load_in.mean(axis=0) * hold_up_d
 

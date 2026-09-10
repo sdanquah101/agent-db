@@ -683,19 +683,125 @@ def test_a_cell_generates_identically_in_a_fresh_process(tmp_path):
 
 
 def test_every_simulator_call_is_logged(clean_run):
-    """CLAUDE.md rule 3, on the harness's own calls."""
-    records = read_calls(clean_run.paths.root)
-    names = [r.name for r in records]
-    assert "sim.generate_influent" in names
-    assert "sim.burn_in" in names
-    assert any(n.startswith("sim.simulate_truth_segment") for n in names)
-    assert "sim.channel_series" in names
-    assert "sim.observe" in names
-    assert [r.seq for r in records] == list(range(len(records)))
-    for record in records:
-        assert record.outcome == "ok"
-        assert record.runtime_s >= 0.0
-        assert len(record.args_hash) == 16
+    """CLAUDE.md rule 3, on the harness's own calls -- in BOTH logs.
+
+    The full log in ``truth_store/<id>/`` carries every call with its real arguments,
+    segment by segment. The visible log in ``runs/<id>/`` carries the same calls, in the
+    same order, with the same outcomes -- rule 3 is satisfied for a workflow -- but its
+    integration is one record and its argument hashes say nothing the visible manifest
+    does not (review finding B2, 2026-09-10; see the next test for the proof).
+    """
+    full = read_calls(clean_run.paths.truth)
+    visible = read_calls(clean_run.paths.root)
+    full_names = [r.name for r in full]
+    assert "sim.generate_influent" in full_names
+    assert "sim.burn_in" in full_names
+    assert any(n.startswith("sim.simulate_truth_segment") for n in full_names)
+    assert "sim.channel_series" in full_names
+    assert "sim.observe" in full_names
+    visible_names = [r.name for r in visible]
+    assert visible_names == [
+        "sim.generate_influent",
+        "sim.burn_in",
+        "sim.simulate_truth",
+        "sim.channel_series",
+        "sim.observe",
+    ]
+    for records in (full, visible):
+        assert [r.seq for r in records] == list(range(len(records)))
+        for record in records:
+            assert record.outcome == "ok"
+            assert record.runtime_s >= 0.0
+            assert len(record.args_hash) == 16
+
+
+def _visible_hashes_from_the_visible_record(run) -> list[str]:
+    """What every visible args_hash MUST equal, computed from public facts alone.
+
+    Only the redacted manifest a workflow can read and the committed harness config are
+    used here -- no scenario id, no seed, no fault plan, no mixing structure. If the
+    harness ever hashes anything else into the visible log, this stops matching.
+    """
+    public = PublicManifest.model_validate(json.loads(run.paths.manifest.read_text()))
+    cfg = load_harness_config()
+    n_days = round(public.duration_days)
+    return [
+        args_hash({"plant": public.plant, "n_days": n_days}),
+        args_hash({"plant": public.plant, "days": cfg.burn_in_days}),
+        args_hash({"plant": public.plant, "n_days": n_days}),
+        args_hash({"n_times": int(run.truth.channels.t.size)}),
+        args_hash({"tier": public.tier}),
+    ]
+
+
+def test_the_visible_log_says_nothing_the_manifest_does_not(clean_run):
+    """Finding B2: the visible call log used to invert to the scenario id.
+
+    ``runs/<id>/calls.jsonl`` is workflow-visible, and its ``args_hash`` covered the
+    scenario id, the segment index and span, the derived seeds, the fault plans and the
+    realised mixing structure -- all drawn from small public spaces, so
+    ``75fbaaa4b387afcc`` gave ``('S0-01', 0, 0.0, 180.0)`` on a real run. Now every visible
+    hash is reproducible from the redacted manifest and the committed config alone, which
+    is asserted by reproducing them; and the truth-side log still carries the scenario id,
+    which is the negative control -- a redaction that emptied both logs would pass the
+    first half and fail this.
+    """
+    visible = read_calls(clean_run.paths.root)
+    assert [r.args_hash for r in visible] == _visible_hashes_from_the_visible_record(clean_run)
+    # negative control: the FULL log is not redacted -- its hashes differ from the visible
+    # ones, and its channel_series record hashes the scenario id in
+    full = read_calls(clean_run.paths.truth)
+    assert {r.args_hash for r in full}.isdisjoint({r.args_hash for r in visible})
+    manifest = RunManifest.model_validate(json.loads(clean_run.paths.truth_manifest.read_text()))
+    channel = next(r for r in full if r.name == "sim.channel_series")
+    assert channel.args_hash == args_hash(
+        {
+            "scenario": manifest.scenario_id,
+            "n_times": int(clean_run.truth.channels.t.size),
+            "ideal_mixing": clean_run.truth.mixing.ideal,
+        }
+    )
+
+
+def test_the_visible_log_collapses_the_segments(tmp_path):
+    """Finding B2: the NUMBER of segment records said whether a parameter fault existed.
+
+    A Level-5 row integrates in two segments around its onset; a Level-0 row in one. The
+    full log records each segment; the visible log records one integration either way.
+    """
+    scenario = load_scenario(SCENARIOS / "S5-01.yaml")
+    onset = min(f.onset_day for f in scenario.faults)
+    faulted = scenario.model_copy(update={"duration_days": float(onset + 10)})
+    run = generate_run(faulted, "B", runs_root=tmp_path / "runs")
+    assert len(run.truth.segments) >= 2, "S5-01 must integrate in at least two segments"
+    full = read_calls(run.paths.truth)
+    visible = read_calls(run.paths.root)
+    assert sum(r.name == "sim.simulate_truth_segment" for r in full) == len(run.truth.segments)
+    assert sum(r.name == "sim.simulate_truth" for r in visible) == 1
+    assert not any(r.name.startswith("sim.simulate_truth_segment") for r in visible)
+    # and the one visible record covers the whole integration's runtime
+    integration = next(r for r in visible if r.name == "sim.simulate_truth")
+    assert (
+        integration.runtime_s
+        >= sum(r.runtime_s for r in full if r.name == "sim.simulate_truth_segment") * 0.99
+    )
+
+
+def test_regenerating_a_cell_starts_its_logs_over(tmp_path):
+    """A regenerated cell's logs are the record of this generation, not an append.
+
+    One cell generated twice used to carry seq 0..9: the index was de-duplicated, the log
+    was not (review, 2026-09-10).
+    """
+    root = tmp_path / "runs"
+    first = generate_run(_short("S0-01"), "A", plant=load_plant_config("C"), runs_root=root)
+    n_visible = len(read_calls(first.paths.root))
+    n_full = len(read_calls(first.paths.truth))
+    again = generate_run(_short("S0-01"), "A", plant=load_plant_config("C"), runs_root=root)
+    assert again.paths.root == first.paths.root  # same cell, same directory
+    assert len(read_calls(again.paths.root)) == n_visible
+    assert len(read_calls(again.paths.truth)) == n_full
+    assert [r.seq for r in read_calls(again.paths.root)] == list(range(n_visible))
 
 
 def test_a_second_writer_continues_the_sequence(tmp_path):

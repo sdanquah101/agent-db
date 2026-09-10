@@ -3784,3 +3784,110 @@ stop. Nothing is pushed after the regeneration unless the coordinator asks, so e
 manifest's `git_sha` matches the head that is merged. The independent whole-branch review is
 redone at that head (the earlier one covered `f8b27c4`, before any of the M2, B1, B2 or
 calcium work), its verdict goes to the lead, and only then does the coordinator merge and tag.
+
+---
+
+## 2026-09-10 — The independent whole-branch review at `f8b27c4`: five blockers, two fixed, three with the lead
+
+**The regeneration is HELD** (the coordinator, 2026-09-10). The review found five blockers in
+code no later commit touched. Two of them change what a regeneration writes, so the matrix
+cannot be regenerated until they are settled. Every finding below was verified at the source
+in this session before anything was done about it; the two the coordinator marked *no ruling
+needed* are fixed on `claude/g1-review-blockers` (branched at `0cf564a`) and not pushed to
+PR #15; the three that need a ruling are untouched.
+
+### Verified, awaiting the lead's ruling — nothing changed
+
+**B1 — the run id is invertible (rule 1).** `sim/run/layout.py:101–123`: `run_id` is the
+SHA-256 of `"ad-agentbench/g1|<scenario>|<plant>|<tier>|<seed>|<replicate>"`. The salt is a
+repository literal, the scenario ids and seeds are committed, and plant and tier are in the
+visible manifest, so the space is enumerable — the review brute-forced 1,440 hashes and
+recovered `run_6ebcad561b75 → S6-01/unadapted` and `run_14c87b1772ec → S6-04/adapted`. Every
+`REDACTED_FIELDS` entry and the answer key follow from the scenario id, so the opacity §10
+relies on is not there. **Needs a ruling on the id scheme** (a per-store secret salt kept
+outside the repository, or an id drawn from the run's seeded RNG and stored only
+truth-side); it changes every run id, so it must land before regeneration.
+
+**B3 — the foaming flag never fires.** `sim/observation/channels.py:694`:
+`foaming = (fos_tac > 0.30) & (gas > ratio × trailing)`, on the **titrimetric** `fos_tac`
+channel. That channel has a structural floor near 0.13 (the bicarbonate carry-over) and the
+24-seed panel puts it at 0.138–0.184 in every sound run; the panel records
+`foaming_day_fraction` 0 everywhere, and the foaming stress multiplier is dead in every cell.
+The same class of defect as the 1000× VFA bug: a mechanism silently disabled. **Needs a
+ruling** — the obvious shape is the hidden-state trigger the lead already chose for overload,
+but the threshold is the lead's.
+
+**B5 — the baseline redaction is defeated.** Redacting `baseline` from the manifest does not
+hide it: `configs/plants/plant_A.yaml` publishes per-baseline acetate and TAN tables, the
+committed scenarios publish baseline → `correct_conclusion`, and the Tier-C `vfa_ac` sensor
+reads the **true** speciated acetate (`sensors.yaml:387–413`: only `vfa_total` went
+titrimetric; `vfa_ac/pro/bu/va` did not). Through `open_run` alone, `vfa_ac` median 0.1341 on
+S6-01 against 0.0253 on S6-04, 5.3×. **Needs a ruling on the visible-information contract.**
+
+### Fixed, no ruling needed — on the side branch, mutation-checked
+
+**B2 — `calls.jsonl` hashed the scenario id (rule 1 broken through rule 3), and it was
+wider than the finding.** `runs/<id>/calls.jsonl` is workflow-visible and its `args_hash`
+covered the real arguments of *every* harness call, not only the segments: `sim.generate_influent`
+hashed the derived influent seed and the influent fault plan as a string; `sim.burn_in` the
+realised mixing structure; `sim.channel_series` the scenario id; `sim.observe` the observation
+seed and the observation fault plan; and each segment its scenario id, index and span, so
+the *count* of segment records said whether a parameter fault existed. All over small public
+spaces; `75fbaaa4b387afcc` inverted to `('S0-01', 0, 0.0, 180.0)` on a real run.
+
+*The fix.* The record is kept twice (`sim/run/harness.py::RunLogs`). The **full** log lives in
+`truth_store/<id>/calls.jsonl` with the real arguments and every segment — the evaluator's
+copy, since rule 3 says evaluation reads logs only. The **visible** log in `runs/<id>/` is a
+projection: the same calls in the same order with the same timings and outcomes, hashed over
+nothing the visible manifest does not already state (plant, tier, horizon, the committed
+burn-in length, the output length), and the segment integrations collapsed to **one**
+`sim.simulate_truth` record whatever the segment count. Both logs start **fresh** on every
+generation (`CallLog(..., fresh=True)`), which also closes the non-blocking finding that a
+regenerated cell appended to its previous log (`seq` 0..9 for one cell generated twice); the
+tool registry's later appends continue the sequence exactly as before.
+
+*The tests* (`tests/test_run_harness.py`). Every visible `args_hash` is **reproduced from the
+redacted manifest and the committed config alone** and must match; the truth-side log's
+hashes are disjoint from the visible ones and its `channel_series` record hashes the scenario
+id in — the negative control, so a redaction that emptied both logs cannot pass; on an S5-01
+run integrated past its onset the full log has one record per segment and the visible log
+exactly one; a cell generated twice has the same line count and `seq` 0..n−1.
+
+**B4 — the AST checker missed the layout API.** `tests/test_truth_isolation.py` flagged only
+imports of a `truth`/`truth_store` module and string literals with `truth` as a path segment.
+`from sim.run.layout import RunPaths; RunPaths.for_run(id).truth / "faults.json"` spells no
+such string, and the review's three-line module read S6-01's answer key with zero
+violations. *The fix:* any import from `sim.run.layout` (by module, by `from sim.run import
+layout`, or by name), the names `truth_store_for` / `TRUTH_STORE_DIR` / `TRUTH_STORE` /
+`RunPaths` however reached, and any attribute access spelled `truth…` are violations. The
+review's module is planted verbatim in shape and must be caught; seven distinct routes are
+planted one per line and each line must be flagged (the first draft missed `from sim.run
+import layout` and this test caught it); a module using only `open_run` must stay clean.
+
+*Mutation results, each mutant built and run, not reasoned about:*
+
+| mutant | test | result |
+|---|---|---|
+| scenario id added to a visible hash | `test_the_visible_log_says_nothing_the_manifest_does_not` | **fails** |
+| logs not started fresh | `test_regenerating_a_cell_starts_its_logs_over` | **fails** |
+| a visible record per segment | `test_the_visible_log_collapses_the_segments` | **fails** |
+| checker without the attribute rule | `test_checker_catches_the_layout_api_bypass` | **fails** |
+
+### Non-blocking, no ruling needed — done on the same branch
+
+- **Generation order.** `generate_matrix` ran the cells in scenario-id order, so the public
+  `created_utc` stamped the run set in ladder order and a sort by timestamp recovered each
+  cell's rung. The *execution* order is now a seeded shuffle (`MATRIX_ORDER_SEED`, fixed and
+  declared, rule 4); results are still returned in the order the cells were given.
+- **`write_index_entry`** rewrites the id → cell map through a sibling temp file and
+  `os.replace`, so a reader or a second generator never sees a half-written index.
+- **Two stale notes** corrected: `sensors.yaml` still said the titrimetric transfer function
+  was "NOT YET IMPLEMENTED"; the `channels.py` module docstring still defined `fos_tac` as
+  true VFA over alkalinity.
+- **The equalisation tank** is initialised from the whole-horizon mean of arrivals, so a
+  future influent fault that changes deliveries after its onset would move the day-0 outflow.
+  Dormant: no frozen scenario injects such a fault on a plant with a tank. **Recorded in the
+  code and here, not changed** — the fix (initialise from the first hold-up window) moves
+  every Plant B cell and is the lead's call.
+
+`pytest -q` 345 passed, 2 skipped; `pytest -q -m g1` 13 passed; ruff clean.

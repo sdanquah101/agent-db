@@ -32,6 +32,8 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
+
 from scenarios.schema import Scenario, load_scenario
 from sim.plants import load_plant_config
 from sim.run.layout import RUNS_ROOT
@@ -184,6 +186,11 @@ class CellResult:
         )
 
 
+MATRIX_ORDER_SEED = 20260910
+"""Seed of the generation-order shuffle in :func:`generate_matrix`. Fixed and declared, so
+the order is reproducible; arbitrary, so it carries no information about the cells."""
+
+
 def _groups(cells: Sequence[Cell]) -> Iterator[tuple[tuple[str, str, int, int], list[Cell]]]:
     """Cells grouped by the (plant, scenario, seed, replicate) that shares one truth."""
     ordered: dict[tuple[str, str, int, int], list[Cell]] = {}
@@ -219,7 +226,15 @@ def generate_matrix(
 
     scenarios = library if library is not None else load_library()
     results: dict[Cell, CellResult] = {}
-    for (plant_id, scenario_id, seed, replicate), group in _groups(cells):
+    # The cells arrive sorted by scenario id, so generating them in that order would stamp
+    # every run's public ``created_utc`` in ladder order -- a workflow that sorted the run
+    # set by timestamp would recover the rung of each cell (review finding, 2026-09-10; no
+    # ruling needed). The EXECUTION order is therefore a seeded shuffle of the truth
+    # groups; the results are still returned in the order the cells were given, and the
+    # seed is fixed so a regeneration is reproducible (CLAUDE.md rule 4).
+    groups = list(_groups(cells))
+    np.random.default_rng(MATRIX_ORDER_SEED).shuffle(groups)
+    for (plant_id, scenario_id, seed, replicate), group in groups:
         scenario = scenarios[scenario_id]
         plant = load_plant_config(plant_id)
         tiers = [c.tier for c in group]

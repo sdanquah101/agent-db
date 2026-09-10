@@ -18,11 +18,13 @@ Conversions used here, all from the ADM1 state definitions:
 * **VFA** — reported as acetic-acid equivalent (the plant convention behind FOS/TAC):
   each acid's COD is converted to moles by its own COD equivalent
   (:data:`VFA_COD_PER_KMOL`) and priced at the molar mass of acetic acid.
-* **FOS/TAC** — total VFA as acetic acid over total alkalinity as CaCO3, the ratio the
-  Muscatine plant reports, on the plant's own units (kg/m3 over kg CaCO3/m3): feeding the
-  anchor's own VFA and alkalinity through this formula returns the anchor's own FOS/TAC
-  column (tested). Our *simulated* healthy digester sits well below the plant's median,
-  which is recorded in configs/observation/sensors.yaml and flagged.
+* **FOS/TAC** — the **titrimetric** FOS (:func:`titrimetric_fos`, what a two-point
+  Nordmann/Kapp titration reports, ~90 % of it bicarbonate carry-over) over total alkalinity
+  as CaCO3, the ratio the Muscatine plant reports, on the plant's own units (kg/m3 over kg
+  CaCO3/m3): feeding the anchor's own VFA and alkalinity through this formula returns the
+  anchor's own FOS/TAC column (tested). The *true-VFA* ratio is kept beside it as the hidden
+  ``fos_tac_true_vfa`` channel (lead's ruling A, 2026-09-09; this paragraph said "total VFA
+  as acetic acid" until the review of 2026-09-10 caught it as stale).
 * **Solids** — volatile solids are the COD states divided by the COD equivalent of the
   class they belong to (:data:`COD_PER_VS_BY_STATE`); the inert states use the influent's
   own inert equivalent, the COD-weighted mean over the fed feeds, exactly as the truth

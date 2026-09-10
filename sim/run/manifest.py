@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 from pathlib import Path
 from typing import Annotated, Self
@@ -268,4 +269,10 @@ def write_index_entry(index_path: Path, entry: dict[str, object]) -> None:
                 kept.append(existing)
     if not replaced:
         kept.append(line)
-    index_path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    # Written to a sibling temp file and moved into place, so a reader -- or a second
+    # generator process -- never sees a half-written id->cell map, and a crash mid-write
+    # leaves the previous index intact rather than an empty file (review, 2026-09-10; no
+    # ruling needed). os.replace is atomic on POSIX and on NTFS.
+    tmp = index_path.with_name(index_path.name + ".tmp")
+    tmp.write_text("\n".join(kept) + "\n", encoding="utf-8")
+    os.replace(tmp, index_path)

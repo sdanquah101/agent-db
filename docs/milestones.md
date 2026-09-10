@@ -1475,3 +1475,52 @@ after the regeneration, so every manifest's `git_sha` matches the merged head. T
 coordinator reruns the independent whole-branch review at that head (the earlier one covered
 `f8b27c4`), the verdict goes to the lead, and the coordinator merges and tags `g1-frozen`.
 Then the tool registry (§6.2).
+
+---
+
+### Session 2026-09-10 (second review) — regeneration HELD; five blockers verified, two fixed, three with the lead
+
+The independent whole-branch review at `f8b27c4` found **five blockers** in code no later
+commit touched, two of which change what a regeneration writes. **The matrix was not
+regenerated**; the wait armed for it was killed. Steps 1–3 of the close-out stand at `0cf564a`.
+Everything below is on `claude/g1-review-blockers` (branched at `0cf564a`), not pushed to PR #15.
+
+**Verified at the source, awaiting the lead's ruling, untouched**
+
+- **B1** — the run id is the SHA-256 of a repo-literal salt and a fully public tuple; the
+  review brute-forced two ids back to their scenarios. Needs a ruling on the id scheme; it
+  changes every run id, so it must land before regeneration.
+- **B3** — the foaming flag compares the titrimetric FOS/TAC (0.14–0.18 on every sound run)
+  with 0.30, so it never fires and the foaming stress is dead in every cell. Needs a ruling on
+  the trigger; the obvious shape is the hidden-state one the lead chose for overload.
+- **B5** — redacting `baseline` does not hide it: the plant contract publishes per-baseline
+  tables, the scenarios publish baseline → answer, and the Tier-C `vfa_ac` sensor reads true
+  acetate (5.3× between S6-01 and S6-04 through `open_run`). Needs a ruling on the
+  visible-information contract.
+
+**Fixed, no ruling needed, mutation-checked**
+
+- **B2** — the visible `calls.jsonl` hashed the scenario id, and *every* other harness call's
+  real arguments too (derived seeds, fault plans, mixing structure, segment spans). The
+  record is now kept twice: the full log truth-side, and a visible projection hashed over
+  nothing the redacted manifest does not state, with the segments collapsed to one record;
+  both logs start fresh on each generation (which also ends the append-on-regeneration).
+  Tests reproduce every visible hash from public facts alone, with the truth-side log as
+  the negative control.
+- **B4** — the static checker now flags any import from `sim.run.layout`, the
+  truth-reaching names, and any `truth…` attribute; the review's three-line bypass is
+  planted and caught, seven routes one per line (the first draft missed
+  `from sim.run import layout` — the test caught it), and the loader-only module stays clean.
+- Four mutants built and run, all four fail their test.
+
+**Non-blocking, done**: seeded shuffle of the matrix execution order (results still in cell
+order); atomic `write_index_entry`; two stale notes corrected; the equalisation tank's
+whole-horizon-mean initialisation recorded in code and the log as dormant-but-fault-sensitive,
+behaviour unchanged.
+
+`pytest -q` 345 passed, 2 skipped; `-m g1` 13 passed; ruff clean.
+
+**Next**: the lead's rulings on B1, B3 and B5 → apply them (B1 and B3 both change what a
+regeneration writes) → merge the side branch into PR #15's branch → CI green → regenerate at
+that head as the last action → the review is rerun at that head → merge and tag by the
+coordinator.

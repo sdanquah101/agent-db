@@ -592,7 +592,7 @@ def simulate_truth(
     *,
     harness: HarnessConfig | None = None,
     target_feed: str | None = None,
-    log: CallLog | None = None,
+    log: RunLogs | None = None,
 ) -> RunTruth:
     """Integrate one scenario's hidden truth, tier-independent.
 
@@ -640,6 +640,7 @@ def simulate_truth(
             n_days=n_days,
             faults=plan.influent,
         ),
+        visible_args={"plant": plant.id, "n_days": n_days},
     )
     truth_frac = generated.truth.fractionations.fractionations
     truth_params = truth_parameters(params, catalogue, generated.truth.mean_recipe_kg_d, truth_frac)
@@ -683,6 +684,7 @@ def simulate_truth(
             u_ext=u_ext,
             mixing=mixing,
         ),
+        visible_args={"plant": plant.id, "days": cfg.burn_in_days},
     )
     if not burn.success:
         raise RuntimeError(
@@ -696,6 +698,7 @@ def simulate_truth(
     grid = np.arange(0.0, scenario.duration_days + 1e-9, cfg.output_interval_d)
     parts = []
     y = y_start
+    integration_started = time.perf_counter()
     for index, (start, end, seg_params) in enumerate(segments):
         model = _compile(seg_params, geometry, enabled, mixing, matrix, solver, extensions)
         t_eval = _segment_grid(grid, start, end, first=index == 0)
@@ -712,6 +715,7 @@ def simulate_truth(
                 u_ext=u_ext,
                 mixing=mixing,
             ),
+            visible_name="",  # the segment structure is hidden truth (finding B2)
         )
         if not part.success:
             raise RuntimeError(
@@ -720,6 +724,17 @@ def simulate_truth(
             )
         parts.append(part)
         y = np.array(part.y[:, -1], dtype=float)
+    if log is not None:
+        # ONE visible record for the whole integration, whatever the segment count: the
+        # number of segments is the number of parameter-fault onsets, which is hidden
+        # truth (finding B2). The full log above has every segment with its real span.
+        log.visible.append(
+            "sim.simulate_truth",
+            SIM_API_VERSION,
+            {"plant": plant.id, "n_days": n_days},
+            time.perf_counter() - integration_started,
+            "ok",
+        )
 
     result = _stitch_extended(parts) if mixing.ideal else _stitch_two_zone(parts)
 
@@ -747,6 +762,7 @@ def simulate_truth(
                 physchem=truth_params.physchem,
             )
         ),
+        visible_args={"n_times": int(result.t.size)},
     )
     obs_cfg = load_observation_config()
     overload, foaming = condition_flags(
@@ -803,12 +819,85 @@ def _simulate(
     )
 
 
-def _logged(log: CallLog | None, name: str, args: Mapping[str, object], call):  # noqa: ANN001, ANN202
-    """Run ``call``, logging it to ``calls.jsonl`` when there is a log (CLAUDE.md rule 3)."""
-    if log is None:
+@dataclass(frozen=True)
+class RunLogs:
+    """The two call logs of one generation: the complete one and its redacted projection.
+
+    **Why two** (review finding B2, 2026-09-10; the mechanism needed no ruling).
+    ``runs/<id>/calls.jsonl`` is declared workflow-visible, and its ``args_hash`` used to
+    cover the real arguments of every harness call: the scenario id, the segment index and
+    span, the derived influent and observation seeds, the influent and observation fault
+    plans as strings, and the realised mixing structure. Every one of those is drawn from a
+    small public space -- committed scenario ids, committed seeds, an enumerable fault
+    catalogue -- so the hashes inverted: ``75fbaaa4b387afcc`` gave ``('S0-01', 0, 0.0,
+    180.0)`` on a real run, and the *number* of segment records alone said whether a
+    parameter fault existed. That is CLAUDE.md rule 1 broken through rule 3.
+
+    So the record is kept twice. :attr:`full` lives in ``truth_store/<id>/`` with the real
+    arguments and every segment -- the evaluator reads it (rule 3 says evaluation reads
+    logs only). :attr:`visible` lives in ``runs/<id>/`` and is a **projection**: the same
+    calls, in the same order, with the same timings and outcomes, but hashed over nothing
+    the visible manifest does not already state, and with the segment structure collapsed
+    to one record. A workflow still sees that the simulator ran, when, for how long and
+    whether it succeeded, which is what rule 3 is for; it no longer sees which rung of the
+    ladder it is standing on.
+    """
+
+    full: CallLog
+    """``truth_store/<id>/calls.jsonl``: real arguments, one record per segment."""
+    visible: CallLog
+    """``runs/<id>/calls.jsonl``: redacted arguments, segments collapsed."""
+
+    @classmethod
+    def fresh(cls, paths: RunPaths) -> RunLogs:
+        """Open both logs, starting each over: a generation's log is that generation's."""
+        return cls(full=CallLog(paths.truth, fresh=True), visible=CallLog(paths.root, fresh=True))
+
+
+def _logged(  # noqa: ANN202
+    logs: RunLogs | None,
+    name: str,
+    args: Mapping[str, object],
+    call,  # noqa: ANN001
+    *,
+    visible_args: Mapping[str, object] | None = None,
+    visible_name: str | None = None,
+):
+    """Run ``call``, logging it to both logs when there are logs (CLAUDE.md rule 3).
+
+    ``args`` go to the full, truth-side log. ``visible_args`` go to the workflow-visible
+    projection and must contain nothing the visible manifest does not already say; when
+    ``None`` the visible record carries an empty argument set. ``visible_name`` renames the
+    visible record (the segment calls are collapsed under it, see :func:`simulate_truth`);
+    passing it as ``""`` writes no visible record at all.
+    """
+    if logs is None:
         return call()
-    with log.record(name, SIM_API_VERSION, args):
-        return call()
+    started = time.perf_counter()
+    with logs.full.record(name, SIM_API_VERSION, args) as pending:
+        try:
+            result = call()
+        except Exception as exc:
+            if visible_name != "":
+                logs.visible.append(
+                    visible_name or name,
+                    SIM_API_VERSION,
+                    visible_args or {},
+                    time.perf_counter() - started,
+                    "error",
+                    f"{type(exc).__name__}: {exc}",
+                )
+            raise
+    if visible_name != "":
+        logs.visible.append(
+            visible_name or name,
+            SIM_API_VERSION,
+            visible_args or {},
+            time.perf_counter() - started,
+            pending.outcome,
+            pending.detail,
+        )
+    return result
 
 
 def generate_run(
@@ -861,7 +950,7 @@ def generate_run(
     paths = RunPaths.for_run(rid, runs_root)
     if write:
         paths.create()
-    log = CallLog(paths.root) if write else None
+    log = RunLogs.fresh(paths) if write else None
 
     if truth is None:
         truth = simulate_truth(scenario, plant_cfg, seeds, target_feed=target_feed, log=log)
@@ -878,6 +967,7 @@ def generate_run(
             seed=seeds.observation,
             faults=truth.plan.observation,
         ),
+        visible_args={"tier": tier_id},
     )
 
     adversarial = any(f.type is FaultType.ADVERSARIAL_LOG_NOTE for f in scenario.faults)

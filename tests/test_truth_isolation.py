@@ -48,6 +48,17 @@ _TRUTH_PATH = re.compile(r"(?i)(^|[/\\])truth(_store)?([/\\]|$)")
 
 _TRUTH_MODULES = frozenset({"truth", "truth_store"})
 
+# The layout API hands out the truth tree without spelling "truth" in any path literal:
+# ``RunPaths.for_run(id).truth``, ``truth_store_for(runs_root)`` and ``TRUTH_STORE_DIR`` are
+# names, not strings, so the path regex never saw them and the review's 3-line workflow
+# read ``faults.json`` with zero violations (finding B4, 2026-09-10). A workflow has no
+# business in :mod:`sim.run.layout` at all -- its loader is :func:`state.run_view.open_run`
+# -- so any import from that module is flagged, as is any of these names however reached,
+# and any attribute access spelled ``truth...`` on any object.
+_LAYOUT_MODULE = "sim.run.layout"
+_TRUTH_NAMES = frozenset({"truth_store_for", "TRUTH_STORE_DIR", "TRUTH_STORE", "RunPaths"})
+_TRUTH_ATTR = re.compile(r"(?i)^truth")
+
 
 @dataclass(frozen=True)
 class Violation:
@@ -96,17 +107,29 @@ def find_truth_references(path: Path) -> list[Violation]:
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if _TRUTH_MODULES & set(alias.name.lower().split(".")):
+                if _TRUTH_MODULES & set(alias.name.lower().split(".")) or alias.name.startswith(
+                    _LAYOUT_MODULE
+                ):
                     found.append(Violation(path, node.lineno, "import", alias.name))
         elif isinstance(node, ast.ImportFrom):
-            module = (node.module or "").lower()
-            segments = set(module.split(".")) if module else set()
+            module = node.module or ""
+            segments = set(module.lower().split(".")) if module else set()
             names = {alias.name.lower() for alias in node.names}
-            if _TRUTH_MODULES & (segments | names):
+            raw_names = {alias.name for alias in node.names}
+            imports_layout = module.startswith(_LAYOUT_MODULE) or (
+                module == _LAYOUT_MODULE.rsplit(".", 1)[0] and "layout" in names
+            )
+            if _TRUTH_MODULES & (segments | names) or imports_layout or _TRUTH_NAMES & raw_names:
                 names_str = ", ".join(alias.name for alias in node.names)
                 found.append(
                     Violation(path, node.lineno, "import", f"from {node.module} import {names_str}")
                 )
+        elif isinstance(node, ast.Name) and node.id in _TRUTH_NAMES:
+            found.append(Violation(path, node.lineno, "name", node.id))
+        elif isinstance(node, ast.Attribute) and (
+            _TRUTH_ATTR.search(node.attr) or node.attr in _TRUTH_NAMES
+        ):
+            found.append(Violation(path, node.lineno, "attribute", f".{node.attr}"))
         elif (
             isinstance(node, ast.Constant)
             and isinstance(node.value, str)
@@ -169,6 +192,70 @@ def test_checker_catches_every_forbidden_pattern(tmp_path: Path):
 def test_checker_ignores_docstrings_and_near_misses(tmp_path: Path):
     good = tmp_path / "good_workflow.py"
     good.write_text(_CLEAN_SOURCE, encoding="utf-8")
+    assert find_truth_references(good) == []
+
+
+# The review's own bypass, verbatim in shape (finding B4): three lines, no string with
+# "truth" in it, and before 2026-09-10 find_truth_references returned [] on it while the
+# module then read S6-01's answer key.
+_LAYOUT_BYPASS_SOURCE = """
+from sim.run.layout import RunPaths
+paths = RunPaths.for_run("run_6ebcad561b75")
+labels = open(paths.truth / "faults.json").read()
+"""
+
+# Each remaining way of reaching the truth tree through the layout API, one per line, so
+# a checker that catches the import alone cannot pass this.
+_LAYOUT_VARIANTS_SOURCE = """
+import sim.run.layout as layout
+from sim.run import layout as lay2
+from sim.run.layout import truth_store_for, TRUTH_STORE_DIR
+a = layout.truth_store_for("runs")
+b = lay2.TRUTH_STORE
+c = something().truth_manifest
+d = other.truth
+"""
+
+# What a workflow is actually given, and it must stay clean: the loader, and a read of the
+# visible record through it. "truthful" is not an attribute spelled truth-anything.
+_LOADER_ONLY_SOURCE = """
+from state.run_view import open_run
+
+def load(run_dir):
+    view = open_run(run_dir)
+    sensors = view.sensors()
+    log = view.read_text("../calls.jsonl") if False else None
+    label = view.manifest.plant
+    return sensors, log, label
+"""
+
+
+def test_checker_catches_the_layout_api_bypass(tmp_path: Path):
+    """Finding B4: the truth tree reached by name, with no truth-spelling string anywhere."""
+    bad = tmp_path / "layout_bypass.py"
+    bad.write_text(_LAYOUT_BYPASS_SOURCE, encoding="utf-8")
+    found = find_truth_references(bad)
+    kinds = sorted(v.kind for v in found)
+    assert "import" in kinds, found  # from sim.run.layout import RunPaths
+    assert "attribute" in kinds, found  # paths.truth
+    assert kinds.count("name") >= 1, found  # RunPaths used
+    # every violation is on a line that spells no "truth" path literal -- the point
+    assert not any(v.kind == "path literal" for v in found), found
+
+
+def test_checker_catches_every_layout_route(tmp_path: Path):
+    bad = tmp_path / "layout_variants.py"
+    bad.write_text(_LAYOUT_VARIANTS_SOURCE, encoding="utf-8")
+    found = find_truth_references(bad)
+    lines = {v.line for v in found}
+    # the two module imports, the from-import, and each of the four uses: seven lines
+    assert lines == {2, 3, 4, 5, 6, 7, 8}, sorted(str(v) for v in found)
+
+
+def test_checker_leaves_the_loader_alone(tmp_path: Path):
+    """The negative control: what a workflow is given must not be flagged."""
+    good = tmp_path / "loader_only.py"
+    good.write_text(_LOADER_ONLY_SOURCE, encoding="utf-8")
     assert find_truth_references(good) == []
 
 
