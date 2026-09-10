@@ -27,6 +27,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import stat
 
 import numpy as np
 import pytest
@@ -45,6 +47,8 @@ from sim.influent import constant_influent, load_feed_fractionation, nominal_mas
 from sim.plants import declared_geometry, load_plant_config
 from sim.plants.truth import load_plant_truth
 from sim.run.harness import (
+    NO_WRITE_KEY,
+    VISIBLE_MTIME,
     apply_adaptation,
     generate_cells,
     generate_run,
@@ -53,16 +57,17 @@ from sim.run.harness import (
 )
 from sim.run.layout import SALT_FILE, RunPaths, run_id, store_salt, truth_store_for
 from sim.run.manifest import REDACTED_FIELDS, PublicManifest, RunManifest
+from sim.run.matrix import Cell, execution_order, generate_matrix, matrix_cells
 from sim.run.seeds import STREAM_ORDER, RunSeeds
 from state.provenance import CallLog, args_hash, read_calls
 from tests.conftest import REPO_ROOT
 
 SCENARIOS = REPO_ROOT / "scenarios"
 SHORT_DAYS = 40.0
-TEST_SALT = bytes.fromhex("ad" * 32)
-"""A fixed store salt for the tests that pin the id derivation (finding B1)."""
 """Horizon of the runs generated here. Long enough to exercise every stage, short enough
 that the file is not the slowest in the suite."""
+TEST_SALT = bytes.fromhex("ad" * 32)
+"""A fixed store salt for the tests that pin the id derivation (finding B1)."""
 
 
 def _short(scenario_id: str, days: float = SHORT_DAYS):
@@ -674,7 +679,11 @@ def test_a_cell_generates_identically_in_a_fresh_process(tmp_path):
 
     # One store for all three generations: run ids are keyed by the store's salt (finding
     # B1, 2026-09-10), so the id is only expected to agree within a store. The record --
-    # the fingerprint -- must agree regardless.
+    # the fingerprint -- must agree regardless. The salts are created here, up front: a
+    # no-write generation creates nothing itself (finding F5) and would otherwise key its
+    # id with the fixed no-write key in both stores.
+    store_salt(truth_store_for(tmp_path / "runs"))
+    store_salt(truth_store_for(tmp_path / "elsewhere" / "runs"))
     outputs = []
     for hash_seed in ("0", "12345"):
         result = subprocess.run(
@@ -712,25 +721,23 @@ def test_a_cell_generates_identically_in_a_fresh_process(tmp_path):
 # ------------------------------------------------------------------ 6. provenance
 
 
-def test_every_simulator_call_is_logged(clean_run):
-    """CLAUDE.md rule 3, on the harness's own calls -- in BOTH logs.
+@pytest.fixture(scope="module")
+def three_tiers(tmp_path_factory):
+    """One cell at all three tiers, sharing one integration (§6.4)."""
+    root = tmp_path_factory.mktemp("tiers") / "runs"
+    return generate_cells(_short("S0-01"), load_plant_config("C"), ["A", "B", "C"], runs_root=root)
 
-    The full log in ``truth_store/<id>/`` carries every call with its real arguments,
-    segment by segment. The visible log in ``runs/<id>/`` carries the same calls, in the
-    same order, with the same outcomes -- rule 3 is satisfied for a workflow -- but its
-    integration is one record and its argument hashes say nothing the visible manifest
-    does not (review finding B2, 2026-09-10; see the next test for the proof).
-    """
-    full = read_calls(clean_run.paths.truth)
-    visible = read_calls(clean_run.paths.root)
+
+def _assert_complete_logs(run) -> None:
+    full = read_calls(run.paths.truth)
+    visible = read_calls(run.paths.root)
     full_names = [r.name for r in full]
     assert "sim.generate_influent" in full_names
     assert "sim.burn_in" in full_names
     assert any(n.startswith("sim.simulate_truth_segment") for n in full_names)
     assert "sim.channel_series" in full_names
-    assert "sim.observe" in full_names
-    visible_names = [r.name for r in visible]
-    assert visible_names == [
+    assert full_names[-1] == "sim.observe" and full_names.count("sim.observe") == 1
+    assert [r.name for r in visible] == [
         "sim.generate_influent",
         "sim.burn_in",
         "sim.simulate_truth",
@@ -741,8 +748,46 @@ def test_every_simulator_call_is_logged(clean_run):
         assert [r.seq for r in records] == list(range(len(records)))
         for record in records:
             assert record.outcome == "ok"
-            assert record.runtime_s >= 0.0
             assert len(record.args_hash) == 16
+    # the truth-side log carries the wall-clock rule 3 asks for; the projection does not
+    for record in full:
+        assert record.runtime_s is not None and record.runtime_s >= 0.0
+        assert record.t_utc is not None
+    for record in visible:
+        assert record.runtime_s is None and record.t_utc is None
+
+
+def test_every_simulator_call_is_logged(clean_run):
+    """CLAUDE.md rule 3, on the harness's own calls -- in BOTH logs.
+
+    The full log in ``truth_store/<id>/`` carries every call with its real arguments,
+    segment by segment. The visible log in ``runs/<id>/`` carries the same calls, in the
+    same order, with the same outcomes -- rule 3 is satisfied for a workflow -- but its
+    integration is one record and its argument hashes say nothing the visible manifest
+    does not (review finding B2, 2026-09-10; see the next test for the proof), and it
+    carries no timestamp and no runtime (findings F1 and F3).
+    """
+    _assert_complete_logs(clean_run)
+
+
+def test_every_tier_of_a_cell_carries_the_shared_integration_in_its_own_log(three_tiers):
+    """Finding F4: the tiers share one integration, and every tier's log must show it.
+
+    Before 2026-09-10 the second and third tiers' logs held only ``sim.observe``: the
+    evaluator, which reads logs only, saw no integration behind two tiers of every cell.
+    """
+    assert [r.manifest.tier for r in three_tiers] == ["A", "B", "C"]
+    for run in three_tiers:
+        _assert_complete_logs(run)
+    # the copied records are the SAME calls: identical hashes up to the observation, which
+    # is each tier's own; and the truth-side copies keep the original timestamps
+    visible = [read_calls(r.paths.root) for r in three_tiers]
+    full = [read_calls(r.paths.truth) for r in three_tiers]
+    for other in (1, 2):
+        assert [r.args_hash for r in visible[other][:-1]] == [r.args_hash for r in visible[0][:-1]]
+        assert [r.args_hash for r in full[other][:-1]] == [r.args_hash for r in full[0][:-1]]
+        assert [r.t_utc for r in full[other][:-1]] == [r.t_utc for r in full[0][:-1]]
+        assert visible[other][-1].args_hash != visible[0][-1].args_hash  # a different tier
 
 
 def _visible_hashes_from_the_visible_record(run) -> list[str]:
@@ -809,12 +854,11 @@ def test_the_visible_log_collapses_the_segments(tmp_path):
     assert sum(r.name == "sim.simulate_truth_segment" for r in full) == len(run.truth.segments)
     assert sum(r.name == "sim.simulate_truth" for r in visible) == 1
     assert not any(r.name.startswith("sim.simulate_truth_segment") for r in visible)
-    # and the one visible record covers the whole integration's runtime
+    # and the one visible record says nothing about how long the integration took: the
+    # runtime alone marked the two-zone row (finding F3), so the projection carries none
     integration = next(r for r in visible if r.name == "sim.simulate_truth")
-    assert (
-        integration.runtime_s
-        >= sum(r.runtime_s for r in full if r.name == "sim.simulate_truth_segment") * 0.99
-    )
+    assert integration.runtime_s is None and integration.t_utc is None
+    assert all(r.runtime_s is not None for r in full if r.name == "sim.simulate_truth_segment")
 
 
 def test_regenerating_a_cell_starts_its_logs_over(tmp_path):
@@ -964,6 +1008,147 @@ def test_the_loader_has_no_route_to_the_scenario_files(clean_run):
         with pytest.raises((TruthAccessError, FileNotFoundError)):
             view.read_text(relative)
     assert not any("scenario" in f.lower() for f in view.files)
+
+
+# ------------------------------------------------ 8. no visible wall-clock (finding F1)
+
+
+_ISO_TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}")
+
+
+def test_no_visible_file_carries_a_timestamp(three_tiers):
+    """Finding F1: nothing a workflow can read says when the run was generated.
+
+    Not the manifest (``created_utc`` is redacted), not the call log (``t_utc`` is gone
+    from the projection), and not the files' modification times, which are all set to one
+    fixed instant. The truth-side manifest and log carry both: the negative control.
+    """
+    for run in three_tiers:
+        public = PublicManifest.model_validate(json.loads(run.paths.manifest.read_text()))
+        assert not hasattr(public, "created_utc")
+        assert "created_utc" in REDACTED_FIELDS
+        for path in run.paths.root.rglob("*"):
+            assert abs(path.stat().st_mtime - VISIBLE_MTIME) < 1.0, path
+            if path.is_file():
+                text = path.read_text(encoding="utf-8", errors="replace")
+                assert not _ISO_TIMESTAMP.search(text), (path, _ISO_TIMESTAMP.search(text))
+        assert abs(run.paths.root.stat().st_mtime - VISIBLE_MTIME) < 1.0
+        # the negative control: the truth store still says when
+        complete = json.loads(run.paths.truth_manifest.read_text())
+        assert _ISO_TIMESTAMP.search(complete["created_utc"])
+        assert all(_ISO_TIMESTAMP.search(r.t_utc) for r in read_calls(run.paths.truth))
+        assert abs(run.paths.truth_manifest.stat().st_mtime - VISIBLE_MTIME) > 86400.0
+
+
+def test_the_execution_order_is_keyed_by_the_store_salt():
+    """Finding F1: a shuffle seeded with a committed constant is a public permutation.
+
+    The reviewer reproduced it and mapped position to cell. The order of a written matrix
+    is now keyed with the store's secret salt: two stores generate the same cells in two
+    different orders, neither of which is the library order, and a generation with no
+    store falls back to the declared constant seed and is reproducible.
+    """
+    cells = matrix_cells()
+    library_order = [group for _, group in _library_groups(cells)]
+    salt_1, salt_2 = bytes.fromhex("11" * 32), bytes.fromhex("22" * 32)
+    order_1 = execution_order(cells, salt_1)
+    order_2 = execution_order(cells, salt_2)
+    order_none = execution_order(cells, None)
+    for order in (order_1, order_2, order_none):
+        assert {tuple(g) for g in order} == {tuple(g) for g in library_order}  # a permutation
+        assert len(order) == len(library_order) and order != library_order
+    assert order_1 != order_2 and order_1 != order_none and order_2 != order_none
+    assert execution_order(cells, salt_1) == order_1  # deterministic in the salt
+    assert execution_order(cells, None) == order_none  # ... and without one
+
+
+def _library_groups(cells):
+    """The truth groups in library order, as generate_matrix received them before F1."""
+    ordered: dict[tuple, list] = {}
+    for cell in cells:
+        ordered.setdefault(cell.key, []).append(cell)
+    return list(ordered.items())
+
+
+def test_two_stores_generate_the_same_cells_in_their_own_orders(tmp_path):
+    """Finding F1, end to end: the order on disk follows the store's salt, not the library.
+
+    Two stores with two salts generate the same small matrix; the truth-side
+    ``created_utc`` (the only timestamp left) orders each store's runs exactly as
+    :func:`execution_order` predicts for its salt -- so the wiring is asserted rather than
+    inferred from the two orders happening to differ.
+    """
+    plant = load_plant_config("C")
+    library = {"S0-01": _short("S0-01"), "S2-03": _short("S2-03")}
+    library["S0-01"] = library["S0-01"].model_copy(update={"plant": "C"})
+    library["S2-03"] = library["S2-03"].model_copy(update={"plant": "C"})
+    cells = [Cell("S0-01", "C", "A", 1000, 0), Cell("S2-03", "C", "A", 1023, 0)]
+    del plant
+    # two salts whose predicted orders differ, chosen by construction rather than by luck:
+    # with two groups a random pair of salts would agree half the time
+    first = bytes.fromhex("11" * 32)
+    second = next(
+        bytes.fromhex(f"{i:02x}" * 32)
+        for i in range(2, 64)
+        if execution_order(cells, bytes.fromhex(f"{i:02x}" * 32)) != execution_order(cells, first)
+    )
+    orders = {}
+    for salt in (first, second):
+        root = tmp_path / salt.hex()[:4] / "runs"
+        store = truth_store_for(root)
+        store.mkdir(parents=True)
+        (store / SALT_FILE).write_bytes(salt)
+        results = generate_matrix(cells, runs_root=root, library=library)
+        assert all(r.ok for r in results)
+        by_time = sorted(
+            results,
+            key=lambda r: json.loads(RunPaths.for_run(r.run_id, root).truth_manifest.read_text())[
+                "created_utc"
+            ],
+        )
+        orders[salt] = [r.cell for r in by_time]
+        predicted = [group[0] for group in execution_order(cells, salt)]
+        assert orders[salt] == predicted, (orders[salt], predicted)
+        # and the visible side of both runs says nothing about the order
+        for r in results:
+            paths = RunPaths.for_run(r.run_id, root)
+            assert "created_utc" not in json.loads(paths.manifest.read_text())
+            assert all("t_utc" not in line for line in paths.calls.read_text().splitlines())
+    assert len({tuple(o) for o in orders.values()}) == 2, orders
+
+
+# ----------------------------------------------- 9. a no-write generation (finding F5)
+
+
+def test_a_no_write_generation_writes_nothing(tmp_path):
+    """Finding F5: ``write=False`` used to create the store's salt on the way past."""
+    root = tmp_path / "store" / "runs"
+    run = generate_run(
+        _short("S0-01"), "B", plant=load_plant_config("C"), runs_root=root, write=False
+    )
+    assert not (tmp_path / "store").exists(), sorted((tmp_path / "store").rglob("*"))
+    assert run.run_id == run_id("S0-01", "C", "B", _short("S0-01").seed, key=NO_WRITE_KEY)
+    # a store that has a salt keys the no-write id with it, so the two agree
+    store_salt(truth_store_for(root))
+    again = generate_run(
+        _short("S0-01"), "B", plant=load_plant_config("C"), runs_root=root, write=False
+    )
+    assert again.run_id != run.run_id
+    assert (
+        again.run_id
+        == generate_run(_short("S0-01"), "B", plant=load_plant_config("C"), runs_root=root).run_id
+    )
+
+
+def test_the_salt_is_created_unreadable_to_others(tmp_path):
+    """Finding F5: the salt is a secret, so its file mode is 0600, not the default 0644."""
+    store = tmp_path / "truth_store"
+    key = store_salt(store)
+    assert len(key) == 32
+    assert stat.S_IMODE((store / SALT_FILE).stat().st_mode) == 0o600
+    assert store_salt(store) == key  # read back, not regenerated
+    assert store_salt(tmp_path / "other", create=False) is None
+    assert not (tmp_path / "other").exists()
 
 
 def test_a_second_writer_continues_the_sequence(tmp_path):

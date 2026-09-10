@@ -567,12 +567,12 @@ baselines are not the same plant and must not be averaged into one number.
 | **C** | — | 24/24 | **9.22 %** | 6.62 – 16.56 % | 24/24 | — | 0.00 % |
 | **A** | `unadapted` | 24/24 | **1.49 %** | 0.00 – 3.97 % | **21/24** | — | 0.00 % |
 | **A** | `adapted` | 24/24 | **0.28 %** | 0.00 – 1.32 % | **7/24** | — | 0.00 % |
+| *anchor* | | | *7.78 %* | | | | *8.25 – 9.18 %* |
 
 Re-measured on 2026-09-10 after the calcium and liquor rulings (§3.3); the VFA-ratio p92
 column was not re-measured and is left blank rather than carried over from the earlier feed.
 The earlier table — B 7.92 %, C 9.96 %, A-unadapted 2.54 %, A-adapted 0.52 % — is in the
 decisions log of 2026-09-09.
-| *anchor* | | | *7.78 %* | | | | *8.25 – 9.18 %* |
 
 **B and C bracket the anchor. Plant A is well below it, and the difference is the finding**
 (the lead: differences between plants are to be recorded, not tuned away; there is no
@@ -592,10 +592,11 @@ per-plant cut-off and 2.00× stands on all four rows).
 
 **The comparison is controlled.** Plant A's two baselines are the same geometry, the same
 feed streams, the same delivery schedule, the same seeds and the same 2.00× cut-off. They
-differ in **one declared property**: `K_I_nh3`, and therefore which community carries the
-acetate flux — acetoclastic (`adapted`, X_ac 1.129, X_sao 6.9e-05) or syntrophic acetate
-oxidation (`unadapted`, X_sao 0.910, X_ac 9.9e-05). Everything that would otherwise explain
-a difference in VFA excursions is held fixed by construction.
+differ in **one property**: the community's inhibition constant (truth-side since ruling
+B5), and therefore which pathway carries the acetate flux — acetoclastic (`adapted`, X_ac
+1.065, X_sao 6.9e-05) or syntrophic acetate oxidation (`unadapted`, X_sao 0.853, X_ac
+0.0019), as re-measured on the current feed on 2026-09-10 (§3.3). Everything that would
+otherwise explain a difference in VFA excursions is held fixed by construction.
 
 | Plant A, 24 seeds each | `unadapted` (SAO) | `adapted` (acetoclastic) | ratio |
 |---|---:|---:|---:|

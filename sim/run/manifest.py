@@ -52,10 +52,28 @@ HARNESS_VERSION = "1.0"
 """Version of the run harness itself. Bump when the on-disk contract changes."""
 
 REDACTED_FIELDS: frozenset[str] = frozenset(
-    {"scenario_id", "level", "seeds", "fault_layers", "target_feed", "notes_seeded", "baseline"}
+    {
+        "scenario_id",
+        "level",
+        "seeds",
+        "fault_layers",
+        "target_feed",
+        "notes_seeded",
+        "baseline",
+        "created_utc",
+    }
 )
 """Manifest fields a workflow must never see: they name the scenario, its faults, or the
 seeds that would let a workflow regenerate the hidden truth for itself.
+
+``created_utc`` joined the list at the final review of ``99a8947`` (finding F1,
+2026-09-10): the matrix is generated in a shuffled order, but the shuffle was seeded with a
+committed constant over the public library, so the permutation was reproducible and a sort
+of the run set by creation time mapped position to cell exactly — a public salt over a
+public space, the same class as B1. The order is now keyed with the store's secret salt
+*and* the timestamp is gone from the visible surface (the manifest here, ``t_utc`` in the
+visible call log, and every visible file's modification time is set to one fixed instant),
+so neither the ordering nor a position carries the cell. The complete manifest keeps it.
 
 ``baseline`` is the one that needs an argument, because the plant *contract* declares both
 of Plant A's baselines and a workflow is told they exist (lead's ruling 1, 2026-09-09). What
@@ -91,7 +109,8 @@ class PublicManifest(BaseModel):
 
     Everything here describes the *environment*: which plant, which instrumentation tier,
     how long the record is, and which version of the simulator produced it. Nothing here
-    identifies the scenario, its faults or its seeds.
+    identifies the scenario, its faults or its seeds — nor *when* the run was generated,
+    which was its position in the generation order (finding F1).
     """
 
     model_config = ConfigDict(frozen=True, extra="ignore")
@@ -103,7 +122,6 @@ class PublicManifest(BaseModel):
     n_days: int = Field(description="Number of daily influent samples, d")
     start_doy: int = Field(description="Day of year of day 0 (the seasonal phase)")
     start_weekday: int = Field(description="Weekday of day 0, 0 = Monday")
-    created_utc: str
     harness_version: str
     git_sha: str
     configs: ConfigVersions
@@ -143,7 +161,7 @@ class RunManifest(BaseModel):
         default=None, description="REDACTED: the declared plant baseline this run is staged on"
     )
     notes_seeded: int = Field(default=0, description="REDACTED: number of operator notes placed")
-    created_utc: str
+    created_utc: str = Field(description="REDACTED: the position in the generation order")
     harness_version: str = HARNESS_VERSION
     git_sha: str
     configs: ConfigVersions
@@ -163,7 +181,6 @@ class RunManifest(BaseModel):
             n_days=self.n_days,
             start_doy=self.start_doy,
             start_weekday=self.start_weekday,
-            created_utc=self.created_utc,
             harness_version=self.harness_version,
             git_sha=self.git_sha,
             configs=self.configs,

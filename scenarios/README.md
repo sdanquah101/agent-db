@@ -71,23 +71,31 @@ three tiers and nowhere but Plant A (`sim/run/matrix.py`, and the decisions entr
 * **There is one answer key per scenario, not one per tier.** `S2-02` flatlines a Tier-B
   instrument, so at Tier A there is nothing to observe and its `correct_conclusion` is
   the Tier-B/C answer. Flagged for the lead in `docs/decisions.md`.
-* **`S4-02` is currently weak on a healthy digester.** The overload flag it scales fires
-  on no day at all in most sound Plant B runs, against the plant's ~8 %. Measured in
-  `docs/g1_anchor_report.md` §5. The threshold itself is not the problem — it is the
-  anchor's own 92nd percentile of titrimetric FOS/TAC (lead's ruling 4, 2026-09-09) — the
-  simulated FOS/TAC is on a different scale, and the titrimetric sensor convention that
-  would reconcile them is approved in principle and not yet implemented.
+* **`S4-02` has something to scale** (settled 2026-09-09/10; this entry once said the
+  opposite). Both flags its fault scales fire on the **hidden state**: overload on true VFA
+  above 2.00× its 30-day trailing median (lead's ruling B), foaming on a gas surge above
+  1.80× its 30-day trailing median while true VFA is above its own (ruling B3). Measured on
+  24 sound Plant B runs they fire on 7.67 % and 7.20 % of days, in every run, against the
+  plant's own 7.78–9.18 % FOS/TAC exceedance; the titrimetric sensor convention is
+  implemented (ruling A, `sim.observation.channels.titrimetric_fos`, no fitted parameter).
+  `docs/g1_anchor_report.md` §5.4 has the four-row tables. What remains thin is the single
+  Plant A Tier-A cell, where both triggers fire on well under 1 % of days — recorded, not
+  tuned.
 * **`S6-01` was inert and is not any more** (lead's ruling 1, 2026-09-09). Acetoclasts and
   syntrophs cannot coexist at a steady state — they compete for one substrate — so Plant A
   is one or the other, and at its adapted constant it is acetoclastic, which left the
   omitted pathway carrying no flux. Plant A now declares **two baselines** and each row
   names the one its answer key assumes:
 
-  | baseline | `K_I_nh3` | X_ac | X_sao | acetate | rows |
-  |---|---|---:|---:|---:|---|
-  | `adapted` | 0.02 | 1.129 | 6.9e-05 | 0.038 kg/m³ | S5-01, S7-02 (they inject a *loss* of adaptation), and S6-04 |
-  | `unadapted` | ADM1 default | 9.9e-05 | 0.910 | 0.240 kg/m³ | S6-01 |
+  | baseline | community | acetate flux carried by | rows |
+  |---|---|---|---|
+  | `adapted` | acclimated to its ammonia | the acetoclastic methanogens; the syntrophic pathway is present and idle | S5-01, S7-02 (they inject a *loss* of adaptation), and S6-04 |
+  | `unadapted` | not acclimated | syntrophic acetate oxidation; the acetoclasts have washed out | S6-01 |
 
+  The numbers — the adapted inhibition constant and what each state measures at — are in
+  the **truth-side plant record** `sim/plants/truth/plant_A.yaml` (lead's ruling B5,
+  2026-09-10), not in the visible contract and not here: this file is under `scenarios/`,
+  which a workflow is barred from, but a table it could be quoted from belongs in one place.
   Both are sound digesters; they are two different ones. **S6-01 and S6-04 are the same
   fault on the two baselines** — on the first the omitted pathway carries the whole acetate
   flux and the correct conclusion is a structural revision; on the second it carries nothing

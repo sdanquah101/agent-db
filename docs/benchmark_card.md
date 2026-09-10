@@ -76,9 +76,11 @@ to:
 ```
 runs/<id>/                     <id> is a keyed hash of the cell (HMAC, per-store secret salt)
   manifest.json                the REDACTED manifest: plant, tier, horizon, seasonal
-                               phase, config versions, git SHA. Written redacted.
+                               phase, config versions, git SHA. Written redacted; no
+                               creation time (that was the generation order).
   calls.jsonl                  one line per tool call (rule 3); append-only, shared by the
-                               harness now and the tool registry later
+                               harness now and the tool registry later. The harness's
+                               records carry no timestamp and no runtime here.
   observations/
             sensors.json       the tier's record, with units, flags and report times
             feed_log.csv       the operator's feed log (mis-logs applied)
@@ -117,8 +119,8 @@ whole-branch review). A workflow, at any tier, is given exactly this and nothing
 | the observation record at its tier (`observations/sensors.json`: sampled, noisy, drifting, lagged, with gaps) | the truth store (`truth_store/<id>/`): true states, true parameters, true influent, the fault plan, the answer key, the complete manifest |
 | the operator's feed log and the tier's feed assays (`feed_log.csv`, `feed_assays.csv`) | the scenario files (`scenarios/*.yaml`): they name the baseline, the faults and the `correct_conclusion` of every row |
 | the operator's log notes (`operator_notes.json`) | the truth-side plant record (`sim/plants/truth/`): the adapted inhibition constant and the measured biomass, acetate and ammonia of each baseline |
-| the redacted manifest (`manifest.json`: plant, tier, horizon, seasonal phase, config versions, git SHA) | the run index (`truth_store/index.jsonl`) and the store's salt |
-| the visible call projection (`calls.jsonl`: the same calls in the same order, hashed over nothing the manifest does not state, segment integrations collapsed to one record) | the truth-side call log with real arguments and one record per integration segment |
+| the redacted manifest (`manifest.json`: plant, tier, horizon, seasonal phase, config versions, git SHA) | the run index (`truth_store/index.jsonl`), the store's salt, and **when** any run was generated: the complete manifest's `created_utc`, the truth-side log's `t_utc`, real file modification times |
+| the visible call projection (`calls.jsonl`: the same calls in the same order, hashed over nothing the manifest does not state, segment integrations collapsed to one record, no timestamp, no runtime) | the truth-side call log with real arguments, one record per integration segment, timestamps and runtimes |
 | the qualitative plant contract (`configs/plants/`: geometry, set point, hydraulics, feed catalogue, blend tank, that two community states exist and what kind of digester each is) | which baseline the run is staged on, and any numeric table that would let the record be read off against one |
 
 Three consequences follow, and each is enforced by a test rather than by the list:
@@ -134,6 +136,13 @@ Three consequences follow, and each is enforced by a test rather than by the lis
   and the loader refuses the scenario files and the plant record by traversal.
 - **The visible call log cannot tell a faulted run from a clean one**: S0-01 and S5-01
   produce logs of the same length, the same names and the same field set.
+- **Nothing visible says when a run was generated, or how long it took.** The generation
+  order is a permutation of the public library; a permutation that can be read off
+  timestamps maps position to cell, and a committed shuffle seed made it reproducible
+  (final review, finding F1). The order is now keyed with the store's secret salt, the
+  visible manifest and call log carry no timestamp, every visible file's modification
+  time is one fixed instant, and the visible log carries no runtime either — the burn-in's
+  wall-clock alone marked the one two-zone row (finding F3). All of it stays truth-side.
 
 **Instrumentation tiers are masks on identical truth** (§6.4). Tier C contains Tier B
 contains Tier A — the schema validates the containment and the tests check it. Two runs at
@@ -397,7 +406,10 @@ from the analysis plan are documented rather than absorbed.
   seed, same run, bit-for-bit.
 - Fault layers hold their **own** stream, so a faulted run differs from its clean twin
   only by the fault (the paired-run property; tested).
-- Every tool call is logged with name, version, argument hash, runtime and outcome.
+- Every tool call is logged with name, version, argument hash, runtime and outcome — in
+  the truth-side log, which the evaluator reads; the workflow-visible projection carries
+  the sequence, name, version, hash and outcome and no wall-clock (§4.1). Every tier's
+  log carries the shared integration's calls, so each run directory is a complete record.
 - Budgets (simulator evaluations, wall-clock, assay units) are enforced in the tool
   registry, not in workflows, so no workflow can grant itself more.
 - All numerical tolerances and solver settings live in `configs/`, versioned, so a run is

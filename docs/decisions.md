@@ -2688,6 +2688,12 @@ on Plant A names the one its answer key assumes:
 | `adapted` | 0.02 kmol N/m³ | 1.129 | 6.9e-05 | 0.038 kg/m³ | 7.80 | 0.688 | S5-01, S7-02, S6-04 |
 | `unadapted` | ADM1 default (0.0018) | 9.9e-05 | 0.910 | 0.240 kg/m³ | 7.79 | 0.692 | S6-01 |
 
+*(Superseded, 2026-09-10: these are the 2026-09-09 measurements. The table was re-measured
+on the current feed the next day — adapted X_ac 1.065, unadapted X_sao 0.853 / X_ac 0.0019,
+see "Close-out" below — and under the lead's ruling B5 it lives in the truth-side plant
+record `sim/plants/truth/plant_A.yaml`, not in the visible contract. It is left here as the
+record of what was decided on the day.)*
+
 Measured through the full harness at the 400-d burn-in, 180 d, seed 1000. **Both are sound
 digesters; they are two different ones.** A second row, **S6-04**, is added: the same SAO
 omission on the `adapted` baseline, scored on **abstention**.
@@ -3879,6 +3885,11 @@ import layout` and this test caught it); a module using only `open_run` must sta
   `created_utc` stamped the run set in ladder order and a sort by timestamp recovered each
   cell's rung. The *execution* order is now a seeded shuffle (`MATRIX_ORDER_SEED`, fixed and
   declared, rule 4); results are still returned in the order the cells were given.
+  **Corrected at the final review (F1, 2026-09-10): this closed nothing.** A shuffle seeded
+  with a committed constant over the public library is a reproducible permutation — the
+  reviewer reproduced it — so the public timestamp still mapped position to cell exactly.
+  The fix is in the entry "Final review at `99a8947`" below: the order is keyed with the
+  store's secret salt AND the timestamps are gone from the visible surface.
 - **`write_index_entry`** rewrites the id → cell map through a sibling temp file and
   `os.replace`, so a reader or a second generator never sees a half-written index.
 - **Two stale notes** corrected: `sensors.yaml` still said the titrimetric transfer function
@@ -4018,4 +4029,105 @@ No change beyond the B2 addition recorded under B1.
 
 The non-blocking items (seeded execution order, atomic index writes, the two stale notes,
 the equalisation-tank initialisation recorded as dormant) were already on the branch.
+
+## 2026-09-10 — Final review at `99a8947`: the timestamp leak (F1) and four smaller findings, fixed; F2 with the lead
+
+The coordinator ran the independent whole-branch review at `99a8947` in parallel with the
+regeneration and stopped the regeneration when the review found a leak that changes what a
+regeneration writes. The regeneration was killed a few cells in and its partial output
+discarded. Everything below is fixed, mutation-checked and documented; **F2 is with the lead
+and nothing here touches it**: the public horizon partitions the ladder (180 d for Levels 0–4
+and 8, 240 d for Levels 5–7), durations cannot change after the tag, and no scenario's
+`duration_days` was changed.
+
+### F1 — blocker: the shuffled generation order was reproducible, so the timestamps leaked
+
+**The finding.** `generate_matrix` shuffled the execution order with a committed seed
+(`MATRIX_ORDER_SEED`), but the group list is a pure function of the public library and the
+seed is public, so the permutation is reproducible — the reviewer reproduced it — and a sort
+of the run set by the visible `created_utc`, or by `t_utc` in the visible `calls.jsonl`,
+mapped position to cell exactly. A public salt over a public space, the same class as B1,
+and the "Generation order" entry above claimed it closed. It did not; that entry is
+annotated.
+
+**The fix, both halves as the reviewer preferred.** (i) The order of a *written* matrix is
+keyed with the store's secret salt (`sim.run.matrix.execution_order`: a seed derived from
+SHA-256 over the salt); a `write=False` generation has no store and falls back to the
+declared constant, reproducibly. (ii) The wall-clock is gone from the visible surface:
+`created_utc` is redacted from `PublicManifest` (it is now in `REDACTED_FIELDS`, so the
+existing "no field for the answer" test covers it); the visible `calls.jsonl` is a
+**projection** (`CallLog(projection=True)`) whose records carry no `t_utc` — the key is
+absent, not null; and every file and directory under `runs/<id>/` is given one fixed
+modification time (`VISIBLE_MTIME`, 2000-01-01T00:00Z), because an mtime is a timestamp a
+workflow can read without opening anything. The complete manifest, the truth-side log and
+the truth-side tree keep all of it.
+
+**Tests.** `execution_order` on the full matrix under two salts and under none gives three
+different permutations of the same groups, none the library order, each deterministic; end
+to end, two stores with two salts (the second chosen by construction to give a different
+order — with two groups a random pair agrees half the time) generate the same small matrix
+and the truth-side `created_utc` orders each store's runs exactly as `execution_order`
+predicts for its salt, while neither visible manifest nor visible log carries a timestamp.
+And on a three-tier cell: the public manifest has no `created_utc` attribute, no visible
+file matches an ISO timestamp, every visible file and directory has the fixed mtime; the
+truth-side manifest and log do carry timestamps and real mtimes (the negative control).
+
+### F3 — the visible runtime marked the two-zone row
+
+The burn-in's visible arguments are identical across scenarios on a plant, but its runtime
+was not (0.55 s against 1.53 s at 40 d; the integration 3.07 against 6.74 s), and S6-03 is
+the only non-ideal-mixing row. The projection now carries **no `runtime_s`** either (omitted
+rather than coarsened: any bucket boundary is a place two rows can straddle); the
+truth-side log keeps the true value, and rule 3's runtime is there for the evaluator.
+
+### F4 — Tier B/C logs carried no simulator calls
+
+The tiers of a cell share one integration, so only the first tier's logs recorded it; the
+evaluator, which reads logs only, saw no integration behind two of three tiers, and the
+harness docstring's "each directory is self-contained" was false for the log. The shared
+integration's records are now **copied into every tier's logs** (`RunLogs.copy_truth_calls`,
+`CallLog.copy`: same calls, same hashes, new sequence numbers; the truth-side copy keeps the
+original timestamps, the projection drops them), and the docstring says so. Tested on all
+three tiers: every tier's visible log is the five-record sequence, every full log carries
+the segments, the hashes up to the observation are identical across tiers, and the
+observation's differs.
+
+### F5 — `write=False` still wrote
+
+`generate_run` called `store_salt` before the `if write` branch, so a no-write call created
+`<runs_root>/../truth_store/salt` — with the default root, the repository's own truth store.
+`store_salt(create=False)` now returns `None` for a store without a salt; a no-write
+generation into such a store keys its id with a declared, non-secret `NO_WRITE_KEY` (the id
+names nothing on disk), and into a store that has a salt with the salt, so an in-memory
+generation agrees with the written one. The salt file is created `O_EXCL` with mode
+**0600**. Tested: a no-write generation leaves no directory behind; the mode is 0600;
+`create=False` creates nothing.
+
+### F6 — docs stale at the freeze
+
+`scenarios/README.md`: the S4-02 "known gap" said the titrimetric convention was "not yet
+implemented" and the flag "fires on no day at all" — both false since the rulings of
+2026-09-09 — and its baseline table republished the superseded Plant A numbers and the
+truth-side constant; the entry now states the measured rates and the table is qualitative,
+pointing at the truth-side record. `docs/g1_anchor_report.md` §5.4 now quotes the
+re-measured biomass and the detached `| *anchor* |` row is back in its table. The 2026-09-09
+baseline table in this log is annotated as superseded (left as the record of the day).
+
+### Mutants, each built and run
+
+| mutant | result |
+|---|---|
+| order: salt ignored, constant seed used for a written matrix | **fails** |
+| order: `generate_matrix` passes no key | **fails** |
+| manifest: `created_utc` field restored on `PublicManifest` and passed | **fails** (two tests) |
+| log: visible log opened without `projection=True` | **fails** |
+| mtimes: not fixed | **fails** |
+| runtime kept in the projection | **fails** |
+| shared calls not copied into the later tiers | **fails** |
+| salt created on a no-write generation | **fails** |
+| salt written with the default mode | **fails** |
+
+(A tenth mutant — `created_utc=self.created_utc` passed to a `PublicManifest` that has no
+such field — survived, because `extra="ignore"` drops it: it is not a leak, and it is
+recorded so the survivor is not mistaken for a gap.)
 

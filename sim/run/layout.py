@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import os
 import secrets
 from dataclasses import dataclass
 from pathlib import Path
@@ -105,7 +106,7 @@ SALT_FILE = "salt"
 """Name of the per-store secret under ``truth_store/``. Gitignored; never copied anywhere."""
 
 
-def store_salt(truth_store: Path) -> bytes:
+def store_salt(truth_store: Path, *, create: bool = True) -> bytes | None:
     """The secret key that makes this store's run ids opaque, creating it on first use.
 
     **Why a secret, and why per store** (review finding B1, the lead's ruling of
@@ -126,18 +127,29 @@ def store_salt(truth_store: Path) -> bytes:
     * the salt must never appear in a manifest, a log, an index line or any visible file
       (tested), and ``.gitignore`` names it explicitly.
 
+    The file is created with mode ``0600``: it is a secret, and the default ``0644`` would
+    have let any other user of the machine read it (final review, finding F5).
+
     Args:
         truth_store: Root of the truth store (:func:`truth_store_for`).
+        create: Generate the salt if the store has none. A caller that is not going to
+            write anything passes ``False`` and gets ``None`` back for a store without a
+            salt, so that a no-write generation leaves no file behind (finding F5).
 
     Returns:
-        The store's key bytes.
+        The store's key bytes, or ``None`` when there is no salt and ``create`` is off.
     """
     path = Path(truth_store) / SALT_FILE
     if path.is_file():
         return path.read_bytes()
+    if not create:
+        return None
     path.parent.mkdir(parents=True, exist_ok=True)
     key = secrets.token_bytes(32)
-    path.write_bytes(key)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as fh:
+        fh.write(key)
+    os.chmod(path, 0o600)
     return key
 
 

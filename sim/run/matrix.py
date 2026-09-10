@@ -26,6 +26,7 @@ to *guarantee* the property rather than hope two integrations agree.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
 import time
 from collections.abc import Iterator, Sequence
@@ -36,7 +37,7 @@ import numpy as np
 
 from scenarios.schema import Scenario, load_scenario
 from sim.plants import load_plant_config
-from sim.run.layout import RUNS_ROOT
+from sim.run.layout import RUNS_ROOT, store_salt, truth_store_for
 
 __all__ = [
     "ALL_TIERS",
@@ -187,8 +188,38 @@ class CellResult:
 
 
 MATRIX_ORDER_SEED = 20260910
-"""Seed of the generation-order shuffle in :func:`generate_matrix`. Fixed and declared, so
-the order is reproducible; arbitrary, so it carries no information about the cells."""
+"""Seed of the generation-order shuffle when there is **no store** to key it with (a
+``write=False`` generation). Fixed and declared, so such a run is reproducible.
+
+It is **not** what keys the order of a written matrix. The final review of ``99a8947``
+(finding F1, 2026-09-10) showed that a shuffle seeded with a committed constant over the
+public library is a reproducible permutation — the reviewer reproduced it — so a sort of
+the run set by any visible timestamp mapped position to cell exactly, a public salt over a
+public space (the same class as B1). A written matrix is shuffled with a key derived from
+the store's secret salt (:func:`execution_order`), and no visible file carries a timestamp
+any more (:mod:`sim.run.manifest`, :mod:`state.provenance`)."""
+
+
+def execution_order(cells: Sequence[Cell], key: bytes | None) -> list[list[Cell]]:
+    """The truth groups of ``cells`` in the order they are generated.
+
+    Args:
+        cells: The cells to generate.
+        key: The store's secret salt, or ``None`` for a generation that writes nothing.
+
+    Returns:
+        The groups (one per shared truth, :func:`_groups`) in execution order: a
+        permutation seeded from the salt when there is one, from
+        :data:`MATRIX_ORDER_SEED` otherwise.
+    """
+    groups = [group for _, group in _groups(cells)]
+    if key is None:
+        seed = MATRIX_ORDER_SEED
+    else:
+        digest = hashlib.sha256(b"ad-agentbench/matrix-order|" + key).digest()
+        seed = int.from_bytes(digest[:8], "big")
+    np.random.default_rng(seed).shuffle(groups)
+    return groups
 
 
 def _groups(cells: Sequence[Cell]) -> Iterator[tuple[tuple[str, str, int, int], list[Cell]]]:
@@ -227,14 +258,13 @@ def generate_matrix(
     scenarios = library if library is not None else load_library()
     results: dict[Cell, CellResult] = {}
     # The cells arrive sorted by scenario id, so generating them in that order would stamp
-    # every run's public ``created_utc`` in ladder order -- a workflow that sorted the run
-    # set by timestamp would recover the rung of each cell (review finding, 2026-09-10; no
-    # ruling needed). The EXECUTION order is therefore a seeded shuffle of the truth
-    # groups; the results are still returned in the order the cells were given, and the
-    # seed is fixed so a regeneration is reproducible (CLAUDE.md rule 4).
-    groups = list(_groups(cells))
-    np.random.default_rng(MATRIX_ORDER_SEED).shuffle(groups)
-    for (plant_id, scenario_id, seed, replicate), group in groups:
+    # the run set in ladder order. The EXECUTION order is a shuffle of the truth groups
+    # keyed with the store's secret salt (finding F1: a committed seed was a reproducible
+    # permutation); the results are still returned in the order the cells were given. A
+    # no-write generation has no store and falls back to the declared constant seed.
+    key = store_salt(truth_store_for(runs_root)) if write else None
+    for group in execution_order(cells, key):
+        plant_id, scenario_id, seed, replicate = group[0].key
         scenario = scenarios[scenario_id]
         plant = load_plant_config(plant_id)
         tiers = [c.tier for c in group]

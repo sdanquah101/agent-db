@@ -47,12 +47,24 @@ windows (§6.4).
 
 **Reused truth.** Because the tier changes only the mask, :func:`generate_cells` integrates
 the truth once per (plant, scenario) and writes one run directory per tier from it. Each
-directory is still self-contained: it carries its own complete copy of the truth, so
-deleting one run never damages another.
+directory is still self-contained: it carries its own complete copy of the truth, **and its
+own complete call log** — the calls that produced the shared integration are copied into
+every tier's log (full and visible), so the evaluator, which reads logs only, sees the
+integration behind each of the three tiers rather than only behind the first (final
+review, finding F4, 2026-09-10). Deleting one run never damages another.
+
+**No visible wall-clock.** Nothing under ``runs/<id>/`` says *when* it was generated: the
+visible manifest has no ``created_utc``, the visible call log has no ``t_utc`` and no
+``runtime_s``, and every visible file's modification time is set to one fixed instant
+(:data:`VISIBLE_MTIME`). The generation order is a permutation of the public library, and
+a permutation that can be recovered from timestamps maps position to cell (final review,
+finding F1); the runtime of the burn-in alone marked the one two-zone row (finding F3).
+The truth-side copies keep all of it.
 """
 
 from __future__ import annotations
 
+import os
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
@@ -147,11 +159,13 @@ from sim.run.manifest import (
 )
 from sim.run.notes import LogNote, load_log_notes, operator_notes
 from sim.run.seeds import RunSeeds
-from state.provenance import CallLog
+from state.provenance import CallLog, read_calls
 
 __all__ = [
     "HARNESS_CONFIG",
+    "NO_WRITE_KEY",
     "SIM_API_VERSION",
+    "VISIBLE_MTIME",
     "DigesterHealth",
     "HarnessConfig",
     "HealthThresholds",
@@ -851,22 +865,42 @@ class RunLogs:
     So the record is kept twice. :attr:`full` lives in ``truth_store/<id>/`` with the real
     arguments and every segment -- the evaluator reads it (rule 3 says evaluation reads
     logs only). :attr:`visible` lives in ``runs/<id>/`` and is a **projection**: the same
-    calls, in the same order, with the same timings and outcomes, but hashed over nothing
-    the visible manifest does not already state, and with the segment structure collapsed
-    to one record. A workflow still sees that the simulator ran, when, for how long and
-    whether it succeeded, which is what rule 3 is for; it no longer sees which rung of the
-    ladder it is standing on.
+    calls, in the same order, with the same outcomes, but hashed over nothing the visible
+    manifest does not already state, with the segment structure collapsed to one record,
+    and -- since the final review's findings F1 and F3 -- with no timestamp and no runtime.
+    A workflow still sees that the simulator ran and whether it succeeded, which is what
+    rule 3 is for; it no longer sees which rung of the ladder it is standing on, nor its
+    position in the generation order, nor the wall-clock that marked the two-zone row.
     """
 
     full: CallLog
     """``truth_store/<id>/calls.jsonl``: real arguments, one record per segment."""
     visible: CallLog
-    """``runs/<id>/calls.jsonl``: redacted arguments, segments collapsed."""
+    """``runs/<id>/calls.jsonl``: redacted arguments, segments collapsed, no wall-clock."""
 
     @classmethod
     def fresh(cls, paths: RunPaths) -> RunLogs:
-        """Open both logs, starting each over: a generation's log is that generation's."""
-        return cls(full=CallLog(paths.truth, fresh=True), visible=CallLog(paths.root, fresh=True))
+        """Open both logs, starting each over: a generation's log is that generation's.
+
+        The visible log is a *projection* (:class:`state.provenance.CallLog`): its records
+        carry no timestamp and no runtime (findings F1 and F3).
+        """
+        return cls(
+            full=CallLog(paths.truth, fresh=True),
+            visible=CallLog(paths.root, fresh=True, projection=True),
+        )
+
+    def copy_truth_calls(self, shared: RunPaths) -> None:
+        """Copy the shared integration's records from another tier's logs into these.
+
+        Every record of the other tier's logs except its observation call, which is that
+        tier's own. The full log keeps the copied timestamps and runtimes; the projection
+        drops them as it drops its own.
+        """
+        for source, target in ((shared.truth, self.full), (shared.root, self.visible)):
+            for record in read_calls(source):
+                if record.name != "sim.observe":
+                    target.copy(record)
 
 
 def _logged(  # noqa: ANN202
@@ -924,6 +958,7 @@ def generate_run(
     replicate: int = 0,
     runs_root: Path = RUNS_ROOT,
     truth: RunTruth | None = None,
+    shared_from: RunPaths | None = None,
     target_feed: str | None = None,
     write: bool = True,
 ) -> RunArtifacts:
@@ -941,6 +976,8 @@ def generate_run(
         runs_root: Root of the run store.
         truth: A truth already integrated for this (plant, scenario) — the tiers of one
             cell share it. Recomputed when absent.
+        shared_from: The run the shared ``truth`` was integrated for; its logged calls are
+            copied into this run's logs so every tier's record is complete (finding F4).
         target_feed: Feed an influent fault acts on.
         write: Whether to write the run directory (False is for tests that only want the
             objects).
@@ -961,19 +998,24 @@ def generate_run(
             "no stochastic component may run unseeded (CLAUDE.md rule 4)"
         )
     seeds = RunSeeds.derive(base, plant_cfg.id, replicate)
-    # keyed with the store's secret, so the id is opaque to anything without it (B1)
+    # keyed with the store's secret, so the id is opaque to anything without it (B1). A
+    # no-write generation creates nothing, not even the salt (finding F5): a store that has
+    # one keys the id as usual, and one that has none gets a key that is never written down.
+    key = store_salt(truth_store_for(runs_root), create=write)
     rid = run_id(
         scenario.id,
         plant_cfg.id,
         tier_id,
         base,
         replicate,
-        key=store_salt(truth_store_for(runs_root)),
+        key=key if key is not None else NO_WRITE_KEY,
     )
     paths = RunPaths.for_run(rid, runs_root)
     if write:
         paths.create()
     log = RunLogs.fresh(paths) if write else None
+    if log is not None and truth is not None and shared_from is not None:
+        log.copy_truth_calls(shared_from)
 
     if truth is None:
         truth = simulate_truth(scenario, plant_cfg, seeds, target_feed=target_feed, log=log)
@@ -1048,6 +1090,7 @@ def generate_run(
                 "replicate": replicate,
             },
         )
+        _fix_visible_mtimes(paths.root)
     return RunArtifacts(
         run_id=rid,
         paths=paths,
@@ -1058,6 +1101,28 @@ def generate_run(
         workflow_faults=truth.plan.workflow.tool_failure,
         wall_s=time.perf_counter() - started,
     )
+
+
+VISIBLE_MTIME = 946684800.0
+"""Modification time given to every file under ``runs/<id>/``: 2000-01-01T00:00:00Z.
+
+A file's mtime is a timestamp a workflow can read without opening anything, and the
+order of generation is the leak of finding F1; so every visible file gets the same fixed
+instant. The truth-side tree keeps real mtimes."""
+
+NO_WRITE_KEY = b"ad-agentbench/no-write: an id that is never written anywhere"
+"""Key for the run id of a ``write=False`` generation into a store that has no salt.
+
+Not a secret and not meant to be: such an id names nothing on disk. A store that already
+has a salt keys a no-write id with it, so an in-memory generation agrees with the written
+one (finding F5)."""
+
+
+def _fix_visible_mtimes(run_root: Path) -> None:
+    """Set every visible file's and directory's atime and mtime to :data:`VISIBLE_MTIME`."""
+    for path in run_root.rglob("*"):
+        os.utime(path, (VISIBLE_MTIME, VISIBLE_MTIME))
+    os.utime(run_root, (VISIBLE_MTIME, VISIBLE_MTIME))
 
 
 def _config_versions() -> object:
@@ -1121,7 +1186,7 @@ def generate_cells(
     the property rather than rely on two integrations agreeing.
     """
     truth = None
-    out = []
+    out: list[RunArtifacts] = []
     for tier in tiers:
         run = generate_run(
             scenario,
@@ -1131,6 +1196,7 @@ def generate_cells(
             replicate=replicate,
             runs_root=runs_root,
             truth=truth,
+            shared_from=out[0].paths if out and write else None,
             target_feed=target_feed,
             write=write,
         )

@@ -17,6 +17,16 @@ a benchmark that stored them would make ``calls.jsonl`` the size of the run. The
 enough to tell two calls apart and to spot a repeat, which is what the metrics of §6.7 C
 need.
 
+**The workflow-visible projection carries no wall-clock.** A :class:`CallLog` opened with
+``projection=True`` writes its records without ``t_utc`` and without ``runtime_s`` (final
+review at ``99a8947``, findings F1 and F3, 2026-09-10). The timestamp of a generation call
+is the cell's position in the generation order, and the generation order was a function of
+the public library and a committed seed, so a workflow that sorted the run set by any
+visible timestamp recovered every cell's rung; and the runtime of the burn-in alone marked
+the one two-zone row (0.55 s against 1.53 s at 40 d). The truth-side log keeps both — rule 3
+wants a runtime, and the evaluator reads that log — and the visible one keeps the sequence,
+the name, the version, the hash and the outcome.
+
 **Hashing.** :func:`args_hash` canonicalises a mapping to sorted-key JSON with numpy
 arrays reduced to ``(shape, dtype, sha256 of the bytes)``, so the same arguments always
 give the same hash on the same platform and different arguments practically never
@@ -94,33 +104,33 @@ class CallRecord:
 
     seq: int
     """Position in the file, from 0. Continues across writers appending to one run."""
-    t_utc: str
-    """ISO-8601 UTC timestamp of the moment the call returned."""
+    t_utc: str | None
+    """ISO-8601 UTC timestamp of the moment the call returned; ``None`` in a projection."""
     name: str
     """Tool name, e.g. ``sim.simulate_extended`` or ``bayes_mcmc``."""
     version: str
     """Version string of the tool, so a re-run with a changed tool is visible."""
     args_hash: str
-    runtime_s: float
+    runtime_s: float | None
+    """Wall-clock seconds the call took; ``None`` in a projection."""
     outcome: Outcome
     detail: str = ""
     """Free text: an error message, a solver message, or a note. Never an argument value."""
 
     def to_json(self) -> str:
-        """The record as one JSON line (no trailing newline)."""
-        return json.dumps(
-            {
-                "seq": self.seq,
-                "t_utc": self.t_utc,
-                "name": self.name,
-                "version": self.version,
-                "args_hash": self.args_hash,
-                "runtime_s": round(self.runtime_s, 6),
-                "outcome": self.outcome,
-                "detail": self.detail,
-            },
-            separators=(",", ":"),
-        )
+        """The record as one JSON line (no trailing newline).
+
+        A projection record has no ``t_utc`` and no ``runtime_s`` key at all, rather than a
+        null: the key's absence is the statement.
+        """
+        payload: dict[str, Any] = {"seq": self.seq}
+        if self.t_utc is not None:
+            payload["t_utc"] = self.t_utc
+        payload.update(name=self.name, version=self.version, args_hash=self.args_hash)
+        if self.runtime_s is not None:
+            payload["runtime_s"] = round(self.runtime_s, 6)
+        payload.update(outcome=self.outcome, detail=self.detail)
+        return json.dumps(payload, separators=(",", ":"))
 
     @classmethod
     def from_json(cls, line: str) -> Self:
@@ -134,11 +144,11 @@ class CallRecord:
             raise ValueError(f"call record must be a JSON object, got {type(raw).__name__}")
         return cls(
             seq=int(raw["seq"]),
-            t_utc=str(raw["t_utc"]),
+            t_utc=None if raw.get("t_utc") is None else str(raw["t_utc"]),
             name=str(raw["name"]),
             version=str(raw["version"]),
             args_hash=str(raw["args_hash"]),
-            runtime_s=float(raw["runtime_s"]),
+            runtime_s=None if raw.get("runtime_s") is None else float(raw["runtime_s"]),
             outcome=raw["outcome"],
             detail=str(raw.get("detail", "")),
         )
@@ -161,7 +171,9 @@ class CallLog:
 
     FILENAME = "calls.jsonl"
 
-    def __init__(self, run_dir: str | Path, *, fresh: bool = False) -> None:
+    def __init__(
+        self, run_dir: str | Path, *, fresh: bool = False, projection: bool = False
+    ) -> None:
         """Open (or create) the call log of a run directory.
 
         Args:
@@ -174,9 +186,13 @@ class CallLog:
                 the tool registry appending a workflow's calls -- leaves this ``False``
                 and continues the sequence, which is the behaviour the docstring above
                 promises.
+            projection: Write records without a timestamp or a runtime (the
+                workflow-visible log; see the module docstring). The truth-side log and a
+                workflow's own later calls carry both.
         """
         self.path = Path(run_dir) / self.FILENAME
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.projection = projection
         if fresh and self.path.exists():
             self.path.unlink()
         self._seq = sum(1 for _ in self.path.open(encoding="utf-8")) if self.path.exists() else 0
@@ -202,14 +218,38 @@ class CallLog:
         """
         record = CallRecord(
             seq=self._seq,
-            t_utc=datetime.now(UTC).isoformat(timespec="milliseconds"),
+            t_utc=None if self.projection else datetime.now(UTC).isoformat(timespec="milliseconds"),
             name=name,
             version=version,
             args_hash=args_hash(args),
-            runtime_s=float(runtime_s),
+            runtime_s=None if self.projection else float(runtime_s),
             outcome=outcome,
             detail=detail,
         )
+        return self._write(record)
+
+    def copy(self, record: CallRecord) -> CallRecord:
+        """Append a record written elsewhere, under this file's next sequence number.
+
+        The tiers of one cell share one integration of the truth (§6.4), so the calls that
+        produced it are written into every tier's log rather than only the first's (final
+        review, finding F4, 2026-09-10): the evaluator reads logs only, and a log that
+        showed no integration for two of three tiers was not the record it claimed to be.
+        A projection drops the copied record's timestamp and runtime as it drops its own.
+        """
+        copied = CallRecord(
+            seq=self._seq,
+            t_utc=None if self.projection else record.t_utc,
+            name=record.name,
+            version=record.version,
+            args_hash=record.args_hash,
+            runtime_s=None if self.projection else record.runtime_s,
+            outcome=record.outcome,
+            detail=record.detail,
+        )
+        return self._write(copied)
+
+    def _write(self, record: CallRecord) -> CallRecord:
         with self.path.open("a", encoding="utf-8") as fh:
             fh.write(record.to_json() + "\n")
         self._seq += 1

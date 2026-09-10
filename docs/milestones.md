@@ -1556,3 +1556,30 @@ wall-clock, index line count, the four-row overload table, the four-row foaming 
 operator-visible rate; then **stop pushing**. The coordinator reruns the whole-branch review
 at that head, then merges and tags.
 
+---
+
+### Session 2026-09-10 (final review) — F1/F3/F4/F5/F6 fixed; regeneration stopped and HELD for F2
+
+The coordinator's final whole-branch review at `99a8947` found a leak that changes what a
+regeneration writes; the regeneration was stopped a few cells in and its output discarded.
+
+- **F1** — the seeded generation-order shuffle was a public permutation, so the visible
+  timestamps mapped position to cell. Fixed both ways: the order is keyed with the store's
+  secret salt, and `created_utc`, `t_utc`, `runtime_s` and real mtimes are gone from
+  everything under `runs/<id>/`. Tests on the order (unit and end-to-end, salt-predicted)
+  and on the absence of any visible timestamp; the decisions entry that claimed the leak
+  closed is corrected.
+- **F3** — no runtime in the visible projection (the burn-in's wall-clock marked S6-03).
+- **F4** — the shared integration's calls are copied into every tier's logs; tested on all
+  three tiers.
+- **F5** — a no-write generation creates nothing, not even the salt; the salt is 0600.
+- **F6** — `scenarios/README.md` known gaps and baseline table settled; report §5.4 numbers
+  current and its stray row back in the table; the superseded table in the decisions log
+  annotated.
+- Nine mutants built, nine killed (one no-op survivor explained in the decisions log).
+
+**F2 is with the lead** (the public horizon partitions the ladder; durations cannot change
+after the tag). No `duration_days` was touched. **Do not regenerate until the coordinator
+says so.** Next: push, CI green, report to the coordinator; then regenerate on instruction,
+as the last action.
+
