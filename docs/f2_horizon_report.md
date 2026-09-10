@@ -392,3 +392,53 @@ trading half the share for a two-month baseline) is viable at 240 d and marginal
 Provenance: `<scratchpad>/probe_onset.py` at `3be4ef9`; results in `probe_onset.json` (not
 committed). Nothing in `scenarios/` changed.
 
+## 13. STOP — at a real 200-d horizon `biogas_mean` is out of band, and §3's horizon table was wrong
+
+*Status line for the coordinator: 200 d NOT committed — the 200-d panel fails the anchor
+gate; §12 pushed; holding for the lead.*
+
+**What was measured** (24-seed Plant B clean panel generated *at* 200 d, `OUTPUT_DAYS = 200`,
+settled from day 30; the report block regenerated at 200 d says the same):
+
+| row | at 180 d | at 200 d (real panel) | at 240 d (real panel) | declared band | status at 200 d |
+|---|---:|---:|---:|---|---|
+| `biogas_mean` | 3143, ratio 1.489 | **3216, ratio 1.523** | 3207, ratio 1.519 | ratio in [0.6, 1.5] | **OUTSIDE by 0.023** |
+| `digester_pH_median` | 7.232 | 7.226 | 7.218 | 7.27 ± 0.4 | inside |
+| `alkalinity_median` (calibrated) | 5.116 | 5.046 | 4.939 | ± 35 % | inside |
+| `vfa_median` | 0.780 | 0.771 (ratio 0.65) | 0.757 | ratio in [0.25, 4] | inside |
+| `fos_tac_median` | 0.151 | 0.151 (ratio 0.65) | 0.151 | ratio in [0.5, 2] | inside |
+
+Souring: **24/24 sound** at 200 d. Triggers at 200 d, Plant B: overload **8.92 %** pooled
+(per-run 4.09–16.37 %, 24/24), foaming **8.72 %** (2.34–16.96 %, 24/24), FOS/TAC > 0.40 and
+> 0.30 both 0.00 %. Plant A `adapted`: overload 0.29 % (8/24), foaming 0.22 % (6/24). The
+Plant C and Plant A `unadapted` rows at 200 d are still computing and will be added.
+
+**Why §3's table was wrong, stated plainly.** The per-horizon ratios in §3 (1.447 at 200 d,
+"widest margin") were **not** measured on 200-d runs. They were the settled means over
+days 30–H *inside the 240-d runs*. A 200-d run is not the first 200 days of a 240-d run:
+the equalisation tank is initialised from the whole-horizon mean of arrivals (recorded in
+the decisions log as dormant-but-horizon-sensitive), and the generator's realisation
+depends on `n_days`, so the trajectories differ from day 0. The difference is not small
+for this row — the windowed estimate at 200 d was 3055, the real 200-d panel is 3216
+(5 %). I presented a windowed estimate as if it were a horizon measurement, and the lead's
+choice of 200 d was made on it. That was my error; the caveat in §3 about the tank was
+there but I did not act on it. Real fixed-horizon panels at 190, 210 and 220 d are running
+now and will replace §3's table (§14), so the lead has a true curve.
+
+**What the real numbers say so far.** On real panels the row sits at the band edge at every
+horizon measured — 1.489 (180 d), 1.523 (200 d), 1.519 (240 d) — so **the horizon does not
+decide this row**; 180 d was inside by 0.7 % of its margin and both equalised horizons are
+outside by ~0.02. Everything else in the 200-d ruling stands: the partition is removed at
+any single value, every other anchored row is inside, souring is 24/24, every answer key
+that holds at 240 d holds at 200 d (S5-01 included), and S7-02 is the separate question.
+
+**Recommendation, revised.** Keep 200 d (or whichever single value the lead prefers once
+§14 is in), and rule on `biogas_mean`'s **comparison basis or band** as a recorded decision:
+the simulated figure is a 170-day settled mean of a February–July window with a
+tank-initialisation transient at its head, compared against a three-year annual mean; the
+row has been within ±0.03 of the band edge on every panel since the calcium ruling and was
+already named "the row to watch". I am not widening the band and not touching the tank,
+calibration or seeds. The 200-d edits (all twenty scenarios, the README, the schema pin,
+`OUTPUT_DAYS`, the decisions entry, the regenerated report block) are held locally,
+uncommitted, until the lead rules.
+
