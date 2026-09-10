@@ -440,6 +440,100 @@ def test_every_feed_assay_describes_the_charge_the_simulator_is_fed(catalogue, a
     assert not failures, "assay and fed charge disagree:\n  " + "\n  ".join(failures)
 
 
+def test_the_charge_consistency_survives_the_whole_range_of_deliveries(
+    catalogue, config, adm1_params
+):
+    """The invariant holds for the assay a workflow READS, not only the catalogue row.
+
+    **This is finding B2** (review of 2026-09-09, ruled 2026-09-10). The guard above is
+    evaluated at catalogue solids. The assay a workflow actually reads is taken on a
+    *delivery*, whose total solids swing by the generator's ``ts_log_sigma`` -- 0.47 on
+    the high-strength waste, the largest in the catalogue. The free acetate scaled with
+    that delivery's COD while the declared liquor did not scale at all, so a stream was
+    **electroneutral only at catalogue TS** and its implied pH drifted with the weather.
+    Measured on real ``AssayRecord``s before the fix: the high-strength waste 15.2 % of
+    records outside 1.5x (worst 3.24x, assay spanning 6.12 to 38.03 against a fed charge
+    of 11.75), primary sludge 45.1 %, cattle slurry 27.2 %.
+
+    The lead's ruling made every dissolved species scale with the **liquor** rather than
+    the solids (:func:`sim.influent.mapping.liquor_fraction`), which is what they are
+    physically dissolved in. Both sides of the balance then carry the same factor, so the
+    ratio is *exactly* invariant to solids rather than approximately so -- and this test
+    asserts that at +/-3 sigma, wider than the +/-2 the ruling asked for, because an exact
+    invariance does not need a margin.
+
+    **What it cannot assert, and why that is right.** On the generated record the
+    high-strength waste still shows a tail: 9.26 % of ``AssayRecord``s outside 1.5x. That
+    is **not** the solids -- with the declared fractionation the ratio is 1.093 at every
+    delivery, 0.00 % outside. It is the per-run Dirichlet draw of the *true* fractionation,
+    on a stream whose composition is not measured at Muscatine and whose
+    ``fractionation_concentration`` of 30 gives its 0.04 VFA share a standard deviation of
+    about 0.035. The assay reports the true composition; the charge is computed from the
+    declared one; the gap between them is the hidden-truth mismatch this benchmark exists
+    to contain, and closing it would mean deleting the thing being measured. It is recorded
+    as a finding in ``docs/g1_anchor_report.md``, and the band was **not** widened.
+    """
+    from sim.influent.generator import feed_cation_charge, total_alkalinity
+
+    physchem = adm1_params.physchem
+    sigma = {
+        fid: feed.moisture.ts_log_sigma
+        for plant in config.plants.values()
+        for fid, feed in plant.feeds.items()
+    }
+    failures = []
+    for name, spec in sorted(catalogue.feeds.items()):
+        s = sigma.get(name)
+        if s is None or abs(feed_cation_charge(spec, physchem)) < ASSAY_VS_CHARGE_FLOOR:
+            continue  # not fed by any plant, or carries no liquor at all (FOG)
+        for k in (-3.0, -1.0, 0.0, 1.0, 3.0):
+            ts = spec.ts * np.exp(k * s)
+            assay = total_alkalinity(spec, spec.fractionation, physchem, ts)
+            charge = feed_cation_charge(spec, physchem, ts)
+            ratio = charge / assay
+            if not (1.0 / ASSAY_VS_CHARGE_RATIO <= ratio <= ASSAY_VS_CHARGE_RATIO):
+                failures.append(
+                    f"{name} at {k:+.0f} sigma (ts {ts:.4f}): assay {assay:.4f} against "
+                    f"charge {charge:.4f} -- {ratio:.3f}x, outside {ASSAY_VS_CHARGE_RATIO}x"
+                )
+    assert not failures, "the charge balance drifts with the delivery:\n  " + "\n  ".join(failures)
+
+    # the invariance is EXACT, not merely inside the band: a scaling applied to one side
+    # and not the other would still pass the loop above on most streams
+    for name, spec in sorted(catalogue.feeds.items()):
+        s = sigma.get(name)
+        if s is None or abs(feed_cation_charge(spec, physchem)) < ASSAY_VS_CHARGE_FLOOR:
+            continue
+        at = [
+            feed_cation_charge(spec, physchem, spec.ts * np.exp(k * s))
+            / total_alkalinity(spec, spec.fractionation, physchem, spec.ts * np.exp(k * s))
+            for k in (-3.0, 0.0, 3.0)
+        ]
+        assert max(at) - min(at) < 1e-3, (name, at)
+
+    # An invariance test alone cannot tell the correct scaling from NO scaling: a
+    # liquor_fraction that always returned 1.0 leaves both sides constant and passes
+    # everything above (checked by building that mutant and running it). So assert the
+    # physics directly -- a drier delivery carries less water per m3 and therefore less
+    # of every solute, and a wetter one more.
+    from sim.influent.mapping import feed_concentrations, liquor_fraction
+
+    spec = catalogue.feeds["high_strength_waste"]
+    drier, wetter = spec.ts * 1.5, spec.ts * 0.5
+    assert liquor_fraction(spec, drier) < 1.0 < liquor_fraction(spec, wetter)
+    assert liquor_fraction(spec) == pytest.approx(1.0)
+    idx = {n: i for i, n in enumerate(LIQUID_STATE_NAMES)}
+    for state in ("S_cat", "S_an", "S_IN", "S_IC", "S_ac"):
+        at_drier = feed_concentrations(spec, spec.fractionation, drier)[idx[state]]
+        at_wetter = feed_concentrations(spec, spec.fractionation, wetter)[idx[state]]
+        assert at_drier < at_wetter, state
+    # ... while the particulate classes go the other way, with the solids
+    for state in ("X_ch", "X_pr", "X_li", "X_I"):
+        at_drier = feed_concentrations(spec, spec.fractionation, drier)[idx[state]]
+        at_wetter = feed_concentrations(spec, spec.fractionation, wetter)[idx[state]]
+        assert at_drier > at_wetter, state
+
+
 def test_the_feed_alkalinity_assay_is_pinned_and_the_two_quantities_are_independent(
     catalogue, adm1_params
 ):

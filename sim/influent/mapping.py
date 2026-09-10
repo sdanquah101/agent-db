@@ -67,26 +67,75 @@ def feed_cod_per_m3(
     return ts_used * spec.vs_of_ts * cod_per_vs * spec.density
 
 
+def liquor_fraction(spec: FeedFractionation, ts: float | None = None) -> float:
+    """How much liquor a delivery carries, relative to the catalogue entry's, -.
+
+    ``(1 - ts) / (1 - ts_catalogue)``, the water fraction of the wet feed against the
+    water fraction the catalogue's dissolved concentrations were declared at.
+
+    **Why dissolved species need it** (the lead's ruling of 2026-09-10, an approved change
+    to a frozen component). The catalogue declares ``s_cat``, ``s_an``, ``tan``, ``s_ic``
+    and ``s_ca`` per m3 of *wet feed*, at the catalogue's own total solids. They are not
+    properties of the wet feed, though: they are solutes carried in its **liquor**. A
+    delivery that arrives drier is the same solute load in less water per m3 of stream, so
+    the concentration per m3 of stream moves with the liquor and not with the solids.
+
+    Holding them fixed while the free acetate scaled with the COD -- which does scale with
+    solids -- was the root cause of finding B2 of 2026-09-09: it made every stream
+    **electroneutral only at catalogue TS** and let its implied pH drift with every
+    delivery. Under this scaling both sides of that balance carry the same factor, so a
+    stream's charge consistency is a property of the catalogue entry rather than of the
+    weather.
+
+    Returns 1.0 at the catalogue's own solids, which is what makes the correction visible
+    as a factor rather than hidden inside the numbers.
+    """
+    ts_used = spec.ts if ts is None else float(ts)
+    return (1.0 - ts_used) / (1.0 - spec.ts)
+
+
+def feed_free_acetate(
+    spec: FeedFractionation, fractionation: CODFractionation, ts: float | None = None
+) -> float:
+    """Free (dissolved) acetate of one wet feed, kg COD/m3.
+
+    The fractionation's VFA share of the COD **at the catalogue's solids**, carried to this
+    delivery by :func:`liquor_fraction`. Free VFA is dissolved in the liquor, so it follows
+    the liquor; the particulate classes follow the solids (lead's ruling, 2026-09-10).
+    """
+    return feed_cod_per_m3(spec, fractionation) * fractionation.f_vfa * liquor_fraction(spec, ts)
+
+
 def feed_concentrations(
     spec: FeedFractionation, fractionation: CODFractionation, ts: float | None = None
 ) -> np.ndarray:
     """The 26 ADM1 liquid concentrations of one wet feed (kg COD/m3, kmol/m3).
 
     COD follows the fractionation given (declared or true); ``ts`` optionally overrides
-    the catalogue total solids. Dissolved species are the catalogue's.
+    the catalogue total solids.
+
+    **Solids and liquor scale differently** (lead's ruling, 2026-09-10). The particulate
+    classes and the soluble inert follow the delivery's solids, as its COD does. The
+    dissolved species -- ammoniacal N, inorganic C, the strong ions and the free acetate --
+    follow its **liquor** (:func:`liquor_fraction`), because that is what they are dissolved
+    in. ``S_I`` stays with the COD deliberately and is flagged rather than moved: it is a
+    soluble lump, so the same argument reaches it, but it carries no charge, so moving it
+    would re-open the ``cod_per_vs`` derivation without fixing anything the ruling is about.
+    Recorded in ``docs/decisions.md`` for the lead.
     """
     c = np.zeros(len(LIQUID_STATE_NAMES))
     cod = feed_cod_per_m3(spec, fractionation, ts)
+    liquor = liquor_fraction(spec, ts)
     c[_L["X_ch"]] = cod * fractionation.f_ch
     c[_L["X_pr"]] = cod * fractionation.f_pr
     c[_L["X_li"]] = cod * fractionation.f_li
     c[_L["X_I"]] = cod * fractionation.f_xi
     c[_L["S_I"]] = cod * fractionation.f_si
-    c[_L["S_ac"]] = cod * fractionation.f_vfa
-    c[_L["S_IN"]] = spec.tan
-    c[_L["S_IC"]] = spec.s_ic
-    c[_L["S_cat"]] = spec.s_cat
-    c[_L["S_an"]] = spec.s_an
+    c[_L["S_ac"]] = feed_free_acetate(spec, fractionation, ts)
+    c[_L["S_IN"]] = spec.tan * liquor
+    c[_L["S_IC"]] = spec.s_ic * liquor
+    c[_L["S_cat"]] = spec.s_cat * liquor
+    c[_L["S_an"]] = spec.s_an * liquor
     return c
 
 

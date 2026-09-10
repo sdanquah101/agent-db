@@ -3469,3 +3469,124 @@ fed streams** (10 fail, FOG is skipped by the floor, cattle slurry at half its c
 survives by moving towards the centre of the band), not "10 of 10 on five". `primary_sludge`
 at 1.470 against the 1.5 limit — 2 % of margin — is now named in the report as a row to
 watch, beside `biogas_mean` at 1.45.
+
+---
+
+## 2026-09-10 — RULING (the lead): dissolved species scale with the liquor, not the solids
+
+**An APPROVED CHANGE TO A FROZEN COMPONENT**, and a further amendment in the ruling-3 /
+M2 thread. It fixes review finding **B2** of 2026-09-09 at the root.
+
+### The defect
+
+The catalogue declares `s_cat`, `s_an`, `tan`, `s_ic` and `s_ca` **per m³ of wet feed**, at
+the catalogue entry's own total solids. `feed_concentrations` carried those numbers through
+unchanged whatever a delivery's moisture was, while the free acetate came from the VFA share
+of the COD — and COD scales with solids. So on a delivery drier than the catalogue entry the
+stream was handed *more* acetate anion and *the same* cations.
+
+The consequence is not cosmetic: **every stream was electroneutral only at catalogue TS**,
+and its implied pH drifted with every delivery. Measured on real `AssayRecord`s before the
+fix, the reported alkalinity against the fed charge: high-strength waste **15.2 %** of
+records outside 1.5× (worst 3.24×, assay spanning 6.12–38.03 against a charge of 11.75),
+primary sludge **45.1 %**, cattle slurry **27.2 %**.
+
+### The physics, and the fix
+
+Those species are not properties of the wet feed. They are **solutes carried in its liquor**.
+A delivery that arrives drier is the same solute load in less water per m³ of stream, so the
+concentration per m³ moves with the liquor:
+
+```
+liquor_fraction(spec, ts) = (1 - ts) / (1 - ts_catalogue)
+```
+
+`sim/influent/mapping.py` now applies it to `S_IN`, `S_IC`, `S_cat`, `S_an` **and the free
+acetate**, while the particulate classes keep following the solids as their COD does.
+`total_alkalinity` and `feed_cation_charge` carry the same factor, so both sides of the
+balance scale together and the ratio is **exactly** invariant to solids rather than
+approximately so.
+
+**`S_I` deliberately stays with the COD, and is flagged rather than moved.** It is a soluble
+lump, so the same argument reaches it; but it carries no charge, so moving it would re-open
+the `cod_per_vs` derivation and the COD assay without fixing anything this ruling is about.
+For the lead, in a later session.
+
+### Measured, before and after
+
+Analytically over ±3 σ of each stream's `ts_log_sigma` — wider than the ±2 σ the ruling asked
+for, because an exact invariance does not need a margin — every fed stream's ratio is
+constant to four decimal places. Empirically on real `AssayRecord`s (3 plants × 8 seeds ×
+400 d):
+
+| stream | % outside 1.5×, before | after | worst, after |
+|---|---:|---:|---:|
+| `cattle_slurry` | 27.2 % | **0.00 %** | 1.31 |
+| `primary_sludge` | 45.1 % | **0.00 %** | 1.43 |
+| `thickened_was` | 2.8 % | **0.00 %** | 1.23 |
+| `high_strength_waste` | 15.2 % | **9.26 %** | 1.82 |
+
+### The remaining tail is a FINDING, and the band was not widened
+
+The high-strength waste's residual **is not the solids**. Decomposed on the same records:
+
+| high-strength waste | % outside 1.5× | worst |
+|---|---:|---:|
+| as reported (assay noise + true fractionation) | 9.26 % | 1.82 |
+| no noise, **true** fractionation | 11.91 % | 1.53 |
+| no noise, **catalogue** fractionation | **0.00 %** | **1.09** |
+
+With the declared fractionation the ratio is 1.093 at *every* delivery. The whole tail is the
+per-run **Dirichlet draw of the true fractionation**: this stream's composition is not
+measured at Muscatine, so its `fractionation_concentration` is 30, which gives the declared
+0.04 VFA share a standard deviation of about 0.035 — the share can plausibly double or vanish.
+The assay reports the true composition; the charge is computed from the declared one; the gap
+between them **is the hidden-truth mismatch the benchmark exists to contain.** Closing it
+would mean deleting the thing being measured.
+
+Note also that the tail is *smaller* with assay noise (9.26 %) than without it (11.91 %): the
+noise is multiplicative and symmetric in the ratio, so it moves as many records back inside
+the band as out. Nobody should read the noise as the cause.
+
+### The guard
+
+`tests/test_generator.py::test_the_charge_consistency_survives_the_whole_range_of_deliveries`
+asserts the band at ±3 σ **and** that the ratio is constant to 1e-3 across that range.
+Mutation-checked, with the mutants built and run:
+
+| mutant | caught |
+|---|---|
+| the acetate back on the solids (the shipped defect) | **yes** |
+| `liquor_fraction` inverted | **yes** |
+| `liquor_fraction` always 1.0 — no scaling at all | **yes, but only by the second half** |
+
+The third is the one worth recording: an invariance test **cannot** distinguish the correct
+scaling from *no* scaling, because both leave the ratio constant. That is why the test also
+asserts the physics directly — a drier delivery carries less of every solute per m³ and more
+of every particulate class. Written down because a guard described as tighter than it is
+would be worse than the one it replaces.
+
+**Alternatives.** Widen the band to swallow the tail (rejected by the ruling, and it would
+hide the fractionation spread that is the actual content); scale the dissolved species by the
+solids too (rejected: it is the wrong physics and would double the drift); leave the
+catalogue-TS invariant and document the drift (rejected: the assay a workflow reads is the
+one that has to be right).
+
+---
+
+## 2026-09-10 — RULING (the lead): grass silage at pH 4.28 is ACCEPTED
+
+**Decision.** `grass_silage`'s declared pH of **4.28 is accepted**, not treated as an outlier
+or a workaround. Grass silage is a **fermented, lactic-acid-preserved feed**; a pH in the low
+fours is what it physically is, not an artefact of a charge balance.
+
+**Why it came up.** It was the one stream of the four B1 breached that could **not** be fixed
+by pairing `s_ic` to its cations. At pH 4 bicarbonate sits four pK units below `pK_a1`, so no
+amount of inorganic carbon balances anything — silage juice cannot hold bicarbonate; it would
+evolve CO₂. Its own charge balance closes at 4.28, so the **declared pH** moved and the
+composition did not. 4.28 is inside McDonald, Henderson & Heron 1991's cited 3.8–4.3 for
+well-preserved grass silage, which the catalogue already cites for this field.
+
+**Nothing the simulator is fed changes.** The declared feed pH is read only by the two visible
+assays (`ph` and `alkalinity`), never by the truth model, so this moves the operator's record
+and not the digester.

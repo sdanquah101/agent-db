@@ -104,7 +104,13 @@ from sim.influent.fractionation import (
     draw_true_fractionations,
     sample_fractionation,
 )
-from sim.influent.mapping import KG_PER_TONNE, feed_cod_per_m3, feed_concentrations
+from sim.influent.mapping import (
+    KG_PER_TONNE,
+    feed_cod_per_m3,
+    feed_concentrations,
+    feed_free_acetate,
+    liquor_fraction,
+)
 from sim.influent.nitrogen import feed_tkn, truth_inert_nitrogen
 from sim.influent.schema import CODFractionation, FeedFractionation, FeedFractionationCatalogue
 from sim.plants.schema import PlantConfig
@@ -526,9 +532,12 @@ def total_alkalinity(
     and the test is there to fail when it does.
 
     ADM1 feeds only one free acid (``S_ac``, from the fractionation's VFA share), so acetate
-    is the only organic term; it scales with the delivery's solids, as its COD does, which is
-    why ``ts`` is taken. The dissolved liquor (``s_ic``, ``tan``, the strong ions) stays at
-    the catalogue value, as everywhere else in this module. Constants are the ADM1 base
+    is the only organic term. **Every term here is a solute, so every term carries the
+    delivery's liquor fraction** (:func:`sim.influent.mapping.liquor_fraction`; the lead's
+    ruling of 2026-09-10). That is what makes this assay and :func:`feed_cation_charge` one
+    quantity at *every* delivery rather than only at catalogue solids -- the defect recorded
+    as finding B2 of 2026-09-09, when the acetate term scaled with the solids while the
+    declared liquor did not scale at all. Constants are the ADM1 base
     values, not temperature-corrected: a feed assay is run on a cooled grab sample, and
     ``pK_a`` at ambient is what the laboratory titrates at.
 
@@ -546,13 +555,16 @@ def total_alkalinity(
     k_co2 = 10.0**-physchem.pK_a_co2_base
     k_ac = 10.0**-physchem.pK_a_ac
     k_w = 10.0**-physchem.pK_w_base
-    s_ac = feed_cod_per_m3(spec, fractionation, ts) * fractionation.f_vfa / COD_PER_KMOL_ACETATE
-    hco3 = spec.s_ic * k_co2 / (k_co2 + h)
+    liquor = liquor_fraction(spec, ts)
+    s_ac = feed_free_acetate(spec, fractionation, ts) / COD_PER_KMOL_ACETATE
+    hco3 = spec.s_ic * liquor * k_co2 / (k_co2 + h)
     ac = s_ac * k_ac / (k_ac + h)
     return KG_CACO3_PER_KMOL_HCO3 * (hco3 + ac + k_w / h - h)
 
 
-def feed_cation_charge(spec: FeedFractionation, physchem: PhysicoChemicalParameters) -> float:
+def feed_cation_charge(
+    spec: FeedFractionation, physchem: PhysicoChemicalParameters, ts: float | None = None
+) -> float:
     """The cation charge of a wet feed that weak bases must balance, kg CaCO3/m3.
 
     **The convention is the truth model's own**, read off
@@ -564,7 +576,9 @@ def feed_cation_charge(spec: FeedFractionation, physchem: PhysicoChemicalParamet
     plant contract enables the ``precipitation`` extension, ``configs/adm1/extensions.yaml``
     declares ``S_ca`` with ``charge: 2``, and :mod:`sim.run.harness` feeds it. Ammonium is in
     it because it is a cation in that balance and a titration to the CO2 end point leaves it
-    protonated, so it sits on the same side of the reference as the strong cations.
+    protonated, so it sits on the same side of the reference as the strong cations. Every
+    term is a solute and carries the delivery's liquor fraction, for the same reason
+    :func:`total_alkalinity` does.
 
     **The calcium term was missing until 2026-09-09 and that is why it is named here.** The
     first version of this function computed ``50 x (S_cat - S_an + [NH4+])`` while its
@@ -580,8 +594,9 @@ def feed_cation_charge(spec: FeedFractionation, physchem: PhysicoChemicalParamet
     """
     h = 10.0**-spec.ph
     k_in = 10.0**-physchem.pK_a_IN_base
-    nh4 = spec.tan * h / (k_in + h)
-    return KG_CACO3_PER_KMOL_HCO3 * (spec.s_cat + 2.0 * spec.s_ca - spec.s_an + nh4)
+    liquor = liquor_fraction(spec, ts)
+    nh4 = spec.tan * liquor * h / (k_in + h)
+    return KG_CACO3_PER_KMOL_HCO3 * (liquor * (spec.s_cat + 2.0 * spec.s_ca - spec.s_an) + nh4)
 
 
 def _amount_to_kg(amount: float, unit: str, spec: FeedFractionation) -> float:
