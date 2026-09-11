@@ -1609,13 +1609,16 @@ question is review finding F2, not the lead's):
   tested). Four-row trigger tables re-measured at the matrix horizons: overload B 7.12 %,
   C 9.82 %, A-unadapted 1.02 %, A-adapted 0.22 %; foaming 6.63 / 8.50 / 0.09 / 0.20 %.
   Expected regeneration cost of the 365-d Plant A cells: under two minutes on ~13 min.
-- **Ruling 4 (this commit)** — S7-02 stays at onset 120 on 365 d; the takeover completes:
+- **Ruling 4 (`a91e71a`)** — S7-02 stays at onset 120 on 365 d; the takeover completes:
   X_sao 0.60 / X_ac 0.46 by day 348 / 350 (S5-01: 298 / 302), SAO 65 % / 85 % of the
   acetate-consuming biomass at the end. Record corrected to what is reached (§17).
 
-**Next, in the coordinator's order:** fast-forward `claude/g1-scenario-generation` to the
-side-branch head; wait for CI (ruff and the default suite green but for the recorded
-band-edge test; the g1 gate red on `biogas_mean`, with the band the lead's); regenerate the
-117-cell matrix at that head as the last action and report SHA, cell count, wall-clock,
-index count and the trigger tables for all three plants; then stop. Hold regeneration only
-on HOLD from the coordinator.
+**Done, in the coordinator's order:** PR #15 fast-forwarded to `a91e71a`; CI there is ruff
+green, the default suite red on the one recorded band-edge test (both Pythons), the g1 gate
+red on the two `biogas_mean` tests (1.536; 21 of 22 independent rows) and nothing else; the
+117-cell matrix **regenerated at `a91e71a`** as the last action — 117/117 generated,
+117/117 sound, 748 s wall-clock, 117 index lines, every manifest at the clean head, every
+Plant A cell 365 d and every B/C cell 200 d, salt absent from every visible file
+(`docs/f2_horizon_report.md` §18). This entry is a docs-only commit on the side branch so
+the PR head stays the regenerated SHA. **Stopped**: no merge, no tag, nothing further
+pushed. Open for the lead: `biogas_mean` (band, basis or feed centres).

@@ -799,3 +799,72 @@ staging (§12 c) and the `unadapted` staging (§11) are not needed and are close
 ruling; retirement (§12 d) is off the table.
 
 **Not changed.** No onset, magnitude, baseline, seed, budget, answer key or tolerance.
+
+## 18. Regeneration at `a91e71a` — the last action; stopping
+
+*Status line: done. PR #15 (`claude/g1-scenario-generation`) is fast-forwarded to
+`a91e71a`, the ruling-4 commit; the 117-cell matrix was regenerated at that head as the
+last action and verified; this section and the milestones line are a docs-only commit on
+the side branch so that the PR head stays the SHA every manifest carries. I have stopped:
+no further push, no merge, no tag. HOLD was not received; CI is red only where §16.3 said
+it would be.*
+
+**The four commits, one per ruling** (each with `ruff check .` and `ruff format --check .`
+green and the default suite green but for the one band-edge test recorded at the first):
+
+| ruling | commit | what |
+|---|---|---|
+| attribution | `e688535` | the common-horizon question is review finding F2, not the lead's |
+| 1 | `1353341` | prefix-stable influent generator; blend tank from its first window; tests |
+| 2 | `7d1554d` | `biogas_mean` investigated, band and basis unchanged (§16) |
+| 3 | `3ec7bb8` | the horizon is the plant's: A 365 d, B and C 200 d; trigger tables re-measured |
+| 4 | `a91e71a` | S7-02 stays at onset 120 on 365 d; the takeover completes (§17) |
+
+**CI at `a91e71a`** (run 34586669039, the pull-request event; the push event is the same):
+ruff **green**; pytest py3.11 and py3.12 **red on exactly one test**,
+`tests/test_plausibility.py::test_plant_b_survives_the_generator_swings`, ratio 1.5004
+against the 1.5 edge (369 passed, 2 skipped, 1 failed on both); gate G1 anchor panel
+**red on exactly the two `biogas_mean` tests** (`biogas_mean` 3244 against 2111, ratio
+1.536; 21 of 22 independent rows matched; 11 passed, 2 failed). All three failures are the
+one row the lead's ruling 2 left as the row to watch, with the band the lead's; nothing
+was weakened.
+
+**The regeneration**, `python -m sim.run.matrix --runs-root runs` after clearing `runs/`
+and `truth_store/`, working tree clean at `a91e71a`:
+
+| | |
+|---|---|
+| head | `a91e71a90288bba292faaf0ce643ce305c0c3488`, 0 dirty files, every manifest carries it |
+| cells | **117 / 117 generated, 117 / 117 sound digesters**; 0 soured, 0 failed |
+| wall-clock | **748 s (12 min 28 s)**, 10:03:54–10:16:22 UTC |
+| per plant (sum of per-cell wall) | A 21 cells 296 s; B 48 cells 231 s; C 48 cells 218 s |
+| index | `truth_store/index.jsonl` **117 lines, 117 unique ids**; 117 run dirs, 117 truth dirs |
+| horizons in the manifests | every Plant A cell 365 d / 365 n_days (21); every B and C cell 200 d (48 + 48) |
+| store | 27 MB under `runs/`, 20 MB under `truth_store/` |
+| verification | `verify_regen.py`: index, run dirs and truth dirs agree; redacted manifests carry no scenario id, seeds or baseline; every run has `calls.jsonl`; the 32-byte salt appears in no visible file |
+
+The expected wall-clock impact of the 365-d Plant A cells (decisions, ruling 3: under two
+minutes on ~13 min) is confirmed the easy way: the whole regeneration took 12.5 min, no
+longer than the last full one at the old horizons (~13 min); Plant A's thirteen truth
+integrations account for 296 s of per-cell wall against B's 231 s for sixteen.
+
+**Trigger-rate tables for all three plants** (24 clean Level-0 seeds each, at the matrix
+horizons under the prefix-stable generator; the four-row form, Plant A as its two
+baselines; also in `docs/g1_anchor_report.md` §5.4, the benchmark card and the decisions
+entry of ruling 3):
+
+| Plant | baseline | horizon | sound | overload, pooled | per-run range | runs firing | foaming, pooled | per-run range | runs firing | operator > 0.40 / > 0.30 |
+|---|---|---:|---|---:|---|---:|---:|---|---:|---:|
+| **B** | — | 200 d | 24/24 | **7.12 %** | 2.34 – 16.37 % | 24/24 | **6.63 %** | 1.75 – 14.04 % | 24/24 | 0.00 % / 0.00 % |
+| **C** | — | 200 d | 24/24 | **9.82 %** | 6.43 – 14.04 % | 24/24 | **8.50 %** | 3.51 – 15.20 % | 24/24 | 0.00 % / 0.00 % |
+| **A** | `unadapted` | 365 d | 24/24 | **1.02 %** | 0.00 – 3.27 % | 21/24 | **0.09 %** | 0.00 – 0.60 % | 5/24 | 0.00 % / 0.00 % |
+| **A** | `adapted` | 365 d | 24/24 | **0.22 %** | 0.00 – 1.19 % | 11/24 | **0.20 %** | 0.00 – 1.19 % | 10/24 | 0.00 % / 0.00 % |
+
+(180-d panels of 2026-09-10 for comparison: overload 7.67 / 9.22 / 1.49 / 0.28 %; foaming
+7.20 / 7.67 / 0.14 / 0.25 %.) B and C still bracket the anchor's 7.78–9.18 % exceedance;
+the Plant A pathway finding stands at 4.6× (was 5.3×).
+
+**Open for the lead, unchanged by anything here:** `biogas_mean` at 1.536 against
+[0.6, 1.5] — the basis is right in kind, the hidden HSW / FOG degradability centres sit
+above the cited literature (§16.2), and the band, basis and centres are the lead's to move.
+Until then the g1 gate and one plausibility test are red on that row alone.
