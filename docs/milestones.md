@@ -1626,3 +1626,28 @@ redone only at the head the lead's next ruling produces, on the coordinator's wo
 merge, no tag. Open for the lead: `biogas_mean` (band, basis or feed centres); the
 coordinator's recommendation is HSW's hidden degradability to the cited 0.84, FOG left; the
 read-only measurement of both options is in `docs/f2_horizon_report.md` §19.
+
+---
+
+### Session 2026-09-11 (continued) — rulings 5 and 6; the regeneration at `a91e71a` void
+
+- **Sequence breach recorded** (the coordinator): the regeneration at `a91e71a` was made
+  while CI was red on the band edge; it is void and is redone only at the final head on the
+  coordinator's word.
+- **§19** (`650e54b`): the HSW / FOG degradability corrections measured read-only, alone and
+  together.
+- **Ruling 5** — HSW 0.84 and FOG 0.92 as feed-centre corrections, band unchanged. Applied
+  and measured at the head: `biogas_mean` 1.355 pass, 23/23 rows, both edge tests pass, the
+  gate's CH₄-margin assertion trips at 0.643 (untouched; with the lead). Two derived check
+  values re-derived (`tkn` of HSW and FOG) and one golden pin refreshed (the HSW alkalinity
+  assay). **Held**: `test_cod_per_vs_is_derived_and_checked_against_the_literature` pins FOG
+  COD/VS to the lead's 2.7–2.9, which the ruled centre cannot reach at the fixed inert
+  equivalent (ceiling 2.677; derives 2.593) — question to the coordinator (`docs/f2_horizon_report.md` §20).
+- **Ruling 6** — whole-run prefix stability from a fixed 200-day reference window; built,
+  tested (bit-equal bar the last output point), mutation-checked; ruling 4 and the Plant A
+  tables re-verified with no recorded number changed (§21).
+
+**Next:** ruling 6 is committed first on its own (the coordinator, 15:27 UTC); ruling 5 is
+parked on `claude/g1-ruling5-held` and lands as one commit with the lead's FOG answer; then
+pytest and ruff with the exact failure set; fast-forward; CI; STOP if red only on the CH₄-margin gate test; no
+regeneration until told the head is final and CI is green.

@@ -72,7 +72,11 @@ Until 2026-09-11 all blocks came from the one stream in sequence, so a change of
 re-rolled every feed from day 0 and every horizon was a different realisation of the same
 seed; that is what made the anchored `biogas_mean` jump by ±5 % between horizons ten days
 apart (sections 14-15 of the report). A change to a later stage still cannot alter an earlier one
-(tested), and the fault layer keeps its own seed.
+(tested), and the fault layer keeps its own seed. The run's *reference* quantities -- the
+mean recipe and the truth inert nitrogen here, and the truth parameters, burn-in recipe,
+inert COD equivalent and calcium state the harness derives from them -- are means over the
+first ``REFERENCE_WINDOW_D`` (200) days, not the horizon (the lead's ruling 6 of 2026-09-11),
+so a whole run is prefix-stable too.
 
 **Hidden truth and the visible record.** :class:`InfluentTruth` is hidden truth (the run
 layer writes it to ``truth_store/<id>/``; nothing here writes anything); the
@@ -121,6 +125,7 @@ from sim.plants.schema import PlantConfig
 
 __all__ = [
     "ASSAY_NAMES",
+    "REFERENCE_WINDOW_D",
     "AmountModel",
     "AssayModel",
     "AssayRecord",
@@ -427,7 +432,8 @@ class InfluentTruth:
     s_ca: np.ndarray
     """Daily dissolved calcium of the influent, kmol/m3 (precipitation extension)."""
     mean_recipe_kg_d: dict[str, float]
-    """Mean true wet mass of each feed over the horizon, kg wet/d."""
+    """Mean true wet mass of each feed over the first ``min(REFERENCE_WINDOW_D, n_days)``
+    days, kg wet/d (the run's reference recipe; ruling 6 of 2026-09-11)."""
 
 
 @dataclass(frozen=True)
@@ -610,6 +616,22 @@ def _amount_to_kg(amount: float, unit: str, spec: FeedFractionation) -> float:
 # ------------------------------------------------------------------- generator
 
 
+REFERENCE_WINDOW_D = 200
+"""Days of the generated influent the run's REFERENCE quantities are the mean of.
+
+The truth parameters (the inert nitrogen ``N_I`` and, through the harness, the truth
+stoichiometry), the burn-in recipe, the influent's inert COD equivalent and the calcium
+extension state all derive from ``mean_recipe_kg_d``. Until the lead's ruling 6 of
+2026-09-11 that was the mean over the WHOLE horizon, so a run's starting point and its
+truth parameters depended on how long the run was and a 200-d run was not the first 200
+days of a 210-d one even with a prefix-stable generator (the coordinator's check of
+``1353341``: ~2 % apart). They are now the mean over the first ``min(REFERENCE_WINDOW_D,
+n_days)`` days, regardless of horizon. 200 because it is the shorter of the two matrix
+horizons (Plants B and C 200 d, Plant A 365 d; ruling 3), so every cell's reference window
+is the same first 200 days and a whole run is prefix-stable in its horizon (tested at the
+run level in ``tests/test_run_harness.py``)."""
+
+
 def generate_influent(
     plant: PlantConfig,
     catalogue: FeedFractionationCatalogue,
@@ -787,7 +809,10 @@ def generate_influent(
     s_ca[fed] /= q[fed]
     influent = Influent(t=day.astype(float), concentrations=conc, q=q, interpolation="hold")
 
-    mean_recipe = {fid: float(feeds_truth[fid].delivered_kg.mean()) for fid in feed_ids}
+    # the reference window (ruling 6): the first min(REFERENCE_WINDOW_D, n_days) days, so the
+    # recipe -- and everything the harness derives from it -- does not depend on the horizon
+    n_ref = min(REFERENCE_WINDOW_D, int(n_days))
+    mean_recipe = {fid: float(feeds_truth[fid].delivered_kg[:n_ref].mean()) for fid in feed_ids}
     n_i = truth_inert_nitrogen(catalogue, mean_recipe, truth_frac.fractionations)
 
     truth = InfluentTruth(

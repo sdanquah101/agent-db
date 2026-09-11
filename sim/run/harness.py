@@ -114,6 +114,7 @@ from sim.influent import (
     load_generator_config,
     truth_parameters,
 )
+from sim.influent.generator import REFERENCE_WINDOW_D
 from sim.influent.mapping import feed_concentrations
 from sim.observation import (
     ObservationRecord,
@@ -598,9 +599,15 @@ def _buffered_ash_load(
 
 
 def _mean_s_ca(truth: GeneratedInfluent) -> float:
-    """Flow-weighted mean dissolved calcium of the feed over the horizon, kmol/m3."""
-    q = np.asarray(truth.truth.influent.q, dtype=float)
-    s_ca = np.asarray(truth.truth.s_ca, dtype=float)
+    """Flow-weighted mean dissolved calcium of the feed over the reference window, kmol/m3.
+
+    The first ``min(REFERENCE_WINDOW_D, n_days)`` days, like the mean recipe the truth
+    parameters and the burn-in come from (ruling 6 of 2026-09-11): the calcium extension's
+    initial state must not depend on the horizon either.
+    """
+    n_ref = min(REFERENCE_WINDOW_D, int(truth.truth.n_days))
+    q = np.asarray(truth.truth.influent.q, dtype=float)[:n_ref]
+    s_ca = np.asarray(truth.truth.s_ca, dtype=float)[:n_ref]
     total = float(q.sum())
     return float((q * s_ca).sum() / total) if total > 0.0 else 0.0
 
@@ -674,6 +681,9 @@ def simulate_truth(
         visible_args={"plant": plant.id, "n_days": n_days},
     )
     truth_frac = generated.truth.fractionations.fractionations
+    # mean_recipe_kg_d is the generator's REFERENCE recipe -- the first REFERENCE_WINDOW_D
+    # days, whatever the horizon (ruling 6) -- so the truth parameters, the burn-in recipe
+    # below, the calcium state and the channels' inert COD equivalent are horizon-free
     truth_params = truth_parameters(params, catalogue, generated.truth.mean_recipe_kg_d, truth_frac)
     truth_params = apply_adaptation(truth_params, plant, scenario.baseline)
     # the adaptation is applied BEFORE the segments, so a Level-5 ammonia fault multiplies

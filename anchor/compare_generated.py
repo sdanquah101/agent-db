@@ -464,8 +464,13 @@ def generated_influent_statistics(
     out["hsw_cod_concentration"] = float(
         feed_cod_per_m3(spec, frac, float(np.mean(run.truth.feeds["high_strength_waste"].ts)))
     )
+    # the anchor's loading rate is the plant's MULTI-YEAR mean, so this row takes the mean
+    # recipe over the whole two-year draw, not the run's reference recipe (which since the
+    # lead's ruling 6 of 2026-09-11 is the first REFERENCE_WINDOW_D days: right for a run's
+    # truth parameters, wrong for a long-run statistic)
+    two_year_recipe = {fid: float(ft.delivered_kg.mean()) for fid, ft in run.truth.feeds.items()}
     out["organic_loading_rate"] = organic_loading_rate(
-        catalogue, run.truth.mean_recipe_kg_d, plant.geometry.V_liq_declared
+        catalogue, two_year_recipe, plant.geometry.V_liq_declared
     )
     return out
 

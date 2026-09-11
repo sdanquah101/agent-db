@@ -1069,3 +1069,47 @@ refreshes I have made and flag here; the third is the question.
 
 **Everything else in the default suite** at the held head: green (the two refreshed tests
 pass; 367 of 370 passed before the refresh, the third being this pin).
+
+## 21. Ruling 6 built and verified: a whole run is prefix-stable from a fixed 200-day reference window
+
+*Status line: ruling 6 is implemented in the working tree for its own commit, after ruling
+5's (held on §20's question). Code: `REFERENCE_WINDOW_D = 200` in the generator, the mean
+recipe and truth `N_I` over the first `min(200, n_days)` days; the harness's truth
+parameters, burn-in recipe and inert COD equivalent follow from it, and the calcium state
+takes the same window. Tests in `tests/test_reference_window.py`, both mutation-checked.*
+
+**What the probe and the tests found.** With the window fixed, a 200-d Plant B run (S3-03)
+is the first 200 days of the 210-d run of the same seed, and a 365-d Plant A run (S5-01) the
+first 365 of a 375-d one: truth parameters, inert equivalent, burn-in and initial state
+identical; the state trajectory, ash, every truth channel and both condition flags
+**bit-equal up to the shorter run's last output point**; that final point differs by at most
+3 × 10⁻¹⁶ relative (B) and 2 × 10⁻¹⁶ (A) — the shorter run reaches it by a step clipped to
+its end, the longer by dense-output interpolation. So: bit-equal, bar one point at solver
+tolerance; the test pins exactly that. Mutation: with the window set beyond every horizon
+(the old horizon-mean behaviour) both the recipe test and the run-level test fail on the
+truth parameters.
+
+**Ruling 4 re-verified at this head** (Plant A runs now take their reference from the first
+200 days): S7-02 reaches 0.60 / 0.46 on days **348 / 350** (half the biomass from 338; end
+share 0.6509), S5-01 on **298 / 302** (291; 0.8483), both sound — every day the same as §17,
+the state values moved in the fourth significant figure. The two Plant A baseline tables at
+365 d (24 seeds): `adapted` 0.22 % / 0.20 % (11 and 10 of 24), `unadapted` 1.02 % / 0.09 %
+(21 and 5 of 24) — **identical to §18's tables to every printed digit**. Deltas: none in any
+recorded number.
+
+**One consumer corrected.** The anchor comparison's `organic_loading_rate` row took the
+two-year generator draw's `mean_recipe_kg_d`; under ruling 6 that would silently have become
+the first-200-day reference recipe and moved the row from 2.171 to 2.163 (the gate's
+report-currency test caught it). A long-run plant statistic must not follow a run's
+reference window, so that row now takes the two-year mean explicitly and reads 2.171 as
+before; the anchor report's generated block is otherwise untouched by ruling 6 (every panel
+run is 200 d, so its window is its horizon).
+
+**Commit order, re-set on the coordinator's instruction of 15:27 UTC:** ruling 6 is
+committed first, on its own, as this commit; the ruling-5 commit — applied and measured
+exactly as §20 reports — is parked on the branch `claude/g1-ruling5-held` (`0265977`) and
+will be re-applied to the side branch as ONE commit carrying the lead's one-line FOG answer
+when it arrives. (Both had briefly been pushed in the other order at `0265977`/`773288f`
+when a repository hook demanded a clean tree; the side branch was re-set to this shape.)
+Then pytest and ruff locally with the exact failure set, the fast-forward, CI, and a STOP
+if CI is red only on the CH₄-margin gate test.

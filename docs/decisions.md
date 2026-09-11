@@ -4196,9 +4196,10 @@ s_ca and fractionation, and the same with S3-01's influent fault plan on Plant A
 The *generator* and the *tank* are prefix-stable; a whole run is not: the harness still takes
 the truth parameters, the burn-in recipe, the S_ca extension state and the inert equivalent
 from the horizon's mean recipe (`sim/run/harness.py` around lines 675, 682, 695 and 771), so
-runs at 190, 200 and 210 d still differ by ~2 %. The commit message's "the digester's
-starting point does not depend on the run's length" is true of the tank only. Noted, no
-code change.
+runs at 190, 200 and 210 d still differed by ~2 %. The commit message's "the digester's
+starting point does not depend on the run's length" was true of the tank only at that
+commit. CORRECTED by ruling 6 below: from that commit a whole run is prefix-stable, the
+reference window being the first 200 days of the generated influent.
 
 **One test is red at this commit and is left red.**
 `tests/test_plausibility.py::test_plant_b_survives_the_generator_swings` runs seed 11 on
@@ -4339,3 +4340,72 @@ Level-7 compound after the freeze (§12 d); move the onset to day 30 on 200 d (�
 parameter fault becomes a phantom); keep 200 d and accept a `structural` label with nothing
 under it (rejected on 2026-09-10).
 
+## 2026-09-11 — RULING 6 (the lead): a whole run is prefix-stable — the reference recipe is the first 200 days, whatever the horizon
+
+**Decision.** The run's reference quantities are derived from a **fixed 200-day window** of
+the generated influent regardless of horizon, at the source: the generator's
+`mean_recipe_kg_d` — and with it the truth inert nitrogen `N_I` — is the mean over the first
+`min(REFERENCE_WINDOW_D, n_days)` days (`sim.influent.generator.REFERENCE_WINDOW_D = 200`, a
+named constant with its reason in the docstring). Everything the harness derives from that
+recipe follows without further change: the truth parameters (`truth_parameters`), the
+burn-in's `constant_influent`, and the channels' influent inert COD equivalent
+(`influent_inert_cod_equivalent`, `sim/run/harness.py` ~line 780 — the same principle,
+flagged here as the coordinator asked). The one harness quantity that was not derived from
+the recipe, the calcium extension's initial state (`_mean_s_ca`, the flow-weighted mean
+dissolved calcium), is now taken over the same window. 200 because it is the shorter of the
+two matrix horizons (ruling 3: Plants B and C 200 d, Plant A 365 d), so every cell's
+reference window is the same first 200 days. For a 200-d cell nothing changes (the window
+is the horizon); a 365-d Plant A cell now takes its parameters, burn-in and calcium state
+from its first 200 days rather than its whole year.
+
+**Reason.** Ruling 1 made the generator and the tank prefix-stable; the coordinator's
+independent check of `1353341` found a whole run still was not — 190, 200 and 210 d differed
+by ~2 % — because the harness took its reference quantities from the horizon's mean recipe.
+With the window fixed, a run is the first N days of any longer run of the same seed, which
+is what "prefix-stable" has to mean for a benchmark whose horizons were just changed and
+may change again: a horizon change moves the end of every run and nothing else.
+
+**Tests.** `tests/test_reference_window.py`: (1) the window is 200 and is the shorter
+matrix horizon; (2) the generator's reference recipe and `N_I` of a 210-d run equal those
+of the 200-d run of the same seed and equal the first-200-day mean, not the horizon mean,
+while runs shorter than the window average their whole length (90 v 130 d differ: the
+negative control); (3) one whole run per matrix horizon — S3-03 on Plant B at 200 against
+210 d and S5-01 on Plant A at 365 against 375 d — with truth parameters, inert equivalent,
+burn-in and initial state identical, and the state trajectory, ash, every truth channel and
+both condition flags **bit-equal up to the shorter run's last output point**, which agrees
+to solver tolerance (the shorter run reaches it by a final step clipped to its end, the
+longer by dense-output interpolation; `rtol` 1e-6). Which of the two the coordinator asked
+me to report: bit-equal, except that one point. The ruling-1 prefix tests are kept.
+Mutation: with `REFERENCE_WINDOW_D` set beyond every horizon (the old behaviour) tests (2)
+and (3) fail.
+
+**Re-verified at this head, Plant A on 365 d** (its runs now take their reference from the
+first 200 days): the ruling-4 trajectories and the two
+baseline trigger tables were re-measured. S7-02: X_sao 0.60 on day **348**, X_ac 0.46 on day
+**350**, half the biomass from day 338, end share 0.6509 (was 0.6509), acetate peak 3.912 on
+day 158 (was 3.912), sound; S5-01: **298 / 302 / 291**, end share 0.8483 (0.8483), acetate
+peak 3.729 on day 201, sound — every day unchanged, the state values moved in the fourth
+significant figure (e.g. S7-02 end X_sao 0.69099 → 0.69100). The 24-seed clean panels at
+365 d: `adapted` overload 0.22 % (0.00–1.19 %, 11/24), foaming 0.20 % (10/24);
+`unadapted` overload 1.02 % (0.00–3.27 %, 21/24), foaming 0.09 % (5/24); operator
+thresholds 0.00 % — **identical to the ruling-3 tables to every printed digit**. The
+first-200-day recipe of a Plant A run differs from its 365-d mean by too little to move a
+day count; no re-staging, no number in the record changes.
+
+**One consumer corrected, flagged.** The anchor comparison's `organic_loading_rate` row
+(`anchor/compare_generated.py`) took the two-year generator draw's `mean_recipe_kg_d`, which
+under this ruling would have become the first-200-day reference recipe and moved the row
+from 2.171 to 2.163 — a long-run plant statistic must not follow a run's reference window,
+so that row now takes the mean over the whole two-year draw explicitly and reads 2.171 as
+before. The generated block of the anchor report is unchanged by this ruling (every panel
+run is 200 d, so its window is its horizon).
+
+**Correction to the ruling-1 entry above.** Its sentence "a whole run is not [prefix-stable]…
+true of the tank only" described the state at `1353341`; from this commit a whole run is
+prefix-stable, with the reference window the first 200 days of the generated influent.
+
+**Alternatives considered.** Deriving the reference quantities from the horizon mean (the
+state before): not prefix-stable. A window of the full 365 d: not available to a 200-d cell.
+The burn-in recipe from the plant's declared median recipe instead of the run's own draw:
+would decouple the burn-in from the realisation the run then feeds, a bigger change than
+the ruling asked for; not done.
