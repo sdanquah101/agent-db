@@ -4499,3 +4499,34 @@ state before): not prefix-stable. A window of the full 365 d: not available to a
 The burn-in recipe from the plant's declared median recipe instead of the run's own draw:
 would decouple the burn-in from the realisation the run then feeds, a bigger change than
 the ruling asked for; not done.
+
+## 2026-09-11 — ANSWER B (the lead): the gate's methane-fraction margin re-declared at 0.60
+
+**Decision.** In `tests/test_g1_anchor.py::test_no_clean_level_0_seed_sours` the assertion
+on the leanest clean Level-0 seed's methane fraction median goes from `> 0.65` to
+`> 0.60`. Nothing else in that test changes: 24 of 24 seeds sound, min pH > 7.0, max pH
+< 7.7 stand as declared.
+
+**What this margin is.** A test guard *above* the soundness threshold: a run is sound at a
+CH₄ fraction of 0.55 (`configs/runs/harness.yaml`, `assess_health`), and the lead's
+acceptance condition of 2026-09-03 added a margin so that "no seed sours" could not be
+satisfied by a run one bad week from souring. It is a declared margin, not a measurement
+of the plant.
+
+**Why it is re-declared, and why not to pass a failing run.** A principled feed correction
+— ruling 5, the cited HSW and FOG degradability centres (0.84 and 0.92) with answer A's
+lipid-like FOG inert equivalent — moved the leanest seed from 0.655 to **0.6437** at the
+committed head (0.6429 at the old FOG equivalent): taking lipid out of the most
+methane-rich streams lowers the panel's leanest methane fraction by a hundredth, while
+every seed stays sound (min pH 7.19, max pH 7.34, CH₄ 0.64–0.69). The feed change was made
+on the lead's principle that every stream's centre is derived the same way, not to move
+this number; the margin is re-declared to sit where the corrected feed puts the leanest
+sound seed with room to spare, at 0.60, still 0.05 above the soundness threshold.
+
+**Measured at the head.** Leanest-seed CH₄ fraction median **0.6437** (seed 1003), panel
+range 0.6437–0.692; 24/24 sound.
+
+**Alternatives considered.** Keep 0.65 and correct HSW alone (§19 variant 1: leanest seed
+0.655, every gate test passing) — **rejected by the lead on principle**, one stream's
+centre corrected and the other's not. Keep 0.65 with both corrections: the gate stays red
+on a guard, not on a soundness failure. Lower the soundness threshold: not on the table.

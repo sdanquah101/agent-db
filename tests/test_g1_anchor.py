@@ -281,7 +281,10 @@ def test_no_clean_level_0_seed_sours(panel):
     ph = [r.statistics["digester_pH_median"] for r in panel]
     ch4 = [r.statistics["ch4_fraction_median"] for r in panel]
     assert min(ph) > 7.0, min(ph)  # not merely above the 6.5 threshold
-    assert min(ch4) > 0.65, min(ch4)
+    # the margin was 0.65 until the lead's answer B of 2026-09-11 re-declared it at 0.60: a
+    # guard above the 0.55 soundness threshold, moved because ruling 5's cited degradability
+    # centres put the leanest seed at 0.6437 (docs/decisions.md, answer B); nothing else here
+    assert min(ch4) > 0.60, min(ch4)
     assert max(ph) < 7.7, max(ph)  # ... and not over-buffered into a different plant
 
 
