@@ -1012,3 +1012,60 @@ scaling. Adding FOG 0.92: 1.35, the same rows in band, but the gate's CH₄-frac
 fails at 0.643, for 0.02 of ratio. The report's generated block and the four-row tables
 would be regenerated with whichever change is ruled; every Plant B and C cell changes
 under either; nothing has been changed in the tree.
+
+## 20. Ruling 5 applied and measured at the head; one pin the ruling cannot satisfy — question to the coordinator
+
+*Status line, 14:15 UTC: ruling 5 is applied in the working tree (variant 2 exactly, old
+values beside the new) and measured at that head; the ruling-5 commit is HELD locally, not
+pushed, because one existing test pin cannot be satisfied by the ruling as worded and I am
+not the one to change it. This section is a docs-only commit so the question and the numbers
+reach the coordinator. Ruling 6 is being built meanwhile in the same tree, for its own commit.*
+
+**Measured at the ruling-5 head (24 seeds, 200 d):** exactly §19's variant 2.
+`biogas_mean` panel median 2860 → **1.355 pass** (24-seed mean 1.379, min 1.077, max 1.720);
+**23 / 23 rows inside** their bands (`hsw_cod_concentration` 1.03 → 1.09, inside ±25 %);
+`test_plant_b_survives_the_generator_swings` **passes**; the gate G1 run is 12 passed, **1
+failed: `test_no_clean_level_0_seed_sours` on its declared CH₄-fraction margin, 0.6429
+against > 0.65**, with 24/24 sound, min pH 7.19, max pH 7.34 — the known consequence, the
+margin untouched. Plant B overload / foaming **7.38 % / 6.34 %** (2.92–19.88 % and
+1.75–13.45 %, 24/24 each); Plant C **9.82 % / 8.50 %**, identical to the last digit. The
+anchor report's generated block is regenerated (23/23), and the §5.4 tables, the card,
+`sensors.yaml`, `channels.py` and the README carry the numbers with the old beside them.
+
+**Three existing tests catch consequences of the catalogue change.** Two are derived-value
+refreshes I have made and flag here; the third is the question.
+
+1. `tests/test_influent.py::test_catalogue_nitrogen_is_consistent_under_its_declared_inert_n`:
+   the catalogue's `tkn` is declared "derived from the fractionation with inert_N_I", and
+   with the larger inert shares the implied TKN moves — HSW 0.0875 against the declared
+   0.076 (15.1 % gap, tolerance 15 %), FOG 0.0102 against 0.0067. `tkn` is a **check value
+   only**: the simulation takes its nitrogen from the fractionation and `inert_N_I`
+   (`sim/influent/mapping.py` reads `tkn` nowhere but in the consistency check), so
+   re-deriving it changes no run. **Re-derived: HSW 0.0875, FOG 0.0102**, old values in the
+   comments.
+2. `tests/test_generator.py::test_the_feed_alkalinity_assay_is_pinned_and_the_two_quantities_are_independent`:
+   the golden pin on the HSW feed-alkalinity **assay** (10.8735 kg CaCO₃/m³) moves with the
+   fractionation to **10.1750**; the **charge** pin (10.8720) is unchanged, as it should be
+   (it reads `s_cat`, `s_ca` and TAN, which the ruling did not touch). Pin refreshed with the
+   reason in the comment. Both panels of §19 and of this section already include this, since
+   the assay is what the operator's feed-alkalinity record reports.
+3. **`tests/test_influent.py::test_cod_per_vs_is_derived_and_checked_against_the_literature`
+   asserts `2.7 <= FOG COD/VS <= 2.9` — "the lead's targets" (2026-09-02).** Under ruling 5
+   the FOG COD/VS derives **2.593**: inside the catalogue's own ±10 % check of 2.80 (−7.4 %,
+   as §19.1 reported and the lead ruled on), but outside the hard 2.7–2.9 range that test
+   pins. And it cannot be brought inside by any split at the ruled centre: with the inert
+   equivalent the lead fixed for FOG (1.42, sludge value, freeze of 2026-09-02) an inert
+   share of 0.08 caps the derived COD/VS at 1 / (0.92 / 2.90 + 0.08 / 1.42) = **2.677**
+   even with every non-inert unit lipid. So ruling 5 (FOG 0.92) and the 2.7–2.9 target are
+   incompatible at the fixed inert equivalent, and one of three things gives: (a) the test's
+   range is re-declared to what the ruled centre derives (2.593; e.g. "within the ±10 %
+   check of 2.80"), (b) FOG's inert COD equivalent is raised from the sludge 1.42 to a value
+   at which 0.08 inert derives ≥ 2.7 (≥ 2.2 kg COD/kg VS for the inert residue — a
+   grease-trap solid at 2.2 rather than 1.42 is defensible, since FOG inerts are grease-bound
+   solids, but it is a frozen value the lead set by instruction), or (c) FOG's centre is
+   left at 0.98 (variant 1, which the lead rejected on principle). **I have not changed the
+   range, the equivalent or the centre.** The ruling-5 commit waits on the coordinator's
+   answer; the only thing red in the default suite at the held head is that one assertion.
+
+**Everything else in the default suite** at the held head: green (the two refreshed tests
+pass; 367 of 370 passed before the refresh, the third being this pin).
