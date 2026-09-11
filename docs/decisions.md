@@ -4189,6 +4189,17 @@ fractionation and assays, with a negative control; a tank test asserts the day-0
 does not see a late change and that the old initialisation did. The generator's
 "Randomness" paragraph is rewritten to the new layout.
 
+**Scope of the prefix-stability, for the record** (the coordinator's independent check of
+`1353341`, 2026-09-11: 3 plants × 4 seeds × 4 horizon pairs including 30/31 and 200/730,
+deliveries, moisture, logs, unrecorded and mislogged days, assay records, influent series,
+s_ca and fractionation, and the same with S3-01's influent fault plan on Plant A — passes).
+The *generator* and the *tank* are prefix-stable; a whole run is not: the harness still takes
+the truth parameters, the burn-in recipe, the S_ca extension state and the inert equivalent
+from the horizon's mean recipe (`sim/run/harness.py` around lines 675, 682, 695 and 771), so
+runs at 190, 200 and 210 d still differ by ~2 %. The commit message's "the digester's
+starting point does not depend on the run's length" is true of the tank only. Noted, no
+code change.
+
 **One test is red at this commit and is left red.**
 `tests/test_plausibility.py::test_plant_b_survives_the_generator_swings` runs seed 11 on
 Plant B for 180 d, unbuffered, and asserts the same [0.6, 1.5] biogas ratio as the anchor

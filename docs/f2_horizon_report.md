@@ -800,7 +800,15 @@ ruling; retirement (§12 d) is off the table.
 
 **Not changed.** No onset, magnitude, baseline, seed, budget, answer key or tolerance.
 
-## 18. Regeneration at `a91e71a` — the last action; stopping
+## 18. Regeneration at `a91e71a` — VOID (sequence breach, recorded by the coordinator)
+
+*Correction, 2026-09-11 13:25 UTC. The coordinator recorded a sequence breach: the ordered
+sequence was fast-forward → CI **green** → regenerate, and I regenerated while CI was red
+on the `biogas_mean` band edge. The regeneration below is therefore **void**: its numbers
+are not the G1 regeneration and are not to be quoted as such; the matrix will be regenerated
+at whatever head the lead's next ruling produces, on the coordinator's word that the head
+is final and CI green, and not before. The section is kept as written so the record shows
+what was done; the CI account and the trigger tables in it stand on their own.*
 
 *Status line: done. PR #15 (`claude/g1-scenario-generation`) is fast-forwarded to
 `a91e71a`, the ruling-4 commit; the 117-cell matrix was regenerated at that head as the
@@ -868,3 +876,139 @@ the Plant A pathway finding stands at 4.6× (was 5.3×).
 [0.6, 1.5] — the basis is right in kind, the hidden HSW / FOG degradability centres sit
 above the cited literature (§16.2), and the band, basis and centres are the lead's to move.
 Until then the g1 gate and one plausibility test are red on that row alone.
+
+## 19. Measured, not estimated: the HSW degradability correction, alone and with FOG
+
+*Status line: the coordinator's read-only instruction of 13:22 UTC, done. Nothing committed
+but this section (and the decisions note of §18's correction); no frozen value in the tree
+changed. The two variants were run in scratch worktrees at `a91e71a` with only
+`configs/influent/feed_fractionation.yaml` edited, code imported from the worktree
+(`PYTHONPATH`), 24-seed clean Level-0 panels at 200 d on Plants B and C, the two edge tests
+and the gate G1 anchor test. Headline: **HSW 0.84 alone takes `biogas_mean` to 1.38 and
+every anchored row inside its band, and both edge tests pass. Adding FOG 0.92 takes it to
+1.35 and trips the gate's CH₄-margin assertion (min CH₄ fraction 0.643 against > 0.65),
+with 24/24 still sound.** Plant C is unchanged to the last digit under both, as it must be.*
+
+### 19.1 What was changed, exactly
+
+**Variant 1 — HSW 0.84, FOG unchanged.** The high-strength waste's inert COD share goes from
+0.05 (`f_xi` 0.03, `f_si` 0.02) to **0.16** (`f_xi` 0.14, `f_si` 0.02) and the four
+degradable classes are scaled by 0.84 / 0.95 so the composition the 0.84 was derived from
+is kept: `f_ch` 0.10 → 0.0884, `f_pr` 0.06 → 0.0531, `f_li` 0.75 → 0.6631, `f_vfa` 0.04 →
+0.0354 (sum 1.0000). The derived COD/VS at the feed's inert equivalent 1.42 goes 2.186 →
+**2.057** against the measured 2.234: **−7.9 %, inside the ±10 % check** — so no further
+lipid redistribution was needed to satisfy it. (The alternative that holds COD/VS at the
+measured value — take the 0.11 from carbohydrate and protein only, `f_ch` 0.03, `f_pr`
+0.02, `f_li` 0.75 — derives 2.232 but changes the composition the literature weighting
+was applied to, and by that same weighting is 0.78 degradable, not 0.84; not run.)
+
+**Variant 2 — HSW 0.84 and FOG 0.92.** As variant 1, plus FOG's inert share 0.02 (`f_xi`
+0.015, `f_si` 0.005) → **0.08** (`f_xi` 0.06, `f_si` 0.02), degradable classes scaled by
+0.92 / 0.98: `f_ch` 0.015 → 0.0141, `f_pr` 0.015 → 0.0141, `f_li` 0.95 → 0.8918. Derived
+COD/VS 2.741 → **2.593** against 2.80: −7.4 %, inside the check.
+
+Nothing else: no TS, VS/TS, density, cations, calcium, inert equivalent, seed, tolerance,
+kinetic constant or plant value.
+
+### 19.2 `biogas_mean` and every other anchored row (Plant B, 24 seeds, 200 d)
+
+The anchored row is the panel **median** of the per-run settled means; the 24-seed mean,
+minimum and maximum the coordinator asked for are beside it.
+
+| | current tree (`a91e71a`) | **HSW 0.84** | **HSW 0.84 + FOG 0.92** |
+|---|---:|---:|---:|
+| `biogas_mean`, panel median (m³/d) → ratio to 2111 | 3244 → **1.536** FAIL | 2903 → **1.375** pass | 2860 → **1.355** pass |
+| 24-seed mean → ratio | 3186 → 1.509 | 2944 → 1.395 | 2911 → 1.379 |
+| per-run minimum → ratio | 2577 → 1.221 | 2326 → 1.102 | 2274 → 1.077 |
+| per-run maximum → ratio | 3884 → 1.840 | 3723 → 1.763 | 3631 → 1.720 |
+| margin to the 1.5 edge (median) | −0.036 | +0.125 | +0.145 |
+
+Every other row (23 in all, one calibrated):
+
+| row | tolerance | current tree | HSW 0.84 | HSW 0.84 + FOG 0.92 |
+|---|---|---|---|---|
+| 18 influent rows (feed volumes, log-sigmas, zero fractions, total flow, VS fractions, OLR) | as declared | all pass, unchanged | all pass, unchanged | all pass, unchanged |
+| `hsw_cod_concentration` (partly circular regression guard) | ± 25 % | 141.1 (1.03) pass | 149.2 (1.09) pass | 149.2 (1.09) pass |
+| `digester_pH_median` | ± 0.4 | 7.227 pass | 7.233 pass | 7.233 pass |
+| `alkalinity_median` (calibrated, not counted) | ± 35 % | 4.912 (0.97) | 5.048 (1.00) | 5.063 (1.00) |
+| `vfa_median` | ratio in [0.25, 4] | 0.744 (0.63) pass | 0.756 (0.64) pass | 0.760 (0.64) pass |
+| `fos_tac_median` | ratio in [0.5, 2] | 0.151 (0.65) pass | 0.151 (0.65) pass | 0.151 (0.65) pass |
+| **rows inside their band** | | **22 / 23** | **23 / 23** | **23 / 23** |
+
+The one influent row that moves is `hsw_cod_concentration`, which is computed from the
+run's *realised* fractionation draw around the new centre (a different Dirichlet
+realisation at the same seed) and stays well inside its ±25 %; it is declared in the code as
+a partly circular regression guard, not evidence. Panel soundness: 24/24 on every panel;
+median pH 7.18–7.32 (current), 7.18–7.32 (HSW), 7.19–7.34 (both).
+
+### 19.3 The two edge tests and the gate
+
+| test | current tree | HSW 0.84 | HSW 0.84 + FOG 0.92 |
+|---|---|---|---|
+| `test_plant_b_survives_the_generator_swings` (seed 11, 180 d, unbuffered; biogas ratio < 1.5 among its assertions) | **FAIL** (1.5004) | **pass** | **pass** |
+| gate G1: `test_the_biogas_the_simulator_makes_is_the_biogas_the_plant_measures` | FAIL (1.536) | pass | pass |
+| gate G1: `test_a_row_calibrated_to_the_anchor_is_never_counted_as_a_match` (every independent row matched) | FAIL (21/22) | pass (22/22) | pass (22/22) |
+| gate G1: `test_no_clean_level_0_seed_sours` (24/24 sound **and** margins: min pH > 7.0, min CH₄ fraction > 0.65, max pH < 7.7) | pass (min CH₄ 0.655) | pass (min CH₄ **0.655**) | **FAIL**: 24/24 sound, min pH 7.19, but min CH₄ fraction median **0.643** |
+| gate G1: `test_the_report_exists_and_its_generated_block_is_current` | pass | FAIL (expected: the committed report's generated block is the current catalogue's; regenerating the block with the change removes it) | FAIL (same) |
+| gate G1, the other 9 tests | pass | pass | pass |
+
+So under **HSW 0.84 alone** every test that measures the simulator passes, with the CH₄
+margin at the same 0.655 the current tree has (the lipid the correction removes is HSW's,
+and the CH₄ fraction of the panel's leanest seed is set by the sludge streams). Under **HSW
+0.84 + FOG 0.92** the extra 43 m³/d of gas removed buys 0.02 of ratio and costs the gate's
+CH₄-fraction margin: taking lipid out of FOG, the most methane-rich stream, drops the
+leanest seed's CH₄ fraction from 0.655 to 0.643. That assertion is a declared margin (the
+lead's acceptance condition, ruling 1 of 2026-09-03: "not merely above the threshold"), not
+a soundness failure; whether 0.65 is the right margin is a separate question I am not
+raising — the variant simply does not clear it as declared.
+
+### 19.4 Trigger-rate tables, Plants B and C (24 clean Level-0 seeds, 200 d)
+
+| Plant | variant | sound | overload, pooled | per-run range | runs | foaming, pooled | per-run range | runs | operator > 0.40 / > 0.30 |
+|---|---|---|---:|---|---:|---:|---|---:|---:|
+| **B** | current tree | 24/24 | 7.12 % | 2.34 – 16.37 % | 24/24 | 6.63 % | 1.75 – 14.04 % | 24/24 | 0.00 / 0.00 % |
+| **B** | HSW 0.84 | 24/24 | **7.50 %** | 2.92 – 17.54 % | 24/24 | **6.75 %** | 1.75 – 14.04 % | 24/24 | 0.00 / 0.00 % |
+| **B** | HSW 0.84 + FOG 0.92 | 24/24 | **7.38 %** | 2.92 – 19.88 % | 24/24 | **6.34 %** | 1.75 – 13.45 % | 24/24 | 0.00 / 0.00 % |
+| **C** | current tree | 24/24 | 9.82 % | 6.43 – 14.04 % | 24/24 | 8.50 % | 3.51 – 15.20 % | 24/24 | 0.00 / 0.00 % |
+| **C** | either variant | 24/24 | 9.82 % | 6.43 – 14.04 % | 24/24 | 8.50 % | 3.51 – 15.20 % | 24/24 | 0.00 / 0.00 % |
+
+Plant C takes neither HSW nor FOG, and its panel is **identical to the last digit** under
+both variants — the check that the edit touched nothing but the two streams. Plant B's
+overload rate moves up by a third of a point (less degradable HSW means less buffering gas
+and a slightly spikier residual-acid pool relative to its own median), still bracketing the
+anchor's 7.78–9.18 % with C.
+
+### 19.5 The sources for 0.84, and what kind of number it is
+
+0.84 is **derived, not measured**: the catalogue's own assumed HSW composition (lipid COD
+share 0.75, carbohydrate 0.10, protein 0.06, acetate 0.04, inert 0.05 — composition is not
+measured at Muscatine) weighted by cited conversion-to-biogas fractions:
+
+* lipids **94.8 %**, proteins **71 %**, carbohydrates **50.4 %** — Jeganathan et al. 2006
+  (*Water Research* 40:3141, FOG/food-processing wastewater anaerobic digestion),
+  Davidsson et al. 2008 (*Waste Management* 28:986, grease-trap sludge co-digestion) and
+  Ziels et al. 2016 (*Water Research* 103:372, FOG co-digestion microbial community), as
+  compiled in the open-access review of FOG co-digestion, PMC8072289
+  (https://pmc.ncbi.nlm.nih.gov/articles/PMC8072289/); the review's theoretical yields
+  (lipid 1.0, protein 0.63, carbohydrate 0.42 m³ CH₄/kg) are the same ordering;
+* acetate taken as fully converted;
+* 0.75 × 0.948 + 0.10 × 0.504 + 0.06 × 0.71 + 0.04 × 1.0 = **0.84**.
+
+For FOG the same weighting gives 0.92, and the direct measurements bracket it: brown grease
+354 mL CH₄/g COD at 35 °C (~90 % of theoretical; Frontiers in Environmental Engineering
+2024, https://www.frontiersin.org/journals/environmental-engineering/articles/10.3389/fenve.2024.1354582/full)
+and 0.40–0.77 m³ CH₄/kg VS removed at pilot scale (Zhang et al. 2014, cited there). I would
+cite the review and its three primary sources for the conversion fractions, and say in the
+catalogue note that the HSW figure is composition-weighted from an assumed composition —
+the honest statement — rather than a measured biodegradability of Muscatine's waste, which
+does not exist.
+
+### 19.6 For the lead's choice, in one paragraph
+
+HSW 0.84 alone: `biogas_mean` 1.38 (margin 0.125), 23/23 rows in band, both edge tests and
+every simulator-measuring gate test pass, trigger rates 7.50 / 6.75 % on B, C unchanged;
+the COD/VS check holds at −7.9 % without touching the lipid share beyond the proportional
+scaling. Adding FOG 0.92: 1.35, the same rows in band, but the gate's CH₄-fraction margin
+fails at 0.643, for 0.02 of ratio. The report's generated block and the four-row tables
+would be regenerated with whichever change is ruled; every Plant B and C cell changes
+under either; nothing has been changed in the tree.

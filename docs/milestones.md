@@ -1620,5 +1620,9 @@ red on the two `biogas_mean` tests (1.536; 21 of 22 independent rows) and nothin
 117/117 sound, 748 s wall-clock, 117 index lines, every manifest at the clean head, every
 Plant A cell 365 d and every B/C cell 200 d, salt absent from every visible file
 (`docs/f2_horizon_report.md` §18). This entry is a docs-only commit on the side branch so
-the PR head stays the regenerated SHA. **Stopped**: no merge, no tag, nothing further
-pushed. Open for the lead: `biogas_mean` (band, basis or feed centres).
+the PR head stays that SHA. **That regeneration is VOID** (the coordinator, 13:22 UTC: the
+sequence was fast-forward → CI green → regenerate, and CI was red on the band edge); it is
+redone only at the head the lead's next ruling produces, on the coordinator's word. No
+merge, no tag. Open for the lead: `biogas_mean` (band, basis or feed centres); the
+coordinator's recommendation is HSW's hidden degradability to the cited 0.84, FOG left; the
+read-only measurement of both options is in `docs/f2_horizon_report.md` §19.
