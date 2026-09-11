@@ -23,7 +23,7 @@ id: S8-02
 plant: B
 tier: B
 level: 8
-duration_days: 180
+duration_days: 200
 truth_label: [sensor]
 faults:
   - type: gas_meter_scale

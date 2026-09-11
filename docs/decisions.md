@@ -4233,3 +4233,58 @@ declaration, not a dial); re-declare the basis as a seasonally matched window (d
 it would change the comparison rather than the model, and the cause was to be found
 first).
 
+
+## 2026-09-11 — RULING 3 (the lead): the horizon is the plant's — 200 d on Plants B and C, 365 d on Plant A
+
+**Decision.** Every cell on Plants B and C runs for 200 days and every cell on Plant A for
+365, whichever row it is. The horizon is declared per plant (`horizon_days` in
+`configs/plants/plant_{A,B,C}.yaml`, a required field of `PlantConfig`), a scenario file's
+`duration_days` is its horizon on its own plant and is checked to equal it
+(`tests/test_scenarios_library.py`), and the matrix re-times a row generated on another
+plant — a Plant B row at Tier A on Plant A — to that plant's horizon before it is generated
+(`sim.run.matrix.at_plant_horizon`, applied in `generate_matrix`; a mutation test asserts
+the harness receives the re-timed row). The sixteen B/C rows go from 180 d (Levels 0–4, 8)
+or 240 d (Levels 5–7) to 200; the four Plant A rows (S5-01, S6-01, S6-04, S7-02) from 240
+to 365. The redacted manifest still carries the horizon: uniform per plant, it says nothing
+the visible plant id does not already say. The anchor's output panel runs at the Plant B
+horizon (`OUTPUT_DAYS = 200`); Plant A's panels pass 365 explicitly.
+
+**Why.** Review finding F2: `duration_days` is public and its two values partitioned the
+ladder — a Plant B/C run at 240 d was exactly one of the four parameter or structural
+rows. One value per plant removes the partition. A year on Plant A rather than 200 d
+because its transition rows need it: the SAO takeover S5-01 and S7-02 inject reaches the
+recorded X_sao 0.60 / X_ac 0.46 only by day ~300 / ~350 on the current feed (ruling 4,
+below); at 200 d the compound row's structural half carried 0.4 % of the acetate flux.
+Plants B and C have no transition row, and 200 d keeps every fault window whole (the
+latest ends at d180) with the widest margin on the anchored rows other than `biogas_mean`
+(`docs/f2_horizon_report.md` §3, §13–§14).
+
+**What moved with it, measured and recorded, not tuned.** The four-row trigger tables
+(24 clean Level-0 seeds each) at the matrix horizons under the prefix-stable generator of
+ruling 1 — overload B 7.12 % (2.34–16.37 %, 24/24), C 9.82 % (6.43–14.04 %, 24/24),
+A-unadapted 1.02 % (0.00–3.27 %, 21/24), A-adapted 0.22 % (0.00–1.19 %, 11/24); foaming
+B 6.63 %, C 8.50 %, A-unadapted 0.09 % (5/24), A-adapted 0.20 % (10/24); operator FOS/TAC
+> 0.40 and > 0.30 0.00 % on every row — replace the 180-d table of 2026-09-10 (B 7.67 /
+C 9.22 / A-unadapted 1.49 / A-adapted 0.28 %; foaming 7.20 / 7.67 / 0.14 / 0.25 %) in
+`docs/g1_anchor_report.md` §5.4, the benchmark card, `configs/observation/sensors.yaml`,
+`sim/observation/channels.py` and `scenarios/README.md`; the old values stay beside them.
+The B and C rates moved with the generator layout (ruling 1), not the horizon: Plant B is
+7.04 / 7.12 / 6.86 % at 190 / 200 / 210 d. The pathway finding on Plant A stands at 4.6×
+(was 5.3×), the SAO baseline still firing in three times as many runs. `biogas_mean` is
+1.54 at 200 d (ruling 2).
+
+**Expected regeneration wall-clock, for the lead.** The last full regeneration of 117 cells
+(44 truth integrations) took ~13 min. Plant A's 13 truth integrations lengthen by 185 d
+(nine Tier-A rows, 180 → 365) or 125 d (the four ammonia rows, 240 → 365): 2,165 more
+integrated days in total, against 480 more on B and C (twelve rows × 2 plants × +20 d) and
+320 fewer (four rows × 2 plants × −40 d). Measured on the panels, a 365-d Plant A run took
+22 s end to end (535 s / 24, both baselines) against 30 s for a 200-d Plant B run: the
+cost is dominated by the burn-in and the stiff transients, not the horizon. Expected impact
+of the 365-d Plant A cells: under two minutes on a ~13-min regeneration; the measured
+figure is reported with the regeneration.
+
+**Alternatives considered.** A single horizon for every cell (200 d, the held F2 edit):
+removes the partition too, but leaves S5-01 and S7-02 with a takeover that does not
+complete (§11–§12 of the F2 report). A single 365-d horizon: doubles the B/C cost for rows
+whose windows all end by d180 and moves `biogas_mean` further out. Keeping the horizon
+per row: the partition. Rejected by the lead in that order.

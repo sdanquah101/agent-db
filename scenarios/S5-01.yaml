@@ -19,7 +19,8 @@
 # pathway shift. From the midpoint of the lead's adapted range (0.035) the same x0.1 lands
 # at 0.0035, above the threshold, and nothing happens.
 #
-# ONSET day 120 of 240: four months of the adapted regime and four of the transition.
+# ONSET day 120 of 365: four months of the adapted regime and eight of the transition
+# (Plant A's horizon is a year: the lead's ruling 3, 2026-09-11).
 #
 # MEASURED (2026-09-10, the harness at this seed, current feed): the transition STARTS and
 # does not complete inside the run. Acetate rises from 0.03 to 1.8 kg/m3 by day 240 (2.9 at
@@ -36,7 +37,7 @@ plant: A
 baseline: adapted
 tier: B
 level: 5
-duration_days: 240
+duration_days: 365
 truth_label: [parameter]
 faults:
   - type: ammonia_inhibition_shift

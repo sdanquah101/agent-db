@@ -669,8 +669,9 @@ def condition_flags(
       VFA dynamics the flag is meant to detect**. Measured: true VFA's day-to-day spread is
       p92/median 2.06, the titrimetric FOS/TAC's is 1.087.
 
-    Measured on 24 sound Plant B runs (3,624 settled digester-days), the adopted trigger
-    fires on 7.67 % of days against the anchor's own 7.78 % — with no tuning. The two
+    Measured on 24 sound Plant B runs at the 200-d matrix horizon (4,104 settled
+    digester-days), the adopted trigger fires on 7.12 % of days against the anchor's
+    own 7.78 % — with no tuning (7.67 % on the 180-d panel of 2026-09-10). The two
     rejected candidates and their equivalent cut-offs are recorded in ``docs/decisions.md``;
     they are **not** OR-ed in, which would give 47 %.
 

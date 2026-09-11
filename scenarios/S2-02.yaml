@@ -18,7 +18,7 @@ id: S2-02
 plant: B
 tier: B
 level: 2
-duration_days: 180
+duration_days: 200
 truth_label: [sensor]
 faults:
   - type: ch4_analyser_flatline

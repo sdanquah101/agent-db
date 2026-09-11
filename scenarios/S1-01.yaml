@@ -16,7 +16,7 @@ id: S1-01
 plant: B
 tier: A
 level: 1
-duration_days: 180
+duration_days: 200
 truth_label: [none]
 faults:
   - type: sensor_noise

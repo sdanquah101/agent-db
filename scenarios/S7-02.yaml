@@ -44,7 +44,7 @@ plant: A
 baseline: adapted
 tier: C
 level: 7
-duration_days: 240
+duration_days: 365
 truth_label: [structural, parameter]
 faults:
   - type: omitted_sao

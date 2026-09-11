@@ -48,7 +48,7 @@ plant: A
 baseline: adapted        # the acetoclastic steady state; the omitted pathway carries no flux
 tier: C
 level: 6
-duration_days: 240
+duration_days: 365
 truth_label: [structural]
 faults:
   - type: omitted_sao

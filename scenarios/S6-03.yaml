@@ -17,7 +17,7 @@ id: S6-03
 plant: B
 tier: A
 level: 6
-duration_days: 240
+duration_days: 200
 truth_label: [structural]
 faults:
   - type: imperfect_mixing

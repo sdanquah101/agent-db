@@ -14,7 +14,7 @@ id: S6-02
 plant: B
 tier: B
 level: 6
-duration_days: 240
+duration_days: 200
 truth_label: [structural]
 faults:
   - type: omitted_precipitation

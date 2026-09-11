@@ -361,6 +361,12 @@ class PlantConfig(_Frozen):
     temperature: Temperature
     hydraulics: Hydraulics
     mixing: Mixing
+    horizon_days: Annotated[float, Field(gt=0.0)] = Field(
+        description="Run length of every cell on this plant, d. Uniform per plant (the "
+        "lead's ruling 3 of 2026-09-11): a scenario's own duration_days is its horizon on "
+        "its own plant, and the matrix runs it at the horizon of whichever plant the cell "
+        "is on (sim.run.matrix.at_plant_horizon)."
+    )
     baselines: tuple[Baseline, ...] = Field(
         default=(),
         description="Declared steady states a scenario may be staged on. A plant with none "

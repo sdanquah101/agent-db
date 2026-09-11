@@ -50,7 +50,7 @@ plant: A
 baseline: unadapted     # the SAO-dominated steady state; the omission bites here
 tier: C
 level: 6
-duration_days: 240
+duration_days: 365
 truth_label: [structural]
 faults:
   - type: omitted_sao

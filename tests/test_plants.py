@@ -333,3 +333,10 @@ def test_true_geometry_feeds_the_truth_model_and_declared_the_workflow(plants):
         assert model.n_states == 29 + 3
     with pytest.raises(ValueError, match="hidden geometry is for plant"):
         true_geometry(plants["A"], sample_hidden_geometry(plants["B"], 1))
+
+
+def test_every_plant_declares_the_horizon_of_its_cells(plants):
+    """Ruling 3 (2026-09-11): one horizon per plant, a year on Plant A and 200 d on B and C."""
+    assert {pid: cfg.horizon_days for pid, cfg in plants.items()} == {"A": 365, "B": 200, "C": 200}
+    with pytest.raises(ValueError, match="horizon_days"):
+        PlantConfig.model_validate({**plants["B"].model_dump(), "horizon_days": 0.0})

@@ -28,7 +28,7 @@ Appendix-B example and keeps its number).
 | `S2-03` | 2 | gas-meter scale ×1.08 from d60 | sensor | B, C, A |
 | `S3-01` | 3 | feed mislabelled (Dirichlet κ 5) d60–120 | influent | B, C, A |
 | `S3-02` | 3 | unrecorded delivery of 3 medians at d90 | influent | B, C, A |
-| `S3-03` | 3 | moisture drift −30 % over d30–180 | influent | B, C, A |
+| `S3-03` | 3 | moisture drift −30 % over d30–180, then held | influent | B, C, A |
 | `S4-01` | 4 | biomass mis-initialised ×0.25 | state | B, C, A |
 | `S4-02` | 4 | informative missingness ×3 | state + sensor | B, C, A |
 | `S5-01` | 5 | loss of adaptation: `K_I_nh3` ×0.1 at d120 | parameter | **A only** |
@@ -41,6 +41,21 @@ Appendix-B example and keeps its number).
 | `S7-02` | 7 | SAO omitted **and** loss of adaptation | structural + parameter | **A only** |
 | `S8-01` | 8 | `bayes_mcmc` always fails, over a gas-meter fault | sensor | B, C |
 | `S8-02` | 8 | false operator note, over a gas-meter fault | sensor | B, C |
+
+**The horizon is the plant's, not the row's** (the lead's ruling 3, 2026-09-11): every cell
+on Plants B and C runs for **200 days** and every cell on Plant A for **365**, whichever row
+it is (`horizon_days` in `configs/plants/`). A row's own `duration_days` is its horizon on
+its own plant and is checked to equal it; a Plant B row that also runs on Plant A at Tier A
+is re-timed to a year by the matrix (`sim.run.matrix.at_plant_horizon`). Until this ruling
+the horizon was the row's — 180 d for Levels 0–4 and 8, 240 d for Levels 5–7 — and, the
+field being public, the two values partitioned the ladder: a Plant B/C run at 240 d was
+exactly one of the four parameter or structural rows, a strong prior for free (review
+finding F2). Uniform per plant, the field says nothing the plant id does not. A year on
+Plant A because its transition rows need it: the SAO takeover S5-01 and S7-02 inject
+reaches the recorded shares only by day ~300 / ~350 (`docs/f2_horizon_report.md` §17).
+The rows that grew from 180 d run their faults further from the same onsets; the four
+B/C rows that shrank from 240 d lose their last forty days, which changes no fault window
+(the latest ends at d180).
 
 Plant A runs the Level 2–5 rows at **Tier A only**; the three ammonia rows run at all
 three tiers and nowhere but Plant A (`sim/run/matrix.py`, and the decisions entry of
@@ -75,7 +90,8 @@ three tiers and nowhere but Plant A (`sim/run/matrix.py`, and the decisions entr
   opposite). Both flags its fault scales fire on the **hidden state**: overload on true VFA
   above 2.00× its 30-day trailing median (lead's ruling B), foaming on a gas surge above
   1.80× its 30-day trailing median while true VFA is above its own (ruling B3). Measured on
-  24 sound Plant B runs they fire on 7.67 % and 7.20 % of days, in every run, against the
+  24 sound Plant B runs at the 200-d matrix horizon they fire on 7.12 % and
+  6.63 % of days, in every run, against the
   plant's own 7.78–9.18 % FOS/TAC exceedance; the titrimetric sensor convention is
   implemented (ruling A, `sim.observation.channels.titrimetric_fos`, no fitted parameter).
   `docs/g1_anchor_report.md` §5.4 has the four-row tables. What remains thin is the single

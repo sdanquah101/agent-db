@@ -89,8 +89,9 @@ plant feed (``configs/plants/plant_B.yaml``)."""
 INFLUENT_DAYS = 730
 """Two years of generator draw, as ``tests/test_generator.py`` uses."""
 
-OUTPUT_DAYS = 180
-"""Horizon of each panel run, matching the horizon most of the scenario ladder uses."""
+OUTPUT_DAYS = 200
+"""Horizon of each panel run: the Plant B and C matrix horizon (the lead's ruling 3,
+2026-09-11; Plant A's is 365 d and its panels pass ``n_days`` explicitly)."""
 
 OUTPUT_PANEL_SEEDS: tuple[int, ...] = tuple(range(1000, 1024))
 """The twenty-four base seeds of the output panel. Declared, contiguous and arbitrary: they

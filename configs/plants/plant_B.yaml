@@ -64,6 +64,8 @@ equalisation:
   feeds: [high_strength_waste]
   source: "muscatine_paper: HSW 'trucked deliveries blended in a 65,000-gal tank'; halved for the modelled unit (geometry.units_at_plant = 2)"
   note: "Well-mixed buffer; outflow proportional to level, so it cannot run dry or overflow and passes what it receives in steady state (sim/plants/equalisation.py)."
+horizon_days: 200   # DESIGN  d; every cell on this plant (the lead's ruling 3, 2026-09-11): one horizon
+                    # per plant, so duration_days says nothing the plant id does not.
 feeds:
   - name: primary_sludge
     kind: primary_sludge

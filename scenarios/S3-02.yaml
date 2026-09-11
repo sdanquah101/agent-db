@@ -16,7 +16,7 @@ id: S3-02
 plant: B
 tier: A
 level: 3
-duration_days: 180
+duration_days: 200
 truth_label: [influent]
 faults:
   - type: unrecorded_delivery

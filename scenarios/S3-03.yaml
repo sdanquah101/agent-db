@@ -10,14 +10,17 @@
 # same tonnage then delivers 30 % less volatile solids, so gas falls by a comparable
 # fraction with no change to any rate constant.
 #
-# WINDOW days 30-180: a slow ramp over five months, which is what makes it a trend rather
-# than a step and is why it is confusable with a kinetic decline - the confusion this row
-# exists to score.
+# WINDOW days 30-180, then HELD at the drifted value to the end of the run (the ramp
+# factor holds after its window, sim.influent.generator._ramp_factor): a slow ramp over
+# five months, which is what makes it a trend rather than a step and is why it is
+# confusable with a kinetic decline - the confusion this row exists to score. The run is
+# 200 d on Plants B and C and 365 d on Plant A's Tier-A cell (the horizon is the plant's:
+# the lead's ruling 3, 2026-09-11).
 id: S3-03
 plant: B
 tier: A
 level: 3
-duration_days: 180
+duration_days: 200
 truth_label: [influent]
 faults:
   - type: moisture_drift

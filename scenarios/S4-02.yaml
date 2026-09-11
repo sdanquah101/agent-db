@@ -20,7 +20,7 @@ id: S4-02
 plant: B
 tier: B
 level: 4
-duration_days: 180
+duration_days: 200
 truth_label: [state, sensor]
 faults:
   - type: informative_missingness

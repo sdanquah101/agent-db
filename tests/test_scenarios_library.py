@@ -23,10 +23,14 @@ import pytest
 
 from scenarios.schema import FaultType, Scenario, TruthLabel
 from sim.faults.schema import FAULT_SEMANTICS
+from sim.plants import load_plant_config
 from sim.run.matrix import (
     ALL_TIERS,
     AMMONIA_SCENARIOS,
     FACTORIAL_PLANTS,
+    Cell,
+    at_plant_horizon,
+    generate_matrix,
     load_library,
     matrix_cells,
 )
@@ -234,6 +238,67 @@ def test_the_matrix_has_the_shape_of_section_7():
     # ammonia rows x three tiers. S6-04 is Level 6, so it is not in the Level-2..5 set.
     assert len(plant_a) == (10 - 1) * 1 + 4 * 3 == 21
     assert len(cells) == 96 + 21 == 117
+
+
+#: The horizon of every cell on a plant (the lead's ruling 3, 2026-09-11): a year on Plant
+#: A, because the SAO takeover its transition rows inject needs ~300-350 days to reach the
+#: recorded shares; 200 d on the dataset-anchored pair. Written as literals, so a change to
+#: a plant file or a scenario file fails here.
+PLANT_HORIZON_DAYS = {"A": 365.0, "B": 200.0, "C": 200.0}
+
+
+def test_every_row_runs_at_its_own_plants_horizon(library):
+    """Ruling 3: the horizon is the plant's, and a row's own ``duration_days`` is its plant's."""
+    for plant_id, horizon in PLANT_HORIZON_DAYS.items():
+        assert load_plant_config(plant_id).horizon_days == horizon, plant_id
+    for scenario in library.values():
+        expected = PLANT_HORIZON_DAYS[str(scenario.plant)]
+        assert scenario.duration_days == expected, (scenario.id, scenario.duration_days)
+        # every onset is inside the shorter horizon, so re-timing to either clips nothing
+        for fault in scenario.faults:
+            assert fault.onset_day < min(PLANT_HORIZON_DAYS.values()), (scenario.id, fault.type)
+
+
+def test_a_row_generated_on_another_plant_takes_that_plants_horizon(library, monkeypatch):
+    """Ruling 3: a Plant B row at Tier A on Plant A runs Plant A's 365 d, not its own 200."""
+    plant_a, plant_b = load_plant_config("A"), load_plant_config("B")
+    row = library["S2-03"]
+    assert str(row.plant) == "B" and row.duration_days == 200.0
+    assert at_plant_horizon(row, plant_b) is row
+    retimed = at_plant_horizon(row, plant_a)
+    assert retimed.duration_days == 365.0
+    assert retimed.model_dump(exclude={"duration_days"}) == row.model_dump(
+        exclude={"duration_days"}
+    )
+    assert at_plant_horizon(library["S5-01"], plant_a) is library["S5-01"]
+
+    # ... and generate_matrix is where it is applied: the harness sees the re-timed row
+    seen: list[tuple[str, str, float]] = []
+
+    class _Health:
+        sound, pH_median, ch4_fraction_mean = True, 7.2, 0.65
+
+    class _Truth:
+        solver_success, solver_message, health = True, "", _Health()
+
+    class _Run:
+        run_id, wall_s, truth = None, 0.0, _Truth()
+
+    def fake_generate_cells(
+        scenario: Scenario, plant: object, tiers: list[str], **_: object
+    ) -> list:
+        seen.append((scenario.id, plant.id, scenario.duration_days))
+        return [_Run() for _ in tiers]
+
+    monkeypatch.setattr("sim.run.harness.generate_cells", fake_generate_cells)
+    cells = [
+        Cell("S2-03", "A", "A", row.seed),
+        Cell("S2-03", "B", "A", row.seed),
+        Cell("S5-01", "A", "A", library["S5-01"].seed),
+    ]
+    results = generate_matrix(cells, library=library, write=False)
+    assert all(r.ok for r in results)
+    assert sorted(seen) == [("S2-03", "A", 365.0), ("S2-03", "B", 200.0), ("S5-01", "A", 365.0)]
 
 
 def test_tiers_of_one_cell_share_one_truth_integration():

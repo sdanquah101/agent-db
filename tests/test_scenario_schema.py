@@ -29,7 +29,7 @@ def test_example_scenario_loads_with_every_field_from_appendix_b():
     assert scenario.plant is Plant.B
     assert scenario.tier is Tier.A
     assert scenario.level == 2
-    assert scenario.duration_days == 180
+    assert scenario.duration_days == 200  # Plant B's horizon: the lead's ruling 3, 2026-09-11
     assert scenario.truth_label == (TruthLabel.SENSOR,)
 
     assert len(scenario.faults) == 1
@@ -96,7 +96,7 @@ def test_unknown_fault_type_is_rejected():
 
 def test_fault_after_end_of_run_is_rejected():
     raw = _base()
-    raw["faults"][0]["onset_day"] = 181
+    raw["faults"][0]["onset_day"] = raw["duration_days"] + 1  # one day past the horizon
     with pytest.raises(ValidationError, match="after the run ends"):
         Scenario.model_validate(raw)
 

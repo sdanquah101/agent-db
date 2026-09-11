@@ -21,6 +21,15 @@ would make the only plant that can host them unable to answer them. Recorded in
 **Truth is integrated once per (plant, scenario).** A tier is a mask (§6.4), so the three
 tiers of a cell share one integration, which is both three times cheaper and the only way
 to *guarantee* the property rather than hope two integrations agree.
+
+**The horizon is the plant's, not the row's** (the lead's ruling 3, 2026-09-11): every cell
+on Plants B and C runs for 200 days and every cell on Plant A for 365, whichever row it is
+(``PlantConfig.horizon_days``). A scenario file's ``duration_days`` is its horizon on its
+own plant and is checked to equal it; a Plant B row that also runs on Plant A at Tier A is
+re-timed to Plant A's horizon by :func:`at_plant_horizon` before it is generated. Until
+this ruling the horizon was the row's — 180 d for Levels 0-4 and 8, 240 d for Levels 5-7 —
+and, ``duration_days`` being public, the two values partitioned the ladder (finding F2).
+Uniform per plant, the field says nothing the visible plant id does not already say.
 """
 
 from __future__ import annotations
@@ -36,7 +45,7 @@ from pathlib import Path
 import numpy as np
 
 from scenarios.schema import Scenario, load_scenario
-from sim.plants import load_plant_config
+from sim.plants import PlantConfig, load_plant_config
 from sim.run.layout import RUNS_ROOT, store_salt, truth_store_for
 
 __all__ = [
@@ -47,6 +56,7 @@ __all__ = [
     "SCENARIO_DIR",
     "Cell",
     "CellResult",
+    "at_plant_horizon",
     "generate_matrix",
     "load_library",
     "matrix_cells",
@@ -106,6 +116,28 @@ class Cell:
     def __str__(self) -> str:
         """``S2-03 on plant B at tier A`` — for reports and test ids."""
         return f"{self.scenario_id} on plant {self.plant} at tier {self.tier}"
+
+
+def at_plant_horizon(scenario: Scenario, plant: PlantConfig) -> Scenario:
+    """The scenario re-timed to the horizon of the plant it is generated on.
+
+    The lead's ruling 3 (2026-09-11): the horizon is uniform per plant, 200 d on Plants B
+    and C and 365 d on Plant A, whichever row runs there. A scenario's own
+    ``duration_days`` is its horizon on its own plant; a row generated on another plant
+    (a Plant B row at Tier A on Plant A) takes that plant's.
+
+    Args:
+        scenario: The validated scenario.
+        plant: The plant the cell is on.
+
+    Returns:
+        The scenario itself when its horizon already is the plant's, else a copy with
+        ``duration_days`` set to ``plant.horizon_days``. Every fault window is clipped to
+        the run by the plan, and every onset in the library precedes both horizons.
+    """
+    if float(scenario.duration_days) == float(plant.horizon_days):
+        return scenario
+    return scenario.model_copy(update={"duration_days": float(plant.horizon_days)})
 
 
 def _tiers_for_plant_a(scenario: Scenario) -> tuple[str, ...]:
@@ -265,8 +297,9 @@ def generate_matrix(
     key = store_salt(truth_store_for(runs_root)) if write else None
     for group in execution_order(cells, key):
         plant_id, scenario_id, seed, replicate = group[0].key
-        scenario = scenarios[scenario_id]
         plant = load_plant_config(plant_id)
+        # the horizon is the plant's (ruling 3): a Plant B row on Plant A runs 365 d
+        scenario = at_plant_horizon(scenarios[scenario_id], plant)
         tiers = [c.tier for c in group]
         started = time.perf_counter()
         try:

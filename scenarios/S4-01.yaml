@@ -21,7 +21,7 @@ id: S4-01
 plant: B
 tier: A
 level: 4
-duration_days: 180
+duration_days: 200
 truth_label: [state]
 faults:
   - type: biomass_misinitialised

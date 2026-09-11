@@ -12,13 +12,14 @@
 # slowly, not consumed less. All three constants move together because a change in
 # particle size does not care which macromolecule it is holding.
 #
-# ONSET day 120 of 240, matching S5-01 so the two Level-5 rows differ only in which
-# parameter moved.
+# ONSET day 120, matching S5-01 so the two Level-5 rows differ only in which parameter
+# moved. The run is 200 d on Plants B and C and 365 d on Plant A's Tier-A cell (the
+# horizon is the plant's: the lead's ruling 3, 2026-09-11).
 id: S5-02
 plant: B
 tier: A
 level: 5
-duration_days: 240
+duration_days: 200
 truth_label: [parameter]
 faults:
   - type: hydrolysis_regime_change

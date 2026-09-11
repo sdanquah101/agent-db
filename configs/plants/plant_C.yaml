@@ -37,6 +37,7 @@ hydraulics:
 mixing:
   model: cstr
   note: "Ideal CSTR in the plant contract; imperfect mixing is a fault-injection truth variant (answer 6)."
+horizon_days: 200   # DESIGN  d; every cell on this plant (the lead's ruling 3, 2026-09-11), as Plant B.
 feeds:
   - name: primary_sludge
     kind: primary_sludge
