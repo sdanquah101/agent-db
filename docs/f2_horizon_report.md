@@ -1072,6 +1072,15 @@ pass; 367 of 370 passed before the refresh, the third being this pin).
 
 ## 21. Ruling 6 built and verified: a whole run is prefix-stable from a fixed 200-day reference window
 
+*Landed: ruling 6 is commit **`f7a3e79`** on `claude/g1-review-blockers`, on its own. Run-level
+prefix result: **bit-equal** on parameters, burn-in, initial state, trajectory, ash, every
+channel and both flags up to the shorter run's last output point, which agrees to 3 × 10⁻¹⁶
+(B) and 2 × 10⁻¹⁶ (A) relative — pinned that way in the test. Full default suite at that
+head: 373 passed, **1 failed — `test_plant_b_survives_the_generator_swings`**, the band-edge
+test that ruling 5 removes (this head has the pre-ruling-5 catalogue); ruff green. The
+ruling-5 commit, measured as §20, waits on `claude/g1-ruling5-held` (`0265977`) for the
+lead's FOG answer.*
+
 *Status line: ruling 6 is implemented in the working tree for its own commit, after ruling
 5's (held on §20's question). Code: `REFERENCE_WINDOW_D = 200` in the generator, the mean
 recipe and truth `N_I` over the first `min(200, n_days)` days; the harness's truth
