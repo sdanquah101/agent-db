@@ -4288,3 +4288,43 @@ removes the partition too, but leaves S5-01 and S7-02 with a takeover that does 
 complete (§11–§12 of the F2 report). A single 365-d horizon: doubles the B/C cost for rows
 whose windows all end by d180 and moves `biogas_mean` further out. Keeping the horizon
 per row: the partition. Rejected by the lead in that order.
+
+## 2026-09-11 — RULING 4 (the lead): S7-02 stays, onset day 120, on Plant A's 365-d horizon; the takeover verified
+
+**Decision.** `S7-02` (SAO omitted **and** a loss of adaptation, Plant A, Level 7) stays in
+the frozen library as staged — onset day 120, `adapted` baseline — on the 365-d horizon of
+ruling 3. Retirement (the outcome staged on 2026-09-10 as §12's option d) and the onset-30
+re-staging (§12's option c) are both off the table. The record is corrected to what the
+year reaches, measured through the harness at the row's own seed under the prefix-stable
+generator of ruling 1 (`docs/f2_horizon_report.md` §17):
+
+| row | X_sao ≥ 0.60 | X_ac ≤ 0.46 | SAO half the biomass | end X_ac / X_sao (share) | acetate before → peak (day) → end |
+|---|---:|---:|---:|---|---|
+| **S7-02** | day 348 | day 350 | day 338 | 0.371 / 0.691 (65 %) | 0.04 → 3.91 (158) → 0.31 kg COD/m³ |
+| **S5-01** | day 298 | day 302 | day 291 | 0.139 / 0.778 (85 %) | 0.02 → 3.73 (201) → 0.19 |
+
+Both runs are sound throughout. So the 0.60 / 0.46 first recorded on 2026-09-03 "in 240 d"
+— not reproducible at any commit, corrected at `3be4ef9` — **is reached on the year**, by
+day ~350 for S7-02 and ~300 for S5-01. The scenario headers, the truth-side record
+(`sim/plants/truth/plant_A.yaml`), the S6-01 cross-reference and the `configs/runs/harness.yaml`
+note now say that, with the monthly trajectory in the S7-02 file.
+
+**Why the row means what its header says, on a year.** The structural half of S7-02 rests on
+the pathway shift; at 200 d it carried 0.4 % of the acetate flux (§11) and a fitted model
+without SAO reproduced every channel. On 365 d the share is 3.8 % at day 240, 27 % at 300,
+45 % at 330 and 65 % at the end: a structural residual that is a **ramp through the last
+four months**, on acetate first and then on the gas as the route changes — the "ramp that
+follows the growing oxidiser population" the answer key describes. The parameter half is
+unchanged: a step at day 120 on the adapted baseline, acetate up 100× within forty days.
+Neither the onset-30 staging (a one-month clean baseline, acetate-only residual) nor the
+`unadapted` staging (the parameter fault a phantom) is needed.
+
+**What was not changed.** No onset, magnitude, baseline, seed, budget or answer key; no
+tolerance. The `kinetic_update_allowed: true` / `abstain_on` structure of the row stands.
+
+**Alternatives considered** (the lead's ruling closes them): retire the row and design the
+Level-7 compound after the freeze (§12 d); move the onset to day 30 on 200 d (§12 c,
+14 % of the flux at 200 d, acetate-only residual); re-stage on `unadapted` (§11, the
+parameter fault becomes a phantom); keep 200 d and accept a `structural` label with nothing
+under it (rejected on 2026-09-10).
+

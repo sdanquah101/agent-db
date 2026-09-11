@@ -60,7 +60,10 @@ initial_extension_states:
 # cannot be traced to a committed state. Measured through the harness at the scenarios'
 # own seeds on the current feed, SAO reaches 9.0 % (S5-01) and 3.2 % (S7-02) of the
 # acetate-consuming biomass by day 240 (1.2 % / 0.4 % at 200 d, 3.6 % / 1.0 % at 220 d),
-# while acetate rises 30-100x after the onset. See docs/f2_horizon_report.md.
+# while acetate rises 30-100x after the onset. MEASURED AGAIN 2026-09-11 on Plant A's
+# 365-d horizon (the lead's rulings 3 and 4): the takeover completes -- X_sao 0.60 / X_ac
+# 0.46 by day 298 / 302 in S5-01 and 348 / 350 in S7-02, SAO 85 % / 65 % of the
+# acetate-consuming biomass at the end. See docs/f2_horizon_report.md sections 11-12, 17.
 #
 # It is physically the right correction, not a fudge: syntrophic acetate oxidisers are
 # continuously re-introduced with the substrate and in a real digester are never absent,

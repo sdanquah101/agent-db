@@ -22,9 +22,9 @@
 # does not exist - the two compete for one substrate, so one always excludes the other, and
 # the exchange is at K_I_nh3 ~ 0.003 kmol N/m3, an order of magnitude below the adapted
 # range 0.02-0.05. S5-01 and S7-02 were unaffected because they are TRANSITIONS: a loss of
-# adaptation at the onset day STARTS the shift inside the run (it does not complete it:
-# measured 2026-09-10, SAO reaches 9 % / 3 % of the acetate-consuming biomass by day 240
-# in S5-01 / S7-02 -- see those files). This row has no transition by
+# adaptation at the onset day STARTS the shift inside the run and, on Plant A's 365-d
+# horizon, completes it (measured 2026-09-11: SAO reaches 0.60 of biomass by day ~300 in
+# S5-01 and ~350 in S7-02 -- see those files; 9 % / 3 % by day 240). This row has no transition by
 # construction, so at Plant A's ADAPTED, acetoclastic baseline the truth's SAO carried no
 # flux and omitting it from the fitted model produced no residual at all.
 #

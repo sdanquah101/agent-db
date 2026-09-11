@@ -1583,3 +1583,39 @@ after the tag). No `duration_days` was touched. **Do not regenerate until the co
 says so.** Next: push, CI green, report to the coordinator; then regenerate on instruction,
 as the last action.
 
+
+---
+
+### Session 2026-09-11 (G1 remediation, the lead's §15 rulings) — C0–C4 on `claude/g1-review-blockers`
+
+Four rulings, one commit each, on top of the F2 investigation (§1–§16 of
+`docs/f2_horizon_report.md`; attribution corrected at `e688535`: the common-horizon
+question is review finding F2, not the lead's):
+
+- **Ruling 1 (`1353341`)** — the influent generator is prefix-stable in the horizon (child
+  streams per (seed, feed, block) and per (seed, feed, assay)), so a longer run is the same
+  realisation extended; the blend tank's hold-up and day-0 state come from the first 30
+  days of arrivals. Prefix-stability test with a negative control; tank-window test; the
+  fourteen equalisation tests unchanged. **One test left red at the band edge**:
+  `test_plant_b_survives_the_generator_swings` (seed 11, 180 d, biogas ratio 1.5004) — the
+  `biogas_mean` excess on one seed, recorded, not weakened.
+- **Ruling 2 (`7d1554d`)** — `biogas_mean` investigated read-only (§16): the anchor column is
+  total metered biogas (burner + boiler), so the basis is right in kind; the hidden HSW /
+  FOG degradability centres (0.95 / 0.98) sit above the cited literature (~0.84 / ~0.92,
+  an estimated ~7 % of gas). Band, basis and feed centres unchanged; the row to watch. The
+  g1 gate is red at 1.54.
+- **Ruling 3 (`3ec7bb8`)** — the horizon is the plant's: `horizon_days` A 365, B and C 200;
+  every scenario at its own plant's horizon; `at_plant_horizon` in the matrix (mutation
+  tested). Four-row trigger tables re-measured at the matrix horizons: overload B 7.12 %,
+  C 9.82 %, A-unadapted 1.02 %, A-adapted 0.22 %; foaming 6.63 / 8.50 / 0.09 / 0.20 %.
+  Expected regeneration cost of the 365-d Plant A cells: under two minutes on ~13 min.
+- **Ruling 4 (this commit)** — S7-02 stays at onset 120 on 365 d; the takeover completes:
+  X_sao 0.60 / X_ac 0.46 by day 348 / 350 (S5-01: 298 / 302), SAO 65 % / 85 % of the
+  acetate-consuming biomass at the end. Record corrected to what is reached (§17).
+
+**Next, in the coordinator's order:** fast-forward `claude/g1-scenario-generation` to the
+side-branch head; wait for CI (ruff and the default suite green but for the recorded
+band-edge test; the g1 gate red on `biogas_mean`, with the band the lead's); regenerate the
+117-cell matrix at that head as the last action and report SHA, cell count, wall-clock,
+index count and the trigger tables for all three plants; then stop. Hold regeneration only
+on HOLD from the coordinator.

@@ -14,23 +14,35 @@
 # takes the inhibition constant below the pathway-exchange threshold, and syntrophic
 # acetate oxidation begins to grow in behind the inhibited acetoclasts. The fitted model
 # has no SAO at all, so the structural error is not a static offset but one that grows as
-# the truth's route to methane changes underneath it -- SLOWLY, as measured:
+# the truth's route to methane changes underneath it -- SLOWLY, as measured. That is why
+# Plant A's horizon is a year (the lead's rulings 3 and 4, 2026-09-11): the shift needs it.
 #
-# MEASURED (2026-09-10, the harness at this scenario's own seed, current feed; the earlier
-# claim of a completed takeover -- X_sao to 0.60, X_ac to 0.46 in 240 d -- is NOT
-# reproducible at 42bbe8e, the commit that recorded it, nor at any later commit, and
-# cannot be traced to a committed state). The loss of adaptation STARTS the shift; it
-# does not complete it inside the run:
+# MEASURED (2026-09-11, the harness at this scenario's own seed, current feed, the
+# prefix-stable generator of ruling 1, 365 d). ONSET day 120 of 365. The loss of
+# adaptation starts the shift and, on the year, COMPLETES it: X_sao reaches 0.60 on day
+# 348 and X_ac falls to 0.46 on day 350; SAO carries half the acetate-consuming biomass
+# from day 338 and 65 % at the end (X_ac 0.371 against X_sao 0.691). Acetate goes from
+# 0.04 kg COD/m3 before the onset to a peak of 3.9 on day 158 and back to 0.31 at the end
+# as the oxidisers take the flux; the run is sound throughout (pH 7.70, CH4 0.62 at the end).
 #
-#   horizon   SAO share of the acetate-consuming biomass at the end   acetate d119 -> end
-#   200 d     0.4 %                                                    0.03 -> 1.2 kg/m3
-#   220 d     1.0 %                                                    0.02 -> 2.0
-#   240 d     3.2 %   (X_sao 0.039 against X_ac 1.171)                 0.03 -> 0.78
+#   day    X_ac    X_sao   SAO share   acetate kg COD/m3
+#   119    1.177   0.0001   0.0 %       0.04       (the adapted regime)
+#   180    1.240   0.003    0.2 %       1.39
+#   240    1.150   0.045    3.8 %       1.51
+#   270    1.070   0.145   11.9 %       1.61
+#   300    0.837   0.311   27.1 %       0.99
+#   330    0.580   0.481   45.4 %       0.38
+#   365    0.371   0.691   65.1 %       0.31
 #
-# What the record shows is the acetoclasts' inhibition -- acetate up 30-100x after the
-# onset and staying there -- with syntrophic oxidation growing in slowly behind it. The
+# So the record's 0.60 / 0.46 IS reached, by day ~350: the figure first recorded on
+# 2026-09-03 as "in 240 d" was not reproducible at any commit (corrected 2026-09-10; at
+# 200 / 220 / 240 d the share is 0.4 / 1.0 / 3.2 %), and the year is what it takes. The
 # structural half of this row therefore rests on a pathway that carries a few per cent of
-# the flux by day 240; whether that is enough is the lead's call (docs/f2_horizon_report.md).
+# the flux until day ~250, a quarter by day 300 and the majority from day ~340: a
+# structural residual that is a RAMP through the last four months, on acetate first and on
+# the gas as the route changes. S5-01, the same transition without the omission, reaches
+# 0.60 / 0.46 fifty days earlier (day 298 / 302; see that file) -- the two rows differ in
+# the fitted model, not in the truth's timing beyond that.
 #
 # WHY `kinetic_update_allowed` IS TRUE HERE and false in S6-01: the truth label carries
 # `parameter` as well as `structural`, so a bounded update of the ammonia-inhibition

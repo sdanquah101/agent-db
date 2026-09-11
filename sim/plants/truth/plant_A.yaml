@@ -29,10 +29,14 @@
 #     0.02-0.05 at which both are present -- the plant is acetoclastic at all of them.
 #   * The Level-5/6/7 rows are therefore staged as *transitions*: the run starts adapted
 #     and acetoclastic, and a loss of adaptation at the onset day takes K_I below the
-#     exclusion threshold, after which SAO grows in behind the inhibited acetoclasts. It
-#     does NOT take over inside the horizon (measured 2026-09-10: 9.0 % of the
-#     acetate-consuming biomass in S5-01 and 3.2 % in S7-02 by day 240, 1.2 % / 0.4 % at
-#     200 d); the row's signal is the acetate accumulation the inhibition causes.
+#     exclusion threshold, after which SAO grows in behind the inhibited acetoclasts. On
+#     Plant A's 365-d horizon (the lead's ruling 3, 2026-09-11) it DOES take over, late:
+#     measured 2026-09-11 with the onset at day 120, X_sao reaches 0.60 and X_ac falls to
+#     0.46 by day 298 / 302 in S5-01 and by day 348 / 350 in S7-02, and SAO carries 85 % /
+#     65 % of the acetate-consuming biomass at the end (9.0 % / 3.2 % by day 240, 1.2 % /
+#     0.4 % at 200 d -- which is why the old 240-d horizon could not hold these rows). The
+#     rows' first signal is the acetate accumulation the inhibition causes; their second,
+#     on the year, is the route changing underneath the fitted model.
 #   * `ammonia_inhibition_shift` admits multipliers of 0.1 to 10 (sim/faults/schema.py,
 #     frozen). 0.02 x 0.1 = 0.002 is below the ~0.003 threshold; 0.035 x 0.1 = 0.0035 is
 #     ABOVE it, so from the midpoint the largest admissible loss of adaptation does not

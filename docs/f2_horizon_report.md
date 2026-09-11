@@ -728,3 +728,74 @@ same excess on one seed, at the band edge by 0.0004. It passed at the PR head be
 seed's old realisation happened to sit below the edge. Left red, recorded in the ruling-1
 decisions entry; it moves with whatever the lead decides for the row.
 
+
+## 17. Ruling 4 — S7-02 at onset 120 on the 365-d horizon: the takeover completes
+
+*Status line: rulings 1–3 landed at `1353341`, `7d1554d`, `3ec7bb8` (one commit each,
+ruff green, the default suite green but for the one band-edge plausibility test recorded at
+`1353341`; the g1 gate red for the same row). This section is the ruling-4 verification;
+its commit carries the scenario record, the truth-side record and the decisions entry.
+Next: fast-forward PR #15 to the side-branch head, CI, then regeneration as the last
+action. Nothing regenerated yet; no HOLD received.*
+
+**The question.** Ruling 4 keeps S7-02 as staged — onset day 120, `adapted` baseline — on
+Plant A's new 365-d horizon (ruling 3), and asks whether the takeover completes there:
+report the X_sao / X_ac trajectories, whether the recorded 0.60 / 0.46 is reached and by
+what day, and correct the record to what is reached. Measured through the harness at each
+row's own seed (S7-02 1072, S5-01 1051), current feed, the prefix-stable generator of
+ruling 1, 365 d, monthly samples of the truth state.
+
+**S7-02** (omitted SAO + loss of adaptation at day 120):
+
+| day | X_ac | X_sao | SAO share of X_ac + X_sao | acetate, kg COD/m³ |
+|---:|---:|---:|---:|---:|
+| 119 | 1.177 | 0.0001 | 0.0 % | 0.04 |
+| 150 | 1.226 | 0.0005 | 0.0 % | 2.34 |
+| 180 | 1.240 | 0.003 | 0.2 % | 1.39 |
+| 210 | 1.208 | 0.012 | 1.0 % | 1.58 |
+| 240 | 1.150 | 0.045 | 3.8 % | 1.51 |
+| 270 | 1.070 | 0.145 | 11.9 % | 1.61 |
+| 300 | 0.837 | 0.311 | 27.1 % | 0.99 |
+| 330 | 0.580 | 0.481 | 45.4 % | 0.38 |
+| 365 | 0.371 | 0.691 | 65.1 % | 0.31 |
+
+X_sao reaches **0.60 on day 348**; X_ac falls to **0.46 on day 350**; SAO carries half the
+acetate-consuming biomass from day 338. Acetate peaks at 3.91 on day 158 and is back to
+0.31 at the end as the oxidisers take the flux. Sound throughout (pH 7.70, CH₄ 0.62 at the
+end).
+
+**S5-01** (the same loss of adaptation, no omission — the control):
+
+| day | X_ac | X_sao | SAO share | acetate, kg COD/m³ |
+|---:|---:|---:|---:|---:|
+| 119 | 1.079 | 0.0001 | 0.0 % | 0.02 |
+| 180 | 1.022 | 0.003 | 0.3 % | 3.62 |
+| 240 | 0.958 | 0.103 | 9.7 % | 3.13 |
+| 270 | 0.734 | 0.361 | 33.0 % | 1.08 |
+| 300 | 0.472 | 0.622 | 56.9 % | 0.26 |
+| 330 | 0.267 | 0.693 | 72.2 % | 0.30 |
+| 365 | 0.139 | 0.778 | 84.8 % | 0.19 |
+
+0.60 on **day 298**, 0.46 on **day 302**, half the biomass from day 291; acetate peaks at
+3.73 on day 201. Sound throughout (pH 7.76, CH₄ 0.65).
+
+**Answer.** Yes: on 365 d the record's 0.60 / 0.46 **is reached**, by day ~350 for S7-02
+and ~300 for S5-01, and the record now says exactly that (the scenario headers, with the
+monthly table in the S7-02 file; the truth-side record; the S6-01 cross-reference; the
+harness note). The figure first recorded on 2026-09-03 as "in 240 d" was not reproducible
+at any commit (§11, corrected at `3be4ef9`); the year is what it takes on the current
+feed. The two rows differ in the fitted model, not in the truth's timing beyond the fifty
+days the omission costs S7-02's oxidisers (they start from the same 7e-5 seed but the
+S7-02 truth's acetate pool relaxes later).
+
+**What that makes of the row.** The structural half of S7-02 rests on a pathway that
+carries a few per cent of the flux until day ~250, a quarter by day 300 and the majority
+from day ~340: a structural residual that is a **ramp through the last four months**, on
+acetate first and on the gas as the route changes — the "ramp that follows the growing
+oxidiser population" the answer key describes, which at 200 d it was not (§11: 0.4 % of
+the flux, every channel reproduced by an SAO-less fit). The parameter half is unchanged: a
+step at day 120 on the adapted baseline, acetate up 100× within forty days. The onset-30
+staging (§12 c) and the `unadapted` staging (§11) are not needed and are closed by the
+ruling; retirement (§12 d) is off the table.
+
+**Not changed.** No onset, magnitude, baseline, seed, budget, answer key or tolerance.
