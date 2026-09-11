@@ -229,7 +229,7 @@ matrix cells are sound. The sound/soured labelling stays as instrumentation.
 - **The consequence that used to follow from it is resolved.** Conditional missingness — and
   with it the Level-4 `informative_missingness` row — had almost nothing to act on, because
   the flag read a quantity that sits far below its threshold. Since the lead's ruling B the
-  trigger reads the hidden process state and fires on **7.12 % of days in every sound run**
+  trigger reads the hidden process state and fires on **7.38 % of days in every sound run**
   (§5.4), against the plant's own 7.78–9.18 %.
 - **`S6-01` (omitted SAO) is no longer inert** (lead's ruling 1, 2026-09-09). Plant A
   declares **two baselines**: `adapted`, acetoclastic, where the omitted syntrophic pathway
@@ -283,15 +283,17 @@ missingness triggers on the hidden state (§5.4).
 
 | | reads | fires on | used for |
 |---|---|---|---|
-| **overload trigger** (conditional missingness) | hidden true VFA > 2.00× its 30-day trailing median | **7.12 %** of days on sound Plant B runs at the 200-d matrix horizon (per-run 2.34 – 16.37 %, 24/24 runs) | §6.1 conditional missingness, and the Level-4 `informative_missingness` row |
-| **foaming trigger** (conditional missingness) | hidden gas > 1.80× its 30-day trailing median **and** true VFA > its 30-day trailing median | **6.63 %** of days on sound Plant B runs at the 200-d matrix horizon (per-run 1.75 – 14.04 %, 24/24 runs) | §6.1 conditional missingness (the 3× online multiplier) |
+| **overload trigger** (conditional missingness) | hidden true VFA > 2.00× its 30-day trailing median | **7.38 %** of days on sound Plant B runs at the 200-d matrix horizon (per-run 2.92 – 19.88 %, 24/24 runs) | §6.1 conditional missingness, and the Level-4 `informative_missingness` row |
+| **foaming trigger** (conditional missingness) | hidden gas > 1.80× its 30-day trailing median **and** true VFA > its 30-day trailing median | **6.34 %** of days on sound Plant B runs at the 200-d matrix horizon (per-run 1.75 – 13.45 %, 24/24 runs) | §6.1 conditional missingness (the 3× online multiplier) |
 | **operator-visible overload** | titrimetric FOS/TAC > 0.40 | 0.00 % of days (0/24 runs; 0.17 %, 1/24, on the 180-d panel of 2026-09-10) | what an operator would call an overload; reported, never a trigger |
 | **operator-visible foaming** | titrimetric FOS/TAC > 0.30 | 0.00 % of days (0/24 runs; 0.25 %, 1/24, on the 180-d panel of 2026-09-10) | what an operator would call foaming; reported, **structurally dead**, never a trigger |
 
 Both triggers on all four rows at the matrix horizons of the lead's ruling 3 (B and C at
-200 d, Plant A at 365 d; 24 seeds each, recorded and not tuned): overload
-7.12 % / 9.82 % / 0.22 % / 1.02 % (B / C / A-adapted / A-unadapted);
-foaming 6.63 % / 8.50 % / 0.20 % / 0.09 % (`docs/g1_anchor_report.md`
+200 d, Plant A at 365 d; 24 seeds each, recorded and not tuned; B and C re-measured
+after the lead's ruling 5 of 2026-09-11 corrected the HSW and FOG degradability centres,
+from 7.12 / 9.82 % overload and 6.63 / 8.50 % foaming): overload
+7.38 % / 9.82 % / 0.22 % / 1.02 % (B / C / A-adapted / A-unadapted);
+foaming 6.34 % / 8.50 % / 0.20 % / 0.09 % (`docs/g1_anchor_report.md`
 §5.4, which also keeps the 180-d values of 2026-09-10 beside them).
 
 **The foaming trigger reads the hidden state because the reading it used to read is
@@ -306,7 +308,7 @@ lowered to make the flag fire.
 The **trigger** reads the plant, not a reading: instruments fail during the transients that
 identify the process whether or not anyone has taken a measurement, and the reading it used
 to use masks those transients (§5.3). Its cut-off was not tuned — 2.00× is the lead's figure
-as written, and it lands on 7.12 % against the plant's own 7.78–9.18 % exceedance. Its
+as written, and it lands on 7.38 % against the plant's own 7.78–9.18 % exceedance. Its
 trailing window **excludes the current day**, so an excursion cannot drag its own reference
 up and mask itself. The cut-off is 2.00× on every plant: **differences between plants are
 recorded, not tuned away.**

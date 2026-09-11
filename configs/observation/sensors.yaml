@@ -62,12 +62,13 @@ conditions:
   # four numbers from two simulators. AFTER the M2 fix of 2026-09-09 (inorganic carbon
   # paired to the high-strength waste's cations) the ADOPTED trigger fired on 7.70 % of the
   # same 24 sound Plant B runs, on 7.67 % after the calcium and liquor rulings of
-  # 2026-09-10 (180-d panel), and on 7.12 % at the 200-d matrix horizon under the
-  # prefix-stable generator (the lead's rulings 1 and 3, 2026-09-11). The three rejected
+  # 2026-09-10 (180-d panel), on 7.12 % at the 200-d matrix horizon under the
+  # prefix-stable generator (the lead's rulings 1 and 3, 2026-09-11), and on 7.38 %
+  # after ruling 5 set the HSW and FOG degradability centres to their cited values. The three rejected
   # candidates were not re-measured; they lost by factors of 3 to 6, which a sub-point
   # shift does not touch.
   #
-  # 7.12 % against the anchor's own 7.78 % exceedance, with NOTHING TUNED. The other two
+  # 7.38 % against the anchor's own 7.78 % exceedance, with NOTHING TUNED. The other two
   # each overshoot alone and the OR gives 47 %, so they are NOT combined. If a combination
   # is ever wanted the equivalent 7.8 % cut-offs are gas > 1.796x trailing and
   # OLR > 1.871x mean; recorded, not used.
@@ -75,7 +76,7 @@ conditions:
   # The cut-off stays 2.00x on every plant: differences between plants are to be RECORDED,
   # NOT TUNED AWAY (the lead), and there is no per-plant cut-off. All four rows are recorded
   # (2026-09-11, at the matrix horizons of ruling 3 -- B and C 200 d, Plant A 365 d -- 24
-  # seeds each): B 7.12 %, C 9.82 %, A-unadapted 1.02 %, A-adapted
+  # seeds each; B and C after ruling 5, from 7.12 / 9.82 %): B 7.38 %, C 9.82 %, A-unadapted 1.02 %, A-adapted
   # 0.22 % (180-d panel of 2026-09-10: 7.67 / 9.22 / 1.49 / 0.28 %).
   # docs/g1_anchor_report.md section 5.4 has the
   # ranges and the pathway finding the Plant A pair carries.

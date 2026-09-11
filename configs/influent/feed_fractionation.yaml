@@ -246,7 +246,7 @@ feeds:
     ts: 0.0733                   # DESIGN  kg TS/kg wet; derived: VS 6.16 % w/w (LABS-raw mean) at an assumed VS/TS of 0.84
     vs_of_ts: 0.84               # DESIGN  kg VS/kg TS; assumed (food-processing waste)
     inert_cod_equivalent: 1.42   # DESIGN  kg COD/kg VS mass; sludge-derived value (lead's freeze: the Muscatine feeds); HSW inerts are biological solids of food-processing origin, taken at the C5H7O2N 1.42
-    cod_per_vs_literature: 2.234 # DESIGN  kg COD/kg VS; CHECK, MEASURED: LABS-raw means 137.6 kg COD/m3 / 61.6 kg VS/m3 (Muscatine); the fractionation below derives 2.186 (-2.2 %) at this feed's inert equivalent of 1.42
+    cod_per_vs_literature: 2.234 # DESIGN  kg COD/kg VS; CHECK, MEASURED: LABS-raw means 137.6 kg COD/m3 / 61.6 kg VS/m3 (Muscatine); the fractionation below derives 2.057 (-7.9 %) at this feed's inert equivalent of 1.42 (2.186, -2.2 %, before ruling 5 of 2026-09-11)
     cod_per_vs_tolerance: 0.10   # DESIGN  -
     ph: 7.0                      # DESIGN  pH; assumed. RAISED from 5.0 by the lead's M2 ruling
                                  # of 2026-09-09 (amendment to ruling 3). At the declared
@@ -258,16 +258,27 @@ feeds:
                                  # neutralising the stream's own acidity, so it arrives as
                                  # sodium bicarbonate: cations PAIRED with S_IC below, at a
                                  # pH a real CIP-buffered industrial waste is delivered at.
-    fractionation:               # DESIGN  kg COD/kg COD; ADJUSTED (lead's decision 2026-09-02, answer 1): PR #7's split (ch 0.20 / pr 0.10 / li 0.55 / xi 0.08 / si 0.02 / vfa 0.05) derived only 1.79 kg COD/kg VS, 20 % under the measured 2.23; the lipid COD share is raised to 0.75 (the lead's 0.7-0.75), which by the equivalents is 0.56 of the VS mass, and the carbohydrate, protein and inert shares reduced in proportion, so the derived COD/VS passes the +/- 10 % check against the measured value; composition is not measured at Muscatine
-      f_ch: 0.10                 #   assumed (was 0.20)
-      f_pr: 0.06                 #   assumed (was 0.10)
-      f_li: 0.75                 #   assumed: lipid COD share needed for the measured COD/VS (was 0.55)
-      f_xi: 0.03                 #   assumed (was 0.08)
+    fractionation:               # DESIGN  kg COD/kg COD; ADJUSTED (lead's decision 2026-09-02, answer 1): PR #7's split (ch 0.20 / pr 0.10 / li 0.55 / xi 0.08 / si 0.02 / vfa 0.05) derived only 1.79 kg COD/kg VS, 20 % under the measured 2.23; the lipid COD share is raised to 0.75 (the lead's 0.7-0.75), which by the equivalents is 0.56 of the VS mass, and the carbohydrate, protein and inert shares reduced in proportion, so the derived COD/VS passes the +/- 10 % check against the measured value; composition is not measured at Muscatine.
+                                 # CORRECTED (the lead's ruling 5, 2026-09-11): the hidden degradability centre
+                                 # (non-inert COD share) is set to its CITED value 0.84, from 0.95. 0.84 is the
+                                 # composition above weighted by cited conversion-to-biogas fractions -- lipid
+                                 # 94.8 % (Jeganathan et al. 2006), protein 71 % (Davidsson et al. 2008),
+                                 # carbohydrate 50.4 % (Ziels et al. 2016), as compiled in the FOG co-digestion
+                                 # review PMC8072289; acetate fully -- 0.75 x 0.948 + 0.10 x 0.504 + 0.06 x 0.71
+                                 # + 0.04 = 0.84: a DERIVED figure from an assumed composition, not a measured
+                                 # biodegradability of Muscatine's waste. Inert 0.05 -> 0.16, the four degradable
+                                 # classes scaled by 0.84/0.95 so the composition is unchanged; the derived COD/VS
+                                 # is 2.057 (-7.9 % of the measured 2.234, inside the check; was 2.186).
+                                 # docs/f2_horizon_report.md sections 16 and 19, docs/decisions.md 2026-09-11.
+      f_ch: 0.0884               #   assumed; was 0.10 (0.20 in PR #7)
+      f_pr: 0.0531               #   assumed; was 0.06 (0.10)
+      f_li: 0.6631               #   assumed: lipid COD share; was 0.75 (0.55)
+      f_xi: 0.14                 #   the non-degradable share the cited conversions imply; was 0.03 (0.08)
       f_si: 0.02                 #   assumed
-      f_vfa: 0.04                #   assumed (was 0.05)
+      f_vfa: 0.0354              #   assumed; was 0.04 (0.05)
     fractionation_concentration: 30.0    # DESIGN  -; assumed: the HSW COD varies by 70 % (sd/mean, LABS-raw), its composition is not measured
     tan: 0.01                    # DESIGN  kmol N/m3; assumed: not measured at Muscatine
-    tkn: 0.076                   # DESIGN  kmol N/m3; derived from the fractionation with inert_N_I (not measured at Muscatine; was 0.127 with the old split)
+    tkn: 0.0875                  # DESIGN  kmol N/m3; derived from the fractionation with inert_N_I (not measured at Muscatine); RE-DERIVED under ruling 5 of 2026-09-11 for the larger inert share (was 0.076 with the 0.95 centre, 0.127 with the PR #7 split). A check value: the simulation takes its nitrogen from the fractionation and inert_N_I, not from this field
     tkn_tolerance: 0.15          # DESIGN  -
     inert_N_I: 0.0015  # DESIGN  kmol N/kg COD; PR #7 Plant B override (see food_waste)
     s_ic: 0.1638                   # DESIGN  kmol C/m3; DERIVED: re-solved 2026-09-10 against the reduced s_ca
@@ -318,19 +329,27 @@ feeds:
                                  # provisional assumed value, forced by the anchor.
     vs_of_ts: 0.95               # DESIGN  kg VS/kg TS; assumed
     inert_cod_equivalent: 1.42   # DESIGN  kg COD/kg VS mass; SLUDGE VALUE BY THE LEAD'S INSTRUCTION (freeze 2026-09-02): FOG's small inert residue is grease-trap solids, taken at the sludge-derived 1.42, an assumption
-    cod_per_vs_literature: 2.80  # DESIGN  kg COD/kg VS; CHECK: FOG taken as ~95 % lipid by mass at the stoichiometric COD of triolein C57H104O6 (2.89 g COD/g) with the rest carbohydrate-like, i.e. 2.7-2.9 (the lead's range); PR #7's 2.75 came from treating the 0.85 lipid COD share as a mass share; the fractionation below derives 2.741 (-2.1 %) at this feed's inert equivalent of 1.42
+    cod_per_vs_literature: 2.80  # DESIGN  kg COD/kg VS; CHECK: FOG taken as ~95 % lipid by mass at the stoichiometric COD of triolein C57H104O6 (2.89 g COD/g) with the rest carbohydrate-like, i.e. 2.7-2.9 (the lead's range); PR #7's 2.75 came from treating the 0.85 lipid COD share as a mass share; the fractionation below derives 2.593 (-7.4 %) at this feed's inert equivalent of 1.42 (2.741, -2.1 %, before ruling 5 of 2026-09-11)
     cod_per_vs_tolerance: 0.10   # DESIGN  -
     ph: 5.0                      # DESIGN  pH; assumed: grease-trap waste is acidic (4.5-6); not measured at Muscatine
-    fractionation:               # DESIGN  kg COD/kg COD; FIXED (lead's decision 2026-09-02, answer 1): PR #7's f_li 0.85 was a COD share that derives only 2.43 kg COD/kg VS; a lipid-dominated FOG needs a lipid COD share of ~0.93-0.95 to land at 2.7-2.9
-      f_ch: 0.015                #   assumed (was 0.05)
-      f_pr: 0.015                #   assumed (was 0.05)
-      f_li: 0.95                 #   assumed: lipid COD share for a ~95 % lipid mass share (was 0.85)
-      f_xi: 0.015                #   assumed (was 0.04)
-      f_si: 0.005                #   assumed (was 0.01)
+    fractionation:               # DESIGN  kg COD/kg COD; FIXED (lead's decision 2026-09-02, answer 1): PR #7's f_li 0.85 was a COD share that derives only 2.43 kg COD/kg VS; a lipid-dominated FOG needs a lipid COD share of ~0.93-0.95 to land at 2.7-2.9.
+                                 # CORRECTED (the lead's ruling 5, 2026-09-11): the hidden degradability centre
+                                 # is set to its CITED value 0.92, from 0.98 -- the same composition-weighted
+                                 # derivation as the high-strength waste (0.95 x 0.948 + 0.015 x 0.504 + 0.015
+                                 # x 0.71 = 0.92), bracketed by brown grease at ~90 % of theoretical (354 mL
+                                 # CH4/g COD at 35 C; Frontiers Environ. Eng. 2024) and 0.40-0.77 m3 CH4/kg VS
+                                 # removed at pilot scale (Zhang et al. 2014). Inert 0.02 -> 0.08, the three
+                                 # degradable classes scaled by 0.92/0.98; the derived COD/VS is 2.593 (-7.4 % of
+                                 # the 2.80 check; was 2.741). Every stream's centre is derived the same way.
+      f_ch: 0.0141               #   assumed; was 0.015 (0.05 in PR #7)
+      f_pr: 0.0141               #   assumed; was 0.015 (0.05)
+      f_li: 0.8918               #   assumed: lipid COD share for a ~95 % lipid mass share; was 0.95 (0.85)
+      f_xi: 0.06                 #   the non-degradable share the cited conversions imply; was 0.015 (0.04)
+      f_si: 0.02                 #   was 0.005 (0.01)
       f_vfa: 0.0
     fractionation_concentration: 60.0    # DESIGN  -; assumed
     tan: 0.0                     # DESIGN  kmol N/m3; assumed
-    tkn: 0.0067                  # DESIGN  kmol N/m3; derived from the fractionation with inert_N_I at the anchor-derived TS (0.033 at the old 10 % TS)
+    tkn: 0.0102                  # DESIGN  kmol N/m3; derived from the fractionation with inert_N_I at the anchor-derived TS; RE-DERIVED under ruling 5 of 2026-09-11 for the larger inert share (was 0.0067 with the 0.98 centre; 0.033 at the old 10 % TS). A check value, not a simulation input
     tkn_tolerance: 0.15          # DESIGN  -
     inert_N_I: 0.0015  # DESIGN  kmol N/kg COD; PR #7 Plant B override (see food_waste)
     s_ic: 0.0                    # DESIGN  kmol C/m3; PR #7 value, no note

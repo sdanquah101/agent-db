@@ -90,8 +90,9 @@ three tiers and nowhere but Plant A (`sim/run/matrix.py`, and the decisions entr
   opposite). Both flags its fault scales fire on the **hidden state**: overload on true VFA
   above 2.00× its 30-day trailing median (lead's ruling B), foaming on a gas surge above
   1.80× its 30-day trailing median while true VFA is above its own (ruling B3). Measured on
-  24 sound Plant B runs at the 200-d matrix horizon they fire on 7.12 % and
-  6.63 % of days, in every run, against the
+  24 sound Plant B runs at the 200-d matrix horizon they fire on 7.38 % and
+  6.34 % of days, in every run (7.12 % and 6.63 % before the lead's ruling 5 of
+  2026-09-11 corrected the HSW and FOG degradability centres), against the
   plant's own 7.78–9.18 % FOS/TAC exceedance; the titrimetric sensor convention is
   implemented (ruling A, `sim.observation.channels.titrimetric_fos`, no fitted parameter).
   `docs/g1_anchor_report.md` §5.4 has the four-row tables. What remains thin is the single
