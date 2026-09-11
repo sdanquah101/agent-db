@@ -4149,3 +4149,50 @@ baseline table in this log is annotated as superseded (left as the record of the
 such field — survived, because `extra="ignore"` drops it: it is not a leak, and it is
 recorded so the survivor is not mistaken for a gap.)
 
+## 2026-09-11 — RULING 1 (the lead): the influent generator is prefix-stable in the horizon, and the blend tank starts from its first window
+
+**Decision.** Two changes to frozen components, on `docs/f2_horizon_report.md` §15.
+(1) `sim/influent/generator.py`: every per-feed block (delivery days, amount AR(1),
+moisture AR(1), unrecorded-delivery uniforms and normals, mis-log uniforms and normals) is
+drawn from its own child stream keyed by `(seed, 1 + k_feed, block)`, and each assay's
+noise from `(seed, 1000 + k_feed, k_assay)`; the true-fractionation draw stays at the head
+of the run's main stream and the fault layer keeps its own seed. (2)
+`sim/plants/equalisation.py`: the tank's hold-up is set from the first 30 days of arrivals
+(`INITIALISATION_WINDOW_D`) and its day-0 level and load from the first hold-up window,
+instead of the whole-horizon mean of arrivals; the harness passes the same window for the
+ash tracer's tank.
+
+**Reason.** With one shared stream a block of length `n_days` shifted every later block, so
+a change of horizon re-rolled every feed from day 0 — verified directly: the same seed at
+190 and 200 d on Plant B gave deliveries that differed on every feed from day 0 — and every
+horizon was a different 24-seed panel. That is what made the anchored `biogas_mean` jump by
+±5 % between horizons ten days apart (1.449 / 1.523 / 1.455 / 1.551 at 190 / 200 / 210 /
+220 d) and what turned the F2 horizon question into a coin flip against the row's band
+edge. With the prefix-stable layout the three horizons agree within 2 % on every quantity.
+The tank initialisation contributes under a percent but is horizon-dependent by
+construction (recorded as dormant at the review of 2026-09-10; it was not) and a window of
+one hold-up is what the tank can actually know on day 0. Rule 4 holds as before: seeded,
+ordered, reproducible; the new property is that a longer run *extends* a realisation.
+
+**Alternatives considered.** Keep the layout and record the jitter as a property of the
+panel (rejected by the lead: a horizon change should not re-roll the world, and the
+measurement the F2 decision needs is impossible without prefix stability); the tank fix
+alone (measured in §15.1: it does not touch the jitter).
+
+**Consequences, stated.** Every cell's realisation changes once, on all plants. The
+anchored rows re-measured under the new layout at 200 d: all inside their bands except
+`biogas_mean` (ruling 2). The trigger rates move (Plant B ~7.1 % / 6.6 % rather than
+~8.9 % / 8.7 % at 200 d). Tests: the fourteen equalisation tests are unchanged (they call
+`buffer_series` with the old default); a prefix-stability test asserts that a 90-day run
+is the first 90 days of a 130-day run on Plants A and B for deliveries, moisture, logs,
+fractionation and assays, with a negative control; a tank test asserts the day-0 state
+does not see a late change and that the old initialisation did. The generator's
+"Randomness" paragraph is rewritten to the new layout.
+
+**One test is red at this commit and is left red.**
+`tests/test_plausibility.py::test_plant_b_survives_the_generator_swings` runs seed 11 on
+Plant B for 180 d, unbuffered, and asserts the same [0.6, 1.5] biogas ratio as the anchor
+row; under the new layout that seed's realisation gives 3168 m³/d against 2111, ratio
+1.5004. It is the `biogas_mean` excess (ruling 2) on one seed, not a regression in the
+layout: the band is the lead's to move and the test is not weakened, per the standing
+rule. The g1 gate (`-m g1`, deselected by default) is red for the same reason.

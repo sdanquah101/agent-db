@@ -59,16 +59,20 @@ by ``anchor/ingest_muscatine.py`` and ``tests/test_generator.py``):
    a piecewise-constant input, decision "Solver defaults and influent handling").
    The truth ``N_I`` is the inert-COD-weighted mean over the horizon's mean true recipe.
 
-**Randomness.** One ``numpy.random.default_rng(seed)`` stream per run (CLAUDE.md rule 4),
-consumed in this fixed order: the true-fractionation draw (feeds in sorted id order);
-then per feed in sorted id order: ``n`` uniforms for delivery days (always consumed,
-whatever the model, so the stream layout is independent of the model), ``n`` normals for
-the amount AR(1), ``n`` normals for the moisture AR(1), ``n`` uniforms and ``n`` normals
-for unrecorded deliveries, ``n`` uniforms and ``n`` normals for mis-logs; then per feed
-in sorted id order, per assay in sorted name order, ``n`` normals of assay noise. A
-change to a later stage cannot alter an earlier one (tested). The blocks are ``n_days``
-long, so the horizon is **not prefix-stable**: a 100-day run is not the first 100 days of
-a 200-day run with the same seed (the seed and the horizon together identify a run).
+**Randomness.** Seeded and **prefix-stable** (CLAUDE.md rule 4; the lead's ruling 1 of
+2026-09-11 on `docs/f2_horizon_report.md` §15). The true-fractionation draw is the head of
+the run's main ``default_rng(seed)`` stream, as before. Every other block is drawn from its
+own child stream keyed by what it is: per feed in sorted id order, ``default_rng([seed,
+1 + k_feed, block])`` for the seven per-feed blocks (delivery days, amount AR(1), moisture
+AR(1), unrecorded-delivery uniforms and normals, mis-log uniforms and normals), and
+``default_rng([seed, 1000 + k_feed, k_assay])`` for each assay's noise. A block of length
+``n_days`` therefore never shifts another block, and **the first n days of a longer run are
+the first n days of a shorter one** — deliveries, moisture, logs and assays alike (tested).
+Until 2026-09-11 all blocks came from the one stream in sequence, so a change of horizon
+re-rolled every feed from day 0 and every horizon was a different realisation of the same
+seed; that is what made the anchored `biogas_mean` jump by ±5 % between horizons ten days
+apart (sections 14-15 of the report). A change to a later stage still cannot alter an earlier one
+(tested), and the fault layer keeps its own seed.
 
 **Hidden truth and the visible record.** :class:`InfluentTruth` is hidden truth (the run
 layer writes it to ``truth_store/<id>/``; nothing here writes anything); the
@@ -658,16 +662,25 @@ def generate_influent(
     feeds_truth: dict[str, FeedTruth] = {}
     logged: dict[str, np.ndarray] = {}
     # 2-6. deliveries, amounts, moisture, unrecorded deliveries, mis-logs
-    for fid in feed_ids:
+    for k_feed, fid in enumerate(feed_ids):
         g = gen.feeds[fid]
         spec = catalogue.feeds[fid]
-        u_days = rng.uniform(size=n_days)
-        z_amount = rng.standard_normal(n_days)
-        z_ts = rng.standard_normal(n_days)
-        u_unrec = rng.uniform(size=n_days)
-        z_unrec = rng.standard_normal(n_days)
-        u_mislog = rng.uniform(size=n_days)
-        z_mislog = rng.standard_normal(n_days)
+
+        # PREFIX-STABLE STREAMS (the lead's ruling 1, 2026-09-11): each block is drawn from
+        # its own child stream keyed by (seed, feed, block), so the first n days of a longer
+        # run are the first n days of a shorter one. With one shared stream a block of
+        # length n_days shifted every later block, and every horizon was a different
+        # realisation from day 0 (docs/f2_horizon_report.md sections 14-15).
+        def _stream(block: int, _k: int = k_feed) -> np.random.Generator:
+            return np.random.default_rng([int(seed), 1 + _k, block])
+
+        u_days = _stream(0).uniform(size=n_days)
+        z_amount = _stream(1).standard_normal(n_days)
+        z_ts = _stream(2).standard_normal(n_days)
+        u_unrec = _stream(3).uniform(size=n_days)
+        z_unrec = _stream(4).standard_normal(n_days)
+        u_mislog = _stream(5).uniform(size=n_days)
+        z_mislog = _stream(6).standard_normal(n_days)
 
         delivered = _delivery_days(g.delivery, u_days, start_weekday)
         season_amt = seasonal_factor(
@@ -731,8 +744,10 @@ def generate_influent(
         # (an assay on an unlogged truck would leak hidden truth into the record)
         first = int(np.argmax(eligible)) if eligible.any() else 0
         sampled = eligible & ((day - first) % sched.interval_d == 0) & (logged[fid] > 0.0)
-        for assay in sorted(sched.assays):
-            z = rng.standard_normal(n_days)
+        for k_assay, assay in enumerate(sorted(sched.assays)):
+            z = np.random.default_rng(
+                [int(seed), 1000 + feed_ids.index(fid), k_assay]
+            ).standard_normal(n_days)
             model = config.assays[assay]
             unit, basis = ASSAY_UNITS[assay]
             for t in np.flatnonzero(sampled):

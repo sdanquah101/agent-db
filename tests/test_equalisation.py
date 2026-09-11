@@ -309,3 +309,30 @@ def test_feed_contribution_sums_what_it_is_given():
     total_q, total_load = feed_contribution(("a", "b"), q, conc)
     np.testing.assert_allclose(total_q, [4.0, 6.0])
     np.testing.assert_allclose(total_load, [[7.0, 7.0, 7.0], [10.0, 10.0, 10.0]])
+
+
+def test_the_tank_starts_from_its_first_window_not_the_whole_horizon():
+    """The lead's ruling 1 (2026-09-11): the day-0 tank state is independent of the run's length.
+
+    The buffer used to be initialised from the whole-horizon mean of arrivals, so the same
+    arrivals truncated at two lengths started from two different tank contents. With the
+    initial state taken from the first hold-up window, a longer series' first days are the
+    shorter series' first days exactly; the old default is kept for the analytical tests and
+    must still differ, or this test would pass on a tank that ignores the window.
+    """
+    rng = np.random.default_rng(3)
+    arrivals = rng.lognormal(3.0, 0.5, 200)
+    arrivals[150:] *= 3.0  # a late change the tank must not "know" on day 0
+    load = arrivals[:, None] * np.array([[1.0, 2.0]])
+    hold_up = 8.0
+    q_long, load_long, level_long = buffer_series(arrivals, load, hold_up, init_window_d=hold_up)
+    q_short, load_short, level_short = buffer_series(
+        arrivals[:100], load[:100], hold_up, init_window_d=hold_up
+    )
+    np.testing.assert_allclose(q_long[:100], q_short)
+    np.testing.assert_allclose(load_long[:100], load_short)
+    np.testing.assert_allclose(level_long[:100], level_short)
+    # the negative control: the whole-horizon initialisation sees the late change on day 0
+    q_old, _, level_old = buffer_series(arrivals, load, hold_up)
+    assert level_old[0] > 1.5 * level_long[0]
+    assert not np.allclose(q_old[:100], q_short)

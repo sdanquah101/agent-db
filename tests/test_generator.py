@@ -219,11 +219,12 @@ def test_same_seed_same_run_and_the_stream_order_is_as_documented(
     # the true-fractionation draw is the head of the stream: identical to the seed-only API
     ids = [f.name for f in plants["B"].feeds]
     assert a.truth.fractionations == sample_true_fractionations(catalogue, ids, 3)
-    # a later stage cannot change an earlier one. fog sorts first: changing its delivery
-    # model (to a Markov chain with the same zero fraction, so the plant check still
-    # passes) changes fog's own deliveries but (uniforms always consumed) nothing else's,
-    # and changing its assay tuple shifts the noise of every later feed's assays while
-    # leaving every delivery and the fractionation bit-identical
+    # a later stage cannot change an earlier one -- and since the lead's ruling 1 of
+    # 2026-09-11 (prefix-stable child streams) no stage can change another feed's either.
+    # fog sorts first: changing its delivery model (to a Markov chain with the same zero
+    # fraction, so the plant check still passes) changes fog's own deliveries and nothing
+    # else's, and changing its assay tuple changes fog's own assay noise and nobody else's,
+    # leaving every delivery, every other feed's assays and the fractionation bit-identical
     gen = config.plants["B"]
     fog = gen.feeds["fog"]
     changed = gen.model_copy(
@@ -253,13 +254,17 @@ def test_same_seed_same_run_and_the_stream_order_is_as_documented(
         np.testing.assert_array_equal(
             d.observed.feed_log_kg_wet_d[fid], a.observed.feed_log_kg_wet_d[fid]
         )
-    # fewer fog assays -> fewer normals consumed before the later feeds' noise -> their
-    # assay values differ, on the same sample days (the schedule does not move)
+    # fewer fog assays used to shift the noise of every later feed's assays (one shared
+    # stream); each assay now has its own child stream, so the other feeds' assay values
+    # are bit-identical on the same sample days, and only fog's own set changed
     for fid in ("high_strength_waste", "primary_sludge", "thickened_was"):
         before = [r for r in a.observed.assays if r.feed_id == fid]
         after = [r for r in d.observed.assays if r.feed_id == fid]
-        assert [(r.sample_day, r.assay) for r in before] == [(r.sample_day, r.assay) for r in after]
-        assert [r.value for r in before] != [r.value for r in after]
+        assert [(r.sample_day, r.assay, r.value) for r in before] == [
+            (r.sample_day, r.assay, r.value) for r in after
+        ]
+    assert {r.assay for r in d.observed.assays if r.feed_id == "fog"} == {"ts"}
+    assert {r.assay for r in a.observed.assays if r.feed_id == "fog"} > {"ts"}
 
 
 # ----------------------------------------------------------------- delivery process
@@ -783,3 +788,40 @@ def test_assays_carry_units_lag_and_are_unbiased_and_tkn_is_the_per_feed_one(
     own = feed_tkn(spec, adm1_params.stoichiometry.N_aa)
     assert abs(fitted - own) / own > 0.15
     assert len(day) == run.truth.n_days
+
+
+def test_a_longer_horizon_extends_the_same_realisation(plants, catalogue, config, adm1_params):
+    """The lead's ruling 1 (2026-09-11): the generator is prefix-stable in the horizon.
+
+    Until then every block was drawn in sequence from one stream, so a block of length
+    ``n_days`` shifted every later block and a change of horizon re-rolled every feed from
+    day 0 -- each horizon was a different realisation of the same seed, and the anchored
+    ``biogas_mean`` jumped by 5 % between horizons ten days apart
+    (docs/f2_horizon_report.md sections 14-15). Now the first n days of a longer run ARE the
+    n-day run: deliveries, moisture, the operator's log, the true fractionation and the
+    assays, on both a plant with a blend tank and one without.
+    """
+    for pid in ("B", "A"):
+        short = generate_influent(plants[pid], catalogue, config, adm1_params, seed=11, n_days=90)
+        longer = generate_influent(plants[pid], catalogue, config, adm1_params, seed=11, n_days=130)
+        assert (
+            short.truth.fractionations.fractionations == longer.truth.fractionations.fractionations
+        )
+        for fid, feed in short.truth.feeds.items():
+            other = longer.truth.feeds[fid]
+            np.testing.assert_array_equal(feed.delivered_kg, other.delivered_kg[:90])
+            np.testing.assert_array_equal(feed.ts, other.ts[:90])
+            assert feed.unrecorded_days == tuple(d for d in other.unrecorded_days if d < 90)
+            assert feed.mislogged_days == tuple(d for d in other.mislogged_days if d < 90)
+        np.testing.assert_array_equal(short.truth.influent.q, longer.truth.influent.q[:90])
+        np.testing.assert_array_equal(
+            short.truth.influent.concentrations, longer.truth.influent.concentrations[:90]
+        )
+        early = [r for r in longer.observed.assays if r.sample_day < 90]
+        assert [(r.feed_id, r.assay, r.sample_day, r.value) for r in short.observed.assays] == [
+            (r.feed_id, r.assay, r.sample_day, r.value) for r in early
+        ]
+        # and the two horizons are still two different runs beyond the shared prefix: the
+        # negative control, so this cannot pass on a generator that ignores its horizon
+        assert longer.truth.influent.q.size == 130
+        assert not np.array_equal(longer.truth.influent.q[90:130], longer.truth.influent.q[50:90])

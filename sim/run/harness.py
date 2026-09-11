@@ -588,7 +588,9 @@ def _buffered_ash_load(
     if not buffered_ids:
         return dict(ash_load)
     stacked = np.stack([ash_load[f] for f in buffered_ids], axis=1)
-    _, out, _ = buffer_series(buffered.passthrough_q_m3_d, stacked, buffered.hold_up_d)
+    _, out, _ = buffer_series(
+        buffered.passthrough_q_m3_d, stacked, buffered.hold_up_d, init_window_d=buffered.hold_up_d
+    )
     smoothed = dict(ash_load)
     for i, fid in enumerate(buffered_ids):
         smoothed[fid] = out[:, i]

@@ -41,7 +41,25 @@ import numpy as np
 from sim.adm1.schema import Influent
 from sim.plants.schema import Equalisation
 
-__all__ = ["BufferedInfluent", "apply_equalisation", "buffer_series", "feed_contribution"]
+__all__ = [
+    "INITIALISATION_WINDOW_D",
+    "BufferedInfluent",
+    "apply_equalisation",
+    "buffer_series",
+    "feed_contribution",
+]
+
+INITIALISATION_WINDOW_D = 30
+"""Days of arrivals the tank's hold-up is set from (the "long-run buffered flow").
+
+The hold-up and the day-0 tank state used to be taken from the WHOLE-HORIZON mean of
+arrivals, which made the digester's starting point a function of the run's length: two
+runs of the same seed at 200 and 240 d started from different tank contents and their
+starting points differed (`docs/f2_horizon_report.md` section 15; the lead's ruling 1 of
+2026-09-11). The hold-up is
+now set from the first 30 days of arrivals (three hold-ups of the Muscatine tank) and the
+tank's initial level and load from the first hold-up window, so neither depends on how
+long the run is."""
 
 
 @dataclass(frozen=True)
@@ -60,7 +78,11 @@ class BufferedInfluent:
 
 
 def buffer_series(
-    q_in: np.ndarray, load_in: np.ndarray, hold_up_d: float
+    q_in: np.ndarray,
+    load_in: np.ndarray,
+    hold_up_d: float,
+    *,
+    init_window_d: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Push a flow and its component loads through one well-mixed tank.
 
@@ -69,6 +91,10 @@ def buffer_series(
         load_in: Component load per day, ``(n, k)``, in each component's own unit times
             m3/d (i.e. concentration x flow).
         hold_up_d: Tank time constant, d. Must be positive.
+        init_window_d: Days of arrivals the tank's day-0 state is the steady state of.
+            ``None`` uses the whole series (the behaviour before 2026-09-10, kept for the
+            analytical tests); the harness passes the hold-up, so the initial state does not
+            depend on the run's length.
 
     Returns:
         ``(q_out, load_out, level)``: the flow and load leaving the tank each day, and the
@@ -85,18 +111,17 @@ def buffer_series(
         raise ValueError(f"load {load_in.shape} does not match flow {q_in.shape}")
 
     decay = float(np.exp(-1.0 / hold_up_d))
-    # the tank starts at its own steady state for this run's mean arrivals: the plant has
-    # been running, so the buffer is not empty on day 0
-    # NOTE (review, 2026-09-10; dormant today, recorded rather than changed): the tank is
-    # initialised from the WHOLE-HORIZON mean of arrivals, so a future influent fault that
-    # changes deliveries after its onset would move the day-0 outflow -- the tank would
-    # "know" about a fault that has not happened yet. No frozen scenario injects such a
-    # fault on a plant with a tank (the Level-3 rows are on the feed composition, not the
-    # delivery pattern), so nothing generated depends on it. The fix, when one is needed,
-    # is to initialise from the first hold-up window only, and it changes every Plant B
-    # cell, so it is the lead's call.
-    level = float(q_in.mean() * hold_up_d)
-    mass = load_in.mean(axis=0) * hold_up_d
+    # the tank starts at its own steady state for the arrivals of its first window: the
+    # plant has been running, so the buffer is not empty on day 0. It was the WHOLE-HORIZON
+    # mean until 2026-09-11 (recorded as dormant at the review of 2026-09-10), which made
+    # the day-0 state of every Plant B cell depend on the run's length
+    # (docs/f2_horizon_report.md section 15; the lead's ruling 1); a window of one hold-up
+    # is what the tank can actually "know" on day 0.
+    n_init = (
+        q_in.size if init_window_d is None else max(1, min(q_in.size, int(np.ceil(init_window_d))))
+    )
+    level = float(q_in[:n_init].mean() * hold_up_d)
+    mass = load_in[:n_init].mean(axis=0) * hold_up_d
 
     q_out = np.empty_like(q_in)
     load_out = np.empty_like(load_in)
@@ -151,12 +176,17 @@ def apply_equalisation(
     direct_q = np.maximum(q_total - q_buffered, 0.0)
     direct_load = load_total - load_buffered
 
-    mean_flow = float(q_buffered.mean())
+    # the "long-run buffered flow" the hold-up is set from is the first INITIALISATION_WINDOW_D
+    # days of arrivals, not the whole horizon: the same run at two lengths must be the same
+    # tank (docs/f2_horizon_report.md section 14)
+    mean_flow = float(q_buffered[: min(q_buffered.size, INITIALISATION_WINDOW_D)].mean())
     if mean_flow <= 0.0:
-        raise ValueError("no flow passes through the declared buffer over this horizon")
+        raise ValueError("no flow passes through the declared buffer in its first window")
     hold_up = config.volume_m3 / mean_flow
 
-    q_out, load_out, levels = buffer_series(q_buffered, load_buffered, hold_up)
+    q_out, load_out, levels = buffer_series(
+        q_buffered, load_buffered, hold_up, init_window_d=hold_up
+    )
     q_new = direct_q + q_out
     load_new = direct_load + load_out
     conc = np.zeros_like(load_new)
