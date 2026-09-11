@@ -19,7 +19,10 @@ regardless of the horizon.
 Until the ruling they took two values — 180 d for Levels 0–4 and 8, 240 d for Levels 5–7 —
 which partitioned the ladder: a Plant B/C run at 240 d was exactly one of {S5-02, S6-02,
 S6-03, S7-01}; a Plant A run at Tier A and 180 d was the Level 2–4 subset. With F1 that was
-complete de-anonymisation. The lead ruled every horizon be equalised to 240 d.
+complete de-anonymisation. The finding is **review finding F2** of the final whole-branch
+review (not the lead's); the lead ruled on it — first 240 d, later revised on the
+measurements below (§13–§15) — and every ruling in this report is the lead's response to
+that finding.
 
 In the working tree: `duration_days: 240` on all twenty scenarios (twelve were 180 d);
 nothing else in any scenario. `scenarios/README.md` says so, `tests/test_scenario_schema.py`'s
