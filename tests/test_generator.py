@@ -356,7 +356,10 @@ COMMITTED_FEED_ALKALINITY: dict[str, tuple[float, float]] = {
     "fog": (-0.0005, 0.0000),
     "food_waste": (7.5887, 7.7247),
     "grass_silage": (6.3575, 4.8990),
-    "high_strength_waste": (10.8735, 10.8720),
+    # the assay moved with the HSW fractionation under the lead's ruling 5 of 2026-09-11
+    # (inert 0.05 -> 0.16, classes scaled); it was 10.8735 with the 0.95 centre. The charge
+    # reads s_cat, s_ca and TAN, none of which the ruling touched, and is unchanged.
+    "high_strength_waste": (10.1750, 10.8720),
     "primary_sludge": (2.5028, 2.5027),
     "thickened_was": (2.0667, 2.0661),
 }

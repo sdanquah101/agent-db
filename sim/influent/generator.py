@@ -629,7 +629,7 @@ days of a 210-d one even with a prefix-stable generator (the coordinator's check
 n_days)`` days, regardless of horizon. 200 because it is the shorter of the two matrix
 horizons (Plants B and C 200 d, Plant A 365 d; ruling 3), so every cell's reference window
 is the same first 200 days and a whole run is prefix-stable in its horizon (tested at the
-run level in ``tests/test_run_harness.py``)."""
+run level in ``tests/test_reference_window.py``)."""
 
 
 def generate_influent(

@@ -4340,6 +4340,96 @@ Level-7 compound after the freeze (§12 d); move the onset to day 30 on 200 d (�
 parameter fault becomes a phantom); keep 200 d and accept a `structural` label with nothing
 under it (rejected on 2026-09-10).
 
+## 2026-09-11 — RULING 5 (the lead): the hidden degradability centres of the high-strength waste and the FOG set to their cited values, 0.84 and 0.92
+
+**Decision.** Two approved feed-centre corrections in `configs/influent/feed_fractionation.yaml`,
+nothing else: the high-strength waste's non-inert COD share goes from 0.95 to **0.84** (inert
+0.05 → 0.16, `f_xi` 0.03 → 0.14, `f_si` 0.02; the four degradable classes scaled by
+0.84 / 0.95: `f_ch` 0.0884, `f_pr` 0.0531, `f_li` 0.6631, `f_vfa` 0.0354) and the FOG's from
+0.98 to **0.92** (inert 0.02 → 0.08, `f_xi` 0.06, `f_si` 0.02; classes scaled by 0.92 / 0.98:
+`f_ch` 0.0141, `f_pr` 0.0141, `f_li` 0.8918). The derived COD/VS checks hold without any
+further redistribution: HSW 2.057 against the measured 2.234 (−7.9 %, was 2.186), FOG 2.593
+against 2.80 (−7.4 %, was 2.741). The old values are kept beside the new in the catalogue.
+**The band is unchanged**, as are the comparison basis, every tolerance, every other feed
+centre, seed, kinetic constant and plant value. The lead's principle: every stream's centre is
+derived the same way; the point is not that the row must pass.
+
+**Reason.** Ruling 2's finding (`docs/f2_horizon_report.md` §16): the anchor column is total
+metered biogas, so the comparison basis is right in kind, and the two centres sat above the
+literature. The cited values are **derived, not measured**: the catalogue's assumed composition
+of each stream weighted by cited conversion-to-biogas fractions — lipid 94.8 % (Jeganathan et
+al. 2006, *Water Research* 40:3141), protein 71 % (Davidsson et al. 2008, *Waste Management*
+28:986), carbohydrate 50.4 % (Ziels et al. 2016, *Water Research* 103:372), as compiled in the
+FOG co-digestion review PMC8072289; acetate fully — HSW 0.75 × 0.948 + 0.10 × 0.504 + 0.06 ×
+0.71 + 0.04 = 0.84, FOG 0.95 × 0.948 + 0.015 × 0.504 + 0.015 × 0.71 = 0.92, the latter
+bracketed by brown grease at ~90 % of theoretical (354 mL CH₄/g COD at 35 °C, Frontiers Environ.
+Eng. 2024) and 0.40–0.77 m³ CH₄/kg VS removed at pilot scale (Zhang et al. 2014). Muscatine
+does not measure the composition of either stream; the catalogue says so.
+
+**Measured at the committed head** (24 clean Level-0 seeds, 200 d, the prefix-stable
+generator; §19 of the F2 report measured the same variant in a scratch worktree and the numbers
+reproduce exactly):
+
+| | before (`a91e71a`) | ruling 5 at the old FOG equivalent 1.42 (§20) | **as committed: ruling 5 + answer A (FOG equivalent 2.9)** |
+|---|---:|---:|---:|
+| `biogas_mean`, panel median → ratio to 2111 | 3244 → 1.536 FAIL | 2860 → 1.355 pass | **2899 → 1.373 pass** |
+| 24-seed mean / min / max ratio | 1.509 / 1.221 / 1.840 | 1.379 / 1.077 / 1.720 | 1.397 / 1.091 / 1.743 |
+| anchored rows inside their band | 22 / 23 | 23 / 23 | **23 / 23** (`hsw_cod_concentration` 1.09 and `organic_loading_rate` 1.15 unchanged from the middle column) |
+| `test_plant_b_survives_the_generator_swings` (seed 11, 180 d) | FAIL (1.5004) | pass | **pass** |
+| gate G1 biogas and match-count tests | FAIL | pass | **pass** |
+| gate G1 `test_no_clean_level_0_seed_sours` | pass (min CH₄ 0.655) | FAIL on its declared margin (min CH₄ 0.6429) | **FAIL on its declared margin**: 24/24 sound, min pH 7.19, max pH 7.34, **min CH₄ fraction median 0.6437 against > 0.65** (answer B, below, re-declares the margin) |
+| Plant B overload / foaming | 7.12 % / 6.63 % | 7.38 % / 6.34 % | **7.55 %** (2.92–19.30 %, 24/24) / **6.60 %** (2.34–13.45 %, 24/24) |
+| Plant C overload / foaming | 9.82 % / 8.50 % | identical (neither stream) | identical to the last digit (neither stream) |
+| Plant A | — | unchanged (neither stream) | unchanged (neither stream); re-measured under ruling 6 |
+
+Answer A moved the gas, contrary to the expectation that it would not: the inert COD
+equivalent sets how much COD a kilogram of FOG volatile solids carries (`ts × vs_of_ts ×
+COD/VS`), so at the anchor-derived 2.0 % TS the same FOG delivery now carries 2.802 / 2.593
+= 8 % more COD, of which the ruled 0.92 degrades — about 1.4 % more biogas on the panel
+(1.355 → 1.373); the rows that read solids move with it and stay inside their bands.
+
+**Two more pins record this ruling, flagged.** `tests/test_influent.py` asserted the lead's
+2026-09-02 HSW lipid COD share 0.7–0.75; the ruled split scales it to **0.6631** (§19.1,
+approved as "variant 2 exactly"), and the assertion now pins that value with the reason.
+The same file's frozen-equivalent test pinned every non-lignocellulosic inert at 1.4–1.5
+and now pins FOG at **2.9** per answer A, and its PR #7 negative control is evaluated at
+the sludge equivalent that split was declared with, so it still fails the check it
+motivated. The docstring of `REFERENCE_WINDOW_D` (ruling 6) named the run-level test's
+file wrongly; corrected in this commit.
+The known consequence, as the coordinator stated it: the gate's CH₄-fraction margin trips at
+0.643. **Neither that margin, the band nor any tolerance is touched here**; the margin question
+is with the lead separately. The anchor report's generated block, its §5.4 tables, the benchmark
+card, `configs/observation/sensors.yaml`, `sim/observation/channels.py` and `scenarios/README.md`
+carry the new numbers with the old beside them.
+
+**Answer A (the lead, 2026-09-11 ~16:00 UTC): FOG's inert COD equivalent is 2.9 kg COD/kg VS
+(lipid-like), superseding the sludge value 1.42 of the 2026-09-02 freeze** — an approved
+change to a frozen feed value, made in this commit. Why it was necessary: with the ruled
+split (`f_ch` 0.0141, `f_pr` 0.0141, `f_li` 0.8918, `f_vfa` 0, `f_xi` 0.06, `f_si` 0.02) the
+derived COD/VS is 1 / Σ(fᵢ/eᵢ) with e = 1.19 / 1.42 / 2.90 / 1.07 for the degradable classes
+and the feed's inert equivalent for `f_xi` and `f_si`:
+
+| inert COD equivalent (kg COD/kg VS) | derived COD/VS | against the measured 2.80 | inside the lead's 2.7–2.9 target? |
+|---:|---:|---:|---|
+| 1.42 (sludge value, 2026-09-02) | **2.593** | −7.4 % | no |
+| 2.0 | 2.708 | −3.3 % | yes |
+| 2.2 | 2.735 | −2.3 % | yes |
+| **2.9 (lipid-like, ruled)** | **2.802** | +0.1 % | yes |
+
+At 1.42 no split at the ruled 0.08 inert share can reach 2.7: the cap, with every non-inert
+unit lipid, is 1 / (0.92 / 2.90 + 0.08 / 1.42) = **2.677**. The 2.7–2.9 test range
+(`tests/test_influent.py`) and the catalogue's ±10 % check are **unchanged**; the test
+passes at 2.802. The inert equivalent feeds the solids channels and the COD the feed
+carries, so the Plant B panel and both edge tests were re-measured at this head (the table
+above, right-hand column).
+
+**Alternatives considered.** HSW 0.84 alone (§19 variant 1): row 1.375, CH₄ margin unchanged
+at 0.655, every gate test passing — **rejected by the lead on principle** (one stream's centre
+corrected and the other's not, when both are derived the same way). Holding COD/VS at the
+measured value by taking the inert share from carbohydrate and protein only: changes the
+composition the cited weighting was applied to (0.78 by the same weighting); not run.
+Widening the band: rejected under ruling 2.
+
 ## 2026-09-11 — RULING 6 (the lead): a whole run is prefix-stable — the reference recipe is the first 200 days, whatever the horizon
 
 **Decision.** The run's reference quantities are derived from a **fixed 200-day window** of

@@ -2,19 +2,22 @@
 
 **Date:** 2026-09-11 (revised after the lead's rulings of 2026-09-03, the remediation
 rulings of 2026-09-04, the four rulings, the close-out rulings and the M2 ruling of
-2026-09-09, the calcium and liquor rulings of 2026-09-10, and rulings 1–3 of 2026-09-11:
-the prefix-stable generator and the per-plant horizons) · **Gate:** G1 (proposal §11) ·
+2026-09-09, the calcium and liquor rulings of 2026-09-10, and rulings 1–3 and 5 of
+2026-09-11: the prefix-stable generator, the per-plant horizons and the cited degradability
+centres) · **Gate:** G1 (proposal §11) ·
 **Status:** infrastructure criterion
 **met**; plant criterion **met** — the Plant B souring that failed the first pass is fixed
-and the acceptance condition is satisfied (24 of 24 panel runs sound). **21 of the 22
-independent rows are inside their declared tolerance.** The two VFA rows joined them when
+and the acceptance condition is satisfied (24 of 24 panel runs sound). **22 of the 22
+independent rows are inside their declared tolerance**. The two VFA rows joined them when
 the convention on *our* side of the comparison was corrected, with no bound moved and no
-kinetic parameter touched (§5.1). **`biogas_mean` is outside its band**: 1.54 against
-[0.6, 1.5] at the 200-d matrix horizon under the prefix-stable generator. The band, the
-comparison basis and the feed centres are unchanged by the lead's ruling 2 of 2026-09-11,
-and the row is recorded as the row to watch — the anchor column is total metered biogas
-(burner plus boiler), so the basis is right in kind, and the hidden HSW/FOG degradability
-centres sit above the cited literature (`docs/f2_horizon_report.md` §16). One row
+kinetic parameter touched (§5.1). **`biogas_mean` is 1.37** against [0.6, 1.5] at the
+200-d matrix horizon (pass): it was 1.54 under the prefix-stable generator with the
+old feed centres, and the lead's ruling 5 of 2026-09-11 set the hidden degradability centres
+of the high-strength waste and the FOG to their cited values (0.84 and 0.92, from 0.95 and
+0.98; `docs/f2_horizon_report.md` §16 and §19) as feed-centre corrections — every stream's
+centre derived the same way — and answer A set FOG's inert COD equivalent to the lipid-like
+2.9, with the band unchanged; the anchor column is total metered
+biogas (burner plus boiler), so the basis is right in kind. One row
 (`alkalinity_median`) is calibrated to the anchor and is reported without being counted as
 a match. S6-01 is no longer inert.
 
@@ -408,56 +411,56 @@ visible contract no longer carries any of them (lead's ruling B5, 2026-09-10).
 | `vs_fraction_primary_sludge` | kg VS/kg wet | 0.0307 | 0.0295 | 1.04 | +/- 20 % | pass |
 | `vs_fraction_thickened_was` | kg VS/kg wet | 0.03191 | 0.0312 | 1.02 | +/- 20 % | pass |
 | `vs_fraction_high_strength_waste` | kg VS/kg wet | 0.0693 | 0.06485 | 1.07 | +/- 25 % | pass |
-| `hsw_cod_concentration` | kg COD/m3 | 141.1 | 136.8 | 1.03 | +/- 25 % | pass |
+| `hsw_cod_concentration` | kg COD/m3 | 149.2 | 136.8 | 1.09 | +/- 25 % | pass |
 | `organic_loading_rate` | kg VS/m3/d | 2.171 | 1.885 | 1.15 | +/- 30 % | pass |
-| `biogas_mean` | m3/d per digester at the meter's conditions | 3244 | 2111 | 1.54 | ratio in [0.6, 1.5] | **FAIL** |
-| `digester_pH_median` | pH units | 7.227 | 7.27 | 0.99 | +/- 0.4 pH units | pass |
-| `alkalinity_median` | kg CaCO3/m3 | 4.912 | 5.043 | 0.97 | +/- 35 % | calibrated to anchor |
-| `vfa_median` | kg/m3 as acetic acid | 0.7439 | 1.178 | 0.63 | ratio in [0.25, 4] | pass |
-| `fos_tac_median` | - (VFA as acetic over alkalinity as CaCO3) | 0.1512 | 0.2323 | 0.65 | ratio in [0.5, 2] | pass |
+| `biogas_mean` | m3/d per digester at the meter's conditions | 2899 | 2111 | 1.37 | ratio in [0.6, 1.5] | pass |
+| `digester_pH_median` | pH units | 7.232 | 7.27 | 0.99 | +/- 0.4 pH units | pass |
+| `alkalinity_median` | kg CaCO3/m3 | 5.051 | 5.043 | 1.00 | +/- 35 % | calibrated to anchor |
+| `vfa_median` | kg/m3 as acetic acid | 0.7564 | 1.178 | 0.64 | ratio in [0.25, 4] | pass |
+| `fos_tac_median` | - (VFA as acetic over alkalinity as CaCO3) | 0.1508 | 0.2323 | 0.65 | ratio in [0.5, 2] | pass |
 
-**21 of 22 independent rows are inside their declared tolerance.** A further 1 row was calibrated to the very anchor column it is compared against, and is excluded from that count: agreeing with a column you were fitted to is not evidence.
+**22 of 22 independent rows are inside their declared tolerance.** A further 1 row was calibrated to the very anchor column it is compared against, and is excluded from that count: agreeing with a column you were fitted to is not evidence.
 
 | Generated statistic with no anchor row | Value |
 |---|---:|
-| `ch4_fraction_median` | 0.6799 |
-| `foaming_day_fraction` | 0.0614 |
+| `ch4_fraction_median` | 0.681 |
+| `foaming_day_fraction` | 0.06433 |
 | `fos_tac_exceedance_fraction` | 0 |
 | `fos_tac_foaming_exceedance_fraction` | 0 |
-| `fos_tac_true_vfa_median` | 0.01316 |
-| `overload_day_fraction` | 0.0731 |
+| `fos_tac_true_vfa_median` | 0.0131 |
+| `overload_day_fraction` | 0.07018 |
 | `sound_run_fraction` | 1 |
-| `vfa_true_median` | 0.06327 |
+| `vfa_true_median` | 0.06676 |
 | `vs_fraction_fog` | 0.01948 |
 
 ### The output panel, run by run
 
 | Base seed | Verdict | median pH | mean CH4 | titrimetric FOS (kg/m3) | true VFA (kg/m3) | FOS/TAC | overload days | foaming days | FOS/TAC > 0.40 days | FOS/TAC > 0.30 days |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1000 | sound | 7.31 | 0.670 | 0.932 | 0.0894 | 0.150 | 8.19 % | 7.02 % | 0.00 % | 0.00 % |
-| 1001 | sound | 7.20 | 0.687 | 0.695 | 0.0624 | 0.153 | 4.68 % | 4.68 % | 0.00 % | 0.00 % |
-| 1002 | sound | 7.25 | 0.684 | 0.790 | 0.0740 | 0.152 | 9.36 % | 9.94 % | 0.00 % | 0.00 % |
-| 1003 | sound | 7.28 | 0.664 | 0.870 | 0.0751 | 0.150 | 7.60 % | 7.02 % | 0.00 % | 0.00 % |
-| 1004 | sound | 7.22 | 0.685 | 0.722 | 0.0625 | 0.151 | 6.43 % | 5.26 % | 0.00 % | 0.00 % |
-| 1005 | sound | 7.21 | 0.679 | 0.722 | 0.0618 | 0.151 | 7.60 % | 11.70 % | 0.00 % | 0.00 % |
-| 1006 | sound | 7.17 | 0.688 | 0.660 | 0.0578 | 0.153 | 2.92 % | 3.51 % | 0.00 % | 0.00 % |
-| 1007 | sound | 7.20 | 0.663 | 0.745 | 0.0617 | 0.152 | 3.51 % | 4.68 % | 0.00 % | 0.00 % |
-| 1008 | sound | 7.20 | 0.665 | 0.725 | 0.0629 | 0.152 | 16.37 % | 14.04 % | 0.00 % | 0.00 % |
-| 1009 | sound | 7.21 | 0.665 | 0.740 | 0.0615 | 0.152 | 9.94 % | 9.94 % | 0.00 % | 0.00 % |
-| 1010 | sound | 7.24 | 0.682 | 0.757 | 0.0657 | 0.151 | 2.92 % | 1.75 % | 0.00 % | 0.00 % |
-| 1011 | sound | 7.30 | 0.682 | 0.876 | 0.0770 | 0.150 | 6.43 % | 5.85 % | 0.00 % | 0.00 % |
-| 1012 | sound | 7.30 | 0.686 | 0.854 | 0.0714 | 0.148 | 5.85 % | 6.43 % | 0.00 % | 0.00 % |
-| 1013 | sound | 7.17 | 0.655 | 0.704 | 0.0611 | 0.153 | 10.53 % | 9.94 % | 0.00 % | 0.00 % |
-| 1014 | sound | 7.21 | 0.676 | 0.716 | 0.0579 | 0.150 | 9.36 % | 8.19 % | 0.00 % | 0.00 % |
-| 1015 | sound | 7.25 | 0.678 | 0.809 | 0.0843 | 0.152 | 7.02 % | 4.09 % | 0.00 % | 0.00 % |
-| 1016 | sound | 7.23 | 0.662 | 0.789 | 0.0637 | 0.151 | 4.09 % | 2.34 % | 0.00 % | 0.00 % |
-| 1017 | sound | 7.24 | 0.692 | 0.742 | 0.0639 | 0.151 | 5.26 % | 3.51 % | 0.00 % | 0.00 % |
-| 1018 | sound | 7.28 | 0.687 | 0.847 | 0.0837 | 0.152 | 8.19 % | 7.60 % | 0.00 % | 0.00 % |
-| 1019 | sound | 7.22 | 0.681 | 0.723 | 0.0604 | 0.151 | 8.19 % | 6.43 % | 0.00 % | 0.00 % |
-| 1020 | sound | 7.23 | 0.662 | 0.787 | 0.0610 | 0.150 | 6.43 % | 5.85 % | 0.00 % | 0.00 % |
-| 1021 | sound | 7.19 | 0.664 | 0.725 | 0.0567 | 0.151 | 9.36 % | 11.11 % | 0.00 % | 0.00 % |
-| 1022 | sound | 7.21 | 0.691 | 0.735 | 0.0828 | 0.156 | 2.34 % | 2.92 % | 0.00 % | 0.00 % |
-| 1023 | sound | 7.31 | 0.683 | 0.902 | 0.0890 | 0.151 | 8.19 % | 5.26 % | 0.00 % | 0.00 % |
+| 1000 | sound | 7.31 | 0.670 | 0.933 | 0.0887 | 0.150 | 8.19 % | 5.85 % | 0.00 % | 0.00 % |
+| 1001 | sound | 7.21 | 0.687 | 0.709 | 0.0636 | 0.152 | 4.68 % | 4.68 % | 0.00 % | 0.00 % |
+| 1002 | sound | 7.25 | 0.685 | 0.795 | 0.0746 | 0.152 | 9.36 % | 8.77 % | 0.00 % | 0.00 % |
+| 1003 | sound | 7.21 | 0.644 | 0.801 | 0.0692 | 0.152 | 7.02 % | 6.43 % | 0.00 % | 0.00 % |
+| 1004 | sound | 7.23 | 0.686 | 0.734 | 0.0642 | 0.151 | 6.43 % | 5.85 % | 0.00 % | 0.00 % |
+| 1005 | sound | 7.22 | 0.678 | 0.738 | 0.0633 | 0.151 | 7.02 % | 10.53 % | 0.00 % | 0.00 % |
+| 1006 | sound | 7.20 | 0.687 | 0.679 | 0.0589 | 0.152 | 4.09 % | 2.92 % | 0.00 % | 0.00 % |
+| 1007 | sound | 7.34 | 0.684 | 0.945 | 0.0811 | 0.148 | 8.19 % | 6.43 % | 0.00 % | 0.00 % |
+| 1008 | sound | 7.21 | 0.665 | 0.734 | 0.0635 | 0.152 | 19.30 % | 13.45 % | 0.00 % | 0.00 % |
+| 1009 | sound | 7.22 | 0.666 | 0.744 | 0.0609 | 0.151 | 10.53 % | 9.94 % | 0.00 % | 0.00 % |
+| 1010 | sound | 7.24 | 0.683 | 0.755 | 0.0654 | 0.151 | 2.92 % | 2.34 % | 0.00 % | 0.00 % |
+| 1011 | sound | 7.30 | 0.682 | 0.878 | 0.0773 | 0.150 | 5.85 % | 4.68 % | 0.00 % | 0.00 % |
+| 1012 | sound | 7.30 | 0.685 | 0.846 | 0.0703 | 0.149 | 5.85 % | 6.43 % | 0.00 % | 0.00 % |
+| 1013 | sound | 7.23 | 0.676 | 0.755 | 0.0681 | 0.151 | 9.94 % | 8.77 % | 0.00 % | 0.00 % |
+| 1014 | sound | 7.25 | 0.678 | 0.758 | 0.0609 | 0.149 | 9.94 % | 9.94 % | 0.00 % | 0.00 % |
+| 1015 | sound | 7.23 | 0.692 | 0.729 | 0.0772 | 0.153 | 7.02 % | 4.09 % | 0.00 % | 0.00 % |
+| 1016 | sound | 7.23 | 0.663 | 0.786 | 0.0638 | 0.151 | 4.09 % | 3.51 % | 0.00 % | 0.00 % |
+| 1017 | sound | 7.28 | 0.692 | 0.799 | 0.0683 | 0.150 | 6.43 % | 4.09 % | 0.00 % | 0.00 % |
+| 1018 | sound | 7.29 | 0.686 | 0.846 | 0.0859 | 0.152 | 10.53 % | 8.19 % | 0.00 % | 0.00 % |
+| 1019 | sound | 7.23 | 0.680 | 0.745 | 0.0619 | 0.151 | 7.60 % | 6.43 % | 0.00 % | 0.00 % |
+| 1020 | sound | 7.23 | 0.662 | 0.787 | 0.0606 | 0.150 | 7.02 % | 6.43 % | 0.00 % | 0.00 % |
+| 1021 | sound | 7.21 | 0.664 | 0.739 | 0.0586 | 0.151 | 8.19 % | 11.11 % | 0.00 % | 0.00 % |
+| 1022 | sound | 7.19 | 0.667 | 0.744 | 0.0814 | 0.156 | 3.51 % | 2.34 % | 0.00 % | 0.00 % |
+| 1023 | sound | 7.32 | 0.683 | 0.910 | 0.0907 | 0.151 | 7.60 % | 5.26 % | 0.00 % | 0.00 % |
 
 **24 of 24 runs are working digesters.**
 
@@ -465,8 +468,8 @@ visible contract no longer carries any of them (lead's ruling B5, 2026-09-10).
 
 | | what it is | pooled | per-run min | per-run max | runs that fire |
 |---|---|---:|---:|---:|---:|
-| **overload trigger** (conditional missingness) | hidden true VFA > 2.00x its 30-d trailing median | **7.12 %** | 2.34 % | 16.37 % | 24 of 24 |
-| **foaming trigger** (conditional missingness) | hidden gas > 1.80x its 30-d trailing median AND true VFA > its 30-d trailing median | **6.63 %** | 1.75 % | 14.04 % | 24 of 24 |
+| **overload trigger** (conditional missingness) | hidden true VFA > 2.00x its 30-d trailing median | **7.55 %** | 2.92 % | 19.30 % | 24 of 24 |
+| **foaming trigger** (conditional missingness) | hidden gas > 1.80x its 30-d trailing median AND true VFA > its 30-d trailing median | **6.60 %** | 2.34 % | 13.45 % | 24 of 24 |
 | operator-visible overload | titrimetric FOS/TAC > 0.40 | **0.00 %** | 0.00 % | 0.00 % | 0 of 24 |
 | operator-visible foaming (unwired) | titrimetric FOS/TAC > 0.30 | **0.00 %** | 0.00 % | 0.00 % | 0 of 24 |
 
@@ -571,14 +574,20 @@ baselines are not the same plant and must not be averaged into one number.
 
 | Plant | baseline | horizon | sound | trigger, pooled | per-run range | runs that fire | VFA ratio p92 | operator FOS/TAC > 0.40 |
 |---|---|---:|---|---:|---|---:|---:|---:|
-| **B** | — | 200 d | 24/24 | **7.12 %** | 2.34 – 16.37 % | 24/24 | — | 0.00 % |
+| **B** | — | 200 d | 24/24 | **7.55 %** | 2.92 – 19.30 % | 24/24 | — | 0.00 % |
 | **C** | — | 200 d | 24/24 | **9.82 %** | 6.43 – 14.04 % | 24/24 | — | 0.00 % |
 | **A** | `unadapted` | 365 d | 24/24 | **1.02 %** | 0.00 – 3.27 % | **21/24** | — | 0.00 % |
 | **A** | `adapted` | 365 d | 24/24 | **0.22 %** | 0.00 – 1.19 % | **11/24** | — | 0.00 % |
 | *anchor* | | | | *7.78 %* | | | | *8.25 – 9.18 %* |
 
 Measured on 2026-09-11 at the matrix horizons of the lead's ruling 3 (200 d on B and C, a
-year on Plant A) under the prefix-stable generator of ruling 1; the VFA-ratio p92 column
+year on Plant A) under the prefix-stable generator of ruling 1, and — for B and C, the two
+plants that take the corrected streams — re-measured after the lead's ruling 5 set the HSW
+and FOG degradability centres to their cited values and the lead's answer A set FOG's inert
+COD equivalent to the lipid-like 2.9 (before ruling 5: B 7.12 %, 2.34 – 16.37 %, 24/24;
+C 9.82 %, 6.43 – 14.04 %, 24/24; at the ruled centres with the old equivalent 1.42, B
+7.38 %; Plant C's feed has neither stream, and its rows are unchanged to the last digit);
+the VFA-ratio p92 column
 was not re-measured and is left blank rather than carried over from the earlier feed. The
 180-d table of 2026-09-10, after the calcium and liquor rulings (§3.3) — B 7.67 %
 (2.65 – 16.56 %, 24/24), C 9.22 % (6.62 – 16.56 %, 24/24), A-unadapted 1.49 % (0.00 –
@@ -676,12 +685,14 @@ digester that is gassing hard while its acids are rising. Measured on the same f
 
 | Plant | baseline | horizon | sound | foaming trigger, pooled | per-run range | runs that fire | operator FOS/TAC > 0.30 (unwired) |
 |---|---|---:|---|---:|---|---:|---:|
-| **B** | — | 200 d | 24/24 | **6.63 %** | 1.75 – 14.04 % | 24/24 | 0.00 % |
+| **B** | — | 200 d | 24/24 | **6.60 %** | 2.34 – 13.45 % | 24/24 | 0.00 % |
 | **C** | — | 200 d | 24/24 | **8.50 %** | 3.51 – 15.20 % | 24/24 | 0.00 % |
 | **A** | `unadapted` | 365 d | 24/24 | **0.09 %** | 0.00 – 0.60 % | 5/24 | 0.00 % |
 | **A** | `adapted` | 365 d | 24/24 | **0.20 %** | 0.00 – 1.19 % | 10/24 | 0.00 % |
 
-Measured on 2026-09-11 at the matrix horizons, on the same panels as the overload table.
+Measured on 2026-09-11 at the matrix horizons, on the same panels as the overload table
+(B re-measured after ruling 5 and answer A, as above; before ruling 5 6.63 %, 1.75 –
+14.04 %, 24/24; at the old FOG equivalent 6.34 %).
 The 180-d table of 2026-09-10 — B 7.20 % (1.32 – 16.56 %, 24/24), C 7.67 % (3.97 –
 11.92 %, 24/24), A-unadapted 0.14 % (0.00 – 0.66 %, 5/24), A-adapted 0.25 % (0.00 –
 1.32 %, 7/24); operator FOS/TAC > 0.30 on B 0.25 % — was measured on the same panels as
@@ -690,7 +701,7 @@ that day's overload table, whose rows (B 7.67 %, C 9.22 %, A-unadapted 1.49 %, A
 changes moved the simulator, since the run-id scheme, the foaming rule and the location of
 the plant record are not inputs to the truth model.
 
-**Reading the foaming rows.** On B and C the foaming trigger fires at about the overload rate (6.63 % and 8.50 % against 7.12 % and 9.82 %), in every sound run, with per-run ranges of the same width: on a batch-fed plant a top-decile gas day is usually a day the acids are also up, because both follow the arrival of a large delivery. They are not the same days — the flags are computed separately, and the missingness model compounds the multipliers when they coincide — but they are the same kind of event. On Plant A both rows are far below B and C, as overload is, and the pathway ordering **reverses**: the `unadapted` (SAO) baseline overloads 4.6× more often than `adapted` but foams *less* often (0.09 % against 0.20 %, 5 against 10 firing runs of 24; on the 180-d panels 0.14 % against 0.25 %, 5 against 7). The foaming trigger needs a gas surge, and gas surges on Plant A follow the weekday silage feeding, which is the same on both baselines; what the SAO baseline adds is VFA excursions that relax slowly *after* the load rather than gas that rises with it, so its extra overload days are not gas-surge days. Two panels of 24 runs at rates below 0.3 % are thin evidence and this is recorded as an observation, not a finding. Nothing was tuned: 1.80× and 1.00× are the lead's figures as written.
+**Reading the foaming rows.** On B and C the foaming trigger fires at about the overload rate (6.60 % and 8.50 % against 7.55 % and 9.82 %), in every sound run, with per-run ranges of the same width: on a batch-fed plant a top-decile gas day is usually a day the acids are also up, because both follow the arrival of a large delivery. They are not the same days — the flags are computed separately, and the missingness model compounds the multipliers when they coincide — but they are the same kind of event. On Plant A both rows are far below B and C, as overload is, and the pathway ordering **reverses**: the `unadapted` (SAO) baseline overloads 4.6× more often than `adapted` but foams *less* often (0.09 % against 0.20 %, 5 against 10 firing runs of 24; on the 180-d panels 0.14 % against 0.25 %, 5 against 7). The foaming trigger needs a gas surge, and gas surges on Plant A follow the weekday silage feeding, which is the same on both baselines; what the SAO baseline adds is VFA excursions that relax slowly *after* the load rather than gas that rises with it, so its extra overload days are not gas-surge days. Two panels of 24 runs at rates below 0.3 % are thin evidence and this is recorded as an observation, not a finding. Nothing was tuned: 1.80× and 1.00× are the lead's figures as written.
 
 **The operator-visible foaming threshold is structurally dead, and that is a
 measurement-model finding, not a threshold to lower.** FOS/TAC > 0.30 stays declared and

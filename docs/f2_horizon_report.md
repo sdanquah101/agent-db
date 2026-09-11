@@ -1122,3 +1122,37 @@ when it arrives. (Both had briefly been pushed in the other order at `0265977`/`
 when a repository hook demanded a clean tree; the side branch was re-set to this shape.)
 Then pytest and ruff locally with the exact failure set, the fast-forward, CI, and a STOP
 if CI is red only on the CH₄-margin gate test.
+
+## 22. Rulings 5 (with answer A) and answer B landed; the measured state at the final head
+
+*Status line: the lead's answers A and B (relayed 20:04 UTC) are applied. Ruling 5 is ONE
+commit on top of `f7a3e79`/`3188ce0`, carrying answer A — FOG's inert COD equivalent 2.9,
+lipid-like, superseding the 2026-09-02 sludge value — with the derivation table in its
+decisions entry; the CH₄-margin re-declaration (answer B) is its own commit after it. The
+docstring nit is fixed inside the ruling-5 commit. SHAs in the milestones entry and the
+commit messages.*
+
+**Ruling 5 + answer A, measured at the committed head** (24 seeds, 200 d): `biogas_mean`
+panel median 2899 → **1.373 pass** (24-seed mean 1.397, min 1.091, max 1.743; it was 1.355
+at the old equivalent — answer A raised the COD a kilogram of FOG solids carries by 8 %, so
+the gas moved up ~1.4 %, contrary to the expectation that it would not); **23 / 23 rows
+inside**, the two solids-reading rows unchanged from §20 (`hsw_cod_concentration` 1.09,
+`organic_loading_rate` 1.15 — the latter is a VS-based load); the seed-11 plausibility test
+**passes**; Plant B overload / foaming **7.55 % / 6.60 %** (2.92–19.30 % and 2.34–13.45 %,
+24/24 each; 7.38 / 6.34 % at the old equivalent); Plant C and Plant A unchanged (neither
+stream). The leanest seed's CH₄ fraction median at this head is **0.6437** (was 0.6429 at
+the old equivalent), min pH 7.19, max pH 7.34, 24/24 sound. FOG COD/VS derives **2.802**
+and `test_cod_per_vs_is_derived_and_checked_against_the_literature` passes; the 2.7–2.9
+range and the ±10 % check are untouched.
+
+**Pins that record the rulings, flagged.** (1) The HSW lipid COD share: the same test
+asserted the lead's 2026-09-02 range 0.7–0.75; the ruled split (variant 2 exactly) is
+0.6631, and the assertion now pins that value with the reason — the ruling's own number, not
+a choice of mine. (2) The frozen inert equivalents: FOG now pinned at 2.9 per answer A, the
+others as before; the PR #7 negative control evaluated at its own sludge equivalent so it
+still fails. (3) The FOG check TKN re-derived to 0.0111 at the new equivalent (a check
+value, not an input).
+
+**Answer B**: `test_no_clean_level_0_seed_sours`'s CH₄-fraction margin re-declared at 0.60
+(was 0.65), a guard above the 0.55 soundness threshold; nothing else in the test changed;
+own commit and decisions entry with the leanest-seed value 0.6437 at this head.

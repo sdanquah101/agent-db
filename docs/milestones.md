@@ -1647,7 +1647,11 @@ read-only measurement of both options is in `docs/f2_horizon_report.md` §19.
   tested (bit-equal bar the last output point), mutation-checked; ruling 4 and the Plant A
   tables re-verified with no recorded number changed (§21).
 
-**Next:** ruling 6 is committed first on its own (the coordinator, 15:27 UTC); ruling 5 is
-parked on `claude/g1-ruling5-held` and lands as one commit with the lead's FOG answer; then
-pytest and ruff with the exact failure set; fast-forward; CI; STOP if red only on the CH₄-margin gate test; no
+- **The lead's answers A and B** (20:04 UTC): FOG's inert COD equivalent 2.9 (lipid-like,
+  superseding 1.42) inside the ruling-5 commit — `biogas_mean` 1.373 pass, 23/23 rows,
+  both edge tests pass, B 7.55 % / 6.60 %, leanest-seed CH₄ 0.6437; the gate's CH₄ margin
+  re-declared at 0.60 in its own commit (`docs/f2_horizon_report.md` §22). Ruling 6 was
+  committed first on its own at `f7a3e79` (the coordinator, 15:27 UTC).
+
+**Next:** pytest, ruff and the g1 gate at the final head with the exact result; fast-forward; CI; STOP if red only on the CH₄-margin gate test; no
 regeneration until told the head is final and CI is green.
