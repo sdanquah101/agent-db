@@ -621,3 +621,110 @@ February–July settled mean against a three-year annual mean. (3) Rule on S7-02
 stands: onset 30 gives 21 % at 200 d under the new draw). Nothing is committed: the 200-d
 edits, the tank fix and the generator variant are all local.
 
+## 16. Ruling 2 — `biogas_mean`: what the anchor column measures, and where the hidden degradability sits
+
+*Status line: ruling 1 landed at `1353341` (prefix-stable generator + first-window tank;
+one plausibility test red at the band edge, recorded, not weakened). This section is the
+ruling-2 report: (a) the anchor column is total metered biogas, so the basis is right in
+kind; (b) the HSW and FOG hidden degradability centres sit above the cited literature
+(0.95 vs ~0.84, 0.98 vs ~0.92) — a feed-centre question for the lead, not changed here.
+Consequence: the g1 gate and one default-suite test are red with the band unchanged; I am
+continuing with rulings 3 and 4 and will hold regeneration only on HOLD.*
+
+*The lead's ruling 2 of 2026-09-11: band and comparison basis unchanged until the cause is
+known; two read-only checks. This is a finding, not a fix — no band, basis or feed centre
+was changed.*
+
+### 16.1 (a) What Muscatine's biogas column measures
+
+**Total metered biogas production: the sum of the flow to the waste-gas burner (flare) and
+the flow to the boiler.** Three sources agree. The dataset's own SCADA data dictionary
+(`anchor/raw/iowa-muscatine-wrrf/SCADA-data-dictionary.csv`) defines `Biogas` as "Total
+biogas flow (sum of Biogas_burner and Biogas_boiler)", with `Biogas_burner` "Digester Gas
+Flow Rate to Waste Gas Burner" (0–1000 cfm) and `Biogas_boiler` "Digester Gas Flow Rate to
+Boiler" (0–120 cfm), plus the daily totals `V-burner_FT3` and `V-Boiler_FT3`. The LABS data
+dictionary defines the daily `Biogas` column, the one the anchor uses, as "Average daily
+biogas flow, cfm — calculated biogas flow as total biogas volume in cubic feet divided by
+1440 minutes per day". And the dataset's paper (Schroer & Just 2023, *ACS ES&T Engineering*,
+open-access copy at https://pmc.ncbi.nlm.nih.gov/articles/PMC10928704/) says the biogas
+variable is built "by first summing the flow to the waste gas burner and flow to the
+boiler", that "daily total biogas volume was recorded in cubic feet", and gives a daily
+average of 103.5 cfm ≈ 149,000 ft³/d for the plant's two 485,000-gal digesters — which is
+the anchor's 2111 m³/d per digester to the unit conversion. There is no CHP engine in the
+metered paths and no statement of unmetered losses; the plant flares most of its gas (the
+burner meter's range is eight times the boiler's).
+
+So the basis is right in kind: the anchor is total production, not gas delivered to a
+consumer net of flare. Two caveats already in the declared tolerance stand: the meter
+states neither temperature nor pressure for its cubic feet (the anchor is at "the meter's
+conditions", the simulator's `q_gas_stp_dry` at 0 °C and 1 atm dry, and the band was widened
+to 0.6–1.5 for that), and the division by two assumes the two digesters produce equally.
+
+### 16.2 (b) The hidden degradability centres against the literature
+
+The truth-side fractionation (`configs/influent/feed_fractionation.yaml`) gives each
+stream a non-inert COD share, `1 − f_xi − f_si`: **high-strength waste 0.95** (lipid COD
+share 0.75, inert 0.05, both marked ASSUMED; the lipid share was raised on the lead's
+decision of 2026-09-02 so the derived COD/VS met the measured 2.23) and **FOG 0.98** (lipid
+0.95, inert 0.02, ASSUMED). The primary sludge and WAS shares (0.67, 0.55) are standard
+ADM1 sludge values and were not asked about.
+
+Literature, as cited in the open-access review of FOG co-digestion
+(https://pmc.ncbi.nlm.nih.gov/articles/PMC8072289/, citing Jeganathan et al. 2006,
+Davidsson et al. 2008 and Ziels et al. 2016): lipids convert **94.8 %** to biogas, proteins
+**71 %**, carbohydrates **50.4 %**; the theoretical yield of lipid is 1.0 m³ CH₄/kg against
+0.63 for protein and 0.42 for carbohydrate. Brown grease measured in BMP gives 354 mL CH₄ per
+g COD at 35 °C and 1 atm (https://www.frontiersin.org/journals/environmental-engineering/articles/10.3389/fenve.2024.1354582/full),
+which is ~90 % of the 395 mL/g COD theoretical at those conditions, and the same paper
+cites 0.40–0.77 m³ CH₄ per kg VS removed for pilot-scale brown grease (Zhang et al. 2014).
+The cited FOG biodegradability range is therefore **~85–95 %** of COD.
+
+Weighting each stream's own fractionation by those conversion fractions gives the
+biodegradable share the literature implies: **HSW 0.84** (0.75 × 0.948 + 0.10 × 0.504 +
+0.06 × 0.71 + 0.04 × 1.0) against the truth's **0.95**; **FOG 0.92** against the truth's
+**0.98**. **Both streams sit above their literature range — HSW by ~11 points, FOG by ~6 —
+and HSW is the one clearly outside**: no cited value for a food-processing waste with
+25 % non-lipid COD reaches 95 % biodegradable, while FOG at 98 % is at the top edge of the
+grease-trap range (94.8 % for pure lipid) rather than beyond it.
+
+**How much of the 1.5× that could explain, estimated, not measured.** HSW and FOG carry
+70 % of the plant's COD load (3232 and 1689 of 7052 kg COD/d at the anchored volumes).
+Moving their degradable shares to the literature-implied values would remove 343 + 103 =
+446 kg COD/d of the 6064 kg/d the truth degrades, i.e. **~7 % less gas**, which would take
+the row from 1.536 to ~1.43 — inside the band with a margin, on a back-of-envelope that
+ignores ADM1's own hydrolysis and LCFA-inhibition kinetics (which already leave some
+non-inert COD unconverted at a 20-d HRT, so the true sensitivity is smaller). Two other
+contributors stand beside it: the meter-conditions unknown (a meter at 35 °C and slight
+overpressure reads 10–13 % more volume than 0 °C dry for the same gas), and the seasonal
+window of §3. None of the three alone is the whole 1.5×; the degradability centres are the
+one that is a *modelling* choice rather than a measurement basis.
+
+**What this implies, for the lead.** The ruling's condition — "only if the basis is right"
+— is met, and the answer to (b) is that the high-strength waste's degradability centre is
+outside its literature range. That is a change to a frozen feed centre, which is the lead's
+call and is not made here: `f_xi`/`f_si` of the HSW (and FOG) would move, the derived
+COD/VS check (±10 % against the measured 2.23) would have to be re-satisfied by
+redistributing the lipid share, every Plant B and C cell would change, and the anchored
+rows and pins would be re-measured. Until then `biogas_mean` stays the row to watch at
+1.50–1.54 on a stable panel, outside its band by 0.004–0.036, recorded as such.
+
+### 16.3 Consequence for CI, stated now
+
+`tests/test_g1_anchor.py::test_the_biogas_the_simulator_makes_is_the_biogas_the_plant_measures`
+asserts `biogas.passed`, and `test_a_row_calibrated_to_the_anchor_is_never_counted_as_a_match`
+asserts every independent row matched. With the band unchanged (ruling 2) and the layout
+adopted (ruling 1), both fail at the 200-d panel (1.536) — the g1 job of CI, which runs on
+any change under `sim/`, will be red on the side branch and on PR #15 once fast-forwarded.
+I am not weakening those tests: they are doing their job. The coordinator decides whether
+CI-green in step (iii) means the ruff and pytest jobs or the g1 gate as well (which cannot
+be, without the lead moving the band or the feed centre).
+
+The default pytest job is also touched, by one test. The full suite at the ruling-1 commit
+is 366 passed, 2 skipped, **1 failed**:
+`tests/test_plausibility.py::test_plant_b_survives_the_generator_swings`, a single-seed
+(seed 11) 180-d unbuffered Plant B run that asserts the same [0.6, 1.5] biogas ratio. Under
+the new layout that seed gives 3168 m³/d against the anchor's 2111, ratio **1.5004** — the
+same excess on one seed, at the band edge by 0.0004. It passed at the PR head because that
+seed's old realisation happened to sit below the edge. Left red, recorded in the ruling-1
+decisions entry; it moves with whatever the lead decides for the row.
+

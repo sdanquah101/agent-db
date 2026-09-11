@@ -4196,3 +4196,40 @@ row; under the new layout that seed's realisation gives 3168 m³/d against 2111,
 1.5004. It is the `biogas_mean` excess (ruling 2) on one seed, not a regression in the
 layout: the band is the lead's to move and the test is not weakened, per the standing
 rule. The g1 gate (`-m g1`, deselected by default) is red for the same reason.
+## 2026-09-11 — RULING 2 (the lead): `biogas_mean` — band and basis unchanged; the investigation's result
+
+**Decision.** The `biogas_mean` band ([0.6, 1.5] on the ratio to the anchor) and its
+comparison basis are unchanged until the cause of the excess is known. Two read-only checks
+were ordered and made (`docs/f2_horizon_report.md` §16); no band, basis or feed centre was
+touched. The row is recorded as **the row to watch**: 1.50–1.54 on a stable 24-seed panel
+at 190–210 d under ruling 1, outside its band by 0.004–0.036.
+
+**(a) The anchor column is total metered biogas** — the sum of the flow to the waste-gas
+burner and the flow to the boiler, recorded as a daily total in cubic feet (the dataset's
+SCADA and LABS data dictionaries; Schroer & Just 2023, *ACS ES&T Engineering*, PMC10928704).
+No CHP, no net-of-flare accounting; the basis is right in kind. The meter's conditions
+(neither temperature nor pressure stated) and the equal split over two digesters remain the
+declared caveats.
+
+**(b) The hidden degradability centres.** Weighting each stream's own fractionation by the
+cited conversion fractions (lipid 94.8 %, protein 71 %, carbohydrate 50.4 %; Jeganathan et
+al. 2006, Davidsson et al. 2008, Ziels et al. 2016 as cited in PMC8072289; brown grease
+~90 % of theoretical, Frontiers Environ. Eng. 2024), the literature implies **HSW 0.84
+against the truth's 0.95** and **FOG 0.92 against the truth's 0.98**. HSW is outside its
+range; FOG is at the top edge. Moving both to the literature values would cut the degraded
+COD by ~7 % (they carry 70 % of the load) and take the row to ~1.43 — an estimate, not a
+measurement, and one that ignores ADM1's own kinetic limits. Meter conditions (10–13 % for
+a warm, slightly pressurised meter) and the seasonal window are the other two contributors.
+
+**Not done, and why.** The HSW (and FOG) inert shares are frozen feed centres; changing
+them redistributes the lipid share to keep the ±10 % COD/VS check, moves every Plant B and
+C cell, and re-opens every anchored row and pin. That is the lead's decision. Recorded for
+it: the finding, the estimate, and the fact that with the band unchanged the g1 anchor
+gate (`test_the_biogas_the_simulator_makes_is_the_biogas_the_plant_measures`) is red at the
+new layout, which the coordinator has been told.
+
+**Alternatives considered.** Widen the band (rejected by the lead: the width is a
+declaration, not a dial); re-declare the basis as a seasonally matched window (deferred:
+it would change the comparison rather than the model, and the cause was to be found
+first).
+
