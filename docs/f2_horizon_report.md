@@ -1125,6 +1125,17 @@ if CI is red only on the CH₄-margin gate test.
 
 ## 22. Rulings 5 (with answer A) and answer B landed; the measured state at the final head
 
+*Landed and green, 20:38 UTC. Ruling 5 with answer A: **`892bbb8`**; answer B: **`49e9477`**;
+both on `claude/g1-review-blockers` on top of `3188ce0`/`f7a3e79`. Local checks at `49e9477`:
+`ruff check .` and `ruff format --check .` clean; `pytest -q` **374 passed, 2 skipped, 0
+failed**; `pytest -m g1` **13 passed, 0 failed**. PR #15 fast-forwarded to **`49e9477`**. CI
+at that head, push run 34644517098: ruff **success**, pytest py3.11 **success**, pytest
+py3.12 **success**, "does this change touch sim/?" **success**, gate G1 anchor panel
+**success**; pull-request run 34644522795: **success**. Stopped here: no regeneration until
+the coordinator confirms CI green at this head; no merge, no tag. This status is a docs-only
+commit on the side branch; the PR head stays `49e9477`, and the regeneration, when ordered,
+runs with the tree at that commit so every manifest carries it.*
+
 *Status line: the lead's answers A and B (relayed 20:04 UTC) are applied. Ruling 5 is ONE
 commit on top of `f7a3e79`/`3188ce0`, carrying answer A — FOG's inert COD equivalent 2.9,
 lipid-like, superseding the 2026-09-02 sludge value — with the derivation table in its
@@ -1156,3 +1167,78 @@ value, not an input).
 **Answer B**: `test_no_clean_level_0_seed_sours`'s CH₄-fraction margin re-declared at 0.60
 (was 0.65), a guard above the 0.55 soundness threshold; nothing else in the test changed;
 own commit and decisions entry with the leanest-seed value 0.6437 at this head.
+
+## 23. The G1 regeneration at `49e9477` — the last action; stopping for the review
+
+*Status line: on the coordinator's word (CI green at `49e9477` confirmed, 14:07 UTC), the
+117-cell matrix was regenerated with the tree checked out at `49e9477`, clean, and verified.
+The regeneration writes nothing that is committed (`runs/` and `truth_store/` are ignored;
+the anchor report's generated block was already current at that head), so the code the
+manifests carry is `49e9477`; this section and the milestones entry are ONE docs-only
+commit on top of it, to which PR #15 is fast-forwarded — that commit is the review head.
+Stopped: no merge, no tag, nothing further pushed.*
+
+**The regeneration** (`python -m sim.run.matrix --runs-root runs` after clearing `runs/` and
+`truth_store/`):
+
+| | |
+|---|---|
+| head every manifest carries | `49e94770077c99b88193647c545f1b486507319c`, 0 dirty files |
+| cells | **117/117 cells generated; 117/117 are sound digesters**; 0 soured, 0 failed |
+| wall-clock | **953 s (15 min 53 s)**, 14:08:08–14:24:01 UTC |
+| per plant (sum of per-cell wall) | A 21 cells 375 s; B 48 cells 290 s; C 48 cells 279 s |
+| index | `truth_store/index.jsonl` **117 lines**, 117 unique ids; 117 run dirs, 117 truth dirs |
+| horizons in the manifests | every Plant A cell 365 d / 365 n_days (21); every B and C cell 200 d (48 + 48) |
+| store | 27M under `runs/`; 20M under `truth_store/` |
+| verification | passed: index, run dirs and truth dirs agree; redacted manifests carry no scenario id, seeds or baseline; every run has `calls.jsonl`; the 32-byte salt appears in no visible file |
+
+**Checks at `49e9477`** (local, before the fast-forward; CI reproduced them on every check):
+`ruff check .` and `ruff format --check .` clean; `pytest -q` **374 passed, 2 skipped, 13
+deselected, 0 failed**; `pytest -m g1` **13 passed, 0 failed**.
+
+**`biogas_mean` and every other anchored row** (24 clean Level-0 seeds, Plant B, 200 d, at
+this head):
+
+| row | generated | anchor | ratio | tolerance | status |
+|---|---:|---:|---:|---|---|
+| `feed_volume_median_primary_sludge` | 31.54 | 30.28 | 1.04 | +/- 15 % | pass |
+| `feed_volume_log_sigma_primary_sludge` | 0.4529 | 0.4363 | 1.04 | +/- 30 % | pass |
+| `delivery_zero_fraction_primary_sludge` | 0 | 0 | — | +/- 0.04 - (fraction of days with no delivery) | pass |
+| `feed_volume_median_thickened_was` | 17.23 | 17.42 | 0.99 | +/- 15 % | pass |
+| `feed_volume_log_sigma_thickened_was` | 0.5156 | 0.5268 | 0.98 | +/- 30 % | pass |
+| `delivery_zero_fraction_thickened_was` | 0 | 0 | — | +/- 0.04 - (fraction of days with no delivery) | pass |
+| `feed_volume_median_high_strength_waste` | 23.78 | 23.58 | 1.01 | +/- 15 % | pass |
+| `feed_volume_log_sigma_high_strength_waste` | 0.8021 | 0.7786 | 1.03 | +/- 30 % | pass |
+| `delivery_zero_fraction_high_strength_waste` | 0.1192 | 0.1006 | 1.18 | +/- 0.04 - (fraction of days with no delivery) | pass |
+| `feed_volume_median_fog` | 33.64 | 33.27 | 1.01 | +/- 15 % | pass |
+| `feed_volume_log_sigma_fog` | 0.7596 | 0.7059 | 1.08 | +/- 30 % | pass |
+| `delivery_zero_fraction_fog` | 0.3164 | 0.3073 | 1.03 | +/- 0.04 - (fraction of days with no delivery) | pass |
+| `total_feed_flow_median` | 105.2 | 94.1 | 1.12 | +/- 15 % | pass |
+| `vs_fraction_primary_sludge` | 0.0307 | 0.0295 | 1.04 | +/- 20 % | pass |
+| `vs_fraction_thickened_was` | 0.03191 | 0.0312 | 1.02 | +/- 20 % | pass |
+| `vs_fraction_high_strength_waste` | 0.0693 | 0.06485 | 1.07 | +/- 25 % | pass |
+| `hsw_cod_concentration` | 149.2 | 136.8 | 1.09 | +/- 25 % | pass |
+| `organic_loading_rate` | 2.171 | 1.885 | 1.15 | +/- 30 % | pass |
+| `biogas_mean` | 2899 | 2111 | 1.37 | ratio in [0.6, 1.5] | pass |
+| `digester_pH_median` | 7.232 | 7.27 | 0.99 | +/- 0.4 pH units | pass |
+| `alkalinity_median` | 5.051 | 5.043 | 1.00 | +/- 35 % | pass (calibrated, not counted) |
+| `vfa_median` | 0.7564 | 1.178 | 0.64 | ratio in [0.25, 4] | pass |
+| `fos_tac_median` | 0.1508 | 0.2323 | 0.65 | ratio in [0.5, 2] | pass |
+
+**23 / 23 rows inside their declared bound**; `biogas_mean` panel median
+2899 m³/d → ratio
+**1.373**, 24-seed mean 1.397,
+min 1.091, max 1.743 (band [0.6, 1.5]). Leanest-seed CH₄ fraction median
+**0.6437** (seed 1003; panel 0.644–0.692); 24/24 sound.
+
+**Trigger-rate tables, all three plants** (24 clean Level-0 seeds each at the matrix
+horizons, the four-row form; B at this head, C and A unchanged by rulings 5/A/B because
+they take neither corrected stream — C measured at ruling 3, A at ruling 6 — and Plant B
+and C's cells in the regenerated matrix carry the same code):
+
+| Plant | baseline | sound | overload, pooled | per-run range | runs | foaming, pooled | per-run range | runs | operator > 0.40 / > 0.30 |
+|---|---|---|---:|---|---:|---:|---|---:|---:|
+| **B** | — (200 d) | 24/24 | **7.55 %** | 2.92 – 19.30 % | 24/24 | **6.60 %** | 2.34 – 13.45 % | 24/24 | 0.00 % / 0.00 % |
+| **C** | — (200 d) | 24/24 | **9.82 %** | 6.43 – 14.04 % | 24/24 | **8.50 %** | 3.51 – 15.20 % | 24/24 | 0.00 % / 0.00 % |
+| **A** | `unadapted` (365 d) | 24/24 | **1.02 %** | 0.00 – 3.27 % | 21/24 | **0.09 %** | 0.00 – 0.60 % | 5/24 | 0.00 % / 0.00 % |
+| **A** | `adapted` (365 d) | 24/24 | **0.22 %** | 0.00 – 1.19 % | 11/24 | **0.20 %** | 0.00 – 1.19 % | 10/24 | 0.00 % / 0.00 % |

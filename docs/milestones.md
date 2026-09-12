@@ -1655,3 +1655,29 @@ read-only measurement of both options is in `docs/f2_horizon_report.md` §19.
 
 **Next:** pytest, ruff and the g1 gate at the final head with the exact result; fast-forward; CI; STOP if red only on the CH₄-margin gate test; no
 regeneration until told the head is final and CI is green.
+
+---
+
+### Session 2026-09-12 — the G1 regeneration at `49e9477`; stopped for the whole-branch review
+
+**Done.** The lead's answers A (FOG inert COD equivalent 2.9, lipid-like) and B (the gate's
+CH₄-fraction margin re-declared at 0.60) landed as `892bbb8` (ruling 5 with answer A) and
+`49e9477` (answer B) on top of ruling 6 (`f7a3e79`). At `49e9477`: ruff clean, `pytest -q`
+374 passed / 0 failed, `pytest -m g1` 13 passed / 0 failed; PR #15 fast-forwarded there and
+CI green on every check (ruff, pytest 3.11 and 3.12, the sim/ gate, the gate G1 anchor
+panel). On the coordinator's word the **117-cell matrix was regenerated with the tree at
+`49e9477`**: 117/117 generated, 117/117 sound, 953 s wall-clock, 117 index lines, every
+manifest carrying `49e9477`, every Plant A cell 365 d and every B/C cell 200 d, the salt in
+no visible file (`docs/f2_horizon_report.md` §23, with the anchored rows, the three-plant
+trigger tables and the leanest-seed CH₄ fraction). The regeneration writes nothing that is
+committed; this docs-only commit on top of `49e9477` is the review head, and PR #15 is
+fast-forwarded to it. **Stopped**: no merge, no tag, nothing further pushed.
+
+**Blocked on.** The coordinator's fresh whole-branch review at the review head, the verdict
+to the lead, and only then the merge and tag of PR #15 — not this session's to do.
+
+**The next session starts on:** hold for the lead's `launch: tool-registry` to the
+coordinating session (proposal §9.2, `tools/`: the registry every workflow must use, with
+budgets enforced there — CLAUDE.md rule 2). Nothing in `runs/` or `truth_store/` is
+committed; a later regeneration is made only at a reviewed head on the coordinator's word,
+never while CI is red (the void regeneration of 2026-09-11 is the record of why).
