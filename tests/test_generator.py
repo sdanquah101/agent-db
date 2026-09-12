@@ -828,3 +828,48 @@ def test_a_longer_horizon_extends_the_same_realisation(plants, catalogue, config
         # negative control, so this cannot pass on a generator that ignores its horizon
         assert longer.truth.influent.q.size == 130
         assert not np.array_equal(longer.truth.influent.q[90:130], longer.truth.influent.q[50:90])
+
+
+def test_assay_noises_are_independent_of_each_other_and_of_the_feed_draws(runs, catalogue, config):
+    """Every assay of a feed has its own noise, and none of them is a feed's own block.
+
+    The review of 2026-09-12 found no test asserting this: two mutants passed the file —
+    all assays of one feed drawn from ONE child key (their noises perfectly correlated), and
+    assay keys colliding with the per-feed block keys (an assay's noise equal to the feed's
+    amount draw). The standardised residual of a multiplicative assay is recovered exactly
+    from the record, ``z = (value / true - 1) / cv``, so both are asserted directly.
+    """
+    run = runs["B"]
+    fid = "primary_sludge"
+    spec = catalogue.feeds[fid]
+    feed_ids = sorted(run.truth.feeds)
+    k_feed = feed_ids.index(fid)
+    truth = {"ts": lambda t: float(run.truth.feeds[fid].ts[t]), "vs": lambda t: spec.vs_of_ts}
+    residual: dict[str, dict[int, float]] = {}
+    for assay, true_at in truth.items():
+        cv = config.assays[assay].cv
+        assert cv > 0.0 and config.assays[assay].sd_abs == 0.0, assay
+        records = [r for r in run.observed.assays if r.feed_id == fid and r.assay == assay]
+        residual[assay] = {
+            r.sample_day: (r.value / true_at(r.sample_day) - 1.0) / cv for r in records
+        }
+    days = sorted(set(residual["ts"]) & set(residual["vs"]))
+    assert len(days) > 100, len(days)
+    z_ts = np.array([residual["ts"][d] for d in days])
+    z_vs = np.array([residual["vs"][d] for d in days])
+    # (a) not the same noise: neither equal nor correlated
+    assert np.max(np.abs(z_ts - z_vs)) > 0.5
+    assert abs(np.corrcoef(z_ts, z_vs)[0, 1]) < 0.3
+    # and each is standard normal-ish, so the recovery is right (not a scale artefact)
+    assert 0.8 < z_ts.std() < 1.2 and 0.8 < z_vs.std() < 1.2
+    # (b) not any of the feed's own seven blocks: the documented child keys, at these days
+    day_index = np.array(days)
+    for block in range(7):
+        draw = np.random.default_rng([7, 1 + k_feed, block])
+        block_values = (
+            draw.uniform(size=run.truth.n_days)
+            if block in (0, 3, 5)
+            else draw.standard_normal(run.truth.n_days)
+        )[day_index]
+        for name, z in (("ts", z_ts), ("vs", z_vs)):
+            assert not np.allclose(z, block_values, atol=1e-9), (name, block)
