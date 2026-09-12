@@ -4570,3 +4570,49 @@ each finding adds the tokens *that* reviewer used, and the next module uses othe
 (`sim.run.harness.simulate_truth`, `sim.influent.generate_influent` and a hand-written
 observer, `anchor.compare_generated.output_panel`, …). A workflow has a small, known
 surface — the registry and the run view — so the surface is what the checker names.
+
+## 2026-09-12 — Blocker 1, round two: dynamic import and code execution are findings; the checker's limit recorded
+
+**Finding** (the coordinator, 15:30 UTC, verified on `bc7b73f`/`b808939`). The allow-list
+covers import *statements* only. Six modules were tried; four passed with `[]`:
+`importlib.import_module("sim.run." + "matrix")` with `getattr(m, "load_" + "library")`;
+`__import__("sim.run.harness", fromlist=["x"])`; `sys.modules.get("sim.run.matrix") or
+__import__(...)`; and `exec(compile("from sim.run.matrix import load_library…", "<x>",
+"exec"))`. A fifth, a second interpreter through `subprocess.run([sys.executable, "-c",
+"from sim.run.matrix import …"])`, passed too. The sixth (`pathlib` and `yaml` over the
+`scenarios/` directory, spelled `"scen" "arios"`) was already reported and stays as the
+positive control.
+
+**The fix** (tests only, `tests/test_truth_isolation.py`; the allow-list stays the first
+layer). A workflow module has no legitimate use for dynamic import or code execution, so
+these are denied by **name and attribute wherever they appear**: the modules `importlib`
+(and any submodule), `runpy`, `subprocess`, `ctypes`, `pkgutil`, `builtins` by any import
+spelling or as a bare name; the callables `__import__`, `exec`, `eval`, `compile`;
+`sys.modules`; `os.system`, `os.popen`, `os.exec*`, `os.spawn*`; and `getattr`/`setattr`/
+`delattr` whose first argument is not a plain name or attribute or whose second is not a
+string literal (plain `getattr(obj, "literal")` stays). A **string literal, or a `+`
+concatenation of literals folded at check time**, that spells a forbidden module path —
+exactly `sim`, `scenarios`, `anchor`, `eval`, `state`, `state.provenance`, a dotted path
+under one, or an `import`/`from` statement of one inside a string — is a finding, and so
+still is a path literal with `truth` or `scenarios` as a segment. Fixtures: the six
+sources verbatim, each of (1)–(4) and (6) asserted to be reported on the route it uses
+(`importlib`, `__import__`, `.modules`, `exec`/`compile`, `subprocess`, and the folded or
+embedded `sim.run.…` literal), (5) asserted to stay reported; and a module of ordinary
+code — `getattr(view.manifest, "plant")`, `os.path`, `sys.argv`, prose strings containing
+the words — asserted clean. Every earlier fixture kept.
+
+**The limit, recorded.** A static checker cannot prove the absence of every dynamic
+route: a compiled extension, an environment trick, a second interpreter reached some way
+the checker does not name, code assembled from characters. What this checker does is make
+every *named* route a finding and make the module say plainly what it is doing. The
+structural defence is that a workflow process must not have `sim`, `scenarios/` or
+`truth_store/` importable or readable at all — workflows run against `tools/` and the run
+view only, in a process or container where those paths are absent. That is a **design
+requirement for the tool-registry and workflow-harness components** (CLAUDE.md rule 2),
+recorded here and in the benchmark card §4.1 as a deferred requirement for the lead's
+launch of those components, not something G1 can enforce.
+
+**Alternatives considered.** Denying only the four routes found: the same deny-list
+mistake one level down. Rejecting any `getattr` at all: would flag the run view's own use;
+the literal-name form is kept. A runtime import hook in the workflow process: the right
+shape, and it belongs to the workflow harness, not to a test.

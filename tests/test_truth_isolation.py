@@ -90,6 +90,50 @@ _DENIED_TOKENS = frozenset(
     {"scenario_id", "seeds", "load_library", "generate_run", "generate_cells", "RunManifest"}
 )
 
+# Round two of blocker 1 (the coordinator, 2026-09-12 15:30): the allow-list covers import
+# STATEMENTS only. ``importlib.import_module("sim.run." + "matrix")``, ``__import__``,
+# ``sys.modules``, ``exec(compile(src, ...))`` and a second interpreter through
+# ``subprocess`` all reached the generator with the allow-list returning []. A workflow
+# module has no legitimate use for dynamic import or code execution, so these are denied by
+# NAME and ATTRIBUTE wherever they appear, and a string literal -- or a concatenation of
+# literals -- that spells a forbidden module path is a finding too. Recorded with its limit
+# in the decisions log: a static checker cannot prove the absence of every dynamic route; the
+# structural defence is a workflow process in which ``sim``, ``scenarios/`` and
+# ``truth_store/`` are not importable or readable at all (deferred to the tool-registry and
+# workflow-harness components).
+_DENIED_MODULES = frozenset({"importlib", "runpy", "subprocess", "ctypes", "pkgutil", "builtins"})
+_DENIED_CALLABLES = frozenset({"__import__", "exec", "eval", "compile"})
+_DENIED_OS_ATTRS = re.compile(r"^(system|popen|exec\w*|spawn\w*)$")
+_DYNAMIC_ATTR_CALLS = frozenset({"getattr", "setattr", "delattr"})
+# a module path a workflow must not spell: the exact name, or a dotted path under it, or an
+# import statement of it inside a string (code handed to exec or a second interpreter)
+_FORBIDDEN_MODULE_ROOTS = ("sim", "scenarios", "anchor", "eval", "state.provenance", "state")
+_MODULE_LITERAL = re.compile(
+    r"(?<![\w.])(?:sim|scenarios|anchor|eval|state\.provenance)\.[A-Za-z_][\w.]*"
+    r"|\b(?:import|from)\s+(?:sim|scenarios|anchor|eval|state\.provenance|state)\b"
+)
+
+
+def _folded_string(node: ast.AST) -> str | None:
+    """A string constant, or a ``+`` chain of string constants folded, else None."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left, right = _folded_string(node.left), _folded_string(node.right)
+        if left is not None and right is not None:
+            return left + right
+    return None
+
+
+def _spells_forbidden_module(text: str) -> bool:
+    stripped = text.strip()
+    return stripped in _FORBIDDEN_MODULE_ROOTS or bool(_MODULE_LITERAL.search(text))
+
+
+def _module_denied(module: str) -> bool:
+    """``importlib``, ``importlib.util``, ``subprocess``, ... by any import spelling."""
+    return module.split(".", 1)[0] in _DENIED_MODULES
+
 
 def _import_allowed(module: str, names: frozenset[str], level: int) -> bool:
     """Whether one import statement is on the allow-list."""
@@ -158,6 +202,7 @@ def find_truth_references(path: Path) -> list[Violation]:
                 alias.name
                 for alias in node.names
                 if not _import_allowed(alias.name, frozenset(), 0)
+                or _module_denied(alias.name)
                 or _TRUTH_MODULES & set(alias.name.lower().split("."))
                 or alias.name.startswith(_LAYOUT_MODULE)
             ]
@@ -173,23 +218,59 @@ def find_truth_references(path: Path) -> list[Violation]:
             )
             if (
                 not _import_allowed(module, raw_names, node.level)
+                or _module_denied(module)
                 or _TRUTH_MODULES & (segments | names)
                 or imports_layout
                 or _TRUTH_NAMES & raw_names
                 or _DENIED_TOKENS & raw_names
+                or _DENIED_CALLABLES & raw_names
             ):
                 names_str = ", ".join(alias.name for alias in node.names)
                 found.append(
                     Violation(path, node.lineno, "import", f"from {node.module} import {names_str}")
                 )
-        elif isinstance(node, ast.Name) and (node.id in _TRUTH_NAMES or node.id in _DENIED_TOKENS):
+        elif isinstance(node, ast.Name) and (
+            node.id in _TRUTH_NAMES
+            or node.id in _DENIED_TOKENS
+            or node.id in _DENIED_CALLABLES
+            or node.id in _DENIED_MODULES
+        ):
             found.append(Violation(path, node.lineno, "name", node.id))
         elif isinstance(node, ast.Attribute) and (
             _TRUTH_ATTR.search(node.attr)
             or node.attr in _TRUTH_NAMES
             or node.attr in _DENIED_TOKENS
+            or (
+                isinstance(node.value, ast.Name)
+                and node.value.id == "sys"
+                and node.attr == "modules"
+            )
+            or (
+                isinstance(node.value, ast.Name)
+                and node.value.id == "os"
+                and _DENIED_OS_ATTRS.match(node.attr)
+            )
         ):
             found.append(Violation(path, node.lineno, "attribute", f".{node.attr}"))
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in _DYNAMIC_ATTR_CALLS
+            and (
+                len(node.args) < 2
+                or not isinstance(node.args[0], ast.Name | ast.Attribute)
+                or not (
+                    isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, str)
+                )
+            )
+        ):
+            found.append(Violation(path, node.lineno, "dynamic attribute", f"{node.func.id}(...)"))
+        elif (
+            isinstance(node, ast.BinOp)
+            and (folded := _folded_string(node)) is not None
+            and _spells_forbidden_module(folded)
+        ):
+            found.append(Violation(path, node.lineno, "module literal", repr(folded)))
         elif (
             isinstance(node, ast.Constant)
             and isinstance(node.value, str)
@@ -197,6 +278,13 @@ def find_truth_references(path: Path) -> list[Violation]:
             and _TRUTH_PATH.search(node.value)
         ):
             found.append(Violation(path, node.lineno, "path literal", repr(node.value)))
+        if (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and id(node) not in exempt
+            and _spells_forbidden_module(node.value)
+        ):
+            found.append(Violation(path, node.lineno, "module literal", repr(node.value)))
 
     return found
 
@@ -487,6 +575,98 @@ def test_checker_flags_every_import_outside_the_allow_list(tmp_path: Path):
     kinds = [v.kind for v in found]
     assert kinds.count("import") == 10, kinds
     assert kinds.count("attribute") == 2 and kinds.count("name") == 2, kinds
+
+
+# Round two (the coordinator, 2026-09-12 15:30 UTC): six modules tried against the
+# allow-list of the first round, four of which it passed. Their exact sources. Every one of
+# (1)-(4) and (6) must be a finding naming its route; (5) was already reported and stays as
+# the positive control.
+_DYNAMIC_ROUTES: dict[str, tuple[str, tuple[str, ...]]] = {
+    "b1_importlib.py": (
+        """
+import importlib
+m = importlib.import_module("sim.run." + "matrix")
+lib = getattr(m, "load_" + "library")()
+""",
+        ("importlib", "'sim.run.matrix'", "getattr(...)"),
+    ),
+    "b2_dunder.py": (
+        """
+h = __import__("sim.run.harness", fromlist=["x"])
+gen = getattr(h, "generate" + "_run")
+""",
+        ("__import__", "'sim.run.harness'", "getattr(...)"),
+    ),
+    "b3_sysmodules.py": (
+        """
+import sys, numpy as np
+from state.run_view import open_run
+mod = sys.modules.get("sim.run.matrix") or __import__("sim.run.matrix", fromlist=["x"])
+""",
+        (".modules", "__import__", "'sim.run.matrix'"),
+    ),
+    "b4_exec.py": (
+        """
+from state.run_view import open_run
+src = "from sim.run.matrix import load_library\\nlib = load_library()"
+exec(compile(src, "<x>", "exec"))
+""",
+        ("exec", "compile", "from sim.run.matrix import"),
+    ),
+    "b5_pathlib.py": (
+        """
+import pathlib, yaml
+from state.run_view import open_run
+root = pathlib.Path(__file__).resolve().parents[1]
+files = sorted((root / "scen" "arios").glob("*.yaml"))
+""",
+        ("yaml", "'scenarios'"),
+    ),
+    "b6_subprocess.py": (
+        "\nimport subprocess, sys\nfrom state.run_view import open_run\n"
+        'out = subprocess.run([sys.executable, "-c", '
+        '"from sim.run.matrix import load_library; print(load_library())"], '
+        "capture_output=True, text=True).stdout\n",
+        ("subprocess", "from sim.run.matrix import"),
+    ),
+}
+
+
+@pytest.mark.parametrize("filename", sorted(_DYNAMIC_ROUTES))
+def test_every_dynamic_route_of_the_second_round_is_a_finding(tmp_path: Path, filename: str):
+    source, expected = _DYNAMIC_ROUTES[filename]
+    bad = tmp_path / filename
+    bad.write_text(source, encoding="utf-8")
+    found = find_truth_references(bad)
+    assert found, filename
+    details = "\n".join(str(v) for v in found)
+    for token in expected:
+        assert token in details, (filename, token, details)
+    # the run view is never what is reported
+    assert "state.run_view" not in " ".join(v.detail for v in found if v.kind == "import")
+
+
+# What the dynamic rules must NOT flag: a workflow reading its own attributes by a literal
+# name, using ``os.path`` and ``sys.argv``, and strings that merely contain the words.
+_DYNAMIC_CLEAN_SOURCE = """
+import os.path
+import sys
+from state.run_view import open_run
+
+def run(run_dir):
+    view = open_run(run_dir)
+    plant = getattr(view.manifest, "plant")
+    args = sys.argv[1:]
+    here = os.path.dirname(run_dir)
+    note = "a simulation of the evaluation, anchored in state" + " of the art"
+    return view, plant, args, here, note
+"""
+
+
+def test_the_dynamic_rules_leave_ordinary_code_alone(tmp_path: Path):
+    good = tmp_path / "dynamic_clean.py"
+    good.write_text(_DYNAMIC_CLEAN_SOURCE, encoding="utf-8")
+    assert find_truth_references(good) == []
 
 
 # --- the rule itself -------------------------------------------------------------

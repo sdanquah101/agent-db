@@ -131,9 +131,24 @@ Three consequences follow, and each is enforced by a test rather than by the lis
   enumerated back to a scenario without the salt (the review's brute-force inversion is a
   test, and recovers nothing), and the truth-side index is the only way from an id to its
   cell.
-- **The static checker bars `scenarios/` as it bars `truth`**: an import of the package or a
-  path literal with `scenarios` as a segment is a violation in any module under `workflows/`,
-  and the loader refuses the scenario files and the plant record by traversal.
+- **The static checker is an allow-list, and it has a limit.** A module under `workflows/`
+  may import the standard library, `numpy`, `scipy`, `pydantic`, the tool registry, its
+  own package and the run view (`state.run_view`) — every other import is a finding
+  (`sim`, `scenarios`, `anchor`, `eval`, the provenance log; the whole-branch review of
+  2026-09-12, blocker 1). Dynamic import and code execution are denied by name and
+  attribute wherever they appear (`importlib`, `__import__`, `exec`, `eval`, `compile`,
+  `runpy`, `subprocess`, `os.system`/`popen`/`exec*`/`spawn*`, `ctypes`, `pkgutil`,
+  `sys.modules`, `builtins`, `getattr`/`setattr` with a non-literal name), and a string
+  literal or concatenation that spells a forbidden module path is a finding; a path literal
+  with `truth` or `scenarios` as a segment still is, and the loader refuses the scenario
+  files and the plant record by traversal. **The limit, recorded honestly:** a static
+  checker cannot prove the absence of every dynamic route — a compiled extension, an
+  environment trick, a second interpreter reached some way the checker does not name. The
+  structural defence is that a workflow process must not have `sim`, `scenarios/` or
+  `truth_store/` importable or readable at all: workflows run against `tools/` and the run
+  view only, in a process or container where those paths are absent. That is a design
+  requirement for the tool-registry and workflow-harness components (rule 2), recorded as a
+  deferred requirement for the lead's launch of those components; G1 cannot enforce it.
 - **The visible call log cannot tell a faulted run from a clean one**: S0-01 and S5-01
   produce logs of the same length, the same names and the same field set.
 - **Nothing visible says when a run was generated, or how long it took.** The generation
