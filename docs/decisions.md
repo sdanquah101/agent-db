@@ -4530,3 +4530,43 @@ range 0.6437–0.692; 24/24 sound.
 0.655, every gate test passing) — **rejected by the lead on principle**, one stream's
 centre corrected and the other's not. Keep 0.65 with both corrections: the gate stays red
 on a guard, not on a soundness failure. Lower the soundness threshold: not on the table.
+
+## 2026-09-12 — Blocker 1 of the whole-branch review: the workflow-side checker is an allow-list
+
+**Finding** (the coordinator's fresh whole-branch review at `99b0547`, reproduced by the
+coordinator). The AST checker in `tests/test_truth_isolation.py` denied only the tokens
+`truth`, `truth_store`, `scenarios`, `sim.run.layout`, `RunPaths`, `truth_store_for`. A
+workflow-side module importing only `sim.run.matrix.load_library`,
+`sim.run.harness.generate_run`, `sim.plants.load_plant_config` and `state.run_view.open_run`
+passed `find_truth_references()` with `[]` and, given only the visible `runs/<id>/`, read
+every scenario's answer key and seed through `load_library` and — by regenerating candidate
+cells with `write=False` and matching `sensors.json` bit for bit — recovered the run's
+scenario id, level and all five derived seeds. Rule 1 and ruling B5(iii) were satisfied in
+letter (no file under `truth_store/` or `scenarios/` was opened by path) and broken in
+substance: the generation machinery *is* the answer key.
+
+**The route**, in one sentence: the checker looked for the *names of the hidden things*,
+and the hidden things are reachable without naming them, through the public generator.
+
+**The fix** (tests only; the runtime guard `state.run_view` is unchanged). The checker is an
+**allow-list**: a module under `workflows/` may import the standard library
+(`sys.stdlib_module_names`), `numpy`, `scipy`, `pydantic`, the tool registry (`tools`), its
+own package (`workflows`, relative imports included) and the workflow-facing run view
+(`state.run_view`; from `state` itself only `RunView`, `TruthAccessError`, `open_run`).
+Every other import — all of `sim`, `scenarios`, `anchor`, `eval`, `state.provenance`,
+`import state` bare, and whatever is added later — is a finding without anyone having to
+foresee it. The deny rules of 2026-09-10 stay as a second layer, and the names
+`scenario_id`, `seeds`, `load_library`, `generate_run`, `generate_cells`, `RunManifest` are
+findings as bare names, attributes or imported names. Fixtures: the reconstructed reviewer
+module is a must-fail fixture (`_SNEAKY_SOURCE`, asserted to spell none of the old tokens
+and to be reported on its three `sim` imports and its uses of `load_library`,
+`generate_run` and `.seeds`); a module of everything the allow-list admits must stay clean;
+a module of fourteen routes just outside it must be flagged on every line; every existing
+fixture is kept and passes unchanged.
+
+**Alternative considered: extend the deny-list** with the new tokens (`load_library`,
+`generate_run`, `sim.run.matrix`, …). Weaker for the same reason the last extension was:
+each finding adds the tokens *that* reviewer used, and the next module uses others
+(`sim.run.harness.simulate_truth`, `sim.influent.generate_influent` and a hand-written
+observer, `anchor.compare_generated.output_panel`, …). A workflow has a small, known
+surface — the registry and the run view — so the surface is what the checker names.

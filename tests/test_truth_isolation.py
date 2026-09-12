@@ -37,6 +37,7 @@ from __future__ import annotations
 import ast
 import json
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -63,6 +64,47 @@ _TRUTH_MODULES = frozenset({"truth", "truth_store", "scenarios"})
 _LAYOUT_MODULE = "sim.run.layout"
 _TRUTH_NAMES = frozenset({"truth_store_for", "TRUTH_STORE_DIR", "TRUTH_STORE", "RunPaths"})
 _TRUTH_ATTR = re.compile(r"(?i)^truth")
+
+# The whole-branch review of 2026-09-12 (blocker 1) showed that a deny-list of tokens is
+# the wrong shape: a module importing only ``sim.run.matrix.load_library``,
+# ``sim.run.harness.generate_run``, ``sim.plants.load_plant_config`` and
+# ``state.run_view.open_run`` spelled none of the denied tokens, passed this checker with
+# [], and -- given only ``runs/<id>/`` -- read every scenario's answer key and seed through
+# ``load_library`` and, by regenerating candidate cells with ``write=False`` and matching
+# ``sensors.json`` bit for bit, recovered the run's scenario id, level and all five derived
+# seeds (``_SNEAKY_SOURCE`` below is that module). So the checker is now an ALLOW-LIST: a
+# module under ``workflows/`` may import the standard library, numpy, scipy, pydantic, the
+# tool registry (``tools``), its own package (``workflows``, relative imports included) and
+# the workflow-facing run view (``state.run_view``; from ``state`` itself only the names the
+# package exports for workflows). Every other import -- all of ``sim``, ``scenarios``,
+# ``anchor``, ``eval``, ``state.provenance``, whatever is added later -- is a finding
+# without anyone having to foresee it. The deny rules above stay as a second layer.
+_STDLIB_MODULES = frozenset(sys.stdlib_module_names)
+_ALLOWED_TOP_LEVEL = frozenset({"tools", "workflows", "numpy", "scipy", "pydantic"})
+_RUN_VIEW_MODULE = "state.run_view"
+_WORKFLOW_FACING_STATE_NAMES = frozenset({"RunView", "TruthAccessError", "open_run"})
+
+# Names of the generation machinery and of the two manifest fields a workflow must never
+# hold (the redacted manifest has neither): a finding as a bare name or as an attribute.
+_DENIED_TOKENS = frozenset(
+    {"scenario_id", "seeds", "load_library", "generate_run", "generate_cells", "RunManifest"}
+)
+
+
+def _import_allowed(module: str, names: frozenset[str], level: int) -> bool:
+    """Whether one import statement is on the allow-list."""
+    if level > 0:  # relative: stays inside workflows/, every module of which is checked
+        return True
+    top = module.split(".", 1)[0]
+    if top in _STDLIB_MODULES or top in _ALLOWED_TOP_LEVEL:
+        return True
+    if module == _RUN_VIEW_MODULE:
+        return True
+    if module == "state":
+        # ``from state import open_run`` is fine; ``from state import run_view`` too;
+        # ``from state import CallLog`` (the provenance log) or ``import state`` is not
+        return bool(names) and names <= (_WORKFLOW_FACING_STATE_NAMES | {"run_view"})
+    return False
 
 
 @dataclass(frozen=True)
@@ -111,28 +153,41 @@ def find_truth_references(path: Path) -> list[Violation]:
 
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            for alias in node.names:
-                if _TRUTH_MODULES & set(alias.name.lower().split(".")) or alias.name.startswith(
-                    _LAYOUT_MODULE
-                ):
-                    found.append(Violation(path, node.lineno, "import", alias.name))
+            # ``import a.b, c`` is one statement; one finding if any alias is off the list
+            bad = [
+                alias.name
+                for alias in node.names
+                if not _import_allowed(alias.name, frozenset(), 0)
+                or _TRUTH_MODULES & set(alias.name.lower().split("."))
+                or alias.name.startswith(_LAYOUT_MODULE)
+            ]
+            if bad:
+                found.append(Violation(path, node.lineno, "import", ", ".join(bad)))
         elif isinstance(node, ast.ImportFrom):
             module = node.module or ""
             segments = set(module.lower().split(".")) if module else set()
             names = {alias.name.lower() for alias in node.names}
-            raw_names = {alias.name for alias in node.names}
+            raw_names = frozenset(alias.name for alias in node.names)
             imports_layout = module.startswith(_LAYOUT_MODULE) or (
                 module == _LAYOUT_MODULE.rsplit(".", 1)[0] and "layout" in names
             )
-            if _TRUTH_MODULES & (segments | names) or imports_layout or _TRUTH_NAMES & raw_names:
+            if (
+                not _import_allowed(module, raw_names, node.level)
+                or _TRUTH_MODULES & (segments | names)
+                or imports_layout
+                or _TRUTH_NAMES & raw_names
+                or _DENIED_TOKENS & raw_names
+            ):
                 names_str = ", ".join(alias.name for alias in node.names)
                 found.append(
                     Violation(path, node.lineno, "import", f"from {node.module} import {names_str}")
                 )
-        elif isinstance(node, ast.Name) and node.id in _TRUTH_NAMES:
+        elif isinstance(node, ast.Name) and (node.id in _TRUTH_NAMES or node.id in _DENIED_TOKENS):
             found.append(Violation(path, node.lineno, "name", node.id))
         elif isinstance(node, ast.Attribute) and (
-            _TRUTH_ATTR.search(node.attr) or node.attr in _TRUTH_NAMES
+            _TRUTH_ATTR.search(node.attr)
+            or node.attr in _TRUTH_NAMES
+            or node.attr in _DENIED_TOKENS
         ):
             found.append(Violation(path, node.lineno, "attribute", f".{node.attr}"))
         elif (
@@ -310,6 +365,128 @@ def test_checker_leaves_the_word_scenario_alone(tmp_path: Path):
     good = tmp_path / "scenario_words.py"
     good.write_text(_SCENARIO_WORDS_SOURCE, encoding="utf-8")
     assert find_truth_references(good) == []
+
+
+# The reviewer's module of the whole-branch review of 2026-09-12 (blocker 1), reconstructed
+# from its description: no ``truth``, no ``scenarios``, no ``layout``, no denied name of the
+# 2026-09-10 checker anywhere in it, so that checker returned []. Given only the visible
+# ``runs/<id>/`` it reads every scenario's answer key and seed through ``load_library`` and,
+# by regenerating candidate cells with ``write=False`` and matching ``sensors.json`` bit for
+# bit, recovers the run's scenario id, level and all five derived seeds. It must fail.
+_SNEAKY_SOURCE = '''
+"""Only public loaders; none of the old tokens. Recovers the answer key of a run."""
+from pathlib import Path
+
+import numpy as np
+
+from sim.plants import load_plant_config
+from sim.run.harness import generate_run
+from sim.run.matrix import load_library
+from state.run_view import open_run
+
+
+def identify(run_dir):
+    view = open_run(run_dir)
+    seen = view.sensors()
+    plant = load_plant_config(view.manifest.plant)
+    tier = view.manifest.tier
+    for sid, row in load_library().items():
+        cell = generate_run(row, tier, plant=plant, write=False)
+        same = all(
+            np.array_equal(cell.record[name].value, np.asarray(series["value"]))
+            for name, series in seen.items()
+        )
+        if same:
+            return sid, row.level, row.correct_conclusion, cell.manifest.seeds
+    return None
+'''
+
+# The old checker's tokens, spelled out so the fixture provably contains none of them: this
+# is what made the module invisible to a deny-list.
+_OLD_CHECKER_TOKENS = ("truth", "scenarios", "layout", "RunPaths", "TRUTH_STORE")
+
+
+def test_the_reviewers_regeneration_oracle_is_a_finding(tmp_path: Path):
+    """Blocker 1 of the 2026-09-12 review: the allow-list catches what the deny-list missed."""
+    lowered = _SNEAKY_SOURCE.lower()
+    assert not any(tok.lower() in lowered for tok in _OLD_CHECKER_TOKENS), (
+        "the fixture must spell none of the old tokens, or it does not reproduce the bypass"
+    )
+    bad = tmp_path / "sneaky_workflow.py"
+    bad.write_text(_SNEAKY_SOURCE, encoding="utf-8")
+    found = find_truth_references(bad)
+    details = " ".join(str(v) for v in found)
+    # the three imports off the allow-list, each its own finding; the run view is allowed
+    imports = [v for v in found if v.kind == "import"]
+    assert len(imports) == 3, imports
+    assert "state.run_view" not in " ".join(v.detail for v in imports)
+    assert all(v.detail.startswith("from sim.") for v in imports), imports
+    # and the generation machinery by name, however it was imported
+    for token in ("load_library", "generate_run", ".seeds"):
+        assert token in details, (token, details)
+    assert not any(v.kind == "path literal" for v in found), found
+
+
+# Everything the allow-list admits, in one module, must stay clean: the standard library,
+# numpy/scipy/pydantic, the tool registry, the workflow package itself (absolute and
+# relative) and the run view by either spelling.
+_ALLOWED_IMPORTS_SOURCE = """
+import json
+import os.path
+from collections import Counter
+from dataclasses import dataclass
+
+import numpy as np
+import scipy.optimize
+from pydantic import BaseModel
+
+import tools
+from tools import registry
+from tools.registry import call
+import workflows.p0_scripted
+from . import helpers
+from .helpers import step
+from state.run_view import open_run, RunView
+from state import open_run as open_run_again
+import state.run_view
+"""
+
+# ... and everything just outside it is a finding: the simulator by any route, the
+# scenario package, the anchor and evaluation internals, the provenance log, the whole
+# state package by bare import, and the denied names as bare names or attributes.
+_DISALLOWED_IMPORTS_SOURCE = """
+import sim
+import sim.run.harness
+from sim.run.matrix import load_library
+from sim.plants import load_plant_config
+from sim.observation import observe
+import anchor.compare_generated
+from eval import metrics
+from state.provenance import CallLog
+from state import CallLog
+import state
+x = manifest.scenario_id
+y = something.seeds
+z = generate_cells(a, b, c)
+w = RunManifest
+"""
+
+
+def test_checker_admits_exactly_the_workflow_facing_surface(tmp_path: Path):
+    good = tmp_path / "allowed_imports.py"
+    good.write_text(_ALLOWED_IMPORTS_SOURCE, encoding="utf-8")
+    assert find_truth_references(good) == []
+
+
+def test_checker_flags_every_import_outside_the_allow_list(tmp_path: Path):
+    bad = tmp_path / "disallowed_imports.py"
+    bad.write_text(_DISALLOWED_IMPORTS_SOURCE, encoding="utf-8")
+    found = find_truth_references(bad)
+    lines = {v.line for v in found}
+    assert lines == set(range(2, 16)), sorted(str(v) for v in found)
+    kinds = [v.kind for v in found]
+    assert kinds.count("import") == 10, kinds
+    assert kinds.count("attribute") == 2 and kinds.count("name") == 2, kinds
 
 
 # --- the rule itself -------------------------------------------------------------
