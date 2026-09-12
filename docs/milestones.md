@@ -1673,8 +1673,19 @@ trigger tables and the leanest-seed CH₄ fraction). The regeneration writes not
 committed; this docs-only commit on top of `49e9477` is the review head, and PR #15 is
 fast-forwarded to it. **Stopped**: no merge, no tag, nothing further pushed.
 
-**Blocked on.** The coordinator's fresh whole-branch review at the review head, the verdict
-to the lead, and only then the merge and tag of PR #15 — not this session's to do.
+**The review at `99b0547` found two blockers** (the coordinator, 2026-09-12 15:05 UTC).
+Blocker 1 (the workflow-side checker was a deny-list; a module using only the public
+generator recovered a run's answer key) is fixed as the tests-only commit `bc7b73f` — an
+allow-list checker with the reviewer's module as a must-fail fixture — and the assay-noise
+test gap is closed at `b808939` (both mutants caught). Blocker 2 (the visible record was
+not prefix-stable; the truth was) awaits the lead's choice: option (b), per-block keyed
+observation and note streams, is built, tested (375 passed, gate 13 passed, truth bit-equal)
+and documented in a scratch worktree, uncommitted; option (a), a docs-only correction, is
+drafted (`docs/f2_horizon_report.md` §24). PR #15 stays at `99b0547`.
+
+**Blocked on.** The lead's choice for blocker 2, relayed by the coordinator; then one commit,
+pytest/ruff, fast-forward, CI, regeneration on the coordinator's word (needed under b), and
+the fresh review — not this session's to merge or tag.
 
 **The next session starts on:** hold for the lead's `launch: tool-registry` to the
 coordinating session (proposal §9.2, `tools/`: the registry every workflow must use, with

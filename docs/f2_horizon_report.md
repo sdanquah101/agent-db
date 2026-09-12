@@ -1242,3 +1242,75 @@ and C's cells in the regenerated matrix carry the same code):
 | **C** | — (200 d) | 24/24 | **9.82 %** | 6.43 – 14.04 % | 24/24 | **8.50 %** | 3.51 – 15.20 % | 24/24 | 0.00 % / 0.00 % |
 | **A** | `unadapted` (365 d) | 24/24 | **1.02 %** | 0.00 – 3.27 % | 21/24 | **0.09 %** | 0.00 – 0.60 % | 5/24 | 0.00 % / 0.00 % |
 | **A** | `adapted` (365 d) | 24/24 | **0.22 %** | 0.00 – 1.19 % | 11/24 | **0.20 %** | 0.00 – 1.19 % | 10/24 | 0.00 % / 0.00 % |
+
+## 24. The 2026-09-12 review's two blockers: blocker 1 fixed and pushed; option (b) for blocker 2 prepared, uncommitted
+
+*Status line: blocker 1 (the workflow-side checker) is fixed as a tests-only commit
+**`bc7b73f`** on `claude/g1-review-blockers` on top of `99b0547`, and the assay-noise
+test gap is closed as its own commit **`b808939`**; PR #15 is NOT fast-forwarded (still
+`99b0547`). Option (b) for blocker 2 is built, tested and documented in a scratch
+worktree at `99b0547`, uncommitted, and waits for the lead's choice; option (a)'s
+docs-only correction is drafted as text. Nothing regenerated.*
+
+### 24.1 Blocker 1 — `bc7b73f`
+
+`find_truth_references` in `tests/test_truth_isolation.py` is an **allow-list**: a module
+under `workflows/` may import the standard library (`sys.stdlib_module_names`), `numpy`,
+`scipy`, `pydantic`, `tools`, its own package (`workflows`, relative imports included) and
+the workflow-facing run view (`state.run_view`; from `state` only `RunView`,
+`TruthAccessError`, `open_run`). Every other import is a finding; the 2026-09-10 deny rules
+stay as a second layer; `scenario_id`, `seeds`, `load_library`, `generate_run`,
+`generate_cells`, `RunManifest` are findings as names, attributes or imported names. The
+reviewer's module is reconstructed as `_SNEAKY_SOURCE` (asserted to spell none of the old
+tokens) and is a must-fail fixture: three `sim` imports reported, `load_library`,
+`generate_run` and `.seeds` reported, no path literal. Two more fixtures: everything the
+allow-list admits in one module stays clean; fourteen routes just outside it are each a
+finding. Every existing fixture kept and passing; the runtime guard untouched.
+`pytest -q tests/test_truth_isolation.py`: **43 passed**. Decisions entry with the
+deny-list-extension alternative and why it is weaker.
+
+### 24.2 Test gap — `b808939`
+
+`test_assay_noises_are_independent_of_each_other_and_of_the_feed_draws`: the primary
+sludge's TS and VS residuals, recovered exactly from the record, are neither equal nor
+correlated, are unit-scale, and equal none of the feed's seven documented block draws.
+Mutant (a) — all assays of one feed from one child key — fails it on equality (max
+difference 7.5 × 10⁻¹⁵); mutant (b) — assay keys colliding with the per-feed block keys —
+fails it on the VS residual equalling block 6 (the mis-log normals). The rest of
+`tests/test_generator.py` catches neither (16 passed under mutant b). Both written, run,
+reverted; the generator is unchanged.
+
+### 24.3 Blocker 2, option (b) — prepared in `scratchpad/wt_b`, uncommitted
+
+**Files touched** (worktree at `99b0547`):
+
+| file | change |
+|---|---|
+| `sim/observation/model.py` | `sensor_block_rng(seed, name, block)` (`SeedSequence([seed, sensor key, block])`); `_sensor_series` takes a `stream(block)` callable and draws its six blocks from six keyed streams; `historian_outages` gains an optional `lengths_rng` (signature-compatible), and `observe` passes `default_rng([seed + OFFSET, 0])` and `[…, 1]`; "Randomness" docstring rewritten; `sensor_rng` kept, `sensor_block_rng` exported |
+| `sim/run/notes.py` | benign notes: one uniform per day from `default_rng([seed, 0])` (a note where it falls below `benign_per_100_d / 100`), texts without repeats in the order of `default_rng([seed, 1]).permutation(...)`; same expected count (Binomial for Poisson); docstring |
+| `sim/influent/generator.py` | `REFERENCE_WINDOW_D` docstring: the truth is prefix-stable by the window, the visible record by its own keying |
+| `tests/test_visible_prefix.py` (new) | S3-03 on Plant B, tier C, 200 v 210 d: every sensor series' `sample_t`, `report_t`, `value`, `missing`, `saturated`, `flatlined`, `fouled` bit-equal up to the shorter run's last sample (that sample to 1e-9, as the truth's final point), the notes (shorter = longer's before day 200), the feed log and the assays; negative control on the comparison |
+| `tests/test_observation.py` | **flagged**: `test_the_effective_online_loss_is_the_recorded_composite`'s lab-assay assertion was a one-sigma band (rel 0.25 of a 2 % rate over ~860 weekly samples, sd 0.0048); the re-keyed seed lands at 0.0256 (1.2 σ). Changed to the binomial three-sigma band plus "less than twice the rate" — the claim it can actually make at this sample size |
+| `tests/test_run_harness.py` | **flagged**: `test_every_run_carries_operator_notes…` generates its clean run at 100 d instead of 40 d, with the reason in the docstring: under the per-day draw a 40-d run is empty with probability 0.94⁴⁰ = 8 %, and this seed's was; at 100 d it is 0.2 %, so "a clean run still has a log" is a property of the design, not of one seed |
+| `docs/decisions.md` | ruling-6 entry corrected ("truth side only" until this); new entry for blocker 2 / option (b) with the finding, the keying, the notes change, the tests and option (a) as the alternative |
+| `docs/f2_horizon_report.md` | correction note at the head of §21 |
+
+**Measured.** Truth untouched: one S3-03 cell on Plant B at tier C generated in the current
+tree and in the worktree — `y`, `t`, ash, both flags and every truth channel **bit-equal**;
+all 15 visible sensor series changed, as they must. Prefix stability of the visible record:
+the new test passes (bit-equal bar the final sample, which agrees to 1.2 × 10⁻¹⁶). The
+observation tests pass unchanged except the one flagged tolerance; the whole default suite in
+the worktree: **375 passed, 2 skipped, 0 failed** (the 374 of `49e9477` plus the new test) and `pytest -m g1` **13 passed** — ruff clean.
+
+**What (b) costs.** Every visible record changes (a regeneration at the committed head);
+the benign-note count becomes Binomial rather than Poisson with the same mean, and a
+40-day run can have an empty benign log (8 %); nothing on the truth side moves.
+
+### 24.4 Option (a), drafted
+
+A docs-only correction (the `REFERENCE_WINDOW_D` docstring, the ruling-6 decisions entry,
+§21/§23): "a whole run is prefix-stable" → "the truth of a whole run is prefix-stable; the
+visible record re-rolls with the horizon, by the observation model's sequential per-sensor
+blocks and the notes' horizon-sized draw — recorded, not changed". Text ready in the
+scratchpad; applies in minutes; no regeneration unless the lead wants the manifests to
+carry the exact final head.
