@@ -139,9 +139,15 @@ Three consequences follow, and each is enforced by a test rather than by the lis
   attribute wherever they appear (`importlib`, `__import__`, `exec`, `eval`, `compile`,
   `runpy`, `subprocess`, `os.system`/`popen`/`exec*`/`spawn*`, `ctypes`, `pkgutil`,
   `sys.modules`, `builtins`, `getattr`/`setattr` with a non-literal name), and a string
-  literal or concatenation that spells a forbidden module path is a finding; a path literal
-  with `truth` or `scenarios` as a segment still is, and the loader refuses the scenario
-  files and the plant record by traversal. **The limit, recorded honestly:** a static
+  literal or concatenation that spells a forbidden module path is a finding; so is every
+  dunder name, attribute or string literal but the ordinary few (`__name__`, `__doc__`,
+  `__file__`, `__version__`, `__all__`, `__main__`, `super().__init__()`), every call to
+  `vars`, `globals`, `locals`, `dir` or `chr`, `.decode`/`.fromhex`, and `codecs`, `base64`,
+  `binascii`, `zlib`, `marshal`, `pickle`; a path literal with `truth` or `scenarios` as a
+  segment still is, and the loader refuses the scenario files and the plant record by
+  traversal. Hardening stopped at the third round (a module name assembled from `chr`
+  codes, the builtins reached through `open_run.__globals__`, `__globals__` itself), by the
+  coordinator's instruction. **The limit, recorded honestly:** a static
   checker cannot prove the absence of every dynamic route — a compiled extension, an
   environment trick, a second interpreter reached some way the checker does not name. The
   structural defence is that a workflow process must not have `sim`, `scenarios/` or

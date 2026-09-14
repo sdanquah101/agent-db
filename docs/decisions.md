@@ -4616,3 +4616,32 @@ launch of those components, not something G1 can enforce.
 mistake one level down. Rejecting any `getattr` at all: would flag the run view's own use;
 the literal-name form is kept. A runtime import hook in the workflow process: the right
 shape, and it belongs to the workflow harness, not to a test.
+
+## 2026-09-12 — Blocker 1, round three and last: dunder access and obfuscated literals are findings; hardening stops here
+
+**Finding** (the coordinator, 18:10 UTC, on `9aa2ef8`). Two more routes passed the
+round-two checker with `[]` and a third was reported only as a module literal: a module
+name assembled from `chr` codes and handed to `__builtins__["__import__"]`; the builtins
+reached through `getattr(open_run, "__globals__")["__builtins__"]` and `vars(...)`; and
+`open_run.__globals__` itself.
+
+**The fix** (tests only, `tests/test_truth_isolation.py`). Every `__x__` as a name, an
+attribute or a string literal is a finding, except the ordinary few — `__name__`, `__doc__`,
+`__file__`, `__version__`, `__all__` (an export list), `__main__` (the idiom) and
+`__init__` as an attribute (`super().__init__()`); the calls `vars`, `globals`, `locals`,
+`dir` and `chr` are findings wherever they appear; `.decode` and `.fromhex` as attributes;
+`codecs`, `base64`, `binascii`, `zlib`, `marshal` and `pickle` by any import spelling or as
+names. The three sources are fixtures verbatim: (7) reported on `chr`, `__builtins__` and
+the `'__import__'` literal; (8) on `'__globals__'`, `'__builtins__'`, `vars(...)`,
+`'__import__'` and the module literal — the dunder route, not only the literal; (9) on
+`.__globals__`. A module of ordinary dunders (a docstring, `__all__`, `__version__`,
+`__file__`, a class with `super().__init__()`, the main idiom) stays clean. Every earlier
+fixture kept: 54 tests in the file.
+
+**Hardening stops here**, by the coordinator's instruction. The round-two entry above
+records why: a static checker cannot prove the absence of every dynamic route — these
+three are the point at which the rounds were stopped, not the last routes that exist — and
+the structural defence is a workflow process in which `sim`, `scenarios/` and
+`truth_store/` are neither importable nor readable, a design requirement for the
+tool-registry and workflow-harness components (rule 2), deferred to the lead's launch of
+those components.

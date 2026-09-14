@@ -101,7 +101,10 @@ _DENIED_TOKENS = frozenset(
 # structural defence is a workflow process in which ``sim``, ``scenarios/`` and
 # ``truth_store/`` are not importable or readable at all (deferred to the tool-registry and
 # workflow-harness components).
-_DENIED_MODULES = frozenset({"importlib", "runpy", "subprocess", "ctypes", "pkgutil", "builtins"})
+_DENIED_MODULES = frozenset(
+    {"importlib", "runpy", "subprocess", "ctypes", "pkgutil", "builtins"}
+    | {"codecs", "base64", "binascii", "zlib", "marshal", "pickle"}
+)
 _DENIED_CALLABLES = frozenset({"__import__", "exec", "eval", "compile"})
 _DENIED_OS_ATTRS = re.compile(r"^(system|popen|exec\w*|spawn\w*)$")
 _DYNAMIC_ATTR_CALLS = frozenset({"getattr", "setattr", "delattr"})
@@ -112,6 +115,31 @@ _MODULE_LITERAL = re.compile(
     r"(?<![\w.])(?:sim|scenarios|anchor|eval|state\.provenance)\.[A-Za-z_][\w.]*"
     r"|\b(?:import|from)\s+(?:sim|scenarios|anchor|eval|state\.provenance|state)\b"
 )
+
+
+# Round three, the LAST hardening round (the coordinator, 2026-09-12 18:10): a module name
+# assembled from ``chr`` codes and handed to ``__builtins__["__import__"]``, the builtins
+# reached through ``open_run.__globals__``, and ``open_run.__globals__`` itself all passed
+# the round-two checker (the second only as a module literal). Dunder access and obfuscated
+# literals have no use in a workflow, so: every ``__x__`` as a name, an attribute or a string
+# literal is a finding except ``__name__``, ``__doc__``, ``__file__``, ``__version__``,
+# ``__main__`` (the idiom), ``__all__`` (an export list) and ``__init__`` as an attribute
+# (``super().__init__()``); ``vars``, ``globals``, ``locals``, ``dir`` and ``chr`` are
+# findings as calls; ``.decode`` and ``.fromhex`` as attributes; ``codecs``, ``base64``,
+# ``binascii``, ``zlib``, ``marshal``, ``pickle`` by any import spelling or as names. Hardening
+# stops here by the coordinator's instruction: the record (decisions, card §4.1) says a
+# static checker cannot close every route and names the structural defence.
+_DUNDER = re.compile(r"^__\w+__$")
+_ALLOWED_DUNDER_NAMES = frozenset({"__name__", "__doc__", "__file__", "__version__", "__all__"})
+_ALLOWED_DUNDER_ATTRS = frozenset({"__name__", "__doc__", "__file__", "__version__", "__init__"})
+_ALLOWED_DUNDER_LITERALS = frozenset({"__name__", "__doc__", "__file__", "__version__", "__main__"})
+_DENIED_INTROSPECTION = frozenset({"vars", "globals", "locals", "dir", "chr"})
+_DENIED_DECODE_ATTRS = frozenset({"decode", "fromhex"})
+_DENIED_ENCODING_MODULES = frozenset({"codecs", "base64", "binascii", "zlib", "marshal", "pickle"})
+
+
+def _denied_dunder(text: str, allowed: frozenset[str]) -> bool:
+    return bool(_DUNDER.match(text)) and text not in allowed
 
 
 def _folded_string(node: ast.AST) -> str | None:
@@ -285,6 +313,30 @@ def find_truth_references(path: Path) -> list[Violation]:
             and _spells_forbidden_module(node.value)
         ):
             found.append(Violation(path, node.lineno, "module literal", repr(node.value)))
+
+        # round three: dunder access, introspection and obfuscated literals, as a separate
+        # chain so that a node already reported above can be reported for this as well
+        if isinstance(node, ast.Name) and (
+            _denied_dunder(node.id, _ALLOWED_DUNDER_NAMES) or node.id in _DENIED_ENCODING_MODULES
+        ):
+            found.append(Violation(path, node.lineno, "dunder name", node.id))
+        elif isinstance(node, ast.Attribute) and (
+            _denied_dunder(node.attr, _ALLOWED_DUNDER_ATTRS) or node.attr in _DENIED_DECODE_ATTRS
+        ):
+            found.append(Violation(path, node.lineno, "dunder attribute", f".{node.attr}"))
+        elif (
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and id(node) not in exempt
+            and _denied_dunder(node.value.strip(), _ALLOWED_DUNDER_LITERALS)
+        ):
+            found.append(Violation(path, node.lineno, "dunder literal", repr(node.value)))
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in _DENIED_INTROSPECTION
+        ):
+            found.append(Violation(path, node.lineno, "introspection", f"{node.func.id}(...)"))
 
     return found
 
@@ -666,6 +718,84 @@ def run(run_dir):
 def test_the_dynamic_rules_leave_ordinary_code_alone(tmp_path: Path):
     good = tmp_path / "dynamic_clean.py"
     good.write_text(_DYNAMIC_CLEAN_SOURCE, encoding="utf-8")
+    assert find_truth_references(good) == []
+
+
+# Round three, the last (the coordinator, 2026-09-12 18:10 UTC): three more routes, exact
+# sources. (7) and (9) passed the round-two checker; (8) was reported only as a module
+# literal and must now be reported on its dunder route.
+_LAST_ROUND_ROUTES: dict[str, tuple[str, tuple[str, ...]]] = {
+    "b7_chr.py": (
+        """
+from state.run_view import open_run
+name = "".join(chr(c) for c in (115, 105, 109, 46, 114, 117, 110, 46, 109, 97, 116, 114, 105, 120))
+mod = __builtins__["__import__"](name) if isinstance(__builtins__, dict) else None
+""",
+        ("chr(...)", "__builtins__", "'__import__'"),
+    ),
+    "b8_lambda_builtins.py": (
+        """
+from state.run_view import open_run
+imp = (lambda: getattr(open_run, "__globals__")["__builtins__"])()
+load = imp["__import__"] if isinstance(imp, dict) else vars(imp)["__import__"]
+m = load("sim.run.harness")
+""",
+        ("'__globals__'", "'__builtins__'", "vars(...)", "'__import__'", "'sim.run.harness'"),
+    ),
+    "b9_open_run_globals.py": (
+        """
+from state.run_view import open_run
+g = open_run.__globals__
+""",
+        (".__globals__",),
+    ),
+}
+
+
+@pytest.mark.parametrize("filename", sorted(_LAST_ROUND_ROUTES))
+def test_every_route_of_the_last_round_is_a_finding(tmp_path: Path, filename: str):
+    source, expected = _LAST_ROUND_ROUTES[filename]
+    bad = tmp_path / filename
+    bad.write_text(source, encoding="utf-8")
+    found = find_truth_references(bad)
+    assert found, filename
+    details = "\n".join(str(v) for v in found)
+    for token in expected:
+        assert token in details, (filename, token, details)
+    if filename == "b8_lambda_builtins.py":
+        # the dunder route itself, not only the module literal at the end
+        assert any(v.kind.startswith("dunder") for v in found), details
+
+
+# Ordinary Python a workflow may well contain, which the dunder rules must leave alone: the
+# main idiom, a module docstring and export list, a class with ``super().__init__()``,
+# ``__version__`` and ``__file__``.
+_DUNDER_CLEAN_SOURCE = '''
+"""A workflow module with the usual dunders."""
+from pathlib import Path
+
+from state.run_view import open_run
+
+__all__ = ["Step"]
+__version__ = "0.1"
+HERE = Path(__file__).parent
+
+
+class Step(dict):
+    def __init__(self, run_dir):
+        super().__init__()
+        self["view"] = open_run(run_dir)
+        self["doc"] = __doc__
+
+
+if __name__ == "__main__":
+    Step(".")
+'''
+
+
+def test_the_dunder_rules_leave_ordinary_dunders_alone(tmp_path: Path):
+    good = tmp_path / "dunder_clean.py"
+    good.write_text(_DUNDER_CLEAN_SOURCE, encoding="utf-8")
     assert find_truth_references(good) == []
 
 
