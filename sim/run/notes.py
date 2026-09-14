@@ -102,7 +102,8 @@ def operator_notes(
 
     Args:
         n_days: Length of the run, d.
-        seed: Seed of the notes stream (stream 4 of :mod:`sim.run.seeds`).
+        seed: Seed of the notes streams (stream 4 of :mod:`sim.run.seeds`): the per-day
+            note draw is keyed ``[seed, 0]`` and the text order ``[seed, 1]``.
         adversarial: Whether the scenario injects ``adversarial_log_note``.
         scenario_id: Which scenario's false-cause note to use.
         adversarial_day: Day the false-cause note is written. The harness passes the
@@ -118,13 +119,24 @@ def operator_notes(
     if n_days < 1:
         raise ValueError("n_days must be positive")
     cfg = config or load_log_notes()
-    rng = np.random.default_rng(seed)
-    expected = cfg.benign_per_100_d * n_days / 100.0
-    # Poisson count, then days without replacement: two notes on one day would read as a
-    # duplicated entry rather than as two events.
-    count = int(min(rng.poisson(expected), n_days, len(cfg.benign)))
-    days = np.sort(rng.choice(n_days, size=count, replace=False)) if count else np.empty(0, int)
-    texts = rng.choice(len(cfg.benign), size=count, replace=False) if count else np.empty(0, int)
+    # Prefix-stable in the horizon (ruling 7, 2026-09-14, for blocker 2 of the whole-branch
+    # review): a note falls on each day independently with probability benign_per_100_d /
+    # 100 -- one uniform per day from the child stream keyed (seed, stage 0), so the first
+    # n days of a longer log are the first n days of a shorter one -- and the texts are
+    # handed out, without repeats, in the order of a permutation from the child stream
+    # keyed (seed, stage 1). A Bernoulli-per-day draw rather than a Poisson count with a
+    # `choice` of days because a count and a `choice` are both functions of the horizon
+    # (every horizon re-drew every day); the expected count is the same as the Poisson
+    # count this replaced (n_days x rate), two notes on one day cannot occur, and a run
+    # long enough to exhaust the catalogue simply stops logging benign notes.
+    u_days = np.random.default_rng(np.random.SeedSequence([int(seed), 0])).uniform(size=n_days)
+    order = np.random.default_rng(np.random.SeedSequence([int(seed), 1])).permutation(
+        len(cfg.benign)
+    )
+    candidates = np.flatnonzero(u_days < cfg.benign_per_100_d / 100.0)
+    count = int(min(candidates.size, len(cfg.benign)))
+    days = candidates[:count]
+    texts = order[:count]
     notes = [
         LogNote(day=int(d), author="operator", text=cfg.benign[int(i)])
         for d, i in zip(days, texts, strict=True)

@@ -1841,6 +1841,8 @@ something quite different from one seeing scattered independent gaps.
   per-sensor 8 / 4 / 2 %. **FLAGGED: this moves the frozen totals, by design.**
 
 **Its own random stream** (rule 4), derived from the run seed by `HISTORIAN_STREAM_OFFSET`
+(re-keyed under ruling 7, 2026-09-14, to `SeedSequence([seed, HISTORIAN_STREAM_KEY,
+block])`, one stream per block, like a sensor's)
 and drawn once per run before any sensor, on the tier's finest online schedule. Deriving it
 by an offset rather than by splitting the run seed leaves every sensor's own draws
 bit-identical to what they were before the historian existed — an archived run is not
@@ -4491,8 +4493,11 @@ before. The generated block of the anchor report is unchanged by this ruling (ev
 run is 200 d, so its window is its horizon).
 
 **Correction to the ruling-1 entry above.** Its sentence "a whole run is not [prefix-stable]…
-true of the tank only" described the state at `1353341`; from this commit a whole run is
-prefix-stable, with the reference window the first 200 days of the generated influent.
+true of the tank only" described the state at `1353341`; from this commit the truth of a
+whole run is prefix-stable, with the reference window the first 200 days of the generated
+influent. **Corrected again on 2026-09-12** (the whole-branch review, blocker 2): this
+entry's "a whole run is prefix-stable" was true of the truth side only — the visible record
+was not until ruling 7 (2026-09-14, below), from which it is true of both.
 
 **Alternatives considered.** Deriving the reference quantities from the horizon mean (the
 state before): not prefix-stable. A window of the full 365 d: not available to a 200-d cell.
@@ -4645,3 +4650,73 @@ the structural defence is a workflow process in which `sim`, `scenarios/` and
 `truth_store/` are neither importable nor readable, a design requirement for the
 tool-registry and workflow-harness components (rule 2), deferred to the lead's launch of
 those components.
+
+## 2026-09-14 — RULING 7 (the lead): the VISIBLE record made prefix-stable — every stream of the record keyed `SeedSequence([seed, key, block])` (blocker 2 of the 2026-09-12 review, option b)
+
+**Finding** (the coordinator's whole-branch review at `99b0547`, 2026-09-12, blocker 2 of
+2, reproduced). Ruling 6 made the truth of a run prefix-stable in its horizon, and the
+decisions entry, §21/§23 of the F2 report and the `REFERENCE_WINDOW_D` docstring said "a
+whole run is prefix-stable". That was false for what a workflow sees, and for the same
+reason on each of three components — **the shared-stream shape**: one stream consumed in
+sequence, so that the position of every draw depended on how many draws came before it,
+and the horizon set that number. `sim/observation/model.py` drew a sensor's six
+horizon-length blocks in sequence from one per-sensor stream, and the historian its two
+blocks from one stream, so every visible sensor series of a 200-d Plant B cell differed
+from the 210-d cell's from index 0; and `sim/run/notes.py` drew the operator-note days
+with a horizon-sized `rng.choice`, so the note days moved with the horizon.
+
+**Decision (the lead, 2026-09-14 05:57 UTC: option b).** Every stream of the visible
+record is a child stream keyed by what it is for, in the shape of ruling 1, and no stream
+is consumed by more than one block:
+
+- each sensor's six blocks (flatline onsets, fouling onsets, drift walk, relative noise,
+  absolute noise, missingness) come from `sensor_block_rng(seed, name, block)` —
+  `SeedSequence([observation seed, sensor key, block])` — instead of in sequence from
+  `sensor_rng(seed, name)` (kept for its identity);
+- the historian's onset and length blocks come from `historian_block_rng(seed, block)` —
+  `SeedSequence([observation seed, HISTORIAN_STREAM_KEY, block])`, the key a SHA-256 of
+  the historian's own domain string, so it is keyed **consistently with the sensors**
+  rather than by the plain integer offset `seed + 1_000_003` it had (the lead's
+  requirement; the offset form the prepared option (b) still carried is retired);
+- the operator log draws one uniform per day from the child stream keyed `(notes seed,
+  stage 0)` and logs a benign note where it falls below `benign_per_100_d / 100`, handing
+  out the texts, without repeats, in the order of a permutation from the child stream
+  keyed `(notes seed, stage 1)`. **Why Bernoulli-per-day**: a Poisson count and a
+  `choice` of days are both functions of the horizon, so no keying of that scheme could
+  make the first n days of a longer log the first n days of a shorter one; a per-day draw
+  is prefix-stable by construction. The expected number of benign notes is unchanged
+  (`n_days × rate`, Binomial in place of Poisson); no two notes on one day; a run long
+  enough to exhaust the catalogue stops logging benign notes.
+
+The truth model is untouched: the state trajectory, times, ash, both condition flags and
+every truth channel (27 keys) of an S3-03 cell on Plant B at tier C, generated at
+`875fa2b` and at this commit, are **bit-equal**; all 15 visible sensor series of that cell
+change, as they must. Every visible record changes, so the matrix is regenerated at the
+committed CI-green head, on the coordinator's word, as the last action.
+
+**Tests.** `tests/test_visible_prefix.py`, one cell per matrix horizon — S3-03 on Plant B
+at 200 against 210 d and S5-01 on Plant A at 365 against 375 d, both at tier C: every
+sensor series' times, values, missingness (the per-sensor process and the historian's
+outages together), saturation, flatline and fouling flags bit-equal up to the shorter
+run's last sample (that sample to 1e-9, as the truth's final point under ruling 6), the
+operator log's note days and texts (the shorter run's notes are the longer run's notes
+before its end, S5-01's false-cause note included), the feed log and the assays, with a
+negative control on the comparison; and the historian mask alone, on a 15-min schedule
+where outage lengths matter, prefix-stable across 200 v 210 d from the two keyed streams,
+another seed giving another mask. Two existing tests changed, each with its reason in the
+file: `test_observation.py`'s composite-loss lab-assay assertion was a one-sigma band that
+the re-keyed seed lands outside (0.0256 against 0.02, 1.2 σ) and is now the binomial
+three-sigma band plus "less than twice the rate"; `test_run_harness.py`'s "every run
+carries notes" fixture generates its clean run at 100 d rather than 40 d, because under a
+per-day draw a 40-d log is empty with probability 8 % and this seed's was. Every other
+observation and notes test passes unchanged; `historian_outages` keeps its signature, with
+the separately keyed lengths stream as an optional argument `observe` passes.
+
+**Record corrected.** The ruling-6 entry, the `REFERENCE_WINDOW_D` docstring, §21/§23 of
+the F2 report and the benchmark card (§9) now say that a whole run — truth AND visible
+record — is prefix-stable, which is true from this commit.
+
+**Alternative (option a)**: leave the visible record re-rolling with the horizon and
+correct the record to "truth-side only". Rejected by the lead: a horizon change would
+still be a different visible realisation of the same seed, which is what ruling 6 exists
+to prevent.

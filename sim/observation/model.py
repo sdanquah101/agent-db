@@ -26,13 +26,17 @@ The **tier** supplies the missing rate, the laboratory turnaround and the recali
 cadence; the **sensor** supplies everything intrinsic to the instrument (lead's decision
 of 2026-09-02).
 
-**Randomness.** **One stream per sensor**, derived from ``(observation seed, sensor
-name)`` by :func:`sensor_rng` (CLAUDE.md rule 4), consumed within a sensor in a fixed
-order: ``n`` uniforms for flatline onsets, ``n`` uniforms for fouling onsets, ``n``
-normals for the drift walk, ``n`` normals for the relative noise, ``n`` normals for the
-absolute noise, ``n`` uniforms for missingness — every block drawn whether or not the
-sensor declares that effect, so adding a drift model to one sensor cannot change that
-sensor's own noise (tested).
+**Randomness.** **One stream per sensor block**, derived from ``(observation seed, sensor
+name, block)`` by :func:`sensor_block_rng` (CLAUDE.md rule 4): ``n`` uniforms for flatline
+onsets, ``n`` uniforms for fouling onsets, ``n`` normals for the drift walk, ``n`` normals
+for the relative noise, ``n`` normals for the absolute noise, ``n`` uniforms for
+missingness — every block drawn whether or not the sensor declares that effect, so adding
+a drift model to one sensor cannot change that sensor's own noise (tested), and each from
+its own keyed stream, so **the first n days of a longer record are the first n days of a
+shorter one** — values, missingness and outages alike (tested at the run level). Until the
+whole-branch review of 2026-09-12 the six blocks came in sequence from one per-sensor
+stream (:func:`sensor_rng`, kept for its identity), so every visible series re-rolled from
+index 0 whenever the horizon changed, while the truth beneath it did not.
 
 It was one serial stream per *run*, consumed in sorted sensor-name order, and that made
 §6.4's central claim false: tiers carry different sensor sets, so a sensor's position in
@@ -47,8 +51,9 @@ of whether a subset was requested (both tested).
 The **historian** stays plant-level, because that is what it models: one logging outage
 that every online sensor at the tier loses together.
 
-The historian is a separate stochastic component and takes its own stream, derived from
-the run seed by :data:`HISTORIAN_STREAM_OFFSET` and drawn once per run: one block of ``n``
+The historian is a separate stochastic component and takes its own streams, keyed like a
+sensor's — ``SeedSequence([seed, key, block])`` with :data:`HISTORIAN_STREAM_KEY` as the
+key (:func:`historian_block_rng`, ruling 7) — and drawn once per run: one block of ``n``
 uniforms for outage onsets and one of ``n`` integers for outage lengths, at the finest
 online schedule of the tier. Every stream here is independent of the influent generator's:
 a run gives the observation model its own seed.
@@ -60,7 +65,7 @@ Nothing here writes files; :class:`ObservationRecord` goes to the run layer, whi
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -77,13 +82,15 @@ from sim.observation.schema import (
 )
 
 __all__ = [
-    "HISTORIAN_STREAM_OFFSET",
+    "HISTORIAN_STREAM_KEY",
     "ObservationRecord",
     "SensorSeries",
     "episode_mask",
+    "historian_block_rng",
     "historian_outages",
     "observe",
     "sample_times",
+    "sensor_block_rng",
     "sensor_rng",
     "sensor_stream_key",
 ]
@@ -124,14 +131,61 @@ def sensor_rng(seed: int, name: str) -> np.random.Generator:
     return np.random.default_rng(np.random.SeedSequence([int(seed), sensor_stream_key(name)]))
 
 
-HISTORIAN_STREAM_OFFSET = 1_000_003
-"""Offset from the run seed to the plant-level historian stream (a prime, for tidiness).
+def sensor_block_rng(seed: int, name: str, block: int) -> np.random.Generator:
+    """The stream of one BLOCK of one sensor's record: (observation seed, sensor, block).
 
-The historian is a *separate stochastic component* and takes its own stream (CLAUDE.md
-rule 4). Deriving it by an offset rather than by splitting the run seed keeps every
-sensor's own draws bit-identical to what they were before the historian existed, so the
-component can be added without silently re-rolling every archived run.
+    One child stream per block is what makes the visible record prefix-stable in the
+    horizon (ruling 7, 2026-09-14, for blocker 2 of the whole-branch review of 2026-09-12):
+    a block of length ``n``
+    drawn from its own stream is the first ``n`` values of the same block drawn longer, so
+    a 200-day record is the first 200 days of a 210-day one. Drawn in sequence from one
+    per-sensor stream (:func:`sensor_rng`, the layout until then), the second block began
+    where the first ended and every horizon re-rolled every block from index 0.
+
+    Args:
+        seed: The run's observation seed.
+        name: The sensor's name.
+        block: Which of the sensor's six blocks (:func:`_sensor_series`).
+
+    Returns:
+        That block's generator.
+    """
+    return np.random.default_rng(
+        np.random.SeedSequence([int(seed), sensor_stream_key(name), int(block)])
+    )
+
+
+_HISTORIAN_STREAM_DOMAIN = "ad-agentbench/observation/historian"
+"""Domain string of the historian's identity: a different domain from the sensors', so no
+sensor name, whatever it is, can share a stream with the plant-level outage process."""
+
+HISTORIAN_STREAM_KEY = int.from_bytes(
+    hashlib.sha256(_HISTORIAN_STREAM_DOMAIN.encode()).digest()[:8], "big"
+)
+"""The plant-level historian's stable 64-bit identity, for :func:`historian_block_rng`.
+
+The historian is a *separate stochastic component* and takes its own streams (CLAUDE.md
+rule 4), keyed exactly as a sensor's are — ``SeedSequence([seed, key, block])`` — with a
+key that is a hash of its own domain rather than of a sensor name. Until ruling 7
+(2026-09-14) it was keyed by an integer offset from the run seed
+(``default_rng([seed + 1_000_003, block])``); the lead ruled that every stream of the
+visible record be keyed the same way.
 """
+
+
+def historian_block_rng(seed: int, block: int) -> np.random.Generator:
+    """The stream of one BLOCK of the plant-level historian: (observation seed, block).
+
+    Args:
+        seed: The run's observation seed.
+        block: 0 for outage onsets, 1 for outage lengths (:func:`historian_outages`).
+
+    Returns:
+        That block's generator.
+    """
+    return np.random.default_rng(
+        np.random.SeedSequence([int(seed), HISTORIAN_STREAM_KEY, int(block)])
+    )
 
 
 def historian_outages(
@@ -139,6 +193,7 @@ def historian_outages(
     tier: str,
     t: np.ndarray,
     rng: np.random.Generator,
+    lengths_rng: np.random.Generator | None = None,
 ) -> np.ndarray:
     """Which of the sample times ``t`` fall inside a shared logging outage.
 
@@ -157,7 +212,11 @@ def historian_outages(
         dropout: The declared outage process.
         tier: Instrumentation tier.
         t: Sample times, d.
-        rng: The historian's own stream.
+        rng: The historian's onset stream.
+        lengths_rng: The historian's outage-length stream. ``None`` draws the lengths from
+            ``rng`` after the onsets (the layout until ruling 7, 2026-09-14);
+            :func:`observe` passes :func:`historian_block_rng` for both, so that the mask
+            is prefix-stable in the horizon.
 
     Returns:
         Boolean mask over ``t``: True where the sample is lost to a shared outage.
@@ -168,7 +227,7 @@ def historian_outages(
     # many outages another tier happened to have
     starts = rng.uniform(size=t.size) < rate
     lengths_d = np.asarray(dropout.gap_lengths_min, dtype=float) / 1440.0
-    draws = rng.integers(0, lengths_d.size, size=t.size)
+    draws = (rng if lengths_rng is None else lengths_rng).integers(0, lengths_d.size, size=t.size)
     if rate <= 0.0:
         return lost
     for i in np.flatnonzero(starts):
@@ -302,15 +361,18 @@ def _sensor_series(
     horizon_d: float,
     overload: np.ndarray,
     foaming: np.ndarray,
-    rng: np.random.Generator,
+    stream: Callable[[int], np.random.Generator],
     faults: ObservationFaults,
     missingness: MissingnessModel,
     lag_d: float,
     recalibration_interval_d: float,
     historian_lost: np.ndarray | None = None,
 ) -> SensorSeries:
-    """One sensor's record; consumes this sensor's block of the run's stream.
+    """One sensor's record; each of its six blocks comes from its own keyed stream.
 
+    ``stream(block)`` is that block's generator (:func:`sensor_block_rng`); the blocks are
+    numbered in the order below and each is a horizon-length draw from a stream of its own,
+    so a longer horizon extends every block rather than shifting the next one.
     ``missingness``, ``lag_d`` and ``recalibration_interval_d`` are the **tier's**
     (:class:`~sim.observation.schema.TierSpec`), not the sensor's.
     """
@@ -318,13 +380,13 @@ def _sensor_series(
     n = t.size
     dt = spec.sampling_interval_d
 
-    # the stream blocks, always drawn in this order and always this size
-    u_flat = rng.uniform(size=n)
-    u_foul = rng.uniform(size=n)
-    z_drift = rng.standard_normal(size=n)
-    z_noise = rng.standard_normal(size=n)
-    z_noise_abs = rng.standard_normal(size=n)
-    u_missing = rng.uniform(size=n)
+    # the six blocks, each from its own keyed stream, always drawn and always this size
+    u_flat = stream(0).uniform(size=n)
+    u_foul = stream(1).uniform(size=n)
+    z_drift = stream(2).standard_normal(size=n)
+    z_noise = stream(3).standard_normal(size=n)
+    z_noise_abs = stream(4).standard_normal(size=n)
+    u_missing = stream(5).uniform(size=n)
 
     truth = np.interp(t, channels.t, channels[spec.channel])
     value = truth.copy()
@@ -509,11 +571,14 @@ def observe(
     historian_t = sample_times(
         min((config.sensors[n].sampling_interval_d for n in online), default=1.0), horizon
     )
+    # two blocks (onsets, lengths), each from its own stream keyed like a sensor block's,
+    # so the mask is prefix-stable in the horizon like every sensor block (ruling 7)
     historian_lost = historian_outages(
         config.historian,
         tier,
         historian_t,
-        np.random.default_rng(int(seed) + HISTORIAN_STREAM_OFFSET),
+        historian_block_rng(seed, 0),
+        historian_block_rng(seed, 1),
     )
     # `or` would replace an empty-but-configured directive object, because
     # ObservationFaults defines __bool__; only None means "no faults"
@@ -526,15 +591,16 @@ def observe(
     out: dict[str, SensorSeries] = {}
     for name in sorted(requested):
         sensor = config.sensors[name]
-        # this sensor's own stream: a function of (run seed, sensor name) and of nothing
-        # else, so which other sensors the tier carries cannot move it
+        # this sensor's own streams: a function of (run seed, sensor name, block) and of
+        # nothing else, so which other sensors the tier carries cannot move it, and neither
+        # can the horizon
         series = _sensor_series(
             sensor,
             channels,
             horizon,
             overload,
             foaming,
-            sensor_rng(seed, name),
+            lambda block, _name=name: sensor_block_rng(seed, _name, block),
             applied,
             config.missingness.model_for(tier, sensor.kind),
             spec_tier.lab_turnaround_d if sensor.kind == "lab" else 0.0,

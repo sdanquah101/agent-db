@@ -485,9 +485,19 @@ def test_the_effective_online_loss_is_the_recorded_composite(config):
         online = record["gas_flow"].missing.mean()
         assert online == pytest.approx(expected[tier], rel=0.12), tier
         assert online > per[tier] * 0.98, (tier, "the shared process must add, not replace")
-    # a laboratory assay never passes through the historian: it loses the bare tier rate
-    lab = observe(channels, config, "C", seed=11)["alkalinity"].missing.mean()
-    assert lab == pytest.approx(per["C"], rel=0.25)
+    # a laboratory assay never passes through the historian: it loses the bare tier rate.
+    # A weekly assay over 6,000 d is ~860 samples, so the realised fraction of a 2 % rate
+    # has a standard deviation of ~0.0048 -- the former tolerance (rel 0.25, i.e. +/- 0.005)
+    # was one sigma, and the 2026-09-12 re-keying of the sensor streams (blocker 2, option
+    # b) landed this seed at 0.0256, 1.2 sigma high. The band is the binomial three-sigma
+    # one, which still fails a lab assay that lost at the online composite (0.0209 is not
+    # distinguishable from 0.02 at this sample size, so the claim this makes is "the bare
+    # rate, not more": a doubled rate fails it).
+    lab_series = observe(channels, config, "C", seed=11)["alkalinity"].missing
+    lab, n_lab = lab_series.mean(), lab_series.size
+    sigma = (per["C"] * (1.0 - per["C"]) / n_lab) ** 0.5
+    assert abs(lab - per["C"]) <= 3.0 * sigma, (lab, per["C"], n_lab)
+    assert lab < 2.0 * per["C"]
 
 
 def test_a_historian_rate_must_cover_every_tier_and_carry_its_lengths(config):

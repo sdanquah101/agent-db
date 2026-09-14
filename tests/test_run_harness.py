@@ -491,11 +491,19 @@ def test_the_mixing_row_makes_the_truth_reactor_two_zone(tmp_path):
 
 
 def test_every_run_carries_operator_notes_and_only_one_carries_the_false_one(tmp_path):
+    """A clean run has a benign log; only the adversarial row has the false-cause note.
+
+    The clean run is 100 d here rather than SHORT_DAYS: benign notes fall on each day
+    independently at 6 per 100 d (the prefix-stable log of 2026-09-12, blocker 2, option b),
+    so a 40-d run is empty with probability 0.94^40 = 8 %, and this seed's 40-d run was; at
+    100 d the chance is 0.2 % and the claim "a clean run still has an operator log" is a
+    property of the design rather than of one seed.
+    """
     """The Level-8 note must not be identifiable by the existence of a notes file."""
     from sim.run.artifacts import read_operator_notes
 
     clean = generate_run(
-        _short("S0-01"), "B", plant=load_plant_config("C"), runs_root=tmp_path / "runs"
+        _short("S0-01", days=100.0), "B", plant=load_plant_config("C"), runs_root=tmp_path / "runs"
     )
     adversarial = generate_run(
         _short("S8-02"), "B", plant=load_plant_config("C"), runs_root=tmp_path / "runs"

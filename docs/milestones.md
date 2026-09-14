@@ -1692,3 +1692,27 @@ coordinating session (proposal §9.2, `tools/`: the registry every workflow must
 budgets enforced there — CLAUDE.md rule 2). Nothing in `runs/` or `truth_store/` is
 committed; a later regeneration is made only at a reviewed head on the coordinator's word,
 never while CI is red (the void regeneration of 2026-09-11 is the record of why).
+
+### Session 2026-09-14 — ruling 7: the visible record made prefix-stable (blocker 2, option b)
+
+**Done.** Blocker 1's hardening closed at `875fa2b` (three rounds; the checker's limit and
+the structural defence recorded in the decisions log and card §4.1). The lead chose option
+(b) for blocker 2 as **ruling 7** (2026-09-14): every stream of the visible record is keyed
+`SeedSequence([seed, key, block])` — each sensor's six blocks by `sensor_block_rng`, the
+historian's onsets and lengths by `historian_block_rng` with a key hashed from the
+historian's own domain (the integer offset retired), the operator log's note days by a
+per-day Bernoulli draw and its texts by a keyed permutation, both keyed `(seed, stage)` —
+landed as ONE commit on `claude/g1-review-blockers` on top of `875fa2b`. Truth channels,
+state, ash and flags of an S3-03/B/tier-C cell bit-equal to `875fa2b`'s (27 keys); all 15
+visible series changed. `tests/test_visible_prefix.py` covers one Plant B cell (200 v 210 d)
+and one Plant A cell (365 v 375 d): every sensor series, missingness, historian dropout,
+note days and texts, feed log and assays equal over the shared prefix, with negative
+controls. Ruling-6 entry, `REFERENCE_WINDOW_D` docstring, F2 §21/§23/§24 and the benchmark
+card §9 now say a whole run — truth and visible record — is prefix-stable, which is true.
+
+**Blocked on.** In order: CI on the fast-forwarded PR #15 head; the coordinator's word for
+the regeneration at that head (the last action; §25 of the F2 report and this file as one
+docs commit on top); then the coordinator's review and, only on the lead's say-so, the
+merge of #15 and the `g1-frozen` tag — neither is this session's to do.
+
+**The next session starts on:** unchanged — hold for the lead's `launch: tool-registry`.

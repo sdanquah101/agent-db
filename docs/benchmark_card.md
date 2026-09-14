@@ -432,6 +432,14 @@ from the analysis plan are documented rather than absorbed.
   seed, same run, bit-for-bit.
 - Fault layers hold their **own** stream, so a faulted run differs from its clean twin
   only by the fault (the paired-run property; tested).
+- **A whole run is prefix-stable in its horizon** — truth and visible record alike
+  (rulings 6 and 7). The truth takes its reference quantities from a fixed 200-day window
+  of the generated influent, and every stream of the visible record (each sensor's six
+  blocks, the historian's outages, the operator log's note days and texts) is a child
+  stream keyed `SeedSequence([seed, key, block])`, so a cell run for 200 days is, in its
+  state, its channels and everything a workflow can read, the first 200 days of the same
+  cell run for 210 (tested on one Plant B and one Plant A cell; the last sample agrees to
+  solver tolerance). A horizon change moves the end of every run and nothing else.
 - Every tool call is logged with name, version, argument hash, runtime and outcome — in
   the truth-side log, which the evaluator reads; the workflow-visible projection carries
   the sequence, name, version, hash and outcome and no wall-clock (§4.1). Every tier's

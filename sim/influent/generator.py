@@ -628,8 +628,11 @@ days of a 210-d one even with a prefix-stable generator (the coordinator's check
 ``1353341``: ~2 % apart). They are now the mean over the first ``min(REFERENCE_WINDOW_D,
 n_days)`` days, regardless of horizon. 200 because it is the shorter of the two matrix
 horizons (Plants B and C 200 d, Plant A 365 d; ruling 3), so every cell's reference window
-is the same first 200 days and a whole run is prefix-stable in its horizon (tested at the
-run level in ``tests/test_reference_window.py``)."""
+is the same first 200 days and the TRUTH of a whole run is prefix-stable in its horizon
+(tested at the run level in ``tests/test_reference_window.py``). The visible record --
+sensor series, missingness, operator notes -- is prefix-stable by its own keying
+(``sim/observation/model.py``, ``sim/run/notes.py``; the whole-branch review of
+2026-09-12, blocker 2; tested in ``tests/test_visible_prefix.py``)."""
 
 
 def generate_influent(

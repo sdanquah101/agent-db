@@ -1072,6 +1072,13 @@ pass; 367 of 370 passed before the refresh, the third being this pin).
 
 ## 21. Ruling 6 built and verified: a whole run is prefix-stable from a fixed 200-day reference window
 
+*Correction, 2026-09-12 (the whole-branch review, blocker 2), closed 2026-09-14 (ruling 7):
+"a whole run" here meant the truth side. The visible record — sensor series, missingness,
+historian outages, operator notes — was not prefix-stable until ruling 7 keyed every one of
+its streams `SeedSequence([seed, key, block])` (the lead's option b); from that commit a
+whole run, truth AND visible record, is prefix-stable in its horizon. See the ruling-7
+decisions entry, `tests/test_visible_prefix.py` and §25.*
+
 *Landed: ruling 6 is commit **`f7a3e79`** on `claude/g1-review-blockers`, on its own. Run-level
 prefix result: **bit-equal** on parameters, burn-in, initial state, trajectory, ash, every
 channel and both flags up to the shorter run's last output point, which agrees to 3 × 10⁻¹⁶
@@ -1169,6 +1176,11 @@ value, not an input).
 own commit and decisions entry with the leanest-seed value 0.6437 at this head.
 
 ## 23. The G1 regeneration at `49e9477` — the last action; stopping for the review
+
+*Correction, 2026-09-14 (ruling 7): where this section says a run is prefix-stable, that was
+true of the truth at `49e9477` and of the visible record only from ruling 7's commit; the
+matrix of this section is superseded by the regeneration of §25 at the ruling-7 head, since
+every visible record changes under the re-keying (the truth beneath it is bit-equal).*
 
 *Status line: on the coordinator's word (CI green at `49e9477` confirmed, 14:07 UTC), the
 117-cell matrix was regenerated with the tree checked out at `49e9477`, clean, and verified.
@@ -1281,6 +1293,12 @@ fails it on the VS residual equalling block 6 (the mis-log normals). The rest of
 reverted; the generator is unchanged.
 
 ### 24.3 Blocker 2, option (b) — prepared in `scratchpad/wt_b`, uncommitted
+
+*Landed 2026-09-14 as ruling 7 (§25), with one change the lead required: the historian's
+two streams are keyed `SeedSequence([seed, HISTORIAN_STREAM_KEY, block])` through
+`historian_block_rng`, consistently with the sensors, not by the integer offset the table
+below records; and the prefix test covers a Plant A cell (S5-01, 365 v 375 d) as well as
+the Plant B one, with the historian mask tested on its own.*
 
 **Files touched** (worktree at `99b0547`):
 
