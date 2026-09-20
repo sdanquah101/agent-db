@@ -1748,3 +1748,26 @@ budgets enforced there — CLAUDE.md rule 2; its structural defence for the trut
 recorded design requirement, decisions 2026-09-12 round two). Nothing in `runs/` or
 `truth_store/` is committed; a later regeneration is made only at a reviewed head on the
 coordinator's word, never while CI is red.
+
+### Session 2026-09-20 (docs fix on the lead's approval) — FREEZE with two non-blocking findings fixed
+
+**Done.** The coordinator's fresh whole-branch review at `8909772` returned FREEZE with no
+blocking findings; the lead's word was "Approved, fix the docs" — one docs-only commit, then
+the coordinator merges #15 and tags `g1-frozen` on green. Fixed, docs only, no code or test
+change, no regeneration (the tree still differs from `7637f7a` in `docs/` alone and every
+manifest carries `7637f7a`): (1) `docs/g1_anchor_report.md` presented the pre-ruling-5
+`biogas_mean` 1.489 as current in the intro, the §3.3 history table and §5 — the table has a
+fourth column with the at-head values (1.373, CH₄ 0.681, pH 7.232, alkalinity 5.051, VFA
+0.7564, FOS/TAC 0.1508, 24/24 sound, the B/C control pair at the declared median feed
+re-measured), and the least-margin statement is re-derived from the current table
+(`total_feed_flow_median` at 1.12 against ± 15 %, then `biogas_mean` at 1.373, then
+`fos_tac_median`); 1.489 stays only where it is historical. (2) The checker's recorded limit
+(decisions, round three; card §4.1) names `str(<bytes>, <encoding>)` as an unnamed sibling of
+the denied `.decode`/`.fromhex`, demonstrated by the reviewer of 2026-09-20 reading the
+truth store through a runtime-assembled path — the recorded blind spot, not a new class;
+`tests/test_truth_isolation.py` untouched, hardening stopped at round three by decision.
+
+**Blocked on.** The coordinator's merge of #15 and the `g1-frozen` tag on green, on the
+lead's approval — not this session's to do.
+
+**The next session starts on:** hold for the lead's `launch: tool-registry`.

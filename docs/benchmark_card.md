@@ -149,7 +149,12 @@ Three consequences follow, and each is enforced by a test rather than by the lis
   codes, the builtins reached through `open_run.__globals__`, `__globals__` itself), by the
   coordinator's instruction. **The limit, recorded honestly:** a static
   checker cannot prove the absence of every dynamic route — a compiled extension, an
-  environment trick, a second interpreter reached some way the checker does not name. The
+  environment trick, a second interpreter reached some way the checker does not name, or
+  an unnamed sibling of a denied form: the reviewer of 2026-09-20 demonstrated a
+  checker-clean module that reads `faults.json`, `parameters.json`, `states.npz` and the
+  salt from the sibling `truth_store/` through a runtime-assembled path and
+  `str(<bytes>, <encoding>)`, the decoding form the `.decode`/`.fromhex` rule does not
+  cover (recorded, not patched: hardening stopped by decision). The
   structural defence is that a workflow process must not have `sim`, `scenarios/` or
   `truth_store/` importable or readable at all: workflows run against `tools/` and the run
   view only, in a process or container where those paths are absent. That is a design

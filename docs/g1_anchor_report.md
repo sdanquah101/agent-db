@@ -33,8 +33,10 @@ inorganic carbon of every buffered stream is the root of that stream's own charg
 and dissolved species scale with a delivery's liquor rather than its solids. `S_cat` is
 unchanged everywhere, so the strong-ion difference reaching each digester is still exactly
 ruling 3's calibration; Plant B's alkalinity and pH land where ruling 3 put them; and the
-visible consequence is methane fraction traded for CO₂ — a biogas ratio of **1.489** against
-its 1.5 bound, the least margin anywhere in this report. Everything that moved is tabulated
+visible consequence is methane fraction traded for CO₂ — at the calcium round a biogas ratio
+of 1.489 against its 1.5 bound, then the least margin anywhere in this report; **since ruling
+5 the ratio is 1.373** (§3.3, §4), and the row nearest its bound is now
+`total_feed_flow_median` at 1.12 against ± 15 % (§5). Everything that moved is tabulated
 in §3.3 and nothing was tuned to compensate.
 
 **M2 is closed.** The assay a workflow reads and the charge the simulator is fed are one
@@ -354,27 +356,43 @@ more acetate anion than cations — 0.771×, inside the band, reported rather th
 
 **Both of the lead's tests of the correction passed, and nothing was tuned towards them.**
 
-| | before any M2 work | after the first B1 attempt | **after the calcium round** | bound | |
-|---|---:|---:|---:|---|---|
-| `biogas_mean` ratio | 1.45 | 1.532 ✗ | **1.489** | 0.6 – 1.5 | inside; 0.7 % of margin — **the row to watch** |
-| `ch4_fraction_median` | 0.700 | 0.666 | **0.680** | no anchor row | |
-| `digester_pH_median` | 7.262 | 7.212 | **7.232** | ± 0.4 pH | inside; ruling 3's ~7.3 |
-| `alkalinity_median` | 5.125 | 5.131 | **5.116** | ± 35 %, calibrated | ruling 3's ~5.0 |
-| `vfa_median` | 0.7778 | 0.7834 | **0.7804** | ratio 0.25 – 4 | inside |
-| `fos_tac_median` | 0.1501 | 0.1511 | **0.1507** | ratio 0.5 – 2 | inside |
-| Plant B sound runs | 24/24 | 24/24 | **24/24** | acceptance condition | met |
-| B/C control pair, pH C > pH B | 7.336 > 7.269 | 7.196 < 7.216 ✗ | **7.252 > 7.238** | `test_plausibility` | restored |
+| | before any M2 work | after the first B1 attempt | after the calcium round (historical) | **after ruling 5 (current, at `7637f7a`)** | bound | |
+|---|---:|---:|---:|---:|---|---|
+| `biogas_mean` ratio | 1.45 | 1.532 ✗ | 1.489 | **1.373** | 0.6 – 1.5 | inside; was 0.7 % of margin at the calcium round, now 74.6 % of the allowance used (§5) |
+| `ch4_fraction_median` | 0.700 | 0.666 | 0.680 | **0.681** | no anchor row | |
+| `digester_pH_median` | 7.262 | 7.212 | 7.232 | **7.232** | ± 0.4 pH | inside; ruling 3's ~7.3 |
+| `alkalinity_median` | 5.125 | 5.131 | 5.116 | **5.051** | ± 35 %, calibrated | ruling 3's ~5.0 |
+| `vfa_median` | 0.7778 | 0.7834 | 0.7804 | **0.7564** | ratio 0.25 – 4 | inside |
+| `fos_tac_median` | 0.1501 | 0.1511 | 0.1507 | **0.1508** | ratio 0.5 – 2 | inside |
+| Plant B sound runs | 24/24 | 24/24 | 24/24 | **24/24** | acceptance condition | met |
+| B/C control pair, pH C > pH B | 7.336 > 7.269 | 7.196 < 7.216 ✗ | 7.252 > 7.238 | **7.252 > 7.244** | `test_plausibility` | restored, holds |
 
-Per plant at the declared median feed, before → after the calcium round: A pH 7.681 → 7.656,
-CH₄ 0.658 → 0.612; B 7.269 → 7.238, 0.697 → 0.675; C 7.336 → 7.252, 0.687 → 0.619. The
-methane fractions are lower than before any M2 work and higher than after the first
-attempt, which is the expected shape: the inorganic carbon the streams were missing now
-leaves as CO₂, and there is about half as much of it as the uncorrected calcium demanded.
+The first three columns are history (the M2 and calcium rounds of 2026-09-09/10); the fourth
+is the state at the regenerated head (`docs/f2_horizon_report.md` §25, the 24-seed Plant B
+panel at 200 d; the control pair re-measured at the declared median feed on 2026-09-20 as
+`tests/test_plausibility.py` measures it). Ruling 5 (the cited HSW and FOG degradability
+centres) and answer A (FOG's inert COD equivalent) are what moved `biogas_mean` from 1.489 to
+1.373 and alkalinity from 5.116 to 5.051; pH, CH₄ fraction and FOS/TAC are unchanged to the
+printed digit.
+
+Per plant at the declared median feed, before → after the calcium round → current: A pH
+7.681 → 7.656 → 7.656, CH₄ 0.658 → 0.612 → 0.612; B 7.269 → 7.238 → 7.244, 0.697 → 0.675 →
+0.675; C 7.336 → 7.252 → 7.252, 0.687 → 0.619 → 0.619 (ruling 5 touches only the streams
+Plant B takes, so A and C do not move). The methane fractions are lower than before any M2
+work and higher than after the first attempt, which is the expected shape: the inorganic
+carbon the streams were missing now leaves as CO₂, and there is about half as much of it as
+the uncorrected calcium demanded.
 
 **All 23 rows are inside their declared bounds and no tolerance was touched.** The rows to
-watch, as the lead ruled they be named: on the **anchor side, `biogas_mean` at 1.489** against
-its unchanged 0.6–1.5 band, the least margin anywhere in this report; on the **catalogue
-side, re-checked after the redistribution, `grass_silage` at 0.771×** — every derived stream
+watch, as the lead ruled they be named: on the **anchor side**, at the calcium round it was
+`biogas_mean` at 1.489 against its unchanged 0.6–1.5 band, the least margin anywhere in this
+report; since ruling 5 `biogas_mean` reads **1.373** (74.6 % of its allowance above 1 used)
+and the row nearest its bound is **`total_feed_flow_median` at 1.12 against ± 15 %** (78.9 %
+of its allowance used), with `fos_tac_median` at 0.65 in [0.5, 2] third (70.1 %) — re-derived
+from the current table (§4; `docs/f2_horizon_report.md` §25 has every row at the regenerated
+head), with the margin measured as the fraction of the declared allowance the deviation
+consumes; on the **catalogue side, re-checked after the redistribution, `grass_silage` at
+0.771×** — every derived stream
 sits at 1.000× and `primary_sludge`, which was the closest at 1.470× before B1, is now exactly
 on the balance, so silage is the one nearest a band edge, because its accepted pH of 4.28 was
 kept while its assumed calcium fell. The four-row missingness table is re-measured in §5.4.

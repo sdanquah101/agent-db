@@ -4649,7 +4649,14 @@ three are the point at which the rounds were stopped, not the last routes that e
 the structural defence is a workflow process in which `sim`, `scenarios/` and
 `truth_store/` are neither importable nor readable, a design requirement for the
 tool-registry and workflow-harness components (rule 2), deferred to the lead's launch of
-those components.
+those components. **One unnamed sibling, recorded 2026-09-20** (the reviewer of the fresh
+whole-branch review at `8909772`, a non-blocking finding fixed on the lead's approval as a
+record correction, not a fourth round): `str(<bytes>, <encoding>)` — the `str(bytes,
+"ascii")` form of decoding — is not among the denied `.decode` / `.fromhex` attributes, and
+a checker-clean module that assembles the path at runtime and decodes with it reads
+`faults.json`, `parameters.json`, `states.npz` and the salt from the sibling `truth_store/`;
+this is the recorded blind spot above (a route the checker does not name), not a new class,
+and the checker is not changed for it.
 
 ## 2026-09-14 — RULING 7 (the lead): the VISIBLE record made prefix-stable — every stream of the record keyed `SeedSequence([seed, key, block])` (blocker 2 of the 2026-09-12 review, option b)
 
