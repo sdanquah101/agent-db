@@ -1332,3 +1332,98 @@ visible record re-rolls with the horizon, by the observation model's sequential 
 blocks and the notes' horizon-sized draw — recorded, not changed". Text ready in the
 scratchpad; applies in minutes; no regeneration unless the lead wants the manifests to
 carry the exact final head.
+
+
+## 25. The G1 regeneration at `7637f7a` (ruling 7) — the last action; stopping for the review
+
+*Status line: on the coordinator's word (CI green at `7637f7a` on all three runs — ruff,
+pytest 3.11, pytest 3.12, the sim/ gate, the gate G1 anchor panel — confirmed 2026-09-20
+14:27 UTC, after the runner outage of 2026-09-14 to 2026-09-20 that failed every job in two
+seconds with no runner and no log, on the repository's side, not the PR's), the 117-cell
+matrix was regenerated with the tree checked out at `7637f7a`, clean, and verified. The
+regeneration writes nothing that is committed (`runs/` and `truth_store/` are ignored; the
+anchor report's generated block is unchanged, see below), so the code every manifest carries
+is `7637f7a` — the CI-green head is the head the matrix was made at; this section and the
+milestones entry are ONE docs-only commit on top of it, to which PR #15 is fast-forwarded —
+that commit is the review head. Stopped: no merge, no tag, nothing further pushed.*
+
+**Why a regeneration.** Ruling 7 re-keyed every stream of the visible record, so every
+sensor series, missingness pattern, historian outage and operator log in the `49e9477`
+matrix (§23) was a realisation the code at this head no longer produces; the truth beneath
+every cell is bit-equal (the decisions entry of 2026-09-14), so every truth-side figure
+below is expected to equal §23's to the printed digit, and does.
+
+**The regeneration** (`python -m sim.run.matrix --runs-root runs` after clearing `runs/` and
+`truth_store/`):
+
+| | |
+|---|---|
+| head every manifest carries | `7637f7a481116173cb1479410dd61a3b5841c944`, 0 dirty files |
+| cells | **117/117 cells generated; 117/117 are sound digesters**; 0 soured or failed |
+| wall-clock | **786 s (13 min 6 s)**, 14:27:08–14:40:14 UTC |
+| per plant (sum of per-cell wall) | A 21 cells 308 s; B 48 cells 235 s; C 48 cells 229 s |
+| index | `truth_store/index.jsonl` **117 lines**, 117 unique ids; 117 run dirs, 117 truth dirs |
+| horizons in the manifests | every Plant A cell 365 d / 365 n_days (21); every B and C cell 200 d (48 + 48) |
+| store | 27M under `runs/`; 20M under `truth_store/` |
+| verification | passed: index, run dirs and truth dirs agree; redacted manifests carry no scenario id, seeds or baseline; every run has `calls.jsonl`; the 32-byte salt appears in no visible file |
+
+**Checks at `7637f7a`** (local, on the tree that became the commit, before the fast-forward;
+CI reproduced them on every check of all three runs): `ruff check .` clean (after
+`ruff format`); `pytest -q` **392 passed, 2 skipped (the Muscatine SCADA file is not
+fetched), 13 deselected, 0 failed** in 477.6 s; `pytest -m g1` **13 passed, 394 deselected,
+0 failed** in 286.6 s. The 392 are `875fa2b`'s 389 plus the three tests of
+`tests/test_visible_prefix.py`. The mutation check of that file, on a copy of the tree:
+historian lengths drawn from the onset stream, notes back to a Poisson count with a
+horizon-sized choice, and sensor blocks in sequence from one per-sensor stream — each caught
+(1, 2 and 2 failures), the unmutated control 3 passed.
+
+**`biogas_mean` and every other anchored row** (24 clean Level-0 seeds, Plant B, 200 d, at
+this head):
+
+| row | generated | anchor | ratio | tolerance | status |
+|---|---:|---:|---:|---|---|
+| `feed_volume_median_primary_sludge` | 31.54 | 30.28 | 1.04 | +/- 15 % | pass |
+| `feed_volume_log_sigma_primary_sludge` | 0.4529 | 0.4363 | 1.04 | +/- 30 % | pass |
+| `delivery_zero_fraction_primary_sludge` | 0 | 0 | — | +/- 0.04 - (fraction of days with no delivery) | pass |
+| `feed_volume_median_thickened_was` | 17.23 | 17.42 | 0.99 | +/- 15 % | pass |
+| `feed_volume_log_sigma_thickened_was` | 0.5156 | 0.5268 | 0.98 | +/- 30 % | pass |
+| `delivery_zero_fraction_thickened_was` | 0 | 0 | — | +/- 0.04 - (fraction of days with no delivery) | pass |
+| `feed_volume_median_high_strength_waste` | 23.78 | 23.58 | 1.01 | +/- 15 % | pass |
+| `feed_volume_log_sigma_high_strength_waste` | 0.8021 | 0.7786 | 1.03 | +/- 30 % | pass |
+| `delivery_zero_fraction_high_strength_waste` | 0.1192 | 0.1006 | 1.18 | +/- 0.04 - (fraction of days with no delivery) | pass |
+| `feed_volume_median_fog` | 33.64 | 33.27 | 1.01 | +/- 15 % | pass |
+| `feed_volume_log_sigma_fog` | 0.7596 | 0.7059 | 1.08 | +/- 30 % | pass |
+| `delivery_zero_fraction_fog` | 0.3164 | 0.3073 | 1.03 | +/- 0.04 - (fraction of days with no delivery) | pass |
+| `total_feed_flow_median` | 105.2 | 94.1 | 1.12 | +/- 15 % | pass |
+| `vs_fraction_primary_sludge` | 0.0307 | 0.0295 | 1.04 | +/- 20 % | pass |
+| `vs_fraction_thickened_was` | 0.03191 | 0.0312 | 1.02 | +/- 20 % | pass |
+| `vs_fraction_high_strength_waste` | 0.0693 | 0.06485 | 1.07 | +/- 25 % | pass |
+| `hsw_cod_concentration` | 149.2 | 136.8 | 1.09 | +/- 25 % | pass |
+| `organic_loading_rate` | 2.171 | 1.885 | 1.15 | +/- 30 % | pass |
+| `biogas_mean` | 2899 | 2111 | 1.37 | ratio in [0.6, 1.5] | pass |
+| `digester_pH_median` | 7.232 | 7.27 | 0.99 | +/- 0.4 pH units | pass |
+| `alkalinity_median` | 5.051 | 5.043 | 1.00 | +/- 35 % | pass (calibrated, not counted) |
+| `vfa_median` | 0.7564 | 1.178 | 0.64 | ratio in [0.25, 4] | pass |
+| `fos_tac_median` | 0.1508 | 0.2323 | 0.65 | ratio in [0.5, 2] | pass |
+
+**23 / 23 rows inside their declared bound**; `biogas_mean` panel median
+2899 m³/d → ratio **1.373**, 24-seed mean 1.397,
+min 1.091, max 1.743 (band [0.6, 1.5]). Leanest-seed CH₄
+fraction median **0.6437** (seed 1003; panel
+0.644–0.692); 24/24 sound. Against §23's table at `49e9477`:
+every generated value identical to the digit
+— these are truth-side statistics, and the truth is bit-equal under ruling 7.
+
+**Trigger-rate tables, all three plants** (24 clean Level-0 seeds each at the matrix
+horizons, the four-row form, every row re-measured at this head):
+
+| Plant | baseline | sound | overload, pooled | per-run range | runs | foaming, pooled | per-run range | runs | operator > 0.40 / > 0.30 |
+|---|---|---|---:|---|---:|---:|---|---:|---:|
+| **B** | — (200 d) | 24/24 | **7.55 %** | 2.92 – 19.30 % | 24/24 | **6.60 %** | 2.34 – 13.45 % | 24/24 | 0.00 % / 0.00 % |
+| **C** | — (200 d) | 24/24 | **9.82 %** | 6.43 – 14.04 % | 24/24 | **8.50 %** | 3.51 – 15.20 % | 24/24 | 0.00 % / 0.00 % |
+| **A** | `unadapted` (365 d) | 24/24 | **1.02 %** | 0.00 – 3.27 % | 21/24 | **0.09 %** | 0.00 – 0.60 % | 5/24 | 0.00 % / 0.00 % |
+| **A** | `adapted` (365 d) | 24/24 | **0.22 %** | 0.00 – 1.19 % | 11/24 | **0.20 %** | 0.00 – 1.19 % | 10/24 | 0.00 % / 0.00 % |
+
+**What the review head is.** The manifests carry `7637f7a`; the docs-only commit on top
+of it (this section and the milestones entry) is what PR #15 points at, and its tree differs
+from `7637f7a` in `docs/` alone. Stopped here: no merge, no tag, nothing further.

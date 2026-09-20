@@ -1716,3 +1716,35 @@ docs commit on top); then the coordinator's review and, only on the lead's say-s
 merge of #15 and the `g1-frozen` tag — neither is this session's to do.
 
 **The next session starts on:** unchanged — hold for the lead's `launch: tool-registry`.
+
+### Session 2026-09-20 — the G1 regeneration at `7637f7a` (ruling 7); stopped for the fresh review
+
+**Done.** Ruling 7 landed as `7637f7a` on 2026-09-14 (local: `pytest -q` 392 passed / 2
+skipped / 0 failed, `ruff check .` clean, `pytest -m g1` 13 passed / 0 failed) and PR #15
+was fast-forwarded to it the same day. CI at that head was red for six days for a reason
+outside the PR — every job on all three runs failed within two seconds with no runner and
+no log, on the repository's side; the lead cleared it (the repository is public now) and on
+2026-09-20 every check is green on all three runs: ruff, pytest 3.11, pytest 3.12, the sim/
+gate, the gate G1 anchor panel. On the coordinator's word the **117-cell matrix was
+regenerated with the tree clean at `7637f7a`**: 117/117 generated, 117/117 sound, 786 s
+wall-clock, 117 index lines and unique ids, 117 run dirs and truth dirs, every manifest
+carrying `7637f7a`, every Plant A cell 365 d and every B/C cell 200 d, redacted manifests
+without scenario id / seeds / baseline, `calls.jsonl` in every run, the salt in no visible
+file. Every truth-side figure re-measured at this head equals §23's to the printed digit
+(23/23 anchored rows inside; `biogas_mean` 1.373 / 1.397 / 1.091 / 1.743; leanest-seed CH₄
+0.6437; B 7.55 / 6.60 %, C 9.82 / 8.50 %, A unadapted 1.02 / 0.09 %, A adapted 0.22 /
+0.20 %), as it must with the truth bit-equal under ruling 7; every visible record is new.
+`docs/f2_horizon_report.md` §25 has the full tables. The regeneration writes nothing that is
+committed; this docs-only commit on top of `7637f7a` is the review head, and PR #15 is
+fast-forwarded to it. **Stopped**: no merge, no tag, nothing further pushed.
+
+**Blocked on.** The coordinator's fresh whole-branch review at the review head, the verdict
+to the lead, and — only on the lead's say-so — the merge of #15 and the `g1-frozen` tag,
+neither of which is this session's to do.
+
+**The next session starts on:** hold for the lead's `launch: tool-registry` to the
+coordinating session (proposal §9.2, `tools/`: the registry every workflow must use, with
+budgets enforced there — CLAUDE.md rule 2; its structural defence for the truth store is a
+recorded design requirement, decisions 2026-09-12 round two). Nothing in `runs/` or
+`truth_store/` is committed; a later regeneration is made only at a reviewed head on the
+coordinator's word, never while CI is red.
