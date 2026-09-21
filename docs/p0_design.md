@@ -232,7 +232,8 @@ per evaluation, `plan.eval_seconds_assumed` (12 s, set from the measurement abov
 the pilot), never the one measured during the run — so the same
 cell gives the same plan on every machine at least that fast. For each expensive step the
 projected cost is its declared bound (the registry's own cost rule) × `eval_seconds_assumed`;
-if it exceeds `plan.step_share` (0.35) of the wall-clock left, or its bound exceeds the
+if it exceeds `plan.step_share` (0.75; 0.35 as proposed, raised in implementing ruling A so the
+ruled sampler fits after the fit of a 90-minute cell) of the wall-clock left, or its bound exceeds the
 evaluations left, the step takes the declared fallback in order, and the state records
 which:
 

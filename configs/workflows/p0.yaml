@@ -134,7 +134,16 @@ plan:
                               # 2.5-4.4 s on a constant log and 2.1 s at 30 days; one
                               # stiff vector 274 s. Set from that measurement before the
                               # pilot (a first pilot launch at 4.0 measured only the guard)
-  step_share: 0.35            # DESIGN  -; share of the wall clock left one step may take
+  step_share: 0.75            # DESIGN  -; share of the wall clock left one step may take.
+                              # 0.35 as proposed; 0.75 in implementing the lead's ruling A
+                              # of 2026-09-21 (the plan that REACHES MCMC): after the fit
+                              # of a 90-minute cell ~35 min remain and the ruled sampler
+                              # (8 x 11 = 88 evaluations) needs 18 min at 12 s (19 at the
+                              # measured 13 s under parallel load), which 0.35 x 33 refused
+                              # on the first round-2 cell; every step after MCMC costs at
+                              # most the ensemble's 8 evaluations, so the higher share
+                              # keeps room for them. Recorded in the ruling's decisions
+                              # entry for the coordinator to confirm.
   profile_share: 0.15         # DESIGN  -; share the profiles may take, all together
   profile_evals_per_point: 60 # DESIGN  expected evaluations per profile point (a bounded
                               # least-squares over 1-3 free parameters converges in tens);

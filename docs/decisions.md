@@ -5167,3 +5167,14 @@ these 2026-09-21 amendments; the pilot is re-run at the new budgets and plan.
 needs ~3.5 h per 200-day cell; rejected by the lead in favour of option a); keeping the
 thresholds and reporting the false positives as P0's baseline behaviour (rejected: two
 of the paths read the plant, not the data).
+
+**Implementing ruling A (2026-09-21, later the same day; the coordinator to confirm).**
+The first round-2 cell (S2-01 B/B) skipped MCMC again: with the ruled plan the fit ends
+with ~35 min of a 90-minute allowance left, the ruled sampler (8 walkers × 11 = 88
+evaluations) needs 18 min at 12 s (19 min at the 13 s measured under parallel load), and
+`plan.step_share` 0.35 × (35 − 2 reserve) = 11.6 min refused it. The ruling's intent is
+explicit — the plan that reaches MCMC, its ladders' minima at or below the ruled sizes —
+so `plan.step_share` is 0.75 (from 0.35): every step after MCMC costs at most the
+ensemble's 8 evaluations, so the larger share keeps room for them; on a 120- or
+150-minute cell 0.35 already sufficed. The round was stopped after one cell, the three
+touched cell groups regenerated at the same head, and the round restarted.
