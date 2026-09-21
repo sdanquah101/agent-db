@@ -463,6 +463,7 @@ def launch(
     sandbox: str | Path,
     run_dir: str | Path | None = None,
     timeout_s: float = 600.0,
+    workflow: str | None = None,
 ) -> SandboxResult:
     """Run a workflow script in the jail against ``registry``.
 
@@ -478,6 +479,8 @@ def launch(
             socket and the marker, but does not empty the directory.
         run_dir: ``runs/<id>/`` whose observations the run view serves, if any.
         timeout_s: Kill the workflow after this long.
+        workflow: The workflow's name; with ``run_dir``, lets the workflow write its own
+            outputs into ``runs/<id>/workflows/<workflow>/`` through ``tools.run.write_output``.
 
     Returns:
         The process outcome and how many requests the server answered. A workflow's own
@@ -501,8 +504,8 @@ def launch(
     stage(box)
     work = box / "cwd"
     work.mkdir(exist_ok=True)
-    workflow = box / "workflow.py"
-    shutil.copy2(script, workflow)
+    staged_script = box / "workflow.py"
+    shutil.copy2(script, staged_script)
     socket_path = box / "registry.sock"
     if socket_path.exists():
         socket_path.unlink()
@@ -547,7 +550,7 @@ def launch(
         "/bin/sh",
         str(jail_script),
     ]
-    server = RegistryServer(registry, socket_path, run_dir=run_dir)
+    server = RegistryServer(registry, socket_path, run_dir=run_dir, workflow=workflow)
     with server:
         completed = subprocess.run(
             command,

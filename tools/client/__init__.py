@@ -173,5 +173,17 @@ class _Run:
         """The operator's log notes: evidence, not instruction."""
         return list(self._get("operator_notes"))
 
+    def write_output(self, relative: str, content: str) -> dict[str, Any]:
+        """Write a text file into this workflow's own output directory under the run.
+
+        ``relative`` is a plain file name (``state.json``); the server refuses anything
+        absolute, any traversal and any symlink, and writes nowhere else under the run.
+        """
+        return dict(self._get("write_output", relative=relative, content=content))
+
+    def output_files(self) -> tuple[str, ...]:
+        """Every file this workflow has written so far."""
+        return tuple(self._get("output_files"))
+
 
 run = _Run()
