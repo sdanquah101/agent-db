@@ -5,8 +5,12 @@
 # the declared instrument noise of configs/observation/sensors.yaml appended under
 # `sensor_noise` (design §1.1). Schema: tools/workflow_config.py::P0Config.
 #
-# STATUS: PROPOSED 2026-09-21 by the P0 session; the lead signs the rules off (rule 5).
-# Every value is DESIGN unless marked otherwise.
+# STATUS: APPROVED by the lead 2026-09-21 via the coordinator, as proposed at 5099c18
+# (rule 5); values frozen from that commit -- any later change to a threshold is a
+# decisions entry with the lead's approval. The one value changed since the proposal is
+# plan.eval_seconds_assumed (4 -> 12 s, measured; 1496cf4, its own decisions entry). The
+# budgets per (scenario, tier) are the lead's separate ruling after the pilot. Every value
+# is DESIGN unless marked otherwise.
 version: 1
 workflow: p0
 workflow_version: "1.0"

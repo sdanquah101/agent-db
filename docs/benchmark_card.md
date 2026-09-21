@@ -227,7 +227,7 @@ likely to be lost from an online probe during overload and three times during fo
 gaps coincide with exactly the transients that identify the process, and naive
 interpolation across a gap destroys information rather than merely losing precision.
 
-### 4.2 The P0 baseline (milestone 5, 2026-09-21; rules PROPOSED, the lead signs off)
+### 4.2 The P0 baseline (milestone 5, 2026-09-21; rules APPROVED by the lead, budgets pending the pilot)
 
 P0 (`workflows/p0_scripted/pipeline.py`, `configs/workflows/p0.yaml`, `docs/p0_design.md`)
 is the scripted baseline of §6.5, the strongest fair one rule 5 asks for: what a competent

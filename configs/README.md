@@ -111,6 +111,6 @@ is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
   sensors weight the objective and how, the QC exclusion rules, the screening sizes and
   thresholds (Morris, Sobol, Fisher), the fit and MCMC sizes, the assay spend, the
   attribution rule's every threshold, the deterministic plan and its budget fallbacks, and
-  one declared seed per stochastic call (rule 4). PROPOSED 2026-09-21; the lead signs the
-  rules off (rule 5). The runner hands the file to the jailed pipeline as JSON together
+  one declared seed per stochastic call (rule 4). APPROVED by the lead 2026-09-21 via the
+  coordinator (rule 5); values frozen, a later change is a decisions entry. The runner hands the file to the jailed pipeline as JSON together
   with the declared sensor noise and plant geometry, nothing of a run.

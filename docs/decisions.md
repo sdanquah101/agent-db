@@ -5079,3 +5079,20 @@ successful, the record plausible (pH 7.24). A stiffness pocket, not a failure. P
 avoid it (every screening design samples the box) and its wall-clock guard absorbs it; the
 solver settings are frozen under G1 (`configs/adm1/solver.yaml`), so this is recorded for
 the registry's owner and the lead, not patched here.
+
+## 2026-09-21 — The lead approved the P0 rules as proposed (via the coordinator); the budgets are ruled after the pilot
+
+**Decision.** The lead approved the P0 design as proposed at `5099c18`, 2026-09-21, via
+the coordinator: (1) the declared instrument noise as P0's residual weights; (2) the rules
+and thresholds of `docs/p0_design.md` §3 and `configs/workflows/p0.yaml` as declared, and
+the plan and fallback ladder of §4; (3) the two registry additions, `run.write_output`
+restricted to `runs/<id>/workflows/<name>/` and the call envelope carrying the visible
+log line's `seq`, `args_hash` and version. The values are frozen from that commit; any
+later change to a threshold is a decisions entry with the lead's approval. Recorded
+plainly: one value changed between the proposal and the sign-off —
+`plan.eval_seconds_assumed`, 4 → 12 s from the measurement on generated cells (entry
+above, `1496cf4`); it is the declared cost the plan is sized with, not a rule, and the
+coordinator is asked to confirm it falls under the approval. **Not yet ruled:** point 4,
+the budgets per (scenario, tier); the lead rules once the pilot table is in, on the
+measured numbers and the proposed re-declaration, with no scenario's budget block edited
+by this session.

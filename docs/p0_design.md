@@ -1,10 +1,16 @@
 # P0 — the scripted pipeline (milestone 5, proposal §6.5)
 
-Status: **proposed 2026-09-21** by the P0 session; the coordinator takes the rules below to
-the lead for sign-off (CLAUDE.md rule 5 makes P0 the baseline of the whole benchmark, so
-the lead decides its rules). Every threshold, size and seed is a key of
-`configs/workflows/p0.yaml`, named here in `code`; the pipeline reads that file and nothing
-else for its settings, so a ruling changes a value, never the code.
+Status: **APPROVED by the lead, 2026-09-21, via the coordinator** ("Approve" on the design
+as proposed at `5099c18`: the declared instrument noise as the weights, the rules and
+thresholds of §3 and `configs/workflows/p0.yaml`, the plan and fallback ladder of §4, and
+the two registry additions). The values are frozen from that commit; any later change to
+a threshold is a decisions entry with the lead's approval. The one value changed between
+the proposal and the sign-off is `plan.eval_seconds_assumed` (4 → 12 s, from the
+measurement in §2, `1496cf4`, its own decisions entry). **Point 4, the budgets (§6), is
+not yet ruled**: the lead rules once the pilot table is in. CLAUDE.md rule 5 makes P0 the
+baseline of the whole benchmark, so the lead decides its rules; every threshold, size and
+seed is a key of `configs/workflows/p0.yaml`, named here in `code`, and the pipeline reads
+that file and nothing else for its settings, so a ruling changes a value, never the code.
 
 ## 1. What P0 is
 
