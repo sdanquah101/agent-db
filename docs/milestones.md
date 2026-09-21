@@ -1846,10 +1846,11 @@ nothing under `sim/`, `scenarios/`, `state/` or the frozen configs is touched.
   `pyproject.toml` (emcee, cma; the three new sub-packages).
 
 **Measured.** `ruff check .` and `ruff format --check .` clean; the four new test files:
-55 tests. Full default suite at `a15bfc7`: 444 passed, 2 skipped (the pre-existing
-Muscatine SCADA skips), 13 deselected (the g1 panel), 7 min 52 s; at the hardening
-commit `5d7a7da`: 446 passed, 2 skipped, 13 deselected, no warnings, 7 min 51 s. The g1 panel was not run locally: nothing under
-`sim/` or the frozen configs changed (CI runs it because `configs/tools/` is new).
+59 tests. Full default suite (no `PYTHONPATH`) at the jail commit: 448 passed, 2 skipped
+(the pre-existing Muscatine SCADA skips), 13 deselected, no warnings, 7 min 49 s; the g1
+panel: 13 passed, 4 min 32 s (nothing under `sim/` or the frozen configs changed; CI
+runs it because `configs/tools/` is new). CI on the GitHub runner builds the jail
+through the sysctl step and passes the same tests.
 
 **Not done / limits, stated plainly.** (1) The process boundary is proposed, built and
 tested, not ruled on; the container form is deferred to release. (2) The fitted model is
