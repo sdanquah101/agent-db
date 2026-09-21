@@ -61,17 +61,18 @@ class _Model(BaseModel):
 class ActionRef(_Model):
     """One tool call the workflow made, as the call log identifies it (rule 3).
 
-    ``call_index`` is the registry's own count at the time of the call (``remaining().n_calls``
-    before it), from 0 for the first call after ``registry.open``; the evaluator maps it to
-    ``seq`` in ``calls.jsonl`` by adding the number of records the harness and the opening
-    wrote. ``args_hash`` is :func:`state.provenance.args_hash` of the validated input, so a
-    workflow's own record of a call can be matched to the log line for line.
+    ``seq`` is the line's sequence number in ``runs/<id>/calls.jsonl`` and ``args_hash``
+    its fingerprint, both handed back by the registry with the call (``tools.last_call()``),
+    so a workflow's own record of a call matches the log line for line. ``call_index`` is
+    the registry's own count before the call (``remaining().n_calls``), from 0 for the
+    first call after ``registry.open``.
     """
 
     step: str = Field(description="Which step of the workflow made the call")
     name: str = Field(description="Tool name")
-    version: str = Field(description="Tool version, from describe()")
-    args_hash: str = Field(description="Fingerprint of the validated arguments")
+    version: str = Field(description="Tool version, as logged")
+    args_hash: str = Field(description="Fingerprint of the validated arguments, as logged")
+    seq: int | None = Field(description="Sequence number of the line in calls.jsonl")
     call_index: int = Field(ge=0, description="The registry's call count before this call")
     outcome: Literal["ok", "error", "budget_exceeded"] = Field(
         description="As the workflow experienced it (an injected failure looks like ok)"

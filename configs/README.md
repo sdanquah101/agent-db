@@ -106,3 +106,11 @@ is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
   MHE), `voi.yaml`. Every entry a workflow may set per call is a **ceiling**: it may ask
   for fewer trajectories, samples, starts or steps than the file says, never more
   (decisions log, 2026-09-21).
+- `workflows/p0.yaml` — the P0 scripted pipeline (proposal §6.5; `docs/p0_design.md`;
+  schema `tools/workflow_config.py::P0Config`): the calibration and hold-out windows, which
+  sensors weight the objective and how, the QC exclusion rules, the screening sizes and
+  thresholds (Morris, Sobol, Fisher), the fit and MCMC sizes, the assay spend, the
+  attribution rule's every threshold, the deterministic plan and its budget fallbacks, and
+  one declared seed per stochastic call (rule 4). PROPOSED 2026-09-21; the lead signs the
+  rules off (rule 5). The runner hands the file to the jailed pipeline as JSON together
+  with the declared sensor noise and plant geometry, nothing of a run.

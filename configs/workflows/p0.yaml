@@ -1,0 +1,149 @@
+# P0 — the scripted pipeline (proposal §6.5; docs/p0_design.md). Every threshold, size
+# and seed P0 uses is here and nowhere in workflows/p0_scripted/pipeline.py (CLAUDE.md
+# conventions; rule 4: every stochastic step takes an explicit seed declared here). The
+# runner (tools/runner.py) hands this file to the jailed pipeline as p0_config.json, with
+# the declared instrument noise of configs/observation/sensors.yaml appended under
+# `sensor_noise` (design §1.1). Schema: tools/workflow_config.py::P0Config.
+#
+# STATUS: PROPOSED 2026-09-21 by the P0 session; the lead signs the rules off (rule 5).
+# Every value is DESIGN unless marked otherwise.
+version: 1
+workflow: p0
+workflow_version: "1.0"
+
+# The uncertainty classes of §6.3 as the evaluator spells them. Read from here rather than
+# spelled in the pipeline because the rule-1 checker forbids the bare token of a forbidden
+# module name in workflow code, and one class shares its name with the `state` package.
+labels:
+  sensor: sensor
+  influent: influent
+  initial_state: state
+  parameter: parameter
+  structural: structural
+  none: none
+
+windows:
+  calibration_start_d: 0.0    # DESIGN  d; the burn-in supplies the initial state
+  holdout_fraction: 0.25      # DESIGN  -; the last quarter of the record is never read
+                              # before step 10 (the frozen hold-out, §6.7 A)
+
+calibration:
+  # Sensors that enter the objective when the tier carries them and QC did not exclude
+  # them (by SENSOR name; temperature never: no calibratable parameter moves it).
+  channels: [gas_flow, ch4_fraction, ph, alkalinity, vfa_total, tan, cod_total,
+             vfa_ac, vfa_pro, vfa_bu, vfa_va, h2_offgas, digestate_vs, digestate_ts]
+  primary_channel: gas_flow   # DESIGN  the channel the assay day and R5 read
+  min_relative_sd: 0.02       # DESIGN  -; floor on a sample's sd as a fraction of the
+                              # series' median |value| (a declared-noise-free sensor
+                              # must not dominate the objective)
+  sd_floor_abs: 1.0e-6        # DESIGN  in the channel unit; never a zero sd
+
+qc:
+  event_load_quantile: 0.90   # DESIGN  -; days above this quantile of the declared COD
+                              # load are the "event windows" of data_qc
+  flatline_flag_d: 3.0        # DESIGN  d; a flatline at least this long flags the sensor
+  drift_bound_factor: 1.0     # DESIGN  -; a QC drift finding flags the sensor only when the
+                              # excursion |slope x span| exceeds this factor times the
+                              # instrument's DECLARED drift bound (sensors.yaml); a drift
+                              # inside the declared bound is the instrument being itself
+                              # and is recorded, not excluded. A sensor that declares no
+                              # drift is flagged on any QC drift finding.
+  min_samples: 8              # DESIGN  observed samples in the calibration window a
+                              # sensor needs to enter the objective
+
+mass_balance:
+  window_d: 30.0              # DESIGN  d; consecutive closure windows over the record
+
+gsa:
+  morris_trajectories: 8      # DESIGN  r; cost r (k + 1) = 168 evaluations at k = 20
+  sobol_samples: 32           # DESIGN  N, a power of two; cost N (2 k_s + 2) with second
+                              # order = 320 evaluations at k_s = 4
+  summary: mean               # DESIGN  the scalar of each output the indices are on
+
+screening:
+  morris_min_relative: 0.10   # DESIGN  -; mu* over the largest mu* of that output
+  morris_keep: 4              # DESIGN  cap on the Morris subset
+  sobol_min_total: 0.05       # DESIGN  -; total-order index a parameter needs on any output
+  min_subset: 2               # DESIGN  the subset never shrinks below this
+
+identifiability:
+  max_relative_crlb: 0.5      # DESIGN  -; CRLB sd over the bound width above which a
+                              # parameter is practically non-identifiable at the defaults
+  profile_grid: 5             # DESIGN  profile points when a profile is run (§4 plan)
+  profile_starts: 1           # DESIGN
+
+fit:
+  lsq_starts: 3               # DESIGN  multistarts (Latin hypercube + the defaults)
+  lsq_max_nfev_per_start: 40  # DESIGN
+  de_popsize: 4               # DESIGN  per parameter (scipy's convention)
+  de_generations: 8           # DESIGN
+  second_pass: true           # DESIGN  refit without a channel the sensor rule flagged
+
+mcmc:
+  walkers: 8                  # DESIGN  even, at least 2 k (the tool raises it if not)
+  steps: 30                   # DESIGN
+  likelihood: gaussian        # DESIGN
+
+uncertainty:
+  z: 1.645                    # DESIGN  90 % two-sided interval half-width in sd units
+
+assays:
+  max_requests: 2             # DESIGN  requests per run
+  disagreement_z: 3.0         # DESIGN  |assay - prediction| / sd beyond which the assay
+                              # disagrees with the model
+  preference: [vfa_speciation, alkalinity, tan]   # DESIGN  in order, by units left
+
+validation:
+  ensemble_size: 8            # DESIGN  predictive draws around the optimum (each one
+                              # simulator evaluation); halved by the plan, 0 = point only
+
+attribution:
+  sensor_bias_z: 3.0          # DESIGN  R1b: |mean residual| / se
+  sensor_step_z: 3.0          # DESIGN  R1b: before/after split difference in se units
+  clean_bias_z: 1.5           # DESIGN  what "the other channels are fine" means
+  balance_windows_min: 2      # DESIGN  R2: inadmissible COD windows
+  feed_eta2_min: 0.15         # DESIGN  R2: eta^2 of the feed-batch covariate
+  structural_channels_min: 2  # DESIGN  R3: channels still structured after the fit
+  structural_rmse_z_min: 2.0  # DESIGN  R3: RMS standardised residual a channel needs to
+                              # count as "still structured" (well above declared noise)
+  parameter_step_z: 3.0       # DESIGN  R4: a change point's before/after difference, se units
+  parameter_channels_min: 2   # DESIGN  R4: channels sharing the change point
+  step_day_tolerance_d: 20.0  # DESIGN  R4: how close two change points must be, d
+  transient_d: 30.0           # DESIGN  R5: the initial window, d
+  state_bias_z: 3.0           # DESIGN  R5: bias in the initial window
+  confidence:
+    single: 0.8               # DESIGN  one rule fired
+    multiple: 0.5             # DESIGN  more than one fired
+    none: 0.6                 # DESIGN  R6
+
+plan:
+  eval_seconds_assumed: 4.0   # DESIGN  s; the declared cost of one evaluation the plan
+                              # is sized with (measured 2.5-4.4 s at this head, one
+                              # stiff vector 274 s); never the measured value, so the
+                              # plan is the same on every machine at least this fast
+  step_share: 0.35            # DESIGN  -; share of the wall clock left one step may take
+  profile_share: 0.15         # DESIGN  -; share the profiles may take, all together
+  profile_evals_per_point: 60 # DESIGN  expected evaluations per profile point (a bounded
+                              # least-squares over 1-3 free parameters converges in tens);
+                              # the registry's own bound may still refuse the call, which
+                              # is a recorded fallback
+  morris_min_trajectories: 4  # DESIGN  below this Morris is replaced by Fisher screening
+  sobol_min_samples: 8        # DESIGN  below this Sobol is skipped
+  de_min_generations: 2       # DESIGN  below this DE is skipped
+  mcmc_min_steps: 10          # DESIGN  below this MCMC is skipped
+  ensemble_min: 2             # DESIGN  below this the point prediction stands alone
+  wall_clock_reserve_min: 2.0 # DESIGN  min; kept for the cheap closing steps
+
+seeds:                        # rule 4: every stochastic tool call, declared here
+  morris: 101
+  sobol: 102
+  profile: 103
+  lsq: 104
+  de: 105
+  mcmc: 106
+  ensemble: 107
+
+runner:                       # the privileged runner (tools/runner.py)
+  timeout_margin_min: 5.0     # DESIGN  min; the jail is killed this long after the cell's
+                              # wall-clock allowance (a call that started inside the
+                              # allowance may run past it; the registry refuses the next)

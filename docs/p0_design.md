@@ -20,12 +20,18 @@ the redacted manifest and the tools; nothing else. Its outputs are the shared ta
 
 The runner (`tools/runner.py`, privileged) writes P0's configuration into the sandbox as
 `p0_config.json` before launch: the contents of `configs/workflows/p0.yaml`, plus the
-**declared instrument noise** of every sensor (`cv`, `sd_abs` from
-`configs/observation/sensors.yaml`, the visible sensor contract of §6.1: "every sensor has
-a declared model"). Nothing derived from the run's truth, its scenario or its seeds enters;
-the same file goes into every cell's sandbox. **Flagged for the lead** (§6, point 1): the
-declared noise is what P0 weights residuals with; the alternative is estimating it from the
-data.
+**declared instrument noise and drift** of every sensor (`cv`, `sd_abs`, the drift random
+walk's scale and bound, from `configs/observation/sensors.yaml`: the visible sensor
+contract of §6.1, "every sensor has a declared model") and the **declared geometry** of
+every plant (the liquid volume and the set point, from `configs/plants/`, the qualitative
+plant contract the card §4.1 lists as visible). Nothing derived from the run's truth, its
+scenario or its seeds enters; the same document goes into every cell's sandbox (tested).
+**Flagged for the lead** (§6, point 1): the declared noise is what P0 weights residuals
+with; the alternative is estimating it from the data.
+
+The label vocabulary is also read from the configuration (`labels`), because the rule-1
+checker forbids the bare token of a forbidden module name in workflow code and one class
+shares its name with the `state` package.
 
 ## 2. The fixed sequence, and what each step feeds the next
 
@@ -66,8 +72,12 @@ Then, per sensor, in this order:
    a segment of at least `qc.flatline_flag_d` (3 d) **flags** the sensor (`sensor`
    evidence) and adds the abstention `<sensor>_claims` over that window.
 2. `spikes` → the spike samples are dropped, the sensor is not flagged.
-3. `drift` → the sensor is **flagged and excluded** from the calibration objective; it
-   stays in the record for the cross-channel checks.
+3. `drift` → if the excursion `|slope| × span` exceeds `qc.drift_bound_factor` (1.0) × the
+   instrument's **declared** drift bound, the sensor is **flagged and excluded** from the
+   calibration objective (it stays in the record for the cross-channel checks); a drift
+   inside the declared bound is the instrument being itself and is recorded, not
+   excluded. A sensor that declares no drift is flagged on any drift finding. (A clean
+   30-day cell flagged its pH probe's own declared random walk before this rule.)
 4. `informative_missingness` → recorded; the abstention `missing_transient` is added and
    the `state` evidence counter incremented (§3.7).
 5. A sensor with fewer than `qc.min_samples` (8) observed samples inside the calibration
@@ -97,9 +107,13 @@ is reported as interaction evidence and does not change the subset.
 parameter whose CRLB standard deviation exceeds `identifiability.max_relative_crlb` (0.5)
 × its bound width, or that lies on a null direction, is dropped as practically
 non-identifiable from these data; at least `screening.min_subset` stay. The survivors are
-the **approved subset**. After the fit, `fisher_info` at the optimum gives the intervals
-of §3.5; `profile_likelihood` (grid `identifiability.profile_grid` (5), one start) is run
-on the approved parameters in order of worst conditioning while the plan allows it (§4).
+the **approved subset**. After the fit, the Fisher intervals of §3.5 come from the fit's
+own Jacobian covariance at the optimum (`sigma² (JᵀJ)⁻¹` with `sigma² = chi² / (n − k)`:
+the Fisher information at the optimum scaled by the residual variance, which the fitter
+already computes, so no evaluation is spent twice), clipped to the parameter's bounds;
+`profile_likelihood` (grid `identifiability.profile_grid` (5), one start) is run on the
+approved parameters in order of worst conditioning while the plan allows it (§4), and a
+closed profile interval replaces the Fisher one.
 
 ### 3.4 The fit (`fit.*`) and the second pass
 
@@ -138,40 +152,50 @@ The values are reported; they do not enter the objective.
 
 ### 3.7 Attribution (`attribution.*`)
 
-Evidence is collected as named counters and the label is the first rule that fires, in
-this order (a compound row therefore reports one primary label; the other rules that
-fired are listed as `secondary_labels`, and the evaluator scores both):
+Evidence is collected as named items and the rules are tried in a fixed order; the first
+that fires sets the label, the others that fire are listed as `secondary_labels` (a
+compound row therefore reports one primary label and the evaluator scores both). The rule
+is a pure function of the collected evidence (`workflows/p0_scripted/pipeline.py::classify`),
+tested on constructed evidence. In order:
 
-- **R1 sensor.** (a) A sensor flagged by §3.1 (drift, a long flatline). (b) Exactly one
-  calibrated channel whose post-fit residual is biased beyond `attribution.sensor_bias_z`
-  (3.0) in standardised units, or structured in time with a step (the mean before and
-  after the best split differ by more than `attribution.sensor_step_z` (3.0)), while every
-  other calibrated channel is within `attribution.clean_bias_z` (1.5) and unstructured,
-  and the COD balance is admissible. (c) `charge_consistent` is false and `ph` is the
-  channel whose residual is structured. For `gas_flow` the scale factor is estimated as
-  the median of observed / predicted after the step (`estimate_scale_factor`).
+- **R1 sensor.** (a) A sensor flagged by §3.1 (drift beyond its declared bound, a long
+  flatline). (b) Exactly one calibrated channel whose post-fit residual is biased beyond
+  `attribution.sensor_bias_z` (3.0) in standardised units, or shows a step in time (the
+  means before and after the best split differ by more than `attribution.sensor_step_z`
+  (3.0) standard errors), while every other calibrated channel is within
+  `attribution.clean_bias_z` (1.5) and not serially structured, and the COD balance is
+  admissible. (c) `charge_consistent` is false and the pH residual is serially structured.
+  For `gas_flow` the scale factor is estimated as the median of observed / predicted after
+  the step (`estimate_scale_factor`). The second pass of §3.4 follows R1b.
 - **R2 influent.** The COD closure is inadmissible in at least
-  `attribution.balance_windows_min` (2) windows, or the residual of the primary channel
-  is structured by the feed-batch covariate (η² above `attribution.feed_eta2_min` (0.15))
-  more than by any other covariate. The action is `revise_influent_mapping`; kinetics are
-  not moved.
-- **R3 structural.** At least `attribution.structural_channels_min` (2) calibrated
-  channels stay structured after the fit (serially structured and structured by load or
-  time), or a fitted parameter sits at a bound while its channel's residual stays
-  structured; `recommend_structural_review` is set and the parameter values are abstained
+  `attribution.balance_windows_min` (2) windows, or the primary channel's residual is
+  explained most by a feed covariate (the dominant feed of the day, or a feed's mass
+  fraction) with η² of at least `attribution.feed_eta2_min` (0.15). The action is
+  `revise_influent_mapping`; kinetics are not moved.
+- **R5 state.** The primary residual is biased beyond `attribution.state_bias_z` (3.0)
+  in the first `attribution.transient_d` (30 d) of the record and within `clean_bias_z`
+  after it, or informative missingness was found (§3.1). Parameters are reported
+  unchanged.
+- **R4 parameter.** A common change point: at least `attribution.parameter_channels_min`
+  (2) calibrated channels show a step beyond `attribution.parameter_step_z` (3.0) whose
+  split days lie within `attribution.step_day_tolerance_d` (20 d) of each other, the COD
+  balance is admissible and no feed covariate explains the primary residual. The bounded
+  update of the approved subset is offered (`kinetic_update`).
+- **R3 structural.** No common change point, and at least
+  `attribution.structural_channels_min` (2) calibrated channels stay structured after the
+  fit: RMS standardised residual at least `attribution.structural_rmse_z_min` (2.0),
+  serially structured, and explained most by load or time (or a fitted parameter sits at
+  a bound). `recommend_structural_review` is set and the parameter values are abstained
   on (§3.8).
-- **R4 parameter.** A fitted parameter of the approved subset moved from 1 by more than
-  `attribution.parameter_move_z` (3.0) interval half-widths, the residuals of its channels
-  are unstructured after the fit, and the balances close. The bounded update is reported.
-- **R5 state.** The residual of the primary channel is structured in time only in the
-  first `attribution.transient_d` (30 d) of the record (bias beyond
-  `attribution.state_bias_z` (3.0) there, within `clean_bias_z` after), or informative
-  missingness was found (§3.1) — parameters are reported unchanged.
-- **R6 none.** Otherwise.
+- **R6 none.** Otherwise: the calibration stands, with its intervals.
 
-Confidence is `attribution.confidence.single` (0.8) when one rule fired,
-`attribution.confidence.multiple` (0.5) when more than one, `attribution.confidence.none`
-(0.6) for R6.
+R4 is tried before R3 so that a regime change (Level 5: a step in time that a constant
+parameter cannot fit) is not read as persistent structure; R5 before both so that the
+initial transient of a mis-initialised state (Level 4) is not read as a change point.
+Moving parameters is not by itself evidence of a fault: a Level-0 calibration moves them
+too. Confidence is `attribution.confidence.single` (0.8) when the rules that fired agree on
+one label, `attribution.confidence.multiple` (0.5) when they do not,
+`attribution.confidence.none` (0.6) for R6.
 
 **What P0 never does:** move a kinetic parameter because a note says so (notes are data:
 their days and authors are recorded, their text is not interpreted); report a posterior
@@ -216,7 +240,9 @@ projection at the *measured* rate, the same fallback is taken and recorded under
 §6.6): data-quality status per sensor; tier; candidate model; the classification (label,
 secondary labels, confidence, evidence with the tool calls it rests on); the approved
 subset and the screening trail; the residual-diagnostics summary per output; actions
-taken (name, version, args hash, the registry's call index); tool failures; the remaining
+taken (name, version, the visible log line's sequence number and argument hash, handed
+back by the registry with every call; tested to match `calls.jsonl` line for line); tool
+failures; the remaining
 budget; validation status; abstentions; the final label and the final parameter estimates
 with intervals and the method that produced them; the plan and its fallbacks; the notes
 seen (day, author, length). `report.json` — the same conclusions in prose lines with the
@@ -232,16 +258,24 @@ completion, the final label) from its privileged side, and one row per cell to
 1. The declared instrument noise as P0's weights (§1.1).
 2. The rules and thresholds of §3, as declared; the sizes of §4 against the frozen
    budgets — the pilot (`docs/milestones.md`) measures whether P0 completes comfortably.
-3. `runs/<id>/` gains `workflows/<name>/` for a workflow's own outputs, written through the
-   registry (`run.write_output`, restricted to that directory, traversal refused); the
-   layout ruling of 2026-09-04 said the run directory holds the observations, the redacted
-   manifest and the call log — this is the fourth thing, and it is workflow-written.
+3. Two registry additions, both plumbing for the task state and nothing the registry PR
+   tested changes: (a) `runs/<id>/` gains `workflows/<name>/` for a workflow's own
+   outputs, written through the registry (`run.write_output`, restricted to that
+   directory, traversal refused); the layout ruling of 2026-09-04 said the run directory
+   holds the observations, the redacted manifest and the call log — this is the fourth
+   thing, and it is workflow-written. (b) Every call envelope carries the visible log
+   line's `seq`, `args_hash` and version (`tools.last_call()`), so a workflow names its
+   actions the way the log does without re-implementing the hash; the truth-side outcome
+   is not in it (an injected failure still reads `ok`).
 4. A 200-day evaluation costs 2.5–4.4 s; a cell of 4,000 evaluations would take over four
    hours, so the wall-clock allowance (90–150 min) is what binds, and P0's sizes are set by
    it (§4). Whether the budgets should be re-declared is the pilot's question.
 
 ## 7. Recorded limits
 
+- At 30 days the Fisher information at the defaults drops every Sobol parameter as
+  practically non-identifiable (relative CRLB 4–9) and the declared minimum of two stands;
+  whether 200 days identify more is the pilot's to say.
 - MCMC with the sizes the wall clock allows (8 walkers × 30 steps) will rarely converge on
   ADM1; P0 then reports Fisher intervals by the same rule the Level-8 row exercises. This
   is stated, not hidden; a larger allowance is the lead's call.

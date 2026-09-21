@@ -4989,3 +4989,88 @@ would then require everywhere, and the same guarantee); `chroot` + `setuid(nobod
 root (needs root, which CI's runner user is not without `sudo`); enumerating the host
 interpreter names and `/proc` paths (the deny-list shape the 2026-09-12 rounds already
 showed does not close).
+
+## 2026-09-21 — The P0 session is launched on "Launch now"
+
+**Decision.** The lead's "Launch now" of 2026-09-21 to the coordinating session, after
+PR #17 (the tool registry, milestone 4) merged at `21424f2`, is read as
+`launch: p0-scripted`, the component `docs/milestones.md` named as next; the coordinator
+launched this session on it. Recorded because CLAUDE.md makes the literal
+`launch: <component>` the only thing that starts a component session, and this one was
+started on a paraphrase (as the registry session was). Branch `claude/p0-scripted` from
+`21424f2`; zero open PRs at launch.
+
+## 2026-09-21 — P0's rules are declared in `configs/workflows/p0.yaml` and proposed to the lead (`docs/p0_design.md`)
+
+**Decision (proposed; the lead decides, rule 5).** P0 is the fixed sequence of §6.5 —
+QC on every sensor → declared exclusion rules → mass balance → Morris on the declared
+set → Sobol on the Morris subset with second order → Fisher information (profiles when
+the plan allows) → the screened fit, LSQ multistart then DE, the lower χ² → MCMC on the
+approved subset → residual diagnostics by feed batch, load, temperature and time → the
+declared assay spend → validation on the frozen last quarter of the record → the
+attribution rule → the task state and the report — with every threshold, size and seed a
+key of `configs/workflows/p0.yaml` and nothing numerical in the pipeline. Its attribution
+rule is an ordered list, R1 sensor → R2 influent → R5 state → R4 parameter → R3 structural
+→ R6 none, a pure function of the collected evidence (tested on constructed evidence); a
+compound row reports one primary label and the other rules that fired as secondary labels.
+Its budget fallbacks are declared ladders (halve the size down to a floor, then the
+declared replacement: Fisher screening for Morris, the Morris subset for Sobol, the
+Fisher intervals for MCMC, the point prediction for the ensemble), sized with a declared
+cost per evaluation (`plan.eval_seconds_assumed`, 4 s) and never the measured one, so the
+plan is deterministic on any machine at least that fast; a runtime guard at the measured
+rate is the one non-deterministic element and is recorded when it trips. The Level-8 rule:
+a `bayes_mcmc` that returns `converged=False` — genuine or injected, which P0 cannot tell
+apart — is a recorded tool failure, the posterior is not reported, the Fisher (or profile)
+intervals stand, `posterior_intervals` is abstained on, and the sampler is never retried.
+Operator notes are data: day, author and length are recorded, the text is never
+interpreted. The declared instrument noise (and drift bound) of the visible sensor
+contract weights the residuals and decides whether a QC drift finding is a fault (beyond
+the declared bound) or the instrument being itself.
+
+**Interpretations recorded on the way, each the lead's to overrule.** (1) Sizes are set by
+the wall clock, not the evaluation count: a 200-day evaluation costs 2.5–4.4 s, so 4,000
+evaluations would take over four hours against a 90-minute allowance. (2) The label
+vocabulary is read from the configuration because the rule-1 checker forbids the bare
+token `state` in workflow code. (3) Fisher intervals come from the fit's own Jacobian
+covariance at the optimum, clipped to the bounds, so no evaluation is spent twice. (4) A
+parameter move is not by itself a fault: R4 needs a common change point in time.
+
+**Alternatives.** Estimating the noise from the data (rejected as the default: the
+contract declares it; flagged for the lead); sizing by the measured evaluation time
+(rejected: non-deterministic across machines); R3 before R4 (rejected: a regime change
+would read as persistent structure).
+
+## 2026-09-21 — Two registry additions for the task state: `run.write_output` and the call record in every envelope
+
+**Decision.** (a) A workflow's task state and report (§6.6) live in
+`runs/<id>/workflows/<workflow>/` — the fourth thing under a run directory after the
+observations, the redacted manifest and the call log of the 2026-09-04 layout ruling —
+written by the jailed workflow through the registry server's `write_output(relative,
+content)` (`tools.server.OutputSink`): plain relative names inside that one directory,
+absolute paths, traversal, symlinks, directories and empty names refused with the
+rule-1 error, nothing else under the run touched (tested directly and over the wire, with
+a negative control). The run view stays read-only and returns contents, never paths; the
+sink is a separate object that holds the one directory it may write. (b) Every call
+envelope carries the visible log line's `seq`, `args_hash` and version
+(`tools.last_call()` in the stub; `CallOutcome.as_record` in the registry), so a
+workflow's action record names each call exactly as `calls.jsonl` does without
+re-implementing the fingerprint — which the checker would have forbidden anyway (the
+canonical form's `__ndarray__` key is a dunder literal). The truth-side outcome is not in
+the record: an injected failure still reads `ok`. Neither addition changes what the
+registry PR tested (budgets, logging, the jail, the fitted model, the tool numerics).
+
+**Alternatives.** The workflow writing its state to its sandbox cwd and the runner copying
+it out (rejected: no checkpoint reaches the run until the process ends, so a wall-clock
+kill loses everything); reconstructing the args hash in the pipeline (rejected: the
+checker, and a second copy of the canonical form that could drift); a `sys.meta_path`
+trick to import `state` in the jail (rejected outright).
+
+## 2026-09-21 — A stiffness pocket inside the fitted model's declared bounds (recorded for the registry)
+
+**Finding.** Timing 27 evaluations of `adm1_fitted` at 200 days: 26 took 2.5–4.4 s on
+Plants B and C (12 Latin-hypercube points each, plus single-parameter probes); one vector —
+`k_dis` × 2.0 with `k_m_aa` × 0.5 on Plant B — took 274–290 s twice, the integrator
+successful, the record plausible (pH 7.24). A stiffness pocket, not a failure. P0 cannot
+avoid it (every screening design samples the box) and its wall-clock guard absorbs it; the
+solver settings are frozen under G1 (`configs/adm1/solver.yaml`), so this is recorded for
+the registry's owner and the lead, not patched here.

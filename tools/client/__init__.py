@@ -33,6 +33,7 @@ __all__ = [
     "UnknownToolError",
     "call",
     "describe",
+    "last_call",
     "remaining",
     "run",
     "tools",
@@ -115,6 +116,19 @@ def remaining() -> RemainingBudget:
     return RemainingBudget.model_validate(_connection.request({"op": "remaining"}))
 
 
+_last_record: dict[str, Any] | None = None
+
+
+def last_call() -> dict[str, Any] | None:
+    """How the registry logged the most recent :func:`call`, refused or failed included.
+
+    ``{"seq", "args_hash", "version", "outcome"}`` as the visible ``calls.jsonl`` line
+    carries them (``seq`` is that line's sequence number), for the task state's action
+    record (§6.6); ``None`` before the first call.
+    """
+    return None if _last_record is None else dict(_last_record)
+
+
 def call(name: str, **args: Any) -> ToolOutput:
     """Call one tool through the registry.
 
@@ -124,7 +138,9 @@ def call(name: str, **args: Any) -> ToolOutput:
         BudgetExceededError: The call would exceed the budget.
         ToolError: The tool failed.
     """
+    global _last_record
     envelope = _connection.request({"op": "call", "name": name, "args": encode_arrays(args)})
+    _last_record = envelope.get("record")
     outcome = envelope.get("outcome")
     if outcome == "budget_exceeded":
         raise BudgetExceededError(str(envelope.get("error")))
