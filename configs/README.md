@@ -92,3 +92,17 @@ is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
   (Tisocco et al. 2024, 2026), the published HRT inconsistency and the chosen 35–45 d,
   with `todo` nulls where the tables are not yet transcribed (the lead transcribes the
   ammonia envelope).
+- `tools/` — the tool registry (proposal §6.2; `tools/config.py` holds the schemas, one
+  per file): `registry.yaml` (per-tool version strings logged with every call), `model.yaml`
+  (the fitted ADM1 as the registry exposes it: the twenty calibratable base parameters as
+  multipliers with their bounds, the burn-in and reference window, the channels it
+  reports), `assays.yaml` (the requested assays of §6.4: source channel, lab sensor whose
+  noise applies, unit cost and turnaround — all DESIGN, no open price list exists),
+  `data_qc.yaml`, `mass_balance.yaml`, `gsa.yaml` (Morris and Sobol ceilings),
+  `identifiability.yaml` (profile likelihood and Fisher information), `fitters.yaml`
+  (LSQ, DE, CMA-ES ceilings and tolerances), `mcmc.yaml` (walkers, steps, R-hat and ESS
+  thresholds, the Level-8 non-converged payload), `validate.yaml` (coverage levels and
+  the admissible range of every output), `residual_diag.yaml`, `filters.yaml` (EnKF and
+  MHE), `voi.yaml`. Every entry a workflow may set per call is a **ceiling**: it may ask
+  for fewer trajectories, samples, starts or steps than the file says, never more
+  (decisions log, 2026-09-21).

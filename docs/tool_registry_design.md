@@ -2,7 +2,9 @@
 
 Status: **proposed 2026-09-21** by the tool-registry session, for the lead through the
 coordinator. Part B (the process boundary) is the part that needs a ruling; parts A, C and D
-are what CLAUDE.md rules 2–6 already require and are built regardless.
+are what CLAUDE.md rules 2–6 already require and are built regardless. All four parts are
+built and tested on `claude/tool-registry` as described here; part B is built *as proposed*
+and changes if the lead rules otherwise.
 
 ## 1. What the registry is
 

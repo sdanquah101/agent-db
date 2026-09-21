@@ -160,6 +160,33 @@ Three consequences follow, and each is enforced by a test rather than by the lis
   view only, in a process or container where those paths are absent. That is a design
   requirement for the tool-registry and workflow-harness components (rule 2), recorded as a
   deferred requirement for the lead's launch of those components; G1 cannot enforce it.
+- **The tool registry's process boundary (milestone 4, 2026-09-21; proposed, awaiting the
+  lead).** The registry (`tools.Registry`: `sim`, the budgets, both call logs, the assay
+  channel into the truth store) lives in a privileged process and is served on a
+  Unix-domain socket; a workflow runs in a subprocess started with `python -I -S`, a path
+  of the standard library, a staged copy of the client stub as `tools`, and the
+  interpreter's package directories, an empty working directory and an environment
+  holding the socket path, and a bootstrap that refuses to run it if `sim`, `scenarios`,
+  `anchor`, `eval` or `state` resolves. `tests/test_tool_sandbox.py` launches a workflow
+  that attempts every named route (`import sim` and its siblings by three spellings,
+  `open("truth_store/…")`, `open("scenarios/…")`, the repository-relative forms, the run's
+  own truth file, walking upwards from the cwd) and asserts each fails, with a negative
+  control that calls a tool, reads the sensors and gets a budget refusal as the right
+  exception in the same process. The run's observations reach the workflow through the
+  registry as contents (`tools.run.sensors()` and the rest of the run view), never as a
+  path, and the loader's refusals are relayed without the path they name. **The limit,
+  stated:** a process boundary does not stop a workflow that is *told* an absolute path
+  from opening it; the layout ruling of 2026-09-04 covers that (the truth store is a
+  sibling the workflow is never told the path of), and a container at release is the
+  stronger boundary, proposed on top.
+- **What a workflow learns from the registry, and what it does not.** The fitted model
+  `adm1_fitted` exposes the same twenty multiplier parameters, the same outputs and the
+  same units on every run; the extensions it carries (the plant's, less what a Level-6
+  row removes) are applied silently on the privileged side. The visible call log records
+  an injected Level-8 failure as `ok` — the truth-side log says `injected_failure` — so a
+  workflow cannot read the row off its own log. Requested assays (`request_assay`, priced
+  in `configs/tools/assays.yaml`) are drawn from the truth channels with the lab sensor's
+  own noise model, keyed by day so a repeated request returns the same value.
 - **The visible call log cannot tell a faulted run from a clean one**: S0-01 and S5-01
   produce logs of the same length, the same names and the same field set.
 - **Nothing visible says when a run was generated, or how long it took.** The generation

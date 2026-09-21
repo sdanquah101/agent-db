@@ -119,3 +119,34 @@ the truth *is* on disk, so the refusals cannot pass vacuously.
 
 `conftest.py` provides the default configuration, the Rosen & Jeppsson (2006) initial
 state and the probe-definition module as fixtures.
+
+The tool registry (`tools/`, `configs/tools/`; milestone 4):
+
+- `test_tool_registry.py` — the core against analytic models: one interface that
+  validates and returns typed outputs with units; one visible projection record per call
+  continuing the harness's sequence (no timestamp, no runtime) and a full truth-side
+  record; the budget refused before a call by its declared bound, an overrun stopped
+  inside the model and charged, the wall clock against an injectable clock, assay units;
+  the Level-8 directive returning non-converged chains (truth-side `injected_failure`,
+  visible `ok`), inert at probability 0 and for a tool without a payload, firing at its
+  rate from a keyed stream; bit-equal output under one seed on five tools; ceilings.
+- `test_tools_known_answers.py` — every tool of §6.2 against a closed form or an
+  independent implementation: Morris on a linear-additive function, Sobol on Ishigami and
+  against `scipy.stats.sobol_indices`, profile likelihood and Fisher information on a
+  ridge and on an identifiable line, the three fitters against OLS, MCMC coverage on a
+  Gaussian target, the EnKF against the Kalman filter, MHE on a driven system, `validate`
+  against hand-computed metrics and the Gaussian CRPS constant, `data_qc` on planted
+  faults, `mass_balance` on a balanced and an unrecorded-delivery digester,
+  `residual_diag` on structured and white residuals, `voi_assay` against the Gaussian EIG.
+- `test_tool_fitted_model.py` — `adm1_fitted` on Plant C: declared, reproducible,
+  responsive to a multiplier, product fractions rescaled, initial state and biomass scale;
+  near the truth on a generated Level-0 run; `open_registry` reading the cell, the S8-01
+  directive (never in the visible tree) and the budget; the same interface on a Level-6
+  cell; `request_assay` with the sensor's noise, keyed by day, priced and logged.
+- `test_tool_sandbox.py` — the structural defence: a workflow launched in the sandbox
+  cannot import `sim`, `scenarios`, `anchor`, `eval` or `state` by any spelling, cannot
+  open `truth_store/…`, `scenarios/…` or its own run's truth file by relative path, finds
+  nothing walking upwards, and — the negative control — calls tools, reads the sensors
+  and gets the right exceptions through the stub; the bootstrap fails closed when a
+  forbidden module resolves; the staged stub equals its source; the transport carries
+  arrays bit for bit.

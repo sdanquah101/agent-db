@@ -4727,3 +4727,152 @@ record — is prefix-stable, which is true from this commit.
 correct the record to "truth-side only". Rejected by the lead: a horizon change would
 still be a different visible realisation of the same seed, which is what ruling 6 exists
 to prevent.
+
+## 2026-09-21 — The tool-registry session is launched on "Lets move to the next task"
+
+**Decision.** The lead's message of 2026-09-21 to the coordinating session, "Lets move to
+the next task", is read as `launch: tool-registry`, the component `docs/milestones.md`
+named as next in every session since 2026-09-12; the coordinator launched this session on
+it. Recorded because CLAUDE.md makes the literal `launch: <component>` the only thing
+that starts a component session, and this one was started on a paraphrase.
+
+**Alternatives.** Wait for the literal phrase (rejected by the coordinator: the milestones
+file left one next task and the lead named it by position).
+
+## 2026-09-21 — The registry's process boundary: a socket server and a sandboxed workflow process (PROPOSED, with the lead)
+
+**Decision (proposed; `docs/tool_registry_design.md` §4).** The structural defence the
+2026-09-12 rounds deferred to this component is a **process boundary**: the registry
+(`tools.Registry`: `sim`, budgets, logs, the assay channel into the truth store) lives in
+the privileged process and is served on a Unix-domain socket (`tools.server`); the
+workflow runs in a subprocess (`tools.sandbox`) started with `python -I -S`, a
+`sys.path` of the standard library, a staged copy of the client stub as `tools`
+(`tools.client` + `tools.schemas` + `tools.transport`) and the interpreter's package
+directories, an empty working directory, and an environment holding the socket path; a
+bootstrap refuses to run the workflow if `sim`, `scenarios`, `anchor`, `eval` or `state`
+resolves (fail closed). The workflow's `import tools` is the stub; `tools.call` crosses
+the socket; the run's observations are served through `state.run_view.open_run` on the
+privileged side, contents only, with the loader's refusal messages stripped of the paths
+they name. `tests/test_tool_sandbox.py` drives a workflow that attempts every named route
+— `import sim` and its siblings, `open("truth_store/…")`, `open("scenarios/…")`, the
+repository-relative spellings, the run's own truth file, walking upwards from the cwd —
+and asserts each fails, with a negative control that calls a tool, reads the sensors and
+gets a budget refusal as the right exception in the same process.
+
+**Cost.** Serialisation (arrays as base64 in requests, JSON lists in replies; kilobytes
+per call against seconds of ADM1); one extra process and one thread per run; the stub is
+copied at launch and asserted equal to its source. **Limit, stated.** A process boundary
+stops imports and relative reads; it does not stop a workflow that is *told* an absolute
+path from opening it. The layout ruling of 2026-09-04 is what covers that (the truth
+store is a sibling the workflow is never told the path of; the sandbox's cwd is empty and
+the run store's path never enters its environment). A container at release (§7's Docker
+image) is the stronger boundary and is proposed on top, not instead.
+
+**Alternatives.** A `sys.meta_path` blocker in the workflow process (removable by the code
+it guards — the runtime form of the checker whose limit is recorded); a virtual
+environment per run (the same guarantee as `-S` with a manual path, more setup); a
+container now (stronger; a runtime the benchmark does not yet ship); an in-process
+registry (gives the workflow `sim` by transitive import — the thing forbidden).
+
+## 2026-09-21 — Libraries of the registry: emcee and cma in, SALib out (own Morris and Sobol)
+
+**Decision.** `emcee>=3.1` (the affine-invariant ensemble sampler, for `bayes_mcmc`) and
+`cma>=3.3` (Hansen's CMA-ES, for `fit_cmaes`) join `pyproject.toml`; both depend on numpy
+alone. **SALib is not added**: version 1.6 requires pandas, matplotlib and multiprocess
+for two estimators of a few dozen lines, so Morris (Morris 1991 trajectories, Campolongo's
+μ*) and Sobol (the Saltelli 2010 design with Jansen's first- and total-order estimators
+and Saltelli 2002's second order, on a scrambled Sobol sequence from `scipy.stats.qmc`)
+are implemented in `tools/impl/gsa.py` and tested against the closed-form indices of a
+linear-additive function and of Ishigami (a = 7, b = 0.1), and against scipy's own
+`sobol_indices` as an independent estimator. SciPy's `least_squares` and
+`differential_evolution` are the fitters' engines.
+
+**Why emcee's own ESS is not used.** The autocorrelation-time ESS of an ensemble
+(the walker-averaged chain) reports ~n·m for walkers that jitter in place at different
+points — exactly the non-converged payload of the Level-8 row — so `bayes_mcmc` reports
+the multi-chain ESS of Gelman et al. (2013) as Stan implements it (within-chain
+autocovariances against the pooled variance, Geyer's initial monotone sequence), which
+collapses to the order of the number of chains when they have not mixed, together with
+split-R-hat over the walkers.
+
+**Alternatives.** SALib (rejected for its dependency weight in a benchmark runtime); a
+hand-written adaptive Metropolis in place of emcee (rejected: emcee is the standard,
+tested choice and its stretch move needs no tuning on correlated posteriors); scipy's
+`sobol_indices` alone (no second order, which §6.2 asks for).
+
+## 2026-09-21 — The fitted model: BSM2 ADM1 plus the fitted extensions, multipliers of the defaults, the same interface on every run
+
+**Decision.** `adm1_fitted` (`tools/fitted.py`) is `sim.adm1` at the BSM2 parameters plus
+the extensions the plant declares as fitted for the run — `parameters.json:
+fitted_extensions` in the truth store, which the privileged side reads and applies
+**silently**. Its influent is the operator's feed log through the declared catalogue at
+catalogue solids, day by day, with Plant B's declared blend tank; its geometry the
+declared one; its initial state a burn-in on the feed log's reference recipe at the
+parameters being evaluated (the harness's staging on declared quantities), or a caller's
+`initial_state` / `biomass_scale` (the Level-4 unknown). Its calibratable parameters are
+twenty base ADM1 kinetic and stoichiometric parameters by name, as **multipliers** of the
+default inside the bounds of `configs/tools/model.yaml` (a product fraction is rescaled
+with its group); extension parameters are not calibratable; the parameter list, the
+output list and the units are **the same on every run** (tested on a Level-0 and a
+Level-6 cell of Plant C), so a workflow cannot read the rung off the model's interface.
+What differs on a Level-6 row is what the model predicts, which is the diagnostic task.
+**Open point 2 for the lead** (design §6): confirm this is the intended visible contract.
+
+**Alternatives.** Exposing extension parameters (would name the omitted extension on a
+Level-6 cell); absolute parameter values rather than multipliers (harder to bound
+uniformly, and the multiplier of 1 is the honest default); starting every evaluation from
+the published R&J 2006 state without a burn-in (the first weeks of every fit would be a
+start-up transient no fault caused — the reason the harness burns in).
+
+## 2026-09-21 — The evaluation-counting rule, and what the wall clock and the visible outcome mean
+
+**Decision.** One call of a registered model on one parameter vector is **one simulator
+evaluation**, whatever the model; the fitted ADM1's evaluation includes its burn-in.
+Every tool declares an upper bound on the evaluations a call will make (Morris
+`r (k + 1)`, Sobol `N (2k + 2)`, a profile `n_grid · n_starts · max_nfev`, a fit
+`n_starts · max_nfev`, MCMC `n_walkers (n_steps + 1)`, the EnKF `n_ensemble · n_steps`
+transitions), the registry refuses a call whose bound exceeds what remains with outcome
+`budget_exceeded` before anything runs, and a `MeteredModel` charges the evaluations
+actually made — a tool that would overrun is stopped inside the model call, its partial
+result discarded and its spent evaluations charged. Every stochastic tool takes an
+explicit `seed`; the same seed gives bit-equal output (tested on five tools). A workflow
+may ask for fewer trajectories, samples, starts or steps than the config's ceiling, never
+more. **Wall clock** is enforced as time since the registry was opened for the run
+(agent thinking time included, which is what §6.7 C measures), against an injectable
+clock. **Assay units** are charged per request at the catalogue price before the call.
+
+**The visible outcome of an injected failure is `ok`.** The truth-side log records
+`injected_failure` (so §6.7 D can tell it from a real error); the projection under
+`runs/<id>/` records `ok`, because a workflow that could read `injected_failure` off its
+own log would have the answer to the Level-8 row. The registry's seed, which keys the
+Level-8 stream and the assay noise, is `SeedSequence([observation seed, key("registry")])`:
+`sim.run.seeds` is frozen with G1 and gains no sixth stream, so the registry takes a keyed
+child of one of the five.
+
+**The Level-8 directive** is built as `sim.faults.plan.WorkflowFaults` carries it —
+`(tool, probability)`, a per-call Bernoulli from a keyed stream, 1.0 in S8-01 so every
+call fails — rather than the `(tool, onset)` the launch note said (open point 3).
+
+**Alternatives.** Charging a declared cost rather than the evaluations made (over-charges
+an early-stopping fitter); wall clock as summed tool runtime (would not measure what §6.7
+C measures); a visible `injected_failure` (leaks the row).
+
+## 2026-09-21 — Requested assays: priced in `configs/tools/assays.yaml`, drawn from the truth with the lab sensor's noise, keyed by day
+
+**Decision.** `request_assay(assay, day)` is served by `tools.assays.AssayServer` on the
+privileged side from `truth_store/<id>/channels.npz`, with the noise model of the
+corresponding lab sensor in `configs/observation/sensors.yaml` applied exactly as
+`sim.observation.model._sensor_series` applies it (`value (1 + cv z₁) + sd_abs z₂`, two
+independent draws), reported on `day + turnaround`. The draw is keyed
+`SeedSequence([registry seed, key("assay", assay, channel), day])`, so the same day asked
+twice returns the same number and a workflow cannot average noise away by repeating a
+request (each request is still charged). Eight assays are priced at 1–2 units with 1–3 d
+turnarounds, all DESIGN (no open price list exists); `vfa_speciation` returns the four
+acids for one request. The mass-balance N closure is admissible inside an *expected
+organic-N share* band (`n_closure_expected: [0.05, 0.65]`) rather than near zero, because
+only TAN is observed in the effluent.
+
+**Alternatives.** Serving assays from the visible sensor record (would give nothing the
+tier does not already have); an unkeyed draw per request (averaging attack); the
+generator's feed-assay noise model (a digestate assay is the observation layer's, not the
+influent generator's).

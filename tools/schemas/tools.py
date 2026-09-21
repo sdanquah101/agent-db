@@ -689,7 +689,6 @@ class RequestAssayOutput(ToolOutput):
     report_day: float
     results: tuple[AssayResult, ...]
     unit_cost: int
-    assay_units_remaining: int
 
 
 class RemainingBudget(ToolOutput):
