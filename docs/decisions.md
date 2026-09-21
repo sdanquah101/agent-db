@@ -5178,3 +5178,22 @@ so `plan.step_share` is 0.75 (from 0.35): every step after MCMC costs at most th
 ensemble's 8 evaluations, so the larger share keeps room for them; on a 120- or
 150-minute cell 0.35 already sufficed. The round was stopped after one cell, the three
 touched cell groups regenerated at the same head, and the round restarted.
+
+## 2026-09-21 — The P0 pilot, round 2, at the lead's rulings A and B: complete, MCMC reached, the Level-8 row exercised, no false fault
+
+**Finding** (`reports/p0_pilot.csv`; `docs/milestones.md`, milestone 5, round 2). The same
+ten cells at the ruled budgets, plan and thresholds: every cell completed in 54–93 min of
+its 90–150-minute allowance using 54–78 % of the ruled evaluation count (243–350 of
+300–750), one guard trip in ten cells; MCMC reached on 8 of 10 (not on the Plant A cell at
+24 s per evaluation, nor on the one cell whose guard tripped), converged on none, so
+every cell reports Fisher intervals and abstains on `posterior_intervals`; the Level-8
+directive of S8-01 exercised and handled by the rule (one call, the injected payload,
+the failure recorded, no posterior, no retry). Five of ten primary labels match the truth
+(the four clean cells `none`, S5-01 `parameter` through R4), no cell reports a false
+fault, and the five misses are `none` where a fault exists — the two silenced paths were
+the only ones that ever named a sensor on Plant B and C, and the post-fit rules cannot see
+a single-channel fault through a background bias of 5–19σ in every channel. Recovery:
+14 of 20 intervals cover the truth multiplier; 7 estimates at a bound. Recorded, not
+tuned (the coordinator's condition (ii)); the ten cells are development cells (condition
+(i)). Not run: the full Level 0–5 sweep (78 cells, ~29 h three in parallel at ~70 min
+per cell), by the lead's agreement.

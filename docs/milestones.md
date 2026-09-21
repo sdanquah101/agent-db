@@ -2021,6 +2021,50 @@ scripted baseline is for and what §6.7 B scores. (4) **Parameter recovery** (Le
 20 approved-parameter estimates): the Fisher interval covers the truth multiplier 1.0 in
 14 of 20; the estimates range 0.50–1.50 and 5 sit at a bound; intervals are wide because
 the residual variance is the background's, not because the estimates are close.
+**The pilot, round 2 — at the lead's rulings A and B** (`reports/p0_pilot.csv` now holds
+this round; the round-1 table above is the record the rulings were made on). The same ten
+cells on the matrix regenerated at `f4c5b03` (the four groups a stopped first attempt had
+touched regenerated again at `5602f3f`, fresh logs, same ids), the ruled budgets (450 /
+600 / 750; Plant A 300), the ruled plan (Morris 4, Sobol 8, one LSQ start, DE 2, MCMC
+8 × 10) and thresholds, `plan.step_share` 0.75 (see the ruling's decisions entry: at
+0.35 the ruled sampler was refused after the fit of a 90-minute cell), three cells in
+parallel, 17:25–21:5x UTC:
+
+| cell | truth | P0 label (rule) | flag | ok | wall min / allow | evals / declared | assays | MCMC | fallbacks | guards | intervals | recovery |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| S0-01 B/A | none | none (R6) | - vs - | yes | 58 / 90.0 | 271 / 450 | 2 / 2 | run, not converged | 0 | 0 | fisher | Y_ac:0.500/1.000/out Y_h2:0.500/1.000/in |
+| S0-01 B/B | none | none (R6) | - vs - | yes | 69 / 90.0 | 323 / 450 | 2 / 2 | run, not converged | 0 | 0 | fisher | Y_ac:1.052/1.000/in k_dec_X_ac:0.885/1.000/in |
+| S0-01 B/C | none | none (R6) | - vs - | yes | 65 / 90.0 | 307 / 450 | 2 / 2 | skipped | 1 | 1 | fisher | Y_ac:1.126/1.000/out Y_h2:1.427/1.000/in k_m_h2:0.809/1.000/in k_m_pro:1.108/1.000/out |
+| S1-01 B/B | none | none (R6) | - vs - | yes | 72 / 90.0 | 349 / 450 | 2 / 2 | run, not converged | 0 | 0 | fisher | Y_ac:0.500/1.000/in Y_h2:0.500/1.000/in k_dec_X_ac:0.536/1.000/in |
+| S2-01 B/B | sensor | none (R6) | - vs ph | yes | 71 / 90.0 | 337 / 450 | 2 / 2 | run, not converged | 0 | 0 | fisher | Y_ac:0.836/1.000/in Y_h2:0.833/1.000/in k_dec_X_ac:0.780/1.000/in |
+| S3-01 C/B | influent | none (R6) | - vs - | yes | 69 / 120.0 | 329 / 600 | 3 / 4 | run, not converged | 0 | 0 | fisher | Y_ac:1.500/1.000/in k_m_ac:0.348/1.000/out |
+| S4-01 B/B | state | none (R6) | - vs - | yes | 72 / 120.0 | 335 / 600 | 3 / 4 | run, not converged | 0 | 0 | fisher | Y_ac:0.504/1.000/out k_dec_X_ac:0.872/1.000/in |
+| S5-01 A/A | parameter | parameter (R4) | - vs - | yes | 93 / 120.0 | 243 / 300 | 3 / 4 | skipped | 1 | 0 | fisher | Y_ac:0.805/1.000/in Y_h2:1.500/1.000/out |
+| S6-02 B/B | structural | none (R6) | - vs - | yes | 72 / 150.0 | 350 / 750 | 3 / 6 | run, not converged | 0 | 0 | fisher | - |
+| S8-01 B/B | sensor | none (R6) | - vs gas_flow | yes | 54 / 150.0 | 250 / 750 | 3 / 6 | run, not converged (INJECTED, handled) | 0 | 0 | fisher | - |
+
+What changed, and what did not. **P0 completes comfortably inside every allowance**
+(54–93 min of 90–150; 54–78 % of the ruled evaluation counts; one guard trip in ten
+cells). **MCMC is reached on 8 of 10 cells** (skipped on S0-01 B/C, where the guard tripped
+at the measured rate, and on the Plant A cell, whose 24 s evaluations do not fit the
+ruled sampler in 120 min); it converged on none (R-hat 1.9–96 at 8 × 10), so every cell
+still reports Fisher intervals and abstains on `posterior_intervals` — the rule the Level-8
+row exercises. **The Level-8 directive of S8-01 was exercised**: one `bayes_mcmc` call,
+the injected payload (truth-side `injected_failure`, visible `ok`), the failure recorded,
+no posterior, no retry. **Attribution: 5 of 10 primary labels match** (the three clean
+S0-01 cells and S1-01 read `none`; S5-01 reads `parameter` through R4 at the 30-day
+tolerance) and **no cell reports a false fault**; the five misses are all `none` where a
+fault exists (S2-01 sensor, S3-01 influent, S4-01 state, S6-02 structural, S8-01 sensor):
+after the fit every channel keeps its 5–19σ background bias, so a fault that shows in one
+channel is never the *single* offender (S2-01's pH is 18σ off with the gas 14σ off), the
+burn-in the fitted model runs at every evaluation absorbs S4-01's mis-initialised
+biomass (early-window bias 0.2σ), S3-01's gas residual is explained by load rather than
+by a feed covariate, and S6-02's residuals do not clear the structural rule's two-channel
+condition. That is the honest scripted baseline of rule 5 at the recorded background
+property. **Parameter recovery** (Levels 0–5, 20 estimates): the Fisher interval covers
+the truth in 14; 7 estimates sit at a bound (Y_ac and Y_h2 at 0.5 or 1.5 on five cells);
+the intervals are wide because the residual variance is the background's.
+
 **Not done / limits, stated plainly.** (1) P0's rules are approved and frozen; the four threshold changes the
 pilot suggests are proposals for a decisions entry with the lead's approval, not made here. (2) The full Level 0–5 sweep is not
 in this PR: 78 cells at Levels 0–5 (Plants B and C: 15 + 15 at 90 min, 18 + 18 at 120 min; Plant A: 3 at
@@ -2030,7 +2074,7 @@ three cells in parallel on this 4-core machine (~22 h with four, at the cost of 
 guard trips the measured rate then causes). The batch runner does it in one command
 (`python -m tools.runner --workflow p0 --all --level 0-5`), resumable by table.. (3) MCMC at the sizes the wall clock allows does not converge on
 ADM1, so P0 reports Fisher intervals by the same rule the Level-8 row exercises. (4) The
-profile likelihood never ran inside the frozen allowances (its registry bound is
+profile likelihood never ran inside the allowances (its registry bound is
 `n_grid · n_starts · 201` evaluations). (5) The checker forbids the bare token `state`
 in workflow code, so the label vocabulary is read from the configuration.
 

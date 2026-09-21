@@ -293,7 +293,9 @@ completion, the final label) from its privileged side, and one row per cell to
    reaching MCMC; proposed `simulator_evals` 450 / 600 / 750 for the 90 / 120 / 150-minute
    cells, and four threshold rulings on the paths that read the background — **ruled**
    2026-09-21 (rulings A and B above): the budgets re-declared, the plan shrunk to what
-   reaches MCMC, the two paths silenced, the two tolerances widened.
+   reaches MCMC, the two paths silenced, the two tolerances widened. Round 2 at the
+   rulings: every cell in 54–93 min using 54–78 % of the ruled counts, MCMC reached on 8
+   of 10, the Level-8 row exercised, 5 of 10 labels right and no false fault.
 
 ## 7. Recorded limits
 
