@@ -117,10 +117,16 @@ attribution:
     none: 0.6                 # DESIGN  R6
 
 plan:
-  eval_seconds_assumed: 4.0   # DESIGN  s; the declared cost of one evaluation the plan
-                              # is sized with (measured 2.5-4.4 s at this head, one
-                              # stiff vector 274 s); never the measured value, so the
-                              # plan is the same on every machine at least this fast
+  eval_seconds_assumed: 12.0  # DESIGN  s; the declared cost of one evaluation the plan
+                              # is sized with; never the value measured during a run, so
+                              # the plan is the same on every machine at least this fast.
+                              # MEASURED 2026-09-21 at 5099c18 on generated cells: a
+                              # 200-day evaluation with the operator's daily feed log
+                              # costs 11.4 s (Plant C) and 11.8 s (Plant B) -- the daily
+                              # breakpoints cap the integrator step at one day -- against
+                              # 2.5-4.4 s on a constant log and 2.1 s at 30 days; one
+                              # stiff vector 274 s. Set from that measurement before the
+                              # pilot (a first pilot launch at 4.0 measured only the guard)
   step_share: 0.35            # DESIGN  -; share of the wall clock left one step may take
   profile_share: 0.15         # DESIGN  -; share the profiles may take, all together
   profile_evals_per_point: 60 # DESIGN  expected evaluations per profile point (a bounded

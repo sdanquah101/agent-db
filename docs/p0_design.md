@@ -35,9 +35,11 @@ shares its name with the `state` package.
 
 ## 2. The fixed sequence, and what each step feeds the next
 
-Costs are simulator evaluations; wall-clock is what binds in practice (a 200-day
-evaluation of `adm1_fitted` costs 2.5–4.4 s on Plants B and C at this head, one vector in
-27 took 290 s: a stiffness pocket, §7).
+Costs are simulator evaluations; wall-clock is what binds in practice: a 200-day
+evaluation of `adm1_fitted` on a generated cell costs 11–12 s on Plants B and C at this
+head (the operator's daily feed log caps the integrator step at one day; 2.5–4.4 s on a
+constant log, 2.1 s at 30 days; one constant-log vector in 27 took 290 s: a stiffness
+pocket, §7).
 
 | # | Step | Tool(s) | Feeds forward |
 |---|---|---|---|
@@ -213,7 +215,8 @@ reported as screened, not as an update). The list is in the state and the report
 
 P0 reads `tools.remaining()` before every expensive step. The plan is **deterministic**:
 sizes are the declared ones scaled to the cell's declared envelope with a declared cost
-per evaluation, `plan.eval_seconds_assumed` (4.0 s), never the measured one — so the same
+per evaluation, `plan.eval_seconds_assumed` (12 s, set from the measurement above before
+the pilot), never the one measured during the run — so the same
 cell gives the same plan on every machine at least that fast. For each expensive step the
 projected cost is its declared bound (the registry's own cost rule) × `eval_seconds_assumed`;
 if it exceeds `plan.step_share` (0.35) of the wall-clock left, or its bound exceeds the
@@ -267,9 +270,12 @@ completion, the final label) from its privileged side, and one row per cell to
    line's `seq`, `args_hash` and version (`tools.last_call()`), so a workflow names its
    actions the way the log does without re-implementing the hash; the truth-side outcome
    is not in it (an injected failure still reads `ok`).
-4. A 200-day evaluation costs 2.5–4.4 s; a cell of 4,000 evaluations would take over four
-   hours, so the wall-clock allowance (90–150 min) is what binds, and P0's sizes are set by
-   it (§4). Whether the budgets should be re-declared is the pilot's question.
+4. A 200-day evaluation on a generated cell costs 11–12 s; a cell of 4,000 evaluations
+   would take over thirteen hours, and a 90-minute allowance buys about 450, so the
+   wall-clock allowance is what binds and P0's sizes are set by it (§4): at 12 s the
+   declared plan runs Morris with 4 trajectories, Sobol with N = 8, one LSQ start, two DE
+   generations and no MCMC inside 90 minutes. Whether the budgets should be re-declared is
+   the pilot's question.
 
 ## 7. Recorded limits
 
@@ -279,7 +285,7 @@ completion, the final label) from its privileged side, and one row per cell to
 - MCMC with the sizes the wall clock allows (8 walkers × 30 steps) will rarely converge on
   ADM1; P0 then reports Fisher intervals by the same rule the Level-8 row exercises. This
   is stated, not hidden; a larger allowance is the lead's call.
-- One parameter vector (k_dis × 2 with k_m_aa × 0.5 on Plant B) integrated in 290 s
-  against 3 s for the rest: a stiffness pocket inside the declared bounds. P0 cannot
+- One parameter vector (k_dis × 2 with k_m_aa × 0.5 on Plant B, constant log) integrated
+  in 274–290 s against 3 s for the rest: a stiffness pocket inside the declared bounds. P0 cannot
   avoid it; the wall-clock guard absorbs it. Recorded for the registry (solver settings are
   frozen under G1).

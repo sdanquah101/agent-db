@@ -5028,8 +5028,12 @@ contract weights the residuals and decides whether a QC drift finding is a fault
 the declared bound) or the instrument being itself.
 
 **Interpretations recorded on the way, each the lead's to overrule.** (1) Sizes are set by
-the wall clock, not the evaluation count: a 200-day evaluation costs 2.5–4.4 s, so 4,000
-evaluations would take over four hours against a 90-minute allowance. (2) The label
+the wall clock, not the evaluation count: a 200-day evaluation on a generated cell costs
+11–12 s (the daily feed log caps the integrator step at one day; 2.5–4.4 s on a constant
+log), so 4,000 evaluations would take over thirteen hours against a 90-minute allowance;
+`plan.eval_seconds_assumed` was set to 12 s from that measurement before the pilot (a
+first launch at the constant-log 4 s measured only the runtime guard and was stopped
+after five minutes, the three touched cells regenerated). (2) The label
 vocabulary is read from the configuration because the rule-1 checker forbids the bare
 token `state` in workflow code. (3) Fisher intervals come from the fit's own Jacobian
 covariance at the optimum, clipped to the bounds, so no evaluation is spent twice. (4) A
@@ -5067,8 +5071,9 @@ trick to import `state` in the jail (rejected outright).
 
 ## 2026-09-21 — A stiffness pocket inside the fitted model's declared bounds (recorded for the registry)
 
-**Finding.** Timing 27 evaluations of `adm1_fitted` at 200 days: 26 took 2.5–4.4 s on
-Plants B and C (12 Latin-hypercube points each, plus single-parameter probes); one vector —
+**Finding.** Timing 27 evaluations of `adm1_fitted` at 200 days on a **constant** feed
+log: 26 took 2.5–4.4 s on Plants B and C (12 Latin-hypercube points each, plus
+single-parameter probes); one vector —
 `k_dis` × 2.0 with `k_m_aa` × 0.5 on Plant B — took 274–290 s twice, the integrator
 successful, the record plausible (pH 7.24). A stiffness pocket, not a failure. P0 cannot
 avoid it (every screening design samples the box) and its wall-clock guard absorbs it; the

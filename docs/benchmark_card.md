@@ -259,9 +259,10 @@ intervals stand, no retry); fit through a flagged sensor; read the hold-out befo
 validation step. Its budget fallbacks are declared ladders sized with a declared cost per
 evaluation, so the same cell gives the same plan and the same state on every machine at
 least that fast (tested); the one non-deterministic element, a guard at the measured rate,
-is recorded when it trips. Measured at this head: a 200-day evaluation costs 2.5–4.4 s
-(one stiff vector 274 s), so the wall-clock allowance, not the evaluation count, is what
-sizes P0; the pilot table (`reports/p0_pilot.csv`, `docs/milestones.md`) has the per-cell
+is recorded when it trips. Measured at this head: a 200-day evaluation on a generated cell
+costs 11–12 s (the daily feed log caps the integrator step at one day; 2.5–4.4 s on a
+constant log, one stiff vector 274 s), so the wall-clock allowance, not the evaluation
+count, is what sizes P0; the pilot table (`reports/p0_pilot.csv`, `docs/milestones.md`) has the per-cell
 numbers.
 
 ## 5. Anchoring status — read this before quoting any number
