@@ -160,8 +160,8 @@ Three consequences follow, and each is enforced by a test rather than by the lis
   view only, in a process or container where those paths are absent. That is a design
   requirement for the tool-registry and workflow-harness components (rule 2), recorded as a
   deferred requirement for the lead's launch of those components; G1 cannot enforce it.
-- **The tool registry's process boundary (milestone 4, 2026-09-21; proposed, awaiting the
-  lead).** The registry (`tools.Registry`: `sim`, the budgets, both call logs, the assay
+- **The tool registry's process boundary (milestone 4, 2026-09-21; proposed, the decision
+  delegated by the lead to the coordinator).** The registry (`tools.Registry`: `sim`, the budgets, both call logs, the assay
   channel into the truth store) lives in a privileged process and is served on a
   Unix-domain socket; a workflow runs in a subprocess started with `python -I -S`, a path
   of the standard library, a staged copy of the client stub as `tools`, and the

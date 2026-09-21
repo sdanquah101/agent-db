@@ -1803,8 +1803,9 @@ nothing under `sim/`, `scenarios/`, `state/` or the frozen configs is touched.
   built as a socket server in the privileged process and a workflow subprocess in which
   `sim`, `scenarios`, `anchor`, `eval` and `state` do not resolve (`-I -S`, a staged stub
   as `tools`, a fail-closed bootstrap, an empty cwd). `tests/test_tool_sandbox.py` drives
-  every named route and a negative control. **Awaiting the lead's word** on the design
-  (design §6, point 1); the limit — an absolute path a workflow is *told* — is recorded.
+  every named route and a negative control. **With the coordinator**, to whom the lead
+  delegated the decision (2026-09-21, conditions (i)–(iii) recorded in the decisions
+  entry); the limit — an absolute path a workflow is *told* — is recorded.
 - **Part C, requested assays** (`tools/assays.py`, `configs/tools/assays.yaml`): eight
   assays priced and timed, served from the truth channels with the lab sensor's noise
   model, keyed by day, charged from `assay_units`.
@@ -1854,9 +1855,10 @@ check is the digestate's implied strong-ion difference, not a full charge closur
 against effluent, because the feed's charge is declared only as strong cations minus
 anions.
 
-**Open for the lead** (through the coordinator; `docs/tool_registry_design.md` §6): the
-process boundary; the fitted model's visible contract; the `(tool, probability)` reading
-of the Level-8 directive; wall clock as time since opening.
+**Open** (`docs/tool_registry_design.md` §6): the process boundary, with the coordinator on
+the lead's delegation; and, for the lead through the coordinator, the fitted model's
+visible contract, the `(tool, probability)` reading of the Level-8 directive, and wall
+clock as time since opening.
 
 **The next session (P0, §6.5) starts on:** `workflows/p0_scripted/`, a workflow script
 run through `tools.sandbox.launch` against `tools.open_registry(run_id)`: QC → balance

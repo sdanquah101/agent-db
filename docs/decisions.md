@@ -4739,7 +4739,16 @@ that starts a component session, and this one was started on a paraphrase.
 **Alternatives.** Wait for the literal phrase (rejected by the coordinator: the milestones
 file left one next task and the lead named it by position).
 
-## 2026-09-21 — The registry's process boundary: a socket server and a sandboxed workflow process (PROPOSED, with the lead)
+## 2026-09-21 — The registry's process boundary: a socket server and a sandboxed workflow process (PROPOSED; the decision delegated to the coordinator)
+
+**Who decides.** The lead delegated the transport decision to the coordinator, 2026-09-21
+(relayed ~01:05 UTC): the coordinator accepts the proposal on the lead's behalf provided it
+(i) meets the recorded requirement (decisions 2026-09-12: a workflow process in which `sim`,
+`scenarios/` and `truth_store/` are neither importable nor readable), (ii) carries the
+demonstrating test with a negative control, and (iii) touches nothing under `sim/`,
+`scenarios/` or the frozen configs. Only a deviation from (i)–(iii) goes to the lead. The
+proposal below is built to those three conditions; the record of the coordinator's
+acceptance belongs in the entry that follows it.
 
 **Decision (proposed; `docs/tool_registry_design.md` §4).** The structural defence the
 2026-09-12 rounds deferred to this component is a **process boundary**: the registry

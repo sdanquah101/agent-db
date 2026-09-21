@@ -1,10 +1,13 @@
 # Tool registry v1.0 — design (milestone 4, proposal §6.2)
 
-Status: **proposed 2026-09-21** by the tool-registry session, for the lead through the
-coordinator. Part B (the process boundary) is the part that needs a ruling; parts A, C and D
-are what CLAUDE.md rules 2–6 already require and are built regardless. All four parts are
-built and tested on `claude/tool-registry` as described here; part B is built *as proposed*
-and changes if the lead rules otherwise.
+Status: **proposed 2026-09-21** by the tool-registry session. The lead delegated the
+part-B decision to the coordinator (2026-09-21): the coordinator accepts it on the lead's
+behalf if it (i) meets the recorded requirement (decisions 2026-09-12), (ii) carries the
+demonstrating test with a negative control, (iii) touches nothing under `sim/`,
+`scenarios/` or the frozen configs. Parts A, C and D are what CLAUDE.md rules 2–6 already
+require and are built regardless. All four parts are built and tested on
+`claude/tool-registry` as described here; part B is built *as proposed* and changes if the
+coordinator's acceptance asks for it.
 
 ## 1. What the registry is
 
@@ -179,8 +182,9 @@ the registry.
 - *In-process registry with the workflow importing `tools` directly.* Cheapest; gives the
   workflow `sim` by transitive import. Rejected: it is exactly what the requirement forbids.
 
-**Question for the lead.** Is the socket-and-sandbox design above the one to build on, or
-does the lead want the container boundary now?
+**Question for the coordinator (on the lead's delegation).** Does the socket-and-sandbox
+design above meet conditions (i)–(iii)? The container boundary is proposed for release, not
+now; that is a deviation only if the coordinator reads (i) as requiring it.
 
 ## 5. Layout
 
@@ -202,7 +206,8 @@ configs/tools/      one YAML per tool; assays.yaml; model.yaml; budget.yaml
 
 ## 6. Open points for the lead
 
-1. Part B (§4): socket-and-sandbox now, container at release?
+1. Part B (§4): socket-and-sandbox now, container at release? (With the coordinator, on
+   the lead's delegation; the lead is not to be interrupted for it.)
 2. The fitted model's *behaviour* differs on a Level-6 row (it must); its interface does
    not. Confirm that exposing the same parameter list and output list on every run, with
    extension parameters fixed and not calibratable, is the intended visible contract.
