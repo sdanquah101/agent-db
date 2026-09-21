@@ -1,0 +1,10 @@
+# voi_assay (proposal §6.2, RQ4): expected information gain of each available requested
+# assay, from posterior samples and the assay's declared noise (configs/tools/assays.yaml,
+# configs/observation/sensors.yaml). Schema tools/config.py::VOIConfig. The estimator is
+# the nested Monte Carlo EIG over the posterior predictive (Ryan et al. 2016); for a
+# Gaussian predictive it reduces to 0.5 ln(1 + var(prediction) / var(noise)), which is the
+# known-answer test.
+version: 1
+
+n_outer: 200                   # DESIGN  ceiling on outer (theta) samples
+n_inner: 200                   # DESIGN  ceiling on inner (marginal) samples

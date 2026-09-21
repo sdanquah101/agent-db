@@ -1,0 +1,15 @@
+# data_qc (proposal §6.2): unit/timestamp checks, flatline / spike / drift detectors,
+# missingness-by-event analysis. Rule-based; no learning. Schema tools/config.py::DataQCConfig.
+# Every threshold is DESIGN and is the kind of number a plant engineer would write into a
+# QC script; a workflow may tighten but not loosen them per call.
+version: 1
+
+flatline_min_samples: 4        # DESIGN  consecutive identical readings that count as stuck
+                               # (a daily sensor: four days; the Level-2 flatline is six)
+spike_mad_multiplier: 5.0      # DESIGN  |x - rolling median| > k x MAD x 1.4826 is a spike
+spike_window_samples: 7        # DESIGN  width of the rolling median (odd)
+drift_min_samples: 20          # DESIGN  a trend is not estimated on fewer samples
+drift_signal_to_noise: 3.0     # DESIGN  |slope x span| / (residual sd) above which drift is flagged
+event_missing_ratio: 2.0       # DESIGN  missing rate inside event windows over outside, above
+                               # which missingness is called informative
+event_min_samples: 5           # DESIGN  samples inside events needed before the ratio is reported

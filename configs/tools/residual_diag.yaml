@@ -1,0 +1,9 @@
+# residual_diag (proposal §6.2): residual structure by feed batch, load, temperature and
+# time -- discrepancy-placement evidence. Schema tools/config.py::ResidualDiagConfig.
+version: 1
+
+n_bins: 5                      # DESIGN  quantile bins for a numeric covariate
+min_per_bin: 3                 # DESIGN  a bin with fewer residuals is merged/skipped
+structure_p_value: 0.05        # DESIGN  one-way ANOVA p below which a covariate explains structure
+autocorrelation_threshold: 0.3 # DESIGN  |lag-1 autocorrelation| above which residuals are serially structured
+runs_p_value: 0.05             # DESIGN  Wald-Wolfowitz runs test

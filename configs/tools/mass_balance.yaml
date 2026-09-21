@@ -1,0 +1,18 @@
+# mass_balance (proposal §6.2): COD, N and charge balance closure over windows; physical
+# admissibility. Schema tools/config.py::MassBalanceConfig. Constants are physics; the
+# admissible bands are DESIGN.
+version: 1
+
+cod_per_m3_ch4_stp: 2.857      # kg COD per m3 CH4 at 0 degC and 1 atm: 64 g COD/mol / 22.414 L/mol
+kg_n_per_kmol: 14.007          # molar mass of nitrogen, kg/kmol
+kg_caco3_per_keq: 50.04        # kg CaCO3 per keq of alkalinity (equivalent mass 100.09/2)
+cod_closure_band: 0.20         # DESIGN  |in - out| / in beyond which a window is inadmissible:
+                               # inert accumulation, sampling noise and the 10-15 % declared
+                               # feed uncertainty together justify a fifth, not more
+n_closure_expected: [0.05, 0.65]   # DESIGN  N: only TAN is observed in the effluent, so the
+                               # closure IS the organic-N share of the digestate (typically
+                               # 30-50 % of TKN for sludge, less for slurry); a window whose
+                               # closure leaves this range is inadmissible in either direction
+charge_drift_band: 0.20        # DESIGN  relative drift of the implied strong-ion difference
+                               # across windows beyond which the record is charge-inconsistent
+min_samples_per_window: 3      # DESIGN  a window with fewer observed samples is not evaluated

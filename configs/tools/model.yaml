@@ -1,0 +1,66 @@
+# The fitted model the tool registry exposes to workflows as `adm1_fitted`
+# (tools/fitted.py; schema tools/config.py::FittedModelConfig). CLAUDE.md conventions:
+# every numerical setting a tool has lives here, never in code.
+#
+# The fitted model is sim.adm1 (BSM2 parameters, configs/adm1/params_bsm2.yaml) plus the
+# extensions the plant contract declares AS FITTED for the run (the plant's
+# truth_model.extensions less what a Level-6 row removes; the registry reads that set from
+# the run's truth store on its privileged side and never reports it). It integrates the
+# operator's feed log through the DECLARED catalogue and the DECLARED geometry: nothing
+# hidden enters (docs/tool_registry_design.md section 2).
+version: 1
+
+# ---------------------------------------------------------------- calibratable parameters
+# Base ADM1 parameters a workflow may move, as MULTIPLIERS of the BSM2 default, with the
+# admissible range of each multiplier. Extension parameters are not calibratable, and the
+# list is the same on every run, so the model's interface says nothing about the rung of
+# the ladder (design section 2, open point 2 for the lead). The bounds are DESIGN values:
+# a factor of ~3 either way for rates and half-saturation constants, the published ranges
+# for yields and inhibition constants (Batstone et al. 2002, Table 6.2 sensitivity ranges).
+parameters:
+  k_dis:      {lower: 0.25, upper: 4.0, group: kinetics}       # DESIGN  multiplier of 1/d
+  k_hyd_ch:   {lower: 0.25, upper: 4.0, group: kinetics}       # DESIGN
+  k_hyd_pr:   {lower: 0.25, upper: 4.0, group: kinetics}       # DESIGN
+  k_hyd_li:   {lower: 0.25, upper: 4.0, group: kinetics}       # DESIGN
+  k_m_su:     {lower: 0.33, upper: 3.0, group: kinetics}       # DESIGN
+  k_m_aa:     {lower: 0.33, upper: 3.0, group: kinetics}       # DESIGN
+  k_m_fa:     {lower: 0.33, upper: 3.0, group: kinetics}       # DESIGN
+  k_m_c4:     {lower: 0.33, upper: 3.0, group: kinetics}       # DESIGN
+  k_m_pro:    {lower: 0.33, upper: 3.0, group: kinetics}       # DESIGN
+  k_m_ac:     {lower: 0.33, upper: 3.0, group: kinetics}       # DESIGN
+  k_m_h2:     {lower: 0.33, upper: 3.0, group: kinetics}       # DESIGN
+  K_S_ac:     {lower: 0.33, upper: 3.0, group: kinetics}       # DESIGN
+  K_S_pro:    {lower: 0.33, upper: 3.0, group: kinetics}       # DESIGN
+  K_S_h2:     {lower: 0.33, upper: 3.0, group: kinetics}       # DESIGN
+  K_I_nh3:    {lower: 0.2,  upper: 5.0, group: kinetics}       # DESIGN  the Level-5 constant
+  K_I_h2_pro: {lower: 0.33, upper: 3.0, group: kinetics}       # DESIGN
+  k_dec_X_ac: {lower: 0.33, upper: 3.0, group: kinetics}       # DESIGN
+  Y_ac:       {lower: 0.5,  upper: 1.5, group: stoichiometry}  # DESIGN  a yield stays a fraction
+  Y_h2:       {lower: 0.5,  upper: 1.5, group: stoichiometry}  # DESIGN
+  f_li_xc:    {lower: 0.5,  upper: 1.5, group: stoichiometry}  # DESIGN  rescaled with the
+                                                                #         other f_*_xc so the
+                                                                #         group still sums to 1
+
+# ---------------------------------------------------------------- initial state
+# The fitted model starts a scenario on a running digester the way the harness stages the
+# truth: a burn-in on the feed log's reference recipe, at the parameters being evaluated.
+# The recipe is the mean of the first `reference_window_d` days of the OPERATOR'S log
+# (the harness's REFERENCE_WINDOW_D is 200 d on the truth; here it is capped at the record's
+# length). Every burn-in counts inside the one simulator evaluation that includes it.
+burn_in_days: 400.0           # DESIGN  d; the harness's own (configs/runs/harness.yaml)
+burn_in_output_interval_d: 10.0   # DESIGN  d
+reference_window_d: 200.0     # DESIGN  d; sim.influent.generator.REFERENCE_WINDOW_D
+output_interval_d: 1.0        # DESIGN  d; the harness's scenario cadence
+initial_extension_states:     # DESIGN  as configs/runs/harness.yaml
+  X_sao: 0.01                 # kg COD/m3
+  X_caco3: 0.0                # kmol/m3
+influent_extension_states:    # DESIGN  as configs/runs/harness.yaml
+  X_sao: 1.0e-4               # kg COD/m3
+
+# ---------------------------------------------------------------- outputs
+# Observation channels the fitted model reports (sim.observation.channels.CHANNEL_UNITS),
+# in the channel units; every sensor of configs/observation/sensors.yaml measures one of
+# them, so a residual is observed minus predicted in one unit.
+outputs: [pH, q_gas_stp_dry, ch4_fraction, co2_fraction, h2_ppm, alkalinity_total,
+          vfa_titrimetric, vfa_ac, vfa_pro, vfa_bu, vfa_va, tan, cod_total, vs, ts,
+          fos_tac, temperature]

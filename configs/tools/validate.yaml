@@ -1,0 +1,21 @@
+# validate (proposal §6.2, §6.7 A): hold-out forecast metrics, coverage, interval score,
+# constraint violations. Verifier tool. Schema tools/config.py::ValidateConfig.
+version: 1
+
+coverage_levels: [0.5, 0.9]    # §6.7 A: interval coverage at 50 / 90 %
+constraints:                   # physical admissibility of a prediction, per output
+  pH:            {lower: 0.0, upper: 14.0}
+  ch4_fraction:  {lower: 0.0, upper: 1.0}
+  co2_fraction:  {lower: 0.0, upper: 1.0}
+  q_gas_stp_dry: {lower: 0.0, upper: null}
+  vfa_titrimetric: {lower: 0.0, upper: null}
+  vfa_ac:        {lower: 0.0, upper: null}
+  vfa_pro:       {lower: 0.0, upper: null}
+  vfa_bu:        {lower: 0.0, upper: null}
+  vfa_va:        {lower: 0.0, upper: null}
+  tan:           {lower: 0.0, upper: null}
+  cod_total:     {lower: 0.0, upper: null}
+  alkalinity_total: {lower: 0.0, upper: null}
+  vs:            {lower: 0.0, upper: null}
+  ts:            {lower: 0.0, upper: null}
+  h2_ppm:        {lower: 0.0, upper: 1.0e+6}

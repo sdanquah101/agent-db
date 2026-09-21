@@ -1,0 +1,16 @@
+# filter_enkf and filter_mhe (proposal §6.2): ensemble Kalman / moving-horizon state
+# estimation with bounded slow parameters. Schema tools/config.py::FiltersConfig.
+# Cost: EnKF n_ensemble x n_steps transitions; MHE n_windows x max_nfev x (horizon transitions).
+version: 1
+
+enkf:
+  n_ensemble: 500              # DESIGN  ceiling (a linear test needs hundreds to match the
+                               # Kalman filter closely; ADM1 use is priced by the meter)
+  inflation: 1.02              # DESIGN  multiplicative covariance inflation per step
+  parameter_random_walk: 0.0   # DESIGN  sd of the slow-parameter random walk as a fraction
+                               # of the bound width per step (0 = parameters constant within
+                               # a run and updated only by the analysis)
+mhe:
+  horizon_steps: 10            # DESIGN  ceiling on the moving window
+  max_nfev: 100                # DESIGN  least_squares budget per window
+  arrival_cost_weight: 1.0     # DESIGN  weight of the prior on the window's first state

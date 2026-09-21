@@ -1,0 +1,24 @@
+# The registry itself (tools/registry.py; schema tools/config.py::RegistryConfig).
+version: 1
+
+registry_version: "1.0"        # logged as the `version` of every registry-level record
+tool_versions:                 # per-tool version strings logged with every call (rule 3)
+  describe_model: "1.0"
+  simulate: "1.0"
+  feed_loads: "1.0"
+  data_qc: "1.0"
+  mass_balance: "1.0"
+  gsa_morris: "1.0"
+  gsa_sobol: "1.0"
+  profile_likelihood: "1.0"
+  fisher_info: "1.0"
+  fit_lsq: "1.0"
+  fit_de: "1.0"
+  fit_cmaes: "1.0"
+  bayes_mcmc: "1.0"
+  filter_enkf: "1.0"
+  filter_mhe: "1.0"
+  residual_diag: "1.0"
+  voi_assay: "1.0"
+  validate: "1.0"
+  request_assay: "1.0"
