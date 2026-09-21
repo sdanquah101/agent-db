@@ -16,7 +16,7 @@
   (``configs/influent/generator.yaml``; Plant B/C statistics from the Muscatine daily
   file through ``anchor/ingest_muscatine.py``).
 
-This package never writes ``runs/<id>/truth/`` and never reads it (CLAUDE.md rule 1):
+This package never writes ``truth_store/<id>/`` and never reads it (CLAUDE.md rule 1):
 :class:`~sim.influent.generator.InfluentTruth` is returned to the run layer, which owns
 that directory.
 """

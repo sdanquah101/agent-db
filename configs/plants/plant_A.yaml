@@ -41,6 +41,31 @@ hydraulics:
 mixing:
   model: cstr
   note: "Ideal CSTR in the plant contract; imperfect mixing is a fault-injection truth variant (answer 6)."
+# TWO DECLARED COMMUNITY STATES (lead's ruling 1, 2026-09-09), declared QUALITATIVELY ONLY
+# (lead's ruling B5, 2026-09-10). Which community this digester carries decides whether a
+# Level-6 structural row means anything, so the two states are declared here and named by
+# the scenario rather than left implicit in a burn-in length. What each state IS
+# numerically -- the constant its community carries, the biomass, acetate and ammonia it
+# measures at -- is truth-side (sim/plants/truth/plant_A.yaml, read by the harness) and not
+# in this file: with those numbers here, the redaction of `baseline` from the run manifest
+# hid nothing. Which state a given run is staged on is not declared anywhere a workflow can
+# read; working it out from the record is part of the diagnostic task.
+default_baseline: adapted
+baselines:
+  - name: adapted
+    description: >-
+      The community AFBI's years of stable operation at high digestate ammonia evidence:
+      acclimated to its ammonia, with the acetoclastic methanogens carrying the acetate
+      flux and the syntrophic pathway present but idle.
+  - name: unadapted
+    description: >-
+      The same plant with a community that has NOT acclimated to its ammonia: the
+      acetoclastic methanogens are inhibited and washed out, and syntrophic acetate
+      oxidation carries the acetate flux instead. A working digester, but a structurally
+      different one.
+horizon_days: 365   # DESIGN  d; every cell on this plant (the lead's ruling 3, 2026-09-11). A year, because
+                    # the ammonia rows are TRANSITIONS: the SAO takeover S5-01 and S7-02 inject reaches
+                    # the recorded 0.60 / 0.46 only by day ~300 / ~350 (sim/plants/truth/plant_A.yaml).
 feeds:
   - name: cattle_slurry
     kind: slurry

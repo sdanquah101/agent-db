@@ -3,6 +3,9 @@ name: CI
 on:
   push:
   pull_request:
+  schedule:
+    # nightly, 03:17 UTC: the gate-G1 realism panel (lead's ruling, 2026-09-03)
+    - cron: "17 3 * * *"
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -10,6 +13,13 @@ concurrency:
 
 permissions:
   contents: read
+  # `dorny/paths-filter` in the g1-changes job below asks the pull-request Files API which
+  # files a PR changed. Declaring `permissions:` at all sets every scope not listed to
+  # none, so with `contents: read` alone the job died on a pull_request event with
+  # "Resource not accessible by integration" while the same job passed on the push event
+  # for the same commit — and the g1 panel was silently SKIPPED on the PR, because it is
+  # gated on that job's output. Read-only, and the workflow needs nothing else.
+  pull-requests: read
 
 jobs:
   lint:
@@ -45,3 +55,43 @@ jobs:
         run: python -m pip install --upgrade pip && pip install -e ".[dev]"
       - name: pytest
         run: pytest -q
+
+  # The gate-G1 anchor comparison is deselected from the run above by the `g1` marker
+  # (pyproject.toml): it is twenty-four 180-day Level-0 runs plus a two-year generator
+  # draw, ~9 min, and it only tells you something when the simulator has changed. So it
+  # runs nightly, and on any pull request that touches sim/ (lead's ruling, 2026-09-03).
+  # (The panel was twelve runs and ~3 min when this job was written; the lead's ruling 1
+  # of the same day made "zero souring on clean Level-0 seeds" the acceptance condition
+  # and the panel was widened to twenty-four. Number corrected 2026-09-04.)
+  g1-changes:
+    name: does this change touch sim/?
+    runs-on: ubuntu-latest
+    outputs:
+      sim: ${{ steps.filter.outputs.sim }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            sim:
+              - 'sim/**'
+              - 'configs/**'
+              - 'anchor/compare_generated.py'
+              - 'scenarios/**'
+
+  g1:
+    name: gate G1 anchor panel
+    needs: g1-changes
+    if: github.event_name == 'schedule' || needs.g1-changes.outputs.sim == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dev dependencies
+        run: python -m pip install --upgrade pip && pip install -e ".[dev]"
+      - name: pytest -m g1
+        run: pytest -q -m g1

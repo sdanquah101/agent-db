@@ -11,7 +11,7 @@ model keeps the ADM1 default") is that
   so the truth value is the **inert-COD-weighted mean** of the fed feeds' values
   (:func:`truth_inert_nitrogen`), recomputed whenever the recipe changes. It is a
   plant-level *hidden truth parameter* derived from the catalogue and the recipe: the run
-  layer may write it to ``runs/<id>/truth/``; it is never a workflow-visible config;
+  layer may write it to ``truth_store/<id>/``; it is never a workflow-visible config;
 * the **fitted model** (standard ADM1) keeps the BSM2 ``N_I`` for every plant
   (``configs/adm1/params_bsm2.yaml`` is untouched by anything here; tested);
 * the **TKN the influent generator reports as a routine assay** is the one implied by the

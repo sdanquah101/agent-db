@@ -1,0 +1,51 @@
+# Level 7 — compound: sensor drift AND feed bias, simultaneously. The ladder's "two
+# simultaneous faults ... both attributed; neither absorbed into kinetics"; truth label
+# `sensor` + `influent`. This is the row H4 rests on: a multi-agent system should gain
+# here, where a single diagnosis is not enough, and nowhere else.
+#
+# The two faults are the Level-2 pH drift and the Level-3 feed mislabelling, each at the
+# SAME magnitude and window it carries in its own row (S2-01 and S3-01), so that the
+# compound row is exactly the superposition of two rows the ladder has already measured in
+# isolation. That is deliberate: it makes "did the workflow find both?" a comparison
+# against two runs that exist, rather than against a fault size unique to this scenario.
+#
+#   ph_electrode_drift  -0.01 pH/d from day 45  (as S2-01)
+#   feed_mislabelled    kappa 5.0, days 60-120  (as S3-01)
+#
+# The onsets are staggered by fifteen days so the two signals do not begin together, which
+# is what lets an analyst separate them in time as well as in channel.
+id: S7-01
+plant: B
+tier: B
+level: 7
+duration_days: 200
+truth_label: [sensor, influent]
+faults:
+  - type: ph_electrode_drift
+    onset_day: 45
+    magnitude: -0.01
+  - type: feed_mislabelled
+    onset_day: 60
+    magnitude: 5.0
+    duration_days: 60.0
+correct_conclusion:
+  flag_sensor: ph
+  estimate_scale_factor: false
+  kinetic_update_allowed: false
+  abstain_on: []
+  revise_influent_mapping: true
+budget:
+  simulator_evals: 8000
+  wall_clock_min: 150
+  assay_units: 6
+seed: 1071
+notes: >-
+  What a workflow should notice: TWO discrepancies with different signatures, and the
+  discipline not to let the first explanation absorb the second. The pH channel drifts
+  from day 45 and steps back at each recalibration while no other channel corroborates it;
+  the gas and COD residuals switch on at day 60 with that feed's delivery days and switch
+  off at day 120. Different channels, different time courses, different corroboration. The
+  correct action is to flag the pH probe AND revise the mapping for that feed, with no
+  kinetic move at all. Two characteristic failures: stopping after the first finding - the
+  pH drift is the more conspicuous - and rolling both into a single kinetic explanation
+  that happens to fit the overlapping window from day 60 to 120.

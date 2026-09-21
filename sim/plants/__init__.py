@@ -3,7 +3,7 @@
 :func:`load_plant_config` reads ``configs/plants/plant_<id>.yaml`` (the only file I/O
 here). :func:`sample_hidden_geometry` draws the hidden active-volume realisation for a
 run from an explicit seed (CLAUDE.md rule 4); the run layer writes it to
-``runs/<id>/truth/``. :func:`declared_geometry` and :func:`true_geometry` produce the
+``truth_store/<id>/``. :func:`declared_geometry` and :func:`true_geometry` produce the
 :class:`~sim.adm1.schema.PlantGeometry` the ADM1 model takes, from the declared and the
 true active volume respectively.
 
@@ -21,7 +21,12 @@ import numpy as np
 import yaml
 
 from sim.adm1.schema import PlantGeometry
-from sim.plants.schema import AmmoniaEnvelope, Anchoring, PlantConfig
+from sim.plants.schema import (
+    AmmoniaEnvelope,
+    Anchoring,
+    Equalisation,
+    PlantConfig,
+)
 
 CONFIG_DIR = Path(__file__).resolve().parents[2] / "configs" / "plants"
 PLANT_A_STATISTICS = CONFIG_DIR.parent / "plant_a_statistics.yaml"
@@ -34,6 +39,7 @@ __all__ = [
     "PLANT_IDS",
     "AmmoniaEnvelope",
     "Anchoring",
+    "Equalisation",
     "HiddenGeometry",
     "PlantConfig",
     "declared_geometry",

@@ -23,7 +23,7 @@ the observation model's. Injecting a fault therefore cannot shift the baseline r
 draws: the same scenario seed with and without a fault gives two runs that differ *only*
 by the fault, which is what makes a paired comparison meaningful (tested).
 
-Nothing here writes files or reads ``runs/<id>/truth/`` (CLAUDE.md rule 1).
+Nothing here writes files or reads ``truth_store/<id>/`` (CLAUDE.md rule 1).
 """
 
 from __future__ import annotations

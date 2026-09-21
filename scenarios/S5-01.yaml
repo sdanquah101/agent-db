@@ -1,0 +1,70 @@
+# Level 5 — true ammonia-inhibition shift, staged as a LOSS OF ADAPTATION. The ladder's
+# "inhibition constant changes after acclimation"; truth label `parameter`. One of the three
+# AMMONIA scenarios, which run on PLANT A ONLY: Muscatine's free ammonia is an order of
+# magnitude below the pathway-shift window and Plant A's is inside it (decisions log,
+# 2026-09-02). It is the one rung where moving a kinetic parameter is the *correct* action.
+#
+# DIRECTION: DOWNWARD, and that is the redesign of 2026-09-03 (the lead's ruling 2). Plant A
+# now declares an ADAPTED acetoclastic inhibition constant (`adaptation.K_I_nh3` = 0.02
+# kmol N/m3, against the ADM1 default 0.0018), because a digester that has run for years at
+# a digestate TAN above 3 kg N/m3 does not have a sewage-sludge community. The scenario is
+# a transition AWAY from that adapted state: the community loses its acclimation - after a
+# feed change, a temperature excursion, a washout event - and its inhibition constant falls
+# back towards the unadapted value.
+#
+# MAGNITUDE 0.1 = the constant falls to a tenth, 0.02 -> 0.002 kmol N/m3 (admissible
+# 0.1-10, and 0.1 is the floor). It is not a round number chosen for looks: MEASURED, the
+# acetoclastic and syntrophic pathways exchange dominance at K_I ~ 0.003, so 0.002 is the
+# largest admissible loss of adaptation that actually crosses the threshold and starts the
+# pathway shift. From the midpoint of the lead's adapted range (0.035) the same x0.1 lands
+# at 0.0035, above the threshold, and nothing happens.
+#
+# ONSET day 120 of 365: four months of the adapted regime and eight of the transition
+# (Plant A's horizon is a year: the lead's ruling 3, 2026-09-11).
+#
+# MEASURED (2026-09-11, the harness at this seed, current feed, the prefix-stable
+# generator of ruling 1, 365 d): the transition STARTS at the onset and COMPLETES on the
+# year. Acetate rises from 0.02 kg COD/m3 to a peak of 3.7 on day 201 as the acetoclasts
+# are inhibited, and syntrophic oxidation grows in behind them -- 0.3 % of the
+# acetate-consuming biomass at day 180, 9.7 % at 240, 33 % at 270 -- to reach X_sao 0.60
+# on day 298 and X_ac 0.46 on day 302 (half the biomass from day 291); at the end X_ac is
+# 0.139 against X_sao 0.778 (85 %) and acetate is back to 0.19 as the oxidisers carry the
+# flux. Sound throughout (pH 7.76, CH4 0.65 at the end). The diagnosable signal of this
+# row is the sustained acetate accumulation after the onset -- present from day ~130 and
+# largest on the heavily fed days -- and, on the year, the relaxation that follows it. The
+# figure first recorded on 2026-09-03 as "X_sao to 0.60 in 240 d" was not reproducible at
+# any commit (corrected 2026-09-10: 1.2 / 3.6 / 9.0 % at 200 / 220 / 240 d); on 365 d it is
+# reached, sixty days after the old horizon ended.
+id: S5-01
+plant: A
+# stated rather than inherited from the plant's default: this row injects a LOSS
+# of adaptation, so it only means anything staged on the adapted baseline
+baseline: adapted
+tier: B
+level: 5
+duration_days: 365
+truth_label: [parameter]
+faults:
+  - type: ammonia_inhibition_shift
+    onset_day: 120
+    magnitude: 0.1
+correct_conclusion:
+  flag_sensor: null
+  estimate_scale_factor: false
+  kinetic_update_allowed: true
+  abstain_on: []
+budget:
+  simulator_evals: 6000
+  wall_clock_min: 120
+  assay_units: 4
+seed: 1051
+notes: >-
+  What a workflow should notice: from day 120 acetate climbs steeply while the gas rate
+  barely moves, and the residual is sustained rather than transient and largest on the days
+  the digester is most heavily fed - because that is when the inhibition term does the most
+  work. Nothing in the feed log, the feed assays or the instruments moved, and the residual
+  does not heal, so it is neither influent, sensor nor state. The correct action is a
+  bounded update of the ammonia-inhibition constant alone. Two characteristic failures:
+  attributing it to the influent because it correlates with load, and updating hydrolysis
+  (which also scales with load) instead of the inhibition constant, which can be made to
+  fit the gas and then gets the acetate badly wrong.

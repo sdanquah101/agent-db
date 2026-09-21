@@ -1,0 +1,47 @@
+# Level 6 — imperfect mixing. The ladder's "truth has RTD; fitted assumes CSTR"; truth
+# label `structural`. The plant contract declares an ideal CSTR for every plant (lead's
+# decision 2026-09-02, answer 6), and imperfect mixing is a truth VARIANT injected here
+# rather than a plant property - which is why the fitted model is entitled to assume a
+# CSTR and still be wrong.
+#
+# MAGNITUDE 0.30 = the stagnant volume fraction of the two-zone truth reactor (admissible
+# 0-0.5; 0 reduces to the CSTR exactly). Everything else about the structure is
+# configs/faults/injection.yaml: the bypass is a fifth of the stagnant fraction (so 0.06
+# here) and the exchange between zones is 1 d^-1. Thirty per cent is the value the
+# fault-injection work measured and recorded: at 0.6x, 1.0x and 1.4x the declared feed the
+# gas deficit against the ideal CSTR is 24.7, 41.2 and 57.9 m3/d - proportional to the
+# load to within a few per cent, with the relative deficit steady near 6 % (decisions log,
+# 2026-09-02). That load-proportional signature is exactly what the ladder asks a workflow
+# to notice, so the magnitude is chosen as the one whose signature is already measured.
+id: S6-03
+plant: B
+tier: A
+level: 6
+duration_days: 200
+truth_label: [structural]
+faults:
+  - type: imperfect_mixing
+    onset_day: 0
+    magnitude: 0.30
+correct_conclusion:
+  flag_sensor: null
+  estimate_scale_factor: false
+  kinetic_update_allowed: false
+  abstain_on: [effective_volume, residence_time_distribution]
+  recommend_structural_review: true
+budget:
+  simulator_evals: 8000
+  wall_clock_min: 150
+  assay_units: 6
+seed: 1063
+notes: >-
+  What a workflow should notice: a gas deficit against the CSTR model that grows in
+  PROPORTION to the throughput while staying a roughly constant fraction of it, and a
+  digestate that carries unreacted substrate the model says should have been consumed. A
+  hydraulic fault scales with flow; a kinetic one scales with concentration and
+  temperature. The two are separable precisely because this plant's load swings by more
+  than a factor of two. The correct action is to report a hydraulic or mixing problem and
+  abstain on the effective volume - the data cannot separate a stagnant zone from a
+  smaller active volume, and this run also carries the plant's hidden 5-15 % volume error
+  underneath. The characteristic failure is to fit the deficit as reduced kinetics, which
+  works at the median load and fails at both ends of the swing.

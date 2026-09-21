@@ -44,9 +44,15 @@ message per component.
 
 ## Non-negotiable rules
 1. **Hidden truth is never readable by workflows.** Simulator ground truth
-   (true parameters, true influent fractions, fault labels) is written only
-   to `runs/<id>/truth/`. Nothing under `workflows/` may import from or read
-   that path. Enforce with a test.
+   (true parameters, true influent fractions, fault labels, the complete run
+   manifest) is written only to `truth_store/<id>/` — a **separate top-level
+   tree**, not a subdirectory of the run, so a workflow rooted at
+   `runs/<id>/observations/` has nothing to escape to (lead's ruling,
+   2026-09-04, after two live bypasses of the loader's path sandbox).
+   `runs/<id>/` holds the observations, the **redacted** manifest and
+   `calls.jsonl`, and nothing else. Nothing under `workflows/` may import from
+   or read the truth store. Enforce with a test — and the test must include a
+   negative control, or it passes by refusing everything.
 2. **All workflows use the same tool registry.** No workflow may call
    numerical code outside `tools/`. Budgets (simulator evals, wall-clock,
    assay units) are enforced in the registry, not in workflows.

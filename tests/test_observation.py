@@ -33,8 +33,13 @@ What is tested and why it cannot pass vacuously:
   base missing rate, the laboratory turnaround and the recalibration cadence — are read
   from the tier and really differ between tiers, on identical truth and an identical
   sensor set;
-* one seeded stream, consumed per sensor in sorted order: same seed same record, and
-  changing one sensor's spec leaves the sensors that precede it bit-identical.
+* **one seeded stream per sensor**, derived from (run seed, sensor name): same seed same
+  record; changing one sensor's spec leaves every other sensor bit-identical; and a shared
+  instrument reads the *same* at every tier that carries it, with a different-seed control
+  so the equality cannot be satisfied by a model that stopped drawing. That last property
+  was false until 2026-09-04 — the stream was serial over `sorted(tier.sensors)`, so a
+  tier comparison was also a re-roll — and the test that missed it compared one shared
+  object with itself.
 """
 
 from __future__ import annotations
@@ -67,6 +72,7 @@ from sim.observation import (
     observe,
 )
 from sim.observation.channels import KG_CACO3_PER_KMOL_CHARGE, M_ACETIC
+from sim.observation.model import sensor_rng, sensor_stream_key
 from sim.observation.schema import (
     MissingnessModel,
     MissingnessPolicy,
@@ -102,11 +108,25 @@ def _without_missingness(config: ObservationConfig) -> ObservationConfig:
 
 
 def _flat_channels(n_days: int = 200, stress_from: int | None = None) -> TruthChannels:
-    """A synthetic run: constant channels, optionally with a stress window."""
+    """A synthetic run: constant channels, optionally with a stress window.
+
+    ``stress_from`` raises **true VFA**, which is what the overload flag triggers on since
+    the lead's ruling B of 2026-09-09 — the hidden process state, not a reading. The
+    titrimetric channels move with it so the record stays self-consistent, but they are not
+    what the flag looks at.
+
+    The trigger is a *departure from recent history*, so a step that stays high stops
+    firing once the trailing median catches up. That is the property, not a defect: a
+    digester that has sat at a high VFA for a month is not in a transient. Tests that need
+    the flag raised throughout use :func:`_sawtooth_channels`.
+    """
     t = np.arange(float(n_days))
-    fos = np.full(t.size, 0.20)
+    vfa = np.full(t.size, 1.0)
     if stress_from is not None:
-        fos[stress_from:] = 0.60  # above the overload threshold
+        vfa[stress_from:] = 3.0  # 3x the pre-window level: well over the 2.0x trigger
+    alk = np.full(t.size, 5.0)
+    # a titrimetric FOS that moves with the true VFA plus the usual bicarbonate carry-over
+    fos_titrimetric = 0.7 + 0.3 * vfa
     return TruthChannels(
         t,
         {
@@ -114,20 +134,50 @@ def _flat_channels(n_days: int = 200, stress_from: int | None = None) -> TruthCh
             "pH": np.full(t.size, 7.30),
             "q_gas_stp_dry": np.full(t.size, 1500.0),
             "ch4_fraction": np.full(t.size, 0.62),
-            "alkalinity_total": np.full(t.size, 5.0),
-            "vfa_total": np.full(t.size, 1.0),
+            "alkalinity_total": alk,
+            "vfa_total": vfa,
             "tan": np.full(t.size, 1.2),
             "cod_total": np.full(t.size, 40.0),
-            "vfa_ac": np.full(t.size, 0.6),
-            "vfa_pro": np.full(t.size, 0.2),
-            "vfa_bu": np.full(t.size, 0.1),
-            "vfa_va": np.full(t.size, 0.05),
+            "vfa_ac": 0.6 * vfa,
+            "vfa_pro": 0.2 * vfa,
+            "vfa_bu": 0.1 * vfa,
+            "vfa_va": 0.05 * vfa,
             "h2_ppm": np.full(t.size, 12.0),
             "vs": np.full(t.size, 25.0),
             "ts": np.full(t.size, 33.0),
-            "fos_tac": fos,
+            "vfa_titrimetric": fos_titrimetric,
+            "fos_tac": fos_titrimetric / alk,
+            "fos_tac_true_vfa": vfa / alk,
         },
     )
+
+
+def _sawtooth_channels(n_days: int, period: int = 8, high: float = 3.0) -> TruthChannels:
+    """A run whose true VFA repeatedly departs from its own recent history.
+
+    A single step raises the overload flag only until the trailing median catches up. A
+    sawtooth keeps departing, so the flag fires at a steady rate over a long horizon —
+    which is what a test of the *rate* needs.
+    """
+    channels = _flat_channels(n_days)
+    t = channels.t
+    vfa = np.where((np.arange(t.size) % period) < 1, high, 1.0)
+    alk = channels["alkalinity_total"]
+    fos_titrimetric = 0.7 + 0.3 * vfa
+    series = {name: channels[name] for name in channels.names}
+    series.update(
+        {
+            "vfa_total": vfa,
+            "vfa_ac": 0.6 * vfa,
+            "vfa_pro": 0.2 * vfa,
+            "vfa_bu": 0.1 * vfa,
+            "vfa_va": 0.05 * vfa,
+            "vfa_titrimetric": fos_titrimetric,
+            "fos_tac": fos_titrimetric / alk,
+            "fos_tac_true_vfa": vfa / alk,
+        }
+    )
+    return TruthChannels(t, series)
 
 
 # ------------------------------------------------------------------ configuration
@@ -435,9 +485,19 @@ def test_the_effective_online_loss_is_the_recorded_composite(config):
         online = record["gas_flow"].missing.mean()
         assert online == pytest.approx(expected[tier], rel=0.12), tier
         assert online > per[tier] * 0.98, (tier, "the shared process must add, not replace")
-    # a laboratory assay never passes through the historian: it loses the bare tier rate
-    lab = observe(channels, config, "C", seed=11)["alkalinity"].missing.mean()
-    assert lab == pytest.approx(per["C"], rel=0.25)
+    # a laboratory assay never passes through the historian: it loses the bare tier rate.
+    # A weekly assay over 6,000 d is ~860 samples, so the realised fraction of a 2 % rate
+    # has a standard deviation of ~0.0048 -- the former tolerance (rel 0.25, i.e. +/- 0.005)
+    # was one sigma, and the 2026-09-12 re-keying of the sensor streams (blocker 2, option
+    # b) landed this seed at 0.0256, 1.2 sigma high. The band is the binomial three-sigma
+    # one, which still fails a lab assay that lost at the online composite (0.0209 is not
+    # distinguishable from 0.02 at this sample size, so the claim this makes is "the bare
+    # rate, not more": a doubled rate fails it).
+    lab_series = observe(channels, config, "C", seed=11)["alkalinity"].missing
+    lab, n_lab = lab_series.mean(), lab_series.size
+    sigma = (per["C"] * (1.0 - per["C"]) / n_lab) ** 0.5
+    assert abs(lab - per["C"]) <= 3.0 * sigma, (lab, per["C"], n_lab)
+    assert lab < 2.0 * per["C"]
 
 
 def test_a_historian_rate_must_cover_every_tier_and_carry_its_lengths(config):
@@ -728,6 +788,116 @@ def test_fos_tac_is_on_the_anchor_s_own_scale_and_its_thresholds_are_reachable(c
     assert float((vfa > 1.0).mean()) > 0.3
 
 
+def test_the_titrimetric_transfer_function_is_declared_chemistry(config):
+    """The lead's ruling A (2026-09-09): no fitted parameter, and the constants are checkable.
+
+    Every number here is derived from the truth model's own equilibrium constants, so the
+    test states them and would fail if the transfer function quietly acquired a fitted
+    factor or a private constant of its own. The values are the ones the ruling gives.
+    """
+    import math
+
+    from sim.adm1.defaults import load_parameters
+    from sim.adm1.physchem import temperature_corrected
+    from sim.observation.channels import (
+        TITRIMETRIC_KAPPA,
+        TITRATION_pH_LOWER,
+        TITRATION_pH_UPPER,
+        _acid_fraction,
+        titrimetric_fos,
+    )
+
+    assert TITRIMETRIC_KAPPA == 1.0, "kappa is frozen: pure chemistry, nothing fitted"
+    assert (TITRATION_pH_UPPER, TITRATION_pH_LOWER) == (5.0, 4.4)
+
+    physchem = load_parameters().physchem
+    T = 308.48  # Plant B's operating temperature
+    tc = temperature_corrected(physchem, T)
+    assert -math.log10(tc.K_a_ac) == pytest.approx(4.760, abs=0.001)
+    assert -math.log10(tc.K_a_co2) == pytest.approx(6.305, abs=0.001)
+
+    f_ac = _acid_fraction(tc.K_a_ac, 5.0) - _acid_fraction(tc.K_a_ac, 4.4)
+    assert f_ac == pytest.approx(0.3309, abs=0.0002)
+    assert 1.0 / f_ac == pytest.approx(3.02, abs=0.01)  # the Nordmann formula's own scale-up
+    carry = _acid_fraction(tc.K_a_co2, 5.0) - _acid_fraction(tc.K_a_co2, 4.4)
+    assert carry == pytest.approx(0.0349, abs=0.0002)
+
+    # A healthy Plant B: S_IC ~0.15 kmol C/m3 and true acetate ~0.09 kg/m3, i.e. 0.0015
+    # kmol/m3 -- the carry-over term then dominates the reading, which is the finding.
+    n = 5
+    s_ic = np.full(n, 0.15)
+    acetate_kmol = 0.0015
+    vfa = {
+        "S_ac": np.full(n, acetate_kmol),
+        "S_pro": np.zeros(n),
+        "S_bu": np.zeros(n),
+        "S_va": np.zeros(n),
+    }
+    fos = titrimetric_fos(s_ic, vfa, T, physchem)
+    only_carry = titrimetric_fos(s_ic, {k: np.zeros(n) for k in vfa}, T, physchem)
+    share = float(only_carry[0] / fos[0])
+    assert 0.85 < share < 0.95, share  # the ruling's 86-90 %
+
+    # it over-reads true VFA severalfold, which is the whole point
+    true_vfa = acetate_kmol * M_ACETIC
+    assert fos[0] > 5.0 * true_vfa, (fos[0], true_vfa)
+
+    # and it is linear in each contribution, so a zero digester reads only the free protons
+    empty = titrimetric_fos(np.zeros(n), {k: np.zeros(n) for k in vfa}, T, physchem)
+    assert 0.0 < float(empty[0]) < 0.01, float(empty[0])
+
+
+def test_the_true_vfa_channel_is_never_what_a_sensor_reads(config):
+    """True VFA stays hidden truth (lead's ruling A): the sensor reads the titration."""
+    assert config.sensors["vfa_total"].channel == "vfa_titrimetric"
+    reading_true_vfa = [
+        name for name, spec in config.sensors.items() if spec.channel == "vfa_total"
+    ]
+    assert not reading_true_vfa, reading_true_vfa
+    # and no sensor reads the true-VFA ratio either
+    assert not [n for n, spec in config.sensors.items() if spec.channel == "fos_tac_true_vfa"]
+
+
+def test_the_overload_threshold_is_the_anchors_own_92nd_percentile(config):
+    """The lead's ruling 4 (2026-09-09): 0.40 is percentile-matched, not transferred.
+
+    The threshold used to be defended as "0.40 is about the 92nd percentile", which the test
+    above checks only as a band (5-15 % of days above it) — a band wide enough that 0.35 or
+    0.45 would also pass. The ruling makes the percentile itself the definition, so this
+    recomputes it from the committed anchor file and pins it on **both** digesters.
+
+    The anchor's FOS/TAC is titrimetric, which is the convention the threshold is matched
+    in; our own `fos_tac` channel is a true-VFA ratio until the transfer function of ruling 3
+    lands. That mismatch is the recorded open item, not something this test can close.
+
+    Measured: Dig1 p92 = 0.402, Dig2 p92 = 0.408. The bound is 0.01, which is what the two
+    digesters actually bracket — not the 0.005 a "to two decimal places" reading of the
+    ruling would imply, because Dig2's 0.408 rounds to 0.41. Setting the bound to the
+    measurement rather than to the claim is the point of having the test at all.
+    """
+    records = load_daily()
+    for digester in (1, 2):
+        v = np.array([getattr(r, f"dig{digester}_vfa_kg_m3") for r in records], dtype=float)
+        a = np.array([getattr(r, f"dig{digester}_alk_kg_caco3_m3") for r in records], dtype=float)
+        ok = np.isfinite(v) & np.isfinite(a) & (a > 0.0)
+        assert int(ok.sum()) == 861, (digester, int(ok.sum()))
+        ratios = v[ok] / a[ok]
+        p92 = float(np.percentile(ratios, 92))
+        assert p92 == pytest.approx(config.conditions.fos_tac_overload, abs=0.01), (
+            digester,
+            p92,
+        )
+    # the match is to the 92nd specifically: neighbouring percentiles are further away, so
+    # this cannot be satisfied by any threshold that happens to sit in the distribution
+    v = np.array([r.dig1_vfa_kg_m3 for r in records], dtype=float)
+    a = np.array([r.dig1_alk_kg_caco3_m3 for r in records], dtype=float)
+    ok = np.isfinite(v) & np.isfinite(a) & (a > 0.0)
+    ratios = v[ok] / a[ok]
+    target = config.conditions.fos_tac_overload
+    best = min(range(50, 100), key=lambda q: abs(float(np.percentile(ratios, q)) - target))
+    assert best == 92, best
+
+
 def test_the_trailing_median_matches_its_own_definition_on_an_irregular_grid():
     """The windowed median is computed by binary search; it must equal the plain definition.
 
@@ -742,45 +912,190 @@ def test_the_trailing_median_matches_its_own_definition_on_an_irregular_grid():
     t[0] = 0.0
     gas = 1500.0 + 600.0 * np.sin(t / 7.0) + rng.normal(0.0, 100.0, t.size)
     fos = 0.2 + 0.3 * np.sin(t / 23.0)
-    channels = TruthChannels(t, {"fos_tac": fos, "q_gas_stp_dry": gas})
-    window = 14.0
+    vfa = 1.0 + 0.8 * np.sin(t / 11.0) + 0.3 * rng.normal(0.0, 1.0, t.size)
+    channels = TruthChannels(
+        t, {"fos_tac": fos, "q_gas_stp_dry": gas, "vfa_total": np.maximum(vfa, 0.05)}
+    )
+    window, vfa_window = 14.0, 30.0
     overload, foaming = condition_flags(
         channels,
-        fos_tac_overload=0.40,
-        fos_tac_foaming=0.30,
+        vfa_surge_ratio=2.0,
+        vfa_median_window_d=vfa_window,
         gas_surge_ratio=1.35,
         gas_median_window_d=window,
+        foaming_vfa_ratio=1.0,
     )
-    trailing = np.array([np.median(gas[(t >= ti - window) & (t <= ti)]) for ti in t])
-    np.testing.assert_array_equal(foaming, (fos > 0.30) & (gas > 1.35 * trailing))
-    np.testing.assert_array_equal(overload, fos > 0.40)
+
+    # both windows are trailing and EXCLUDE the current sample (ruling B3 made the gas one
+    # match the overload one), so the plain definition is written out once for each series
+    def plain(values: np.ndarray, w: float) -> np.ndarray:
+        return np.array(
+            [
+                np.median(values[(t >= ti - w) & (t < ti)]) if (t < ti).any() else values[i]
+                for i, ti in enumerate(t)
+            ]
+        )
+
+    v = np.maximum(vfa, 0.05)
+    vfa_reference = plain(v, vfa_window)
+    gas_reference = plain(gas, window)
+    np.testing.assert_array_equal(overload, v > 2.0 * vfa_reference)
+    np.testing.assert_array_equal(foaming, (gas > 1.35 * gas_reference) & (v > vfa_reference))
     assert foaming.any() and overload.any()  # both flags are exercised, not trivially empty
+    # and the reported ratio takes no part in either: the same flags without the channel
+    without = TruthChannels(t, {"q_gas_stp_dry": gas, "vfa_total": v})
+    again = condition_flags(
+        without,
+        vfa_surge_ratio=2.0,
+        vfa_median_window_d=vfa_window,
+        gas_surge_ratio=1.35,
+        gas_median_window_d=window,
+        foaming_vfa_ratio=1.0,
+    )
+    np.testing.assert_array_equal(again[0], overload)
+    np.testing.assert_array_equal(again[1], foaming)
 
 
-def test_condition_flags_use_only_past_gas_history(config):
-    channels = _flat_channels(stress_from=100)
-    overload, foaming = condition_flags(
+def test_the_overload_reference_excludes_the_current_sample():
+    """A large excursion must not be allowed to drag its own reference up and mask itself.
+
+    With the current day included, a spike enters the median it is being compared against.
+    On a short window that is enough to hide a real transient, which is precisely the state
+    conditional missingness exists to correlate with.
+    """
+    from sim.observation.channels import trailing_median
+
+    t = np.arange(10.0)
+    values = np.ones(10)
+    values[4] = values[5] = 10.0  # a transient lasting more than one sample
+    reference = trailing_median(values, t, window_d=3.0)
+    assert reference[5] == pytest.approx(1.0), reference[5]  # the spike is not in its own median
+    assert reference[0] == pytest.approx(values[0])  # no history: its own value, ratio 1
+
+    # and this is not a distinction without a difference: with the current sample INCLUDED
+    # the reference at index 5 would be 5.5 rather than 1.0, and the excursion would be
+    # compared against itself. A one-sample spike would survive either way (it cannot move
+    # a median it is one of six values in) — a sustained transient is what self-masks, and
+    # a sustained transient is exactly what conditional missingness is about.
+    window = (t >= t[5] - 3.0) & (t <= t[5])
+    including = float(np.median(values[window]))
+    assert including == pytest.approx(5.5), including
+    assert including > 2.0 * reference[5], "inclusion would hide a 10x excursion outright"
+
+
+def _flags(channels, config):
+    """Condition flags at the configured thresholds."""
+    return condition_flags(
         channels,
-        fos_tac_overload=config.conditions.fos_tac_overload,
-        fos_tac_foaming=config.conditions.fos_tac_foaming,
+        vfa_surge_ratio=config.conditions.vfa_surge_ratio,
+        vfa_median_window_d=config.conditions.vfa_median_window_d,
         gas_surge_ratio=config.conditions.gas_surge_ratio,
         gas_median_window_d=config.conditions.gas_median_window_d,
+        foaming_vfa_ratio=config.conditions.foaming_vfa_ratio,
     )
-    assert not overload[:100].any() and overload[100:].all()
+
+
+def test_condition_flags_use_only_past_history(config):
+    """The overload flag is a departure from recent history, and it never sees the future."""
+    channels = _flat_channels(stress_from=100)
+    overload, foaming = _flags(channels, config)
+    assert not overload[:100].any(), "nothing departs from history before the step"
+    assert overload[100], "the step itself is a 3x departure and must fire"
+    # ... and it stops firing once the trailing median has caught up, which is the property:
+    # a digester that has sat at a high VFA for a month is no longer in a transient
+    assert not overload[-1]
     assert not foaming.any()  # a flat gas rate never surges above its own median
-    # a real surge with elevated FOS/TAC does raise foaming
+
+
+def test_the_foaming_flag_needs_a_gas_surge_and_rising_vfa_together(config):
+    """Ruling B3 (2026-09-10): foaming is a gas surge WHILE the hidden VFA is above its median.
+
+    Three windows on one record. The gas doubles while the VFA is stepping up: fires. The
+    gas doubles again a month later, when the VFA has sat at its new level long enough to
+    BE the median: does not fire, because a surge on a settled digester is a good day, not
+    a foam. And the VFA step alone, on a flat gas rate, never fires (the test above).
+    """
+    ratio = config.conditions.gas_surge_ratio
+    assert ratio == 1.80 and config.conditions.foaming_vfa_ratio == 1.00  # the ruling's values
+    channels = _flat_channels(stress_from=100)
     t = channels.t
     gas = np.full(t.size, 1500.0)
-    gas[150:155] = 3000.0
+    gas[100:105] = 3000.0  # 2.0x: above the 1.80x cut-off, while the VFA has just stepped
+    gas[150:155] = 3000.0  # the same surge, once the VFA has been high for 50 days
     surged = TruthChannels(t, {**{k: channels[k] for k in channels.names}, "q_gas_stp_dry": gas})
-    _, foaming2 = condition_flags(
-        surged,
-        fos_tac_overload=config.conditions.fos_tac_overload,
-        fos_tac_foaming=config.conditions.fos_tac_foaming,
-        gas_surge_ratio=config.conditions.gas_surge_ratio,
-        gas_median_window_d=config.conditions.gas_median_window_d,
-    )
-    assert foaming2[150:155].all() and not foaming2[:150].any()
+    _, foaming = _flags(surged, config)
+    assert foaming[100:105].all(), "gas surge + rising VFA is the foaming state"
+    assert not foaming[:100].any()
+    assert not foaming[150:155].any(), "a gas surge on a settled VFA is not foaming"
+    assert not foaming[105:150].any()
+    # the two conditions are separately necessary: drop either and the flag goes out
+    calm_vfa = {k: surged[k] for k in surged.names}
+    calm_vfa["vfa_total"] = np.ones(t.size)
+    assert not _flags(TruthChannels(t, calm_vfa), config)[1].any()
+    weak_gas = {k: surged[k] for k in surged.names}
+    weak_gas["q_gas_stp_dry"] = np.where(gas > 1500.0, 1500.0 * (ratio - 0.01), 1500.0)
+    assert not _flags(TruthChannels(t, weak_gas), config)[1].any()
+    # the window is trailing and excludes the current day: a surge that persists past the
+    # window is its own median and stops firing, exactly as the overload flag does
+    long_gas = np.full(t.size, 1500.0)
+    long_gas[100:] = 3000.0
+    long = TruthChannels(t, {**{k: channels[k] for k in channels.names}, "q_gas_stp_dry": long_gas})
+    _, foaming_long = _flags(long, config)
+    assert foaming_long[100] and not foaming_long[-1]
+
+
+def test_the_foaming_flag_reads_the_hidden_state_and_not_the_reported_ratio(config):
+    """Ruling B3: the operator's 0.30 stays visible and unwired; the flag never reads it.
+
+    The titrimetric FOS/TAC is pinned far above 0.30 with nothing else happening: no flag.
+    Then it is pinned far below 0.30 while the gas surges and the hidden VFA rises: the flag
+    fires anyway. A flag that read the ratio would do the opposite in both cases.
+    """
+    base = _flat_channels(n_days=120)
+    t = base.t
+    loud = {name: base[name] for name in base.names}
+    loud["fos_tac"] = np.full(t.size, 5.0)
+    assert not _flags(TruthChannels(t, loud), config)[1].any()
+
+    quiet = {name: base[name] for name in base.names}
+    quiet["fos_tac"] = np.full(t.size, 0.001)
+    vfa = np.ones(t.size)
+    vfa[60:63] = 1.5  # above its median, well under the 2.0x overload cut-off
+    gas = np.full(t.size, 1500.0)
+    gas[60:63] = 3000.0
+    quiet["vfa_total"], quiet["q_gas_stp_dry"] = vfa, gas
+    overload, foaming = _flags(TruthChannels(t, quiet), config)
+    assert foaming[60:63].all() and foaming.sum() == 3
+    assert not overload.any(), "foaming does not require the overload cut-off"
+    # and the operator's threshold is still declared, for a workflow to read its record by
+    assert config.conditions.fos_tac_foaming == 0.30
+
+
+def test_the_overload_flag_reads_the_hidden_vfa_and_not_the_reported_ratio(config):
+    """The lead's ruling B: the trigger is the process state, not the instrument reading.
+
+    Constructed so the two disagree outright — the titrimetric FOS/TAC is pinned far above
+    the operator threshold everywhere while true VFA is flat, and then true VFA surges while
+    the reported ratio is pinned far below it. A flag that read the ratio would fire in the
+    first case and not the second; the flag that reads the state does the opposite.
+    """
+    base = _flat_channels(n_days=120)
+    t = base.t
+
+    loud_reading = dict.fromkeys(())  # placeholder for clarity below
+    loud_reading = {name: base[name] for name in base.names}
+    loud_reading["fos_tac"] = np.full(t.size, 5.0)  # >> the 0.40 operator threshold
+    overload, _ = _flags(TruthChannels(t, loud_reading), config)
+    assert not overload.any(), "a reported ratio must not raise the flag by itself"
+
+    quiet_reading = {name: base[name] for name in base.names}
+    vfa = np.ones(t.size)
+    vfa[60] = 4.0  # a genuine transient in the hidden state
+    quiet_reading["vfa_total"] = vfa
+    quiet_reading["fos_tac"] = np.full(t.size, 0.001)  # << the operator threshold
+    overload2, _ = _flags(TruthChannels(t, quiet_reading), config)
+    assert overload2[60], "a hidden transient must raise the flag whatever the reading says"
+    assert overload2.sum() == 1
 
 
 # ------------------------------------------------------------------ the sensors
@@ -864,7 +1179,17 @@ def test_relative_and_absolute_noise_are_independent_draws(config, name, value, 
 
 
 def test_drift_is_bounded_and_reset_by_recalibration(config):
-    """The pH probe's random walk stays inside its bound and jumps back at recalibration."""
+    """The pH probe's random walk stays inside its bound and restarts at recalibration.
+
+    The reset is measured as a **ratio of magnitudes over every boundary and eight seeds**,
+    not asserted at four boundaries of one draw. A bounded random walk that is reset is one
+    step from zero at a boundary and ``sqrt(30)`` steps from it just before the next, so the
+    ratio is ~0.18; a walk that is *not* reset moves one step across a boundary and the
+    ratio is ~1. The 0.4 bound discriminates between the two, and no realisation of the
+    reset implementation lands near it — which the earlier "smaller than the sample before
+    it, or below 0.02" form did not: a boundary step of 0.032 after a quiet 0.0009 is a
+    correct reset and failed it.
+    """
     channels = _flat_channels(n_days=400)
     spec = config.sensors["ph"]
     assert spec.drift is not None and spec.drift.recalibrated
@@ -874,24 +1199,41 @@ def test_drift_is_bounded_and_reset_by_recalibration(config):
     cfg = _without_missingness(config).model_copy(
         update={"sensors": {**config.sensors, "ph": quiet}}
     )
-    value = observe(channels, cfg, "B", seed=3)["ph"].value
-    offset = value - 7.30
-    assert np.abs(offset).max() <= spec.drift.bound + 1e-9
-    # the sample after each recalibration boundary starts again from zero
-    for boundary in (30, 60, 90, 120):
-        assert abs(offset[boundary]) < abs(offset[boundary - 1]) or abs(offset[boundary]) < 0.02
-    assert np.abs(offset).max() > 0.01  # it does drift
+    at_boundary: list[float] = []
+    just_before: list[float] = []
+    drifted = 0.0
+    for seed in range(8):
+        offset = observe(channels, cfg, "B", seed=seed)["ph"].value - 7.30
+        assert np.abs(offset).max() <= spec.drift.bound + 1e-9
+        drifted = max(drifted, float(np.abs(offset).max()))
+        for boundary in range(30, 400, 30):
+            at_boundary.append(abs(float(offset[boundary])))
+            just_before.append(abs(float(offset[boundary - 1])))
+    assert drifted > 0.01  # it does drift
+    ratio = float(np.mean(at_boundary) / np.mean(just_before))
+    assert ratio < 0.4, ratio  # ~0.18 when reset, ~1.0 when not
+    # and the first sample after a boundary is one step from zero, never a month's walk
+    step = spec.drift.sd_per_sqrt_d
+    assert np.mean(at_boundary) < 1.5 * step, (np.mean(at_boundary), step)
 
 
 def test_flatline_holds_the_previous_value_and_saturation_clips(config):
+    """Pooled over twelve seeds: the temperature probe's flatline is a rare-event process.
+
+    Its occupancy is the anchor's own 0.00077, so a single 3,000-day run contains a stuck
+    episode only some of the time and a one-seed test is a coin toss on the stream, not a
+    check of the hold.
+    """
     channels = _flat_channels(n_days=3000)
-    record = observe(channels, config, "A", seed=11)
-    temp = record["temperature"]
-    held = np.flatnonzero(temp.flatlined & ~temp.missing)
-    assert held.size > 0
-    for i in held:
-        if i > 0 and not temp.missing[i - 1]:
-            assert temp.value[i] == pytest.approx(temp.value[i - 1])
+    held_total = 0
+    for seed in range(12):
+        temp = observe(channels, config, "A", seed=seed)["temperature"]
+        held = np.flatnonzero(temp.flatlined & ~temp.missing)
+        held_total += held.size
+        for i in held:
+            if i > 0 and not temp.missing[i - 1]:
+                assert temp.value[i] == pytest.approx(temp.value[i - 1])
+    assert held_total > 0, "no flatline episode occurred at all; the hold was never exercised"
     # saturation: a channel far outside the readable range is clipped and flagged
     hot = TruthChannels(
         channels.t,
@@ -934,15 +1276,39 @@ def test_a_saturation_flag_never_contradicts_its_own_reading(config):
 def test_missingness_is_conditional_on_the_process_state(config):
     """The §6.1 property: gaps cluster in the stress window, so interpolation loses information.
 
-    All three sensors here are online probes, so the expected ratio is the online overload
-    multiplier, 4. Pooled over twelve seeds, because the ratio is a ratio of two counts:
-    at Tier B each sensor loses ~1,400 samples in the 3,000 calm days and ~5,700 in the
-    3,000 overloaded ones. Per seed the estimator has sd ~0.42, so pooling twelve gives a
-    standard error near 0.12 and the 20 % tolerance (+/- 0.8) is a ~6 sd bound rather than
-    a rubber stamp. Over forty seeds it converges to 3.96 +/- 0.07 (pH), 4.12 +/- 0.07
-    (gas flow) and 3.92 +/- 0.06 (CH4), so the implementation is unbiased.
+    All three sensors here are online probes, so they also pass through the plant-level
+    historian, whose loss is **unconditional**. The expected rates are therefore the
+    composites ``1 - (1 - per_sensor)(1 - shared)``, not the per-sensor rates, and the
+    expected ratio is the ratio of two composites — 3.67 at Tier B, not the bare overload
+    multiplier of 4. Both expectations are derived from the config here rather than
+    written down, because the earlier form compared the calm-window rate with the
+    *per-sensor* 0.04 when the process actually loses 0.0448, and passed only because
+    12 % happened to sit inside a 15 % tolerance.
+
+    Pooled over twelve seeds, because the ratio is a ratio of two counts.
+
+    **The stress window is a sawtooth, not a step.** Since the lead's ruling B of
+    2026-09-09 the flag fires on a *departure from recent history*, so a step raises it only
+    until the trailing median catches up — which is the intended behaviour (a digester that
+    has sat at a high VFA for a month is not in a transient) and useless for measuring a
+    rate. The second half of this run therefore departs repeatedly, and the calm/stressed
+    split is taken from the flag itself rather than from the day index, so the test measures
+    the loss rate *conditional on the flag* whatever fraction of days the flag happens to
+    cover.
     """
-    channels = _flat_channels(n_days=6000, stress_from=3000)
+    n_days, stress_from = 6000, 3000
+    calm_part = _flat_channels(n_days=n_days)
+    saw = _sawtooth_channels(n_days=n_days, period=8, high=3.0)
+    series = {name: calm_part[name].copy() for name in calm_part.names}
+    for name in series:
+        series[name][stress_from:] = saw[name][stress_from:]
+    channels = TruthChannels(calm_part.t, series)
+
+    overload, _ = _flags(channels, config)
+    assert not overload[:stress_from].any(), "the first half must be calm"
+    stressed_fraction = float(overload[stress_from:].mean())
+    assert 0.05 < stressed_fraction < 0.9, stressed_fraction  # the flag really fires there
+
     names = ("ph", "gas_flow", "ch4_fraction")
     lost_before = dict.fromkeys(names, 0)
     lost_after = dict.fromkeys(names, 0)
@@ -950,22 +1316,42 @@ def test_missingness_is_conditional_on_the_process_state(config):
     for seed in range(12):
         record = observe(channels, config, "B", seed=seed)
         for name in names:
-            series = record[name]
-            calm = series.sample_t < 3000
-            lost_before[name] += int(series.missing[calm].sum())
-            lost_after[name] += int(series.missing[~calm].sum())
+            series_ = record[name]
+            idx = np.clip(
+                np.searchsorted(channels.t, series_.sample_t, side="right") - 1,
+                0,
+                channels.t.size - 1,
+            )
+            flagged = overload[idx]
+            lost_before[name] += int(series_.missing[~flagged].sum())
+            lost_after[name] += int(series_.missing[flagged].sum())
             if name == "ph":
-                seen_before += int(calm.sum())
-                seen_after += int((~calm).sum())
+                seen_before += int((~flagged).sum())
+                seen_after += int(flagged.sum())
+    shared = config.historian.rate_by_tier["B"]
+
+    def composite(per_sensor: float) -> float:
+        """The loss an online sensor actually shows: its own, plus the shared outage."""
+        return 1.0 - (1.0 - per_sensor) * (1.0 - shared)
+
     for name in names:
         before = lost_before[name] / seen_before
         after = lost_after[name] / seen_after
         spec = config.missingness.model_for("B", config.sensors[name].kind)
-        expected = spec.stress_multipliers["overload"]
-        assert lost_before[name] > 300 and lost_after[name] > 600, (name, lost_before, lost_after)
+        multiplier = spec.stress_multipliers["overload"]
+        expected_before = composite(spec.base_rate)
+        expected_after = composite(min(spec.base_rate * multiplier, 1.0))
+        assert lost_before[name] > 300 and lost_after[name] > 200, (name, lost_before, lost_after)
         assert after > before, name
-        assert after / before == pytest.approx(expected, rel=0.20), (name, before, after)
-        assert before == pytest.approx(spec.base_rate, rel=0.15), name
+        assert after / before == pytest.approx(expected_after / expected_before, rel=0.20), (
+            name,
+            before,
+            after,
+        )
+        assert before == pytest.approx(expected_before, rel=0.08), (name, before, expected_before)
+        # the conditional part is what the §6.1 property is about, and it is the larger
+        # of the two: the shared outage alone could not produce a ratio anywhere near this
+        assert expected_after / expected_before > 3.0
     # a laboratory assay degrades under the same overload, but far less than an online probe
     lab = config.missingness.model_for("B", "lab")
     online = config.missingness.model_for("B", "online")
@@ -974,8 +1360,8 @@ def test_missingness_is_conditional_on_the_process_state(config):
     assert config.sensors["alkalinity"].kind == "lab"
 
 
-def test_one_seeded_stream_in_sorted_sensor_order(config):
-    """Same seed, same record; changing one sensor leaves the sensors before it untouched."""
+def test_one_seeded_stream_per_sensor(config):
+    """Same seed, same record; changing one sensor's spec leaves every other one untouched."""
     channels = _flat_channels(n_days=300)
     a = observe(channels, config, "C", seed=42)
     b = observe(channels, config, "C", seed=42)
@@ -983,16 +1369,112 @@ def test_one_seeded_stream_in_sorted_sensor_order(config):
     for name in a.names:
         np.testing.assert_array_equal(a[name].value, b[name].value)
     assert not np.array_equal(a["ph"].value, c["ph"].value)
-    # 'ph' sorts after 'gas_flow' and 'digestate_ts': changing it cannot move them
+    # a sensor's stream is its own, so a change to 'ph' moves nothing else — not the
+    # sensors that sort before it, and (unlike the serial stream this replaced) not the
+    # ones that sort after it either
     loud = config.sensors["ph"].model_copy(update={"noise": NoiseModel(cv=0.5, sd_abs=0.0)})
     cfg = config.model_copy(update={"sensors": {**config.sensors, "ph": loud}})
     d = observe(channels, cfg, "C", seed=42)
-    for earlier in ("alkalinity", "ch4_fraction", "cod_total", "digestate_ts", "gas_flow"):
-        np.testing.assert_array_equal(a[earlier].value, d[earlier].value)
+    for other in a.names:
+        if other != "ph":
+            np.testing.assert_array_equal(a[other].value, d[other].value, err_msg=other)
     assert not np.array_equal(a["ph"].value, d["ph"].value)
     # requesting a subset does not change any value either
     subset = observe(channels, config, "C", seed=42, sensors=["temperature"])
     np.testing.assert_array_equal(subset["temperature"].value, a["temperature"].value)
+
+
+def test_the_sensor_stream_key_is_stable_and_domain_separated():
+    """Golden values. ``hash()`` is salted per process; this derivation must not be.
+
+    If the derivation changes, every archived run's observations change with it, so the
+    numbers are pinned rather than merely asserted to be reproducible within one process.
+    """
+    assert sensor_stream_key("gas_flow") == 7_473_753_770_277_016_189
+    assert sensor_stream_key("ph") == 16_920_755_590_877_555_657
+    assert sensor_stream_key("gas_flow") != sensor_stream_key("gas_flow ")
+    first = sensor_rng(1000, "gas_flow").standard_normal(4)
+    np.testing.assert_allclose(first, sensor_rng(1000, "gas_flow").standard_normal(4))
+    # the seed and the name both matter, and neither alone decides the stream
+    assert not np.array_equal(first, sensor_rng(1001, "gas_flow").standard_normal(4))
+    assert not np.array_equal(first, sensor_rng(1000, "ph").standard_normal(4))
+
+
+def _equal_tier_policy(config: ObservationConfig) -> ObservationConfig:
+    """The same configuration with every *tier policy* held equal across tiers.
+
+    What remains different between tiers is then only the sensor **set**, which is what
+    §6.4 says a tier is. The recalibration cadence, the laboratory turnaround and the two
+    missing rates are declared tier properties and legitimately change a reading; holding
+    them equal is what isolates the question this test is asking.
+    """
+    quiet = _without_missingness(config)
+    tiers = {
+        t: s.model_copy(update={"recalibration_interval_d": 30.0, "lab_turnaround_d": 2.0})
+        for t, s in quiet.tiers.items()
+    }
+    return quiet.model_copy(update={"tiers": tiers})
+
+
+def test_a_sensor_reads_the_same_whichever_tier_carries_it(config):
+    """§6.4: a tier is a mask on identical truth, so it must not also be a re-roll.
+
+    The serial stream this replaced was consumed over ``sorted(tier.sensors)``, and the
+    tiers carry different sets, so a shared instrument's position in the queue changed with
+    the tier and it got a different realisation. Measured at one seed before the fix: tier
+    A's ``gas_flow`` began 3212.4, nan, 5413.4 and tier C's 3065.9, 5927.2, 5515.3 — the
+    same instrument on the same digester, tier A losing a sample tier C kept.
+
+    The three records are generated **separately**, one ``observe`` call each. The old test
+    compared one shared object with itself and could not have seen this.
+    """
+    cfg = _equal_tier_policy(config)
+    channels = _flat_channels(n_days=300)
+    records = {tier: observe(channels, cfg, tier, seed=7) for tier in "ABC"}
+
+    # the test is only meaningful if the sets really differ, and differ in the way that
+    # broke the old scheme: tier C carries sensors that sort BEFORE a shared one
+    sets = {t: set(records[t].names) for t in "ABC"}
+    assert sets["A"] < sets["B"] < sets["C"]
+    assert {"alkalinity", "ch4_fraction", "cod_total"} <= sets["C"] - sets["A"]
+    assert "gas_flow" in sets["A"] & sets["C"]
+
+    for lower, upper in (("A", "B"), ("A", "C"), ("B", "C")):
+        shared = sorted(sets[lower] & sets[upper])
+        assert shared, (lower, upper)
+        for name in shared:
+            np.testing.assert_array_equal(
+                records[lower][name].value,
+                records[upper][name].value,
+                err_msg=f"{name} differs between tiers {lower} and {upper}",
+            )
+            np.testing.assert_array_equal(
+                records[lower][name].missing, records[upper][name].missing, err_msg=name
+            )
+
+    # CONTROL: a different seed must give a different realisation, or the equality above
+    # would be satisfied by a model that had stopped drawing anything at all
+    other = observe(channels, cfg, "A", seed=8)
+    for name in sorted(sets["A"]):
+        assert not np.array_equal(records["A"][name].value, other[name].value), name
+
+
+def test_the_historian_grid_is_the_same_at_every_tier(config):
+    """The shared stream is drawn on the finest online schedule, which must not vary.
+
+    If one tier's finest online interval differed, the outage *days* would differ with it
+    and the tier comparison would carry a second confound behind the one just removed. The
+    rate is a declared tier property and may differ; the grid may not.
+    """
+    finest = {
+        tier: min(
+            config.sensors[n].sampling_interval_d
+            for n in config.tiers[tier].sensors
+            if config.sensors[n].kind == "online"
+        )
+        for tier in "ABC"
+    }
+    assert len(set(finest.values())) == 1, finest
 
 
 def test_a_run_missing_a_channel_is_refused_not_faked(config):

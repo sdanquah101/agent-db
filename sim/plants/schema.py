@@ -5,7 +5,7 @@ consultant — declared geometry, set points, feed catalogue, the plant's anchor
 status. The parts of the plant that are deliberately wrong or unknown (the hidden
 active-volume error, imperfect mixing) are declared here only as *distributions*; their
 realisations are sampled per run with an explicit seed (:mod:`sim.plants`) and written
-by the run layer to ``runs/<id>/truth/`` (CLAUDE.md rule 1), never back into a config.
+by the run layer to ``truth_store/<id>/`` (CLAUDE.md rule 1), never back into a config.
 
 Every quantity carries an explicit unit in its description (CLAUDE.md rule 6). Anchoring
 numbers carry their source, so a reviewer can trace each statistic to the dataset or
@@ -190,6 +190,68 @@ class Mixing(_Frozen):
     note: str = ""
 
 
+class Equalisation(_Frozen):
+    """A declared, well-mixed buffer between the trucked deliveries and the digester.
+
+    Trucked feed does not go straight into a digester: it is discharged into a receiving or
+    blend tank and drawn from there. Muscatine's own plant description says so — the
+    high-strength waste is "blended in a 65,000-gal tank" (``configs/plants/plant_B.yaml``) —
+    and the omission of that tank was what made a clean Level-0 run on Plant B acidify on
+    5 of 12 seeds: a run of large arrivals reached the biomass as an acid pulse rather than
+    as a week of slightly heavier feeding (gate G1, 2026-09-03; the lead's ruling 1).
+
+    It is part of the **declared contract**, not hidden truth: a workflow is told the tank
+    exists, which feeds pass through it and how big it is, exactly as it is told the
+    digester's volume. What stays hidden is the same as ever — the true composition of what
+    was delivered into it.
+
+    The model is one continuously stirred buffer per plant, holding the feeds named in
+    ``feeds``: inflow is the day's deliveries, outflow is ``V / tau`` with ``tau`` the
+    hold-up implied by the tank volume and the long-run buffered flow. Mass is conserved
+    exactly and the tank cannot run dry or overflow (:mod:`sim.plants.equalisation`).
+    """
+
+    volume_m3: _Pos = Field(
+        description="Working volume of the buffer serving the modelled unit, m3"
+    )
+    feeds: tuple[str, ...] = Field(
+        min_length=1, description="Feed ids that pass through the buffer; the rest are direct"
+    )
+    source: str = Field(description="Where the volume comes from, and how it was apportioned")
+    note: str = ""
+
+
+class Baseline(_Frozen):
+    """One **declared** community state a scenario may be staged on (lead's ruling 1, 2026-09-09).
+
+    A plant can be a different digester depending on how its community has acclimated, and
+    the difference is not a fault — it is what the plant *is*. Plant A has two such states:
+    an **adapted** one, acclimated to its ammonia, where a loss of adaptation is the thing a
+    scenario injects; and an **unadapted** one, where the community has not acclimated and
+    a different pathway carries the acetate flux.
+
+    They exist as named, declared variants rather than as a burn-in length or an implicit
+    consequence of a config edit, because a Level-6 structural row is only meaningful if the
+    pathway the fitted model omits is actually carrying flux in the truth — and which state
+    the plant is in decides that.
+
+    **Qualitative only** (lead's ruling B5, 2026-09-10). A workflow is told the states
+    exist and what kind of digester each is, in words; it is not told which one a run is
+    staged on (``baseline`` is redacted from the manifest) and it is not told anything
+    numeric about either — the adapted inhibition constant, the measured biomass, acetate
+    or ammonia of each state live in the truth-side record :mod:`sim.plants.truth`, which
+    the harness reads and a workflow cannot. With the numbers here, the redaction hid
+    nothing: the run's own acetate against a published table said which state it was in.
+    The schema forbids extra fields, and ``tests/test_truth_isolation.py`` asserts that no
+    number appears in these descriptions and that the visible file spells none of the
+    truth-side names.
+    """
+
+    name: str = Field(description="Identifier a scenario selects with its `baseline` field")
+    description: str = Field(description="What kind of digester this baseline is, in words")
+    note: str = ""
+
+
 class FeedStream(_Frozen):
     """One entry of a plant's feed catalogue (identity and delivery pattern only).
 
@@ -299,6 +361,26 @@ class PlantConfig(_Frozen):
     temperature: Temperature
     hydraulics: Hydraulics
     mixing: Mixing
+    horizon_days: Annotated[float, Field(gt=0.0)] = Field(
+        description="Run length of every cell on this plant, d. Uniform per plant (the "
+        "lead's ruling 3 of 2026-09-11): a scenario's own duration_days is its horizon on "
+        "its own plant, and the matrix runs it at the horizon of whichever plant the cell "
+        "is on (sim.run.matrix.at_plant_horizon)."
+    )
+    baselines: tuple[Baseline, ...] = Field(
+        default=(),
+        description="Declared steady states a scenario may be staged on. A plant with none "
+        "has exactly one, the ADM1 defaults.",
+    )
+    default_baseline: str | None = Field(
+        default=None,
+        description="Which baseline a scenario that names none is staged on. Required when "
+        "the plant declares more than one.",
+    )
+    equalisation: Equalisation | None = Field(
+        default=None,
+        description="Declared blend/receiving tank the trucked feeds pass through, if any",
+    )
     feeds: tuple[FeedStream, ...]
     truth_model: TruthModel
     scenario_subset: ScenarioSubset
@@ -306,9 +388,48 @@ class PlantConfig(_Frozen):
         default=(), description="Design points not yet settled by the lead"
     )
 
+    def baseline(self, name: str | None = None) -> Baseline | None:
+        """The named declared baseline, or the plant's default one.
+
+        Args:
+            name: Baseline name, or None for :attr:`default_baseline`.
+
+        Returns:
+            The baseline, or None for a plant that declares none (the ADM1 defaults).
+
+        Raises:
+            ValueError: If the plant does not declare a baseline of that name. A scenario
+                naming a baseline its plant does not have is a broken scenario, not a
+                request to fall back to the default.
+        """
+        wanted = name if name is not None else self.default_baseline
+        if wanted is None:
+            return None
+        for candidate in self.baselines:
+            if candidate.name == wanted:
+                return candidate
+        raise ValueError(
+            f"plant {self.id} declares no baseline {wanted!r}; "
+            f"it has {sorted(b.name for b in self.baselines)}"
+        )
+
     @model_validator(mode="after")
     def _consistent(self) -> PlantConfig:
         keys = {c.key for c in self.anchor_sources}
+        names = [b.name for b in self.baselines]
+        if len(set(names)) != len(names):
+            raise ValueError("baseline names must be unique")
+        if self.default_baseline is not None and self.default_baseline not in names:
+            raise ValueError(
+                f"default_baseline {self.default_baseline!r} is not one of {sorted(names)}"
+            )
+        if len(self.baselines) > 1 and self.default_baseline is None:
+            raise ValueError(
+                f"plant {self.id} declares {len(self.baselines)} baselines and must say "
+                "which is the default; a scenario that names none must not get an arbitrary one"
+            )
+        if self.baselines and self.default_baseline is None:
+            raise ValueError("a plant that declares a baseline must name the default one")
         if len(keys) != len(self.anchor_sources):
             raise ValueError("anchor_sources keys must be unique")
         if not self.feeds:
@@ -316,6 +437,15 @@ class PlantConfig(_Frozen):
         names = [f.name for f in self.feeds]
         if len(set(names)) != len(names):
             raise ValueError("feed names must be unique")
+        if self.equalisation is not None:
+            unknown = set(self.equalisation.feeds) - set(names)
+            if unknown:
+                raise ValueError(
+                    f"equalisation buffers feeds {sorted(unknown)}, which this plant does "
+                    f"not declare; its feeds are {sorted(names)}"
+                )
+            if len(set(self.equalisation.feeds)) != len(self.equalisation.feeds):
+                raise ValueError("equalisation.feeds must be unique")
         h = self.hydraulics
         implied = self.geometry.V_liq_declared / h.feed_flow_m3_d.median
         mismatch = abs(implied - h.hrt_d.median) / h.hrt_d.median

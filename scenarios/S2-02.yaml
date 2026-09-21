@@ -1,0 +1,46 @@
+# Level 2 — flatlined methane analyser. The ladder's "constant value for 6 days"; truth
+# label `sensor`. The correct conclusion is to quarantine the window and abstain on any
+# claim that rests on methane content in it.
+#
+# MAGNITUDE is not used by this fault: sim/faults/schema.py says so explicitly, and the
+# episode is defined by onset_day and duration_days instead. It is written as 0.0 rather
+# than omitted because the schema requires a magnitude.
+#
+# ONSET day 90 (mid-run) and DURATION 6 d, the ladder's own figure.
+#
+# TIER VISIBILITY, flagged. The CH4 analyser is a Tier-B instrument (§6.4), so at Tier A
+# this fault has nothing to act on and the run is indistinguishable from Level 0. The
+# frozen scenario schema carries ONE answer key per scenario, not one per tier, so the
+# `correct_conclusion` below is the Tier-B/C answer; at Tier A the defensible conclusion
+# is that no fault is detectable. Recorded in docs/decisions.md ("Per-tier answer keys")
+# and flagged to the lead.
+id: S2-02
+plant: B
+tier: B
+level: 2
+duration_days: 200
+truth_label: [sensor]
+faults:
+  - type: ch4_analyser_flatline
+    onset_day: 90
+    magnitude: 0.0
+    duration_days: 6.0
+correct_conclusion:
+  flag_sensor: ch4_fraction
+  estimate_scale_factor: false
+  kinetic_update_allowed: false
+  abstain_on: [ch4_fraction, ch4_yield]
+budget:
+  simulator_evals: 4000
+  wall_clock_min: 90
+  assay_units: 2
+seed: 1022
+notes: >-
+  What a workflow should notice: the methane fraction is bit-identical for six consecutive
+  days while the gas rate underneath it keeps swinging with the feed, which no real
+  digester does - a constant ratio through a changing load is an instrument holding its
+  last value, not a process. The record marks those samples `flatlined`, so the evidence
+  is available without inference as well. The correct action is to quarantine days 90-96
+  and decline to state anything about methane content or methane yield over that window;
+  the characteristic failure is to carry the held value into a yield calculation and
+  report the result as measured.

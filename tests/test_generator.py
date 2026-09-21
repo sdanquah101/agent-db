@@ -219,11 +219,12 @@ def test_same_seed_same_run_and_the_stream_order_is_as_documented(
     # the true-fractionation draw is the head of the stream: identical to the seed-only API
     ids = [f.name for f in plants["B"].feeds]
     assert a.truth.fractionations == sample_true_fractionations(catalogue, ids, 3)
-    # a later stage cannot change an earlier one. fog sorts first: changing its delivery
-    # model (to a Markov chain with the same zero fraction, so the plant check still
-    # passes) changes fog's own deliveries but (uniforms always consumed) nothing else's,
-    # and changing its assay tuple shifts the noise of every later feed's assays while
-    # leaving every delivery and the fractionation bit-identical
+    # a later stage cannot change an earlier one -- and since the lead's ruling 1 of
+    # 2026-09-11 (prefix-stable child streams) no stage can change another feed's either.
+    # fog sorts first: changing its delivery model (to a Markov chain with the same zero
+    # fraction, so the plant check still passes) changes fog's own deliveries and nothing
+    # else's, and changing its assay tuple changes fog's own assay noise and nobody else's,
+    # leaving every delivery, every other feed's assays and the fractionation bit-identical
     gen = config.plants["B"]
     fog = gen.feeds["fog"]
     changed = gen.model_copy(
@@ -253,13 +254,17 @@ def test_same_seed_same_run_and_the_stream_order_is_as_documented(
         np.testing.assert_array_equal(
             d.observed.feed_log_kg_wet_d[fid], a.observed.feed_log_kg_wet_d[fid]
         )
-    # fewer fog assays -> fewer normals consumed before the later feeds' noise -> their
-    # assay values differ, on the same sample days (the schedule does not move)
+    # fewer fog assays used to shift the noise of every later feed's assays (one shared
+    # stream); each assay now has its own child stream, so the other feeds' assay values
+    # are bit-identical on the same sample days, and only fog's own set changed
     for fid in ("high_strength_waste", "primary_sludge", "thickened_was"):
         before = [r for r in a.observed.assays if r.feed_id == fid]
         after = [r for r in d.observed.assays if r.feed_id == fid]
-        assert [(r.sample_day, r.assay) for r in before] == [(r.sample_day, r.assay) for r in after]
-        assert [r.value for r in before] != [r.value for r in after]
+        assert [(r.sample_day, r.assay, r.value) for r in before] == [
+            (r.sample_day, r.assay, r.value) for r in after
+        ]
+    assert {r.assay for r in d.observed.assays if r.feed_id == "fog"} == {"ts"}
+    assert {r.assay for r in a.observed.assays if r.feed_id == "fog"} > {"ts"}
 
 
 # ----------------------------------------------------------------- delivery process
@@ -320,10 +325,290 @@ def test_seasonal_and_ar1_primitives():
     assert s.max() == pytest.approx(np.exp(0.25)) and np.argmax(s) == 249
     assert s.min() == pytest.approx(np.exp(-0.25), rel=1e-3)
     assert np.all(seasonal_factor(day, 1, 0.0, 0.0) == 1.0)
-    # alkalinity proxy: all bicarbonate far above pK_a1, none far below
+    # partial (bicarbonate) alkalinity: all bicarbonate far above pK_a1, none far below
     assert bicarbonate_alkalinity(0.05, 9.0, 6.35) == pytest.approx(2.5, rel=3e-3)
     assert bicarbonate_alkalinity(0.05, 3.0, 6.35) < 0.01
     assert bicarbonate_alkalinity(0.0, 7.0, 6.35) == 0.0
+
+
+# -------------------------------------------------- the assay describes what is fed
+
+ASSAY_VS_CHARGE_RATIO = 1.5
+"""Widest accepted ratio either way between a stream's alkalinity assay and its cation
+charge (the lead's M2 ruling, 2026-09-09). Not a tuning knob: the two are the same
+quantity by electroneutrality, and the slack is for the declared pH being a rounded
+laboratory number rather than the exact root of the charge balance."""
+
+ASSAY_VS_CHARGE_FLOOR = 0.10
+"""kg CaCO3/m3 below which the ratio is meaningless and an absolute bound is used
+instead. FOG carries no liquor at all -- no inorganic carbon, no ammoniacal N, equal
+strong ions -- so both sides are zero and a ratio would be 0/0. The floor is two
+orders of magnitude below the smallest real stream (primary sludge, 1.36), so it
+cannot quietly admit a stream that has buffering to report.
+
+**It is also the hole the ratio test alone had** (review finding B3, 2026-09-09): an
+implementation returning 0.0 for both quantities is skipped by this floor on every
+stream and passed the entire suite. :data:`COMMITTED_FEED_ALKALINITY` closes it."""
+
+COMMITTED_FEED_ALKALINITY: dict[str, tuple[float, float]] = {
+    #                          assay      charge   kg CaCO3/m3
+    "cattle_slurry": (12.5030, 12.5037),
+    "fog": (-0.0005, 0.0000),
+    "food_waste": (7.5887, 7.7247),
+    "grass_silage": (6.3575, 4.8990),
+    # the assay moved with the HSW fractionation under the lead's ruling 5 of 2026-09-11
+    # (inert 0.05 -> 0.16, classes scaled); it was 10.8735 with the 0.95 centre. The charge
+    # reads s_cat, s_ca and TAN, none of which the ruling touched, and is unchanged.
+    "high_strength_waste": (10.1750, 10.8720),
+    "primary_sludge": (2.5028, 2.5027),
+    "thickened_was": (2.0667, 2.0661),
+}
+"""Golden pins on the absolute value of both M2 quantities, kg CaCO3/m3 at catalogue TS.
+
+These are the numbers ``docs/g1_anchor_report.md`` §3.3 quotes, so the report and the
+code cannot drift apart, and **an implementation that returns a constant, a zero or a
+copy of the other quantity fails here** rather than sliding through the ratio test.
+Update them deliberately, with the reason, when a stream's declared composition moves --
+that is the mechanism, not an obstacle to it.
+
+**Moved twice, and these are the reasons.** On 2026-09-10 the lead ruled that ``s_ca`` is
+*dissolved* calcium and is derived -- the calcite-saturated value at the declared pH,
+solved jointly with the paired ``s_ic`` -- rather than the total-calcium-sized numbers the
+catalogue had carried; every stream's charge fell with its calcium and the three derived
+streams' assays fell with their re-paired inorganic carbon. Before that, on 2026-09-09,
+the lead's B1 ruling corrected
+:func:`~sim.influent.generator.feed_cation_charge` to carry the divalent calcium the
+simulator is actually fed, which raised every charge, and approved redistributing the four
+streams that then breached the band as paired ``s_cat`` + ``s_ic``. Every assay except
+FOG's and the high-strength waste's moved with its stream's new inorganic carbon or
+declared pH; ``food_waste`` and ``high_strength_waste`` moved on the charge side only,
+because only their calcium term changed. The pins fired exactly as intended -- the
+redistribution could not land without them being looked at."""
+
+
+def test_every_feed_assay_describes_the_charge_the_simulator_is_fed(catalogue, adm1_params):
+    """The visible alkalinity assay and the fed cation charge are the same quantity.
+
+    **This is M2** (review finding of 2026-09-04, ruled 2026-09-09 as an amendment to
+    ruling 3 of 2026-09-03). Ruling 3 raised the high-strength waste's ``s_cat`` from
+    0.03 to 0.225 kmol/m3 to reach the anchor's alkalinity. The assay a workflow reads
+    was the *bicarbonate* alkalinity of ``s_ic`` alone, which that calibration did not
+    touch, so the visible number said 0.0214 kg CaCO3/m3 while the digester was handed
+    10.75 -- a factor of **480** on the one stream the whole plant's buffering rests on.
+
+    **Why it is on every stream, not just the HSW.** The failure was not that someone
+    mis-typed a number; it was that two descriptions of one stream were free to drift
+    apart because nothing compared them. A guard that only watched the stream that had
+    already broken would let the next calibration break a different one silently.
+
+    **What it catches.** Run it against the pre-ruling catalogue and it fails on two
+    streams: the high-strength waste at **4.00x**, and ``food_waste`` at **0.33x** in
+    the other direction (more acetate anion than cations to balance it). Against the
+    pre-ruling *assay* -- bicarbonate alone -- the high-strength waste is out by
+    **503x**.
+
+    **What it does not catch, measured rather than asserted.** Perturbing ``s_cat`` by
+    +/-50 % on the six streams a plant actually feeds gives 12 mutants; **10 fail here,
+    1 is skipped by the floor (FOG, which has no liquor) and 1 survives** -- cattle
+    slurry at half its cations moves 1.39x to 1.11x, *towards* the centre of the band.
+    Perturbing ``s_ic`` or the declared pH is caught where a stream sits near the edge
+    of the band and not where it has slack. **1.5x is a band, not an equality**, and a
+    move that stays inside it is by design not a failure.
+
+    This paragraph replaces a claim of "10 of 10 on five streams" that this session
+    wrote and the review of 2026-09-09 (finding B3) corrected: it was 9 of 10 on the
+    five non-FOG streams, and FOG is a Plant B feed, so there are six. A claim stated as
+    a measurement has to be reproducible, and that one was not.
+
+    **This test is NOT sufficient on its own** (finding B3). An implementation returning
+    0.0 for both quantities is skipped by :data:`ASSAY_VS_CHARGE_FLOOR` on every stream
+    and passed the whole suite when it was tried; so does ``total_alkalinity`` returning
+    ``feed_cation_charge(...)``, which is exactly the vacuous definition the decisions
+    entry claims to have rejected. Those two are killed by
+    :func:`test_the_feed_alkalinity_assay_is_pinned_and_the_two_quantities_are_independent`,
+    which has to be read as part of this guard rather than as a separate nicety.
+    """
+    from sim.influent.generator import feed_cation_charge, total_alkalinity
+
+    failures = []
+    for name, spec in sorted(catalogue.feeds.items()):
+        assay = total_alkalinity(spec, spec.fractionation, adm1_params.physchem)
+        charge = feed_cation_charge(spec, adm1_params.physchem)
+        if max(abs(assay), abs(charge)) < ASSAY_VS_CHARGE_FLOOR:
+            continue
+        if assay <= 0.0:
+            failures.append(
+                f"{name}: assay {assay:.4f} kg CaCO3/m3 is not positive while the "
+                f"simulator is fed {charge:.4f} kg CaCO3/m3 of cation charge"
+            )
+            continue
+        ratio = charge / assay
+        if not (1.0 / ASSAY_VS_CHARGE_RATIO <= ratio <= ASSAY_VS_CHARGE_RATIO):
+            failures.append(
+                f"{name}: assay {assay:.4f} kg CaCO3/m3 against charge "
+                f"{charge:.4f} kg CaCO3/m3 -- {ratio:.2f}x, outside "
+                f"{ASSAY_VS_CHARGE_RATIO:.1f}x (pH {spec.ph}, s_ic {spec.s_ic}, "
+                f"s_cat {spec.s_cat}, s_an {spec.s_an}, tan {spec.tan})"
+            )
+    assert not failures, "assay and fed charge disagree:\n  " + "\n  ".join(failures)
+
+
+def test_the_charge_consistency_survives_the_whole_range_of_deliveries(
+    catalogue, config, adm1_params
+):
+    """The invariant holds for the assay a workflow READS, not only the catalogue row.
+
+    **This is finding B2** (review of 2026-09-09, ruled 2026-09-10). The guard above is
+    evaluated at catalogue solids. The assay a workflow actually reads is taken on a
+    *delivery*, whose total solids swing by the generator's ``ts_log_sigma`` -- 0.47 on
+    the high-strength waste, the largest in the catalogue. The free acetate scaled with
+    that delivery's COD while the declared liquor did not scale at all, so a stream was
+    **electroneutral only at catalogue TS** and its implied pH drifted with the weather.
+    Measured on real ``AssayRecord``s before the fix: the high-strength waste 15.2 % of
+    records outside 1.5x (worst 3.24x, assay spanning 6.12 to 38.03 against a fed charge
+    of 11.75), primary sludge 45.1 %, cattle slurry 27.2 %.
+
+    The lead's ruling made every dissolved species scale with the **liquor** rather than
+    the solids (:func:`sim.influent.mapping.liquor_fraction`), which is what they are
+    physically dissolved in. Both sides of the balance then carry the same factor, so the
+    ratio is *exactly* invariant to solids rather than approximately so -- and this test
+    asserts that at +/-3 sigma, wider than the +/-2 the ruling asked for, because an exact
+    invariance does not need a margin.
+
+    **What it cannot assert, and why that is right.** On the generated record the
+    high-strength waste still shows a tail: 9.26 % of ``AssayRecord``s outside 1.5x. That
+    is **not** the solids -- with the declared fractionation the ratio is 1.093 at every
+    delivery, 0.00 % outside. It is the per-run Dirichlet draw of the *true* fractionation,
+    on a stream whose composition is not measured at Muscatine and whose
+    ``fractionation_concentration`` of 30 gives its 0.04 VFA share a standard deviation of
+    about 0.035. The assay reports the true composition; the charge is computed from the
+    declared one; the gap between them is the hidden-truth mismatch this benchmark exists
+    to contain, and closing it would mean deleting the thing being measured. It is recorded
+    as a finding in ``docs/g1_anchor_report.md``, and the band was **not** widened.
+    """
+    from sim.influent.generator import feed_cation_charge, total_alkalinity
+
+    physchem = adm1_params.physchem
+    sigma = {
+        fid: feed.moisture.ts_log_sigma
+        for plant in config.plants.values()
+        for fid, feed in plant.feeds.items()
+    }
+    failures = []
+    for name, spec in sorted(catalogue.feeds.items()):
+        s = sigma.get(name)
+        if s is None or abs(feed_cation_charge(spec, physchem)) < ASSAY_VS_CHARGE_FLOOR:
+            continue  # not fed by any plant, or carries no liquor at all (FOG)
+        for k in (-3.0, -1.0, 0.0, 1.0, 3.0):
+            ts = spec.ts * np.exp(k * s)
+            assay = total_alkalinity(spec, spec.fractionation, physchem, ts)
+            charge = feed_cation_charge(spec, physchem, ts)
+            ratio = charge / assay
+            if not (1.0 / ASSAY_VS_CHARGE_RATIO <= ratio <= ASSAY_VS_CHARGE_RATIO):
+                failures.append(
+                    f"{name} at {k:+.0f} sigma (ts {ts:.4f}): assay {assay:.4f} against "
+                    f"charge {charge:.4f} -- {ratio:.3f}x, outside {ASSAY_VS_CHARGE_RATIO}x"
+                )
+    assert not failures, "the charge balance drifts with the delivery:\n  " + "\n  ".join(failures)
+
+    # the invariance is EXACT, not merely inside the band: a scaling applied to one side
+    # and not the other would still pass the loop above on most streams
+    for name, spec in sorted(catalogue.feeds.items()):
+        s = sigma.get(name)
+        if s is None or abs(feed_cation_charge(spec, physchem)) < ASSAY_VS_CHARGE_FLOOR:
+            continue
+        at = [
+            feed_cation_charge(spec, physchem, spec.ts * np.exp(k * s))
+            / total_alkalinity(spec, spec.fractionation, physchem, spec.ts * np.exp(k * s))
+            for k in (-3.0, 0.0, 3.0)
+        ]
+        assert max(at) - min(at) < 1e-3, (name, at)
+
+    # An invariance test alone cannot tell the correct scaling from NO scaling: a
+    # liquor_fraction that always returned 1.0 leaves both sides constant and passes
+    # everything above (checked by building that mutant and running it). So assert the
+    # physics directly -- a drier delivery carries less water per m3 and therefore less
+    # of every solute, and a wetter one more.
+    from sim.influent.mapping import feed_concentrations, liquor_fraction
+
+    spec = catalogue.feeds["high_strength_waste"]
+    drier, wetter = spec.ts * 1.5, spec.ts * 0.5
+    assert liquor_fraction(spec, drier) < 1.0 < liquor_fraction(spec, wetter)
+    assert liquor_fraction(spec) == pytest.approx(1.0)
+    idx = {n: i for i, n in enumerate(LIQUID_STATE_NAMES)}
+    for state in ("S_cat", "S_an", "S_IN", "S_IC", "S_ac"):
+        at_drier = feed_concentrations(spec, spec.fractionation, drier)[idx[state]]
+        at_wetter = feed_concentrations(spec, spec.fractionation, wetter)[idx[state]]
+        assert at_drier < at_wetter, state
+    # ... while the particulate classes go the other way, with the solids
+    for state in ("X_ch", "X_pr", "X_li", "X_I"):
+        at_drier = feed_concentrations(spec, spec.fractionation, drier)[idx[state]]
+        at_wetter = feed_concentrations(spec, spec.fractionation, wetter)[idx[state]]
+        assert at_drier > at_wetter, state
+
+
+def test_the_feed_alkalinity_assay_is_pinned_and_the_two_quantities_are_independent(
+    catalogue, adm1_params
+):
+    """The M2 quantities have committed values and are computed from different fields.
+
+    **Written because the ratio guard alone was vacuous** (review finding B3,
+    2026-09-09). Two mutants were built and run, not reasoned about, and both passed the
+    whole 337-test suite: ``total_alkalinity`` and ``feed_cation_charge`` each returning
+    ``0.0`` (every stream then falls under :data:`ASSAY_VS_CHARGE_FLOOR` and is skipped),
+    and ``total_alkalinity`` returning ``feed_cation_charge(...)`` -- which is precisely
+    the strong-ion-difference definition the decisions entry rejects on the grounds that
+    a test of it "could not fail". Nothing anywhere pinned the absolute value of the feed
+    alkalinity assay, so nothing could tell the difference.
+
+    Three properties, each killing one class of mutant:
+
+    1. **Committed values.** :data:`COMMITTED_FEED_ALKALINITY` holds both numbers for
+       every stream, and they are the numbers ``docs/g1_anchor_report.md`` §3.3 quotes.
+       Kills zero, a constant, and a silent formula change.
+    2. **Different fields.** ``s_ic`` moves the assay and leaves the charge alone;
+       ``s_cat`` moves the charge and leaves the assay alone. Kills the copy mutant --
+       if the assay *were* the strong-ion difference, ``s_cat`` would move both.
+    3. **Reproduced from the constants**, for one stream, without calling the
+       implementation. Kills a wrong equilibrium constant or a missing term.
+    """
+    from sim.influent.generator import feed_cation_charge, total_alkalinity
+
+    physchem = adm1_params.physchem
+    assert set(COMMITTED_FEED_ALKALINITY) == set(catalogue.feeds), (
+        "a stream was added or removed; pin it here deliberately"
+    )
+
+    # 1. committed absolute values -- a zero, a constant or a copy fails here
+    for name, (assay, charge) in sorted(COMMITTED_FEED_ALKALINITY.items()):
+        spec = catalogue.feeds[name]
+        assert total_alkalinity(spec, spec.fractionation, physchem) == pytest.approx(
+            assay, abs=5e-4
+        ), name
+        assert feed_cation_charge(spec, physchem) == pytest.approx(charge, abs=5e-4), name
+
+    # 2. the two read different fields, so one cannot be the other
+    spec = catalogue.feeds["high_strength_waste"]
+    more_ic = spec.model_copy(update={"s_ic": spec.s_ic * 2.0})
+    more_cat = spec.model_copy(update={"s_cat": spec.s_cat * 2.0})
+    base_assay = total_alkalinity(spec, spec.fractionation, physchem)
+    base_charge = feed_cation_charge(spec, physchem)
+    assert total_alkalinity(more_ic, more_ic.fractionation, physchem) > base_assay * 1.5
+    assert feed_cation_charge(more_ic, physchem) == pytest.approx(base_charge)
+    assert feed_cation_charge(more_cat, physchem) > base_charge * 1.5
+    assert total_alkalinity(more_cat, more_cat.fractionation, physchem) == pytest.approx(base_assay)
+
+    # 3. one stream reproduced from the constants, independently of the implementation
+    h = 10.0**-spec.ph
+    k_co2, k_ac = 10.0**-6.35, 10.0**-4.76
+    s_ac = spec.cod_per_m3 * spec.fractionation.f_vfa / 64.0
+    expected = 50.0 * (
+        spec.s_ic * k_co2 / (k_co2 + h) + s_ac * k_ac / (k_ac + h) + 10.0**-14.0 / h - h
+    )
+    assert base_assay == pytest.approx(expected, rel=1e-9)
+    assert (10.0**-physchem.pK_a_co2_base, 10.0**-physchem.pK_a_ac) == pytest.approx(
+        (k_co2, k_ac)
+    ), "the literals above are the ADM1 base constants; if those moved, this must be re-derived"
 
 
 # ---------------------------------------------------------- truth vs operator log
@@ -506,3 +791,85 @@ def test_assays_carry_units_lag_and_are_unbiased_and_tkn_is_the_per_feed_one(
     own = feed_tkn(spec, adm1_params.stoichiometry.N_aa)
     assert abs(fitted - own) / own > 0.15
     assert len(day) == run.truth.n_days
+
+
+def test_a_longer_horizon_extends_the_same_realisation(plants, catalogue, config, adm1_params):
+    """The lead's ruling 1 (2026-09-11): the generator is prefix-stable in the horizon.
+
+    Until then every block was drawn in sequence from one stream, so a block of length
+    ``n_days`` shifted every later block and a change of horizon re-rolled every feed from
+    day 0 -- each horizon was a different realisation of the same seed, and the anchored
+    ``biogas_mean`` jumped by 5 % between horizons ten days apart
+    (docs/f2_horizon_report.md sections 14-15). Now the first n days of a longer run ARE the
+    n-day run: deliveries, moisture, the operator's log, the true fractionation and the
+    assays, on both a plant with a blend tank and one without.
+    """
+    for pid in ("B", "A"):
+        short = generate_influent(plants[pid], catalogue, config, adm1_params, seed=11, n_days=90)
+        longer = generate_influent(plants[pid], catalogue, config, adm1_params, seed=11, n_days=130)
+        assert (
+            short.truth.fractionations.fractionations == longer.truth.fractionations.fractionations
+        )
+        for fid, feed in short.truth.feeds.items():
+            other = longer.truth.feeds[fid]
+            np.testing.assert_array_equal(feed.delivered_kg, other.delivered_kg[:90])
+            np.testing.assert_array_equal(feed.ts, other.ts[:90])
+            assert feed.unrecorded_days == tuple(d for d in other.unrecorded_days if d < 90)
+            assert feed.mislogged_days == tuple(d for d in other.mislogged_days if d < 90)
+        np.testing.assert_array_equal(short.truth.influent.q, longer.truth.influent.q[:90])
+        np.testing.assert_array_equal(
+            short.truth.influent.concentrations, longer.truth.influent.concentrations[:90]
+        )
+        early = [r for r in longer.observed.assays if r.sample_day < 90]
+        assert [(r.feed_id, r.assay, r.sample_day, r.value) for r in short.observed.assays] == [
+            (r.feed_id, r.assay, r.sample_day, r.value) for r in early
+        ]
+        # and the two horizons are still two different runs beyond the shared prefix: the
+        # negative control, so this cannot pass on a generator that ignores its horizon
+        assert longer.truth.influent.q.size == 130
+        assert not np.array_equal(longer.truth.influent.q[90:130], longer.truth.influent.q[50:90])
+
+
+def test_assay_noises_are_independent_of_each_other_and_of_the_feed_draws(runs, catalogue, config):
+    """Every assay of a feed has its own noise, and none of them is a feed's own block.
+
+    The review of 2026-09-12 found no test asserting this: two mutants passed the file —
+    all assays of one feed drawn from ONE child key (their noises perfectly correlated), and
+    assay keys colliding with the per-feed block keys (an assay's noise equal to the feed's
+    amount draw). The standardised residual of a multiplicative assay is recovered exactly
+    from the record, ``z = (value / true - 1) / cv``, so both are asserted directly.
+    """
+    run = runs["B"]
+    fid = "primary_sludge"
+    spec = catalogue.feeds[fid]
+    feed_ids = sorted(run.truth.feeds)
+    k_feed = feed_ids.index(fid)
+    truth = {"ts": lambda t: float(run.truth.feeds[fid].ts[t]), "vs": lambda t: spec.vs_of_ts}
+    residual: dict[str, dict[int, float]] = {}
+    for assay, true_at in truth.items():
+        cv = config.assays[assay].cv
+        assert cv > 0.0 and config.assays[assay].sd_abs == 0.0, assay
+        records = [r for r in run.observed.assays if r.feed_id == fid and r.assay == assay]
+        residual[assay] = {
+            r.sample_day: (r.value / true_at(r.sample_day) - 1.0) / cv for r in records
+        }
+    days = sorted(set(residual["ts"]) & set(residual["vs"]))
+    assert len(days) > 100, len(days)
+    z_ts = np.array([residual["ts"][d] for d in days])
+    z_vs = np.array([residual["vs"][d] for d in days])
+    # (a) not the same noise: neither equal nor correlated
+    assert np.max(np.abs(z_ts - z_vs)) > 0.5
+    assert abs(np.corrcoef(z_ts, z_vs)[0, 1]) < 0.3
+    # and each is standard normal-ish, so the recovery is right (not a scale artefact)
+    assert 0.8 < z_ts.std() < 1.2 and 0.8 < z_vs.std() < 1.2
+    # (b) not any of the feed's own seven blocks: the documented child keys, at these days
+    day_index = np.array(days)
+    for block in range(7):
+        draw = np.random.default_rng([7, 1 + k_feed, block])
+        block_values = (
+            draw.uniform(size=run.truth.n_days)
+            if block in (0, 3, 5)
+            else draw.standard_normal(run.truth.n_days)
+        )[day_index]
+        for name, z in (("ts", z_ts), ("vs", z_vs)):
+            assert not np.allclose(z, block_values, atol=1e-9), (name, block)

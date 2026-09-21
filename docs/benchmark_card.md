@@ -53,7 +53,7 @@ statement about what it cannot identify — from a realistic observation window.
 
 ## 4. What is generated, and what is hidden
 
-| | Visible to a workflow | Hidden truth (`runs/<id>/truth/`) |
+| | Visible to a workflow | Hidden truth (`truth_store/<id>/`) |
 |---|---|---|
 | Plant | Declared geometry, temperature set point, feed catalogue, hydraulics | Realised active-volume error, realised mixing structure |
 | Influent | Operator feed log (with unrecorded deliveries and mis-logs), scheduled assays with method noise and turnaround | True per-feed composition and its drift, true COD fractionation, true inert N |
@@ -61,8 +61,114 @@ statement about what it cannot identify — from a realistic observation window.
 | Faults | Nothing | Fault type, layer, onset, magnitude, target |
 
 CLAUDE.md rule 1 is the hard boundary: **nothing under `workflows/` may import from or
-read `runs/<id>/truth/`**, and a test enforces it. Evaluation reads
-`runs/<id>/calls.jsonl` and the truth record; workflows read neither.
+read `truth_store/<id>/`**, and it is enforced three times over — by the layout, by a
+static scan of `workflows/`, and by an adversarial suite that drives the workflow-facing
+loader `state.run_view.open_run` on a real generated run and asks it for truth by relative
+path, traversal, `"."`, `""`, absolute path, symlink, listing, every public attribute it
+exposes, and manifest field. That suite carries a **negative control** — a legitimate read
+that must still succeed — because a sandbox that refuses everything passes every refusal
+test ever written. Evaluation reads `runs/<id>/calls.jsonl` and the truth store; workflows
+read neither.
+
+A generated run is **two trees**, so a workflow rooted at the first has nothing to escape
+to:
+
+```
+runs/<id>/                     <id> is a keyed hash of the cell (HMAC, per-store secret salt)
+  manifest.json                the REDACTED manifest: plant, tier, horizon, seasonal
+                               phase, config versions, git SHA. Written redacted; no
+                               creation time (that was the generation order).
+  calls.jsonl                  one line per tool call (rule 3); append-only, shared by the
+                               harness now and the tool registry later. The harness's
+                               records carry no timestamp and no runtime here.
+  observations/
+            sensors.json       the tier's record, with units, flags and report times
+            feed_log.csv       the operator's feed log (mis-logs applied)
+            feed_assays.csv    the assays the tier's mask permits
+            operator_notes.json  the operator's log, including any Level-8 false note
+
+truth_store/<id>/              a SEPARATE TOP-LEVEL TREE (lead's ruling, 2026-09-04)
+            manifest.json      complete provenance: scenario, seeds, fault layers, config
+                               hashes, git SHA
+            parameters.json    true parameters per integration segment, truth N_I
+            influent.npz       true deliveries, true solids, the true influent series
+            fractionation.json true COD fractionation, unrecorded and mis-logged days
+            geometry.json      realised volume error, realised mixing, digester health
+            states.npz         the full state trajectory and the burn-in state
+            channels.npz       every observable channel and the condition flags
+            faults.json        the fault plan, the truth label, the answer key
+truth_store/index.jsonl        opaque run id -> its cell, for the evaluator
+truth_store/salt               the store's secret salt (32 random bytes, gitignored);
+                               the only key from a public cell to its run id
+```
+
+**The manifest is redacted at write time, not at read time.** The complete manifest is
+hidden truth — the scenario id would leak the row of the ladder (proposal §10), the seeds
+would let a workflow regenerate the truth for itself, and the declared fault layers *are*
+the uncertainty class §6.7 B scores — so it is written to the truth store, and the file
+under `runs/<id>/` never carried any of the three. `truth_store/index.jsonl` is in the
+truth store for the same reason: it names the scenario of every run.
+
+### 4.1 What a workflow may and may not see
+
+The visible-information contract, as ruled by the lead on 2026-09-10 (finding B5 of the
+whole-branch review). A workflow, at any tier, is given exactly this and nothing else:
+
+| A workflow **may** read | A workflow **may not** read |
+|---|---|
+| the observation record at its tier (`observations/sensors.json`: sampled, noisy, drifting, lagged, with gaps) | the truth store (`truth_store/<id>/`): true states, true parameters, true influent, the fault plan, the answer key, the complete manifest |
+| the operator's feed log and the tier's feed assays (`feed_log.csv`, `feed_assays.csv`) | the scenario files (`scenarios/*.yaml`): they name the baseline, the faults and the `correct_conclusion` of every row |
+| the operator's log notes (`operator_notes.json`) | the truth-side plant record (`sim/plants/truth/`): the adapted inhibition constant and the measured biomass, acetate and ammonia of each baseline |
+| the redacted manifest (`manifest.json`: plant, tier, horizon, seasonal phase, config versions, git SHA) | the run index (`truth_store/index.jsonl`), the store's salt, and **when** any run was generated: the complete manifest's `created_utc`, the truth-side log's `t_utc`, real file modification times |
+| the visible call projection (`calls.jsonl`: the same calls in the same order, hashed over nothing the manifest does not state, segment integrations collapsed to one record, no timestamp, no runtime) | the truth-side call log with real arguments, one record per integration segment, timestamps and runtimes |
+| the qualitative plant contract (`configs/plants/`: geometry, set point, hydraulics, feed catalogue, blend tank, that two community states exist and what kind of digester each is) | which baseline the run is staged on, and any numeric table that would let the record be read off against one |
+
+Three consequences follow, and each is enforced by a test rather than by the list:
+
+- **Run ids are store-specific.** An id is an HMAC over the public cell tuple, keyed with a
+  32-byte secret generated at store creation and kept only at `truth_store/salt`. The same
+  cell in two stores is the same record under two ids, the public tuple space cannot be
+  enumerated back to a scenario without the salt (the review's brute-force inversion is a
+  test, and recovers nothing), and the truth-side index is the only way from an id to its
+  cell.
+- **The static checker is an allow-list, and it has a limit.** A module under `workflows/`
+  may import the standard library, `numpy`, `scipy`, `pydantic`, the tool registry, its
+  own package and the run view (`state.run_view`) — every other import is a finding
+  (`sim`, `scenarios`, `anchor`, `eval`, the provenance log; the whole-branch review of
+  2026-09-12, blocker 1). Dynamic import and code execution are denied by name and
+  attribute wherever they appear (`importlib`, `__import__`, `exec`, `eval`, `compile`,
+  `runpy`, `subprocess`, `os.system`/`popen`/`exec*`/`spawn*`, `ctypes`, `pkgutil`,
+  `sys.modules`, `builtins`, `getattr`/`setattr` with a non-literal name), and a string
+  literal or concatenation that spells a forbidden module path is a finding; so is every
+  dunder name, attribute or string literal but the ordinary few (`__name__`, `__doc__`,
+  `__file__`, `__version__`, `__all__`, `__main__`, `super().__init__()`), every call to
+  `vars`, `globals`, `locals`, `dir` or `chr`, `.decode`/`.fromhex`, and `codecs`, `base64`,
+  `binascii`, `zlib`, `marshal`, `pickle`; a path literal with `truth` or `scenarios` as a
+  segment still is, and the loader refuses the scenario files and the plant record by
+  traversal. Hardening stopped at the third round (a module name assembled from `chr`
+  codes, the builtins reached through `open_run.__globals__`, `__globals__` itself), by the
+  coordinator's instruction. **The limit, recorded honestly:** a static
+  checker cannot prove the absence of every dynamic route — a compiled extension, an
+  environment trick, a second interpreter reached some way the checker does not name, or
+  an unnamed sibling of a denied form: the reviewer of 2026-09-20 demonstrated a
+  checker-clean module that reads `faults.json`, `parameters.json`, `states.npz` and the
+  salt from the sibling `truth_store/` through a runtime-assembled path and
+  `str(<bytes>, <encoding>)`, the decoding form the `.decode`/`.fromhex` rule does not
+  cover (recorded, not patched: hardening stopped by decision). The
+  structural defence is that a workflow process must not have `sim`, `scenarios/` or
+  `truth_store/` importable or readable at all: workflows run against `tools/` and the run
+  view only, in a process or container where those paths are absent. That is a design
+  requirement for the tool-registry and workflow-harness components (rule 2), recorded as a
+  deferred requirement for the lead's launch of those components; G1 cannot enforce it.
+- **The visible call log cannot tell a faulted run from a clean one**: S0-01 and S5-01
+  produce logs of the same length, the same names and the same field set.
+- **Nothing visible says when a run was generated, or how long it took.** The generation
+  order is a permutation of the public library; a permutation that can be read off
+  timestamps maps position to cell, and a committed shuffle seed made it reproducible
+  (final review, finding F1). The order is now keyed with the store's secret salt, the
+  visible manifest and call log carry no timestamp, every visible file's modification
+  time is one fixed instant, and the visible log carries no runtime either — the burn-in's
+  wall-clock alone marked the one two-zone row (finding F3). All of it stays truth-side.
 
 **Instrumentation tiers are masks on identical truth** (§6.4). Tier C contains Tier B
 contains Tier A — the schema validates the containment and the tests check it. Two runs at
@@ -90,8 +196,10 @@ are anchored to the Muscatine 1-minute SCADA file and re-derived by
 `tests/test_observation.py`. **Everything else in the observation model is a design value
 marked `ASSUMED`**, including every missingness rate: the provider pre-cleaned the SCADA
 file, whose two channels are 100 % finite, so no dropout statistics exist to fit. The
-FOS/TAC overload threshold (0.40) is anchored — it is the ~92nd percentile of the plant's
-own FOS/TAC column — but the foaming rule is assumed.
+FOS/TAC overload threshold (0.40) is **percentile-matched** to the anchor — see §5.2. The
+two conditional-missingness triggers (overload and foaming) fire on the hidden state, not
+on any reading; their cut-offs are the lead's design values, unanchored (Muscatine records
+no foaming events), and their firing rates are measured and recorded, not tuned (§5.4).
 
 Every configuration value in `configs/` carries `# DESIGN` and a source, or the marker
 `ASSUMED` with the reason. A number without a source is a bug.
@@ -111,6 +219,132 @@ was wrong and the data said so.
   stable. The error was invisible in steady-state tests with nominal feeds and only
   appeared once deliveries became stochastic; `tests/test_plausibility.py` now pins the
   operating envelope so it cannot recur silently.
+
+### 5.2 What gate G1 caught, fixed, and did not fix
+
+Gate G1 (2026-09-03, `docs/g1_anchor_report.md`) found that a clean Level-0 run on **Plant
+B acidified on 5 of 12 seeds** under the then-frozen configuration. Two corrections were
+made on the lead's rulings, and **either one alone is sufficient**:
+
+- **The blend tank the plant always had.** `plant_B.yaml` had described the high-strength
+  waste as "trucked deliveries blended in a 65,000-gal tank" and the simulator had never
+  implemented it, so arrivals reached the biomass as acid pulses. It is now part of the
+  **declared contract** (`sim/plants/equalisation.py`), visible to workflows.
+- **The feed's strong cations, calibrated to the anchor's own digester alkalinity.**
+  Simulated alkalinity went 2.78 → **5.12** kg CaCO₃ m⁻³ against the plant's 5.04, and pH
+  to **7.29** against 7.27. The pH is *not* independent corroboration and this card no
+  longer reads it as such: in a bicarbonate-buffered digester pH is a function of
+  alkalinity and pCO₂, so fixing one and observing the other land is one measurement
+  reported as two. The alkalinity row is reported as **calibrated to anchor** and excluded
+  from the anchor-match count.
+
+On a twenty-four-seed panel with both in place, **24 of 24 runs are sound** and all 117
+matrix cells are sound. The sound/soured labelling stays as instrumentation.
+
+**Still open**, and stated because it bears on what the benchmark can be used for:
+
+- **A residual VFA gap of ~1.5× remains**, and it is smaller than it looks in older
+  documents. On the **true-VFA** convention the simulator carries 0.067 against the plant's
+  1.178 kg m⁻³ — but the plant's column is a titration, not a chromatographic VFA, so those
+  two numbers were never the same quantity. Compared like with like (§5.3) it is **0.775
+  against 1.178**, and FOS/TAC **0.150 against 0.233**. **No kinetic parameter has been
+  changed**, and `docs/vfa_gap.md` measured that none *could* close the true-VFA gap: the
+  model is bistable in `k_m_ac` and the anchor's value lies between the branches. The
+  remaining 1.5× is pinned in both directions by `tests/test_g1_anchor.py`, so it can
+  neither grow nor be quietly tuned away.
+- **The consequence that used to follow from it is resolved.** Conditional missingness — and
+  with it the Level-4 `informative_missingness` row — had almost nothing to act on, because
+  the flag read a quantity that sits far below its threshold. Since the lead's ruling B the
+  trigger reads the hidden process state and fires on **7.55 % of days in every sound run**
+  (§5.4), against the plant's own 7.78–9.18 %.
+- **`S6-01` (omitted SAO) is no longer inert** (lead's ruling 1, 2026-09-09). Plant A
+  declares **two baselines**: `adapted`, acetoclastic, where the omitted syntrophic pathway
+  carries no flux; and `unadapted`, at ADM1's default constant, where the acetoclasts have
+  washed out and syntrophic oxidation carries the entire acetate flux. S6-01 is staged on
+  the second, where the omission bites. `S6-04` is the same omission on the first, scored on
+  **abstention** — the correct conclusion is that no structural residual is detectable — so
+  the pair distinguishes a diagnosis from a workflow that always answers "structural".
+  Since the lead's ruling B5 (2026-09-10) the plant contract declares the two states
+  **qualitatively only**; what each is numerically is in the truth-side plant record (§4.1).
+
+### 5.3 Two FOS/TAC conventions, and which one each number is in
+
+**This is the most important caveat in the card for anyone comparing a simulated FOS/TAC
+with a plant's**, and since the lead's ruling A of 2026-09-09 the benchmark reports both.
+
+| | what it is | where it appears |
+|---|---|---|
+| **True VFA** | the sum of the model's volatile fatty acids, as acetic acid | the hidden `vfa_total` channel and the hidden `fos_tac_true_vfa` channel. **No sensor sees it.** |
+| **Titrimetric FOS** | the acid consumed between pH 5.0 and pH 4.4, reported as acetic acid | the `vfa_titrimetric` channel, the `vfa_total` **sensor**, and the `fos_tac` channel — and the anchor's own VFA column and FOS/TAC |
+
+A titrimetric FOS counts everything titratable in that window: bicarbonate carry-over,
+lactate, phenols. In a digester most of it is **bicarbonate** — measured here, **86–90 %** of
+the reading — which is why it over-reads true VFA severalfold.
+
+**The transfer function has no fitted parameter.** `sim.observation.channels.titrimetric_fos`
+is declared chemistry: κ frozen at 1.0, and every equilibrium constant the truth model's own
+through `sim.adm1.physchem.temperature_corrected`. At Plant B's 308.48 K it gives
+pK_a(acetate) 4.760, pK_a(CO₂) 6.305, a carry-over fraction of 0.0349 of S_IC, and an
+implicit scale-up of 1/f_ac = **3.02** — the Nordmann formula's own factor, derived rather
+than asserted.
+
+**What it did to the comparison.** Simulated FOS/TAC went from 0.013 to **0.150** against the
+plant's 0.233, and the VFA row from a factor of 17.5 out to **1.51×**. That is a measurement
+model being made correct, not a gap being closed by tuning: **no kinetic parameter has been
+changed**, and `docs/vfa_gap.md` still holds — the model is bistable in `k_m_ac` and the
+anchor lies between the branches, so the *true-VFA* gap cannot be closed by fitting at all.
+
+**A finding, and it corrects an earlier diagnosis.** An earlier note called this a "variance
+deficit" in the model. It is not: true VFA's day-to-day spread (p92/median ≈ 2.1) is if
+anything larger than the anchor's FOS/TAC spread (1.74). What is flat is the *titrimetric*
+FOS/TAC (≈ 1.1), and it is flat because most of it is bicarbonate tracking slowly-varying
+alkalinity. So:
+
+> **The titrimetric convention masks the VFA dynamics it is meant to report.**
+
+That is a property of the measurement, not of the model, and it is why conditional
+missingness triggers on the hidden state (§5.4).
+
+### 5.4 Two thresholds that are deliberately different things
+
+| | reads | fires on | used for |
+|---|---|---|---|
+| **overload trigger** (conditional missingness) | hidden true VFA > 2.00× its 30-day trailing median | **7.55 %** of days on sound Plant B runs at the 200-d matrix horizon (per-run 2.92 – 19.30 %, 24/24 runs) | §6.1 conditional missingness, and the Level-4 `informative_missingness` row |
+| **foaming trigger** (conditional missingness) | hidden gas > 1.80× its 30-day trailing median **and** true VFA > its 30-day trailing median | **6.60 %** of days on sound Plant B runs at the 200-d matrix horizon (per-run 2.34 – 13.45 %, 24/24 runs) | §6.1 conditional missingness (the 3× online multiplier) |
+| **operator-visible overload** | titrimetric FOS/TAC > 0.40 | 0.00 % of days (0/24 runs; 0.17 %, 1/24, on the 180-d panel of 2026-09-10) | what an operator would call an overload; reported, never a trigger |
+| **operator-visible foaming** | titrimetric FOS/TAC > 0.30 | 0.00 % of days (0/24 runs; 0.25 %, 1/24, on the 180-d panel of 2026-09-10) | what an operator would call foaming; reported, **structurally dead**, never a trigger |
+
+Both triggers on all four rows at the matrix horizons of the lead's ruling 3 (B and C at
+200 d, Plant A at 365 d; 24 seeds each, recorded and not tuned; B and C re-measured
+after the lead's ruling 5 of 2026-09-11 corrected the HSW and FOG degradability centres,
+from 7.12 / 9.82 % overload and 6.63 / 8.50 % foaming, and again after its answer A set FOG's
+inert COD equivalent to 2.9): overload
+7.55 % / 9.82 % / 0.22 % / 1.02 % (B / C / A-adapted / A-unadapted);
+foaming 6.60 % / 8.50 % / 0.20 % / 0.09 % (`docs/g1_anchor_report.md`
+§5.4, which also keeps the 180-d values of 2026-09-10 beside them).
+
+**The foaming trigger reads the hidden state because the reading it used to read is
+structurally dead** (lead's ruling B3, 2026-09-10). Until the whole-branch review the flag
+compared the titrimetric FOS/TAC with 0.30 and had never fired in any cell: a two-point
+titration counts the bicarbonate between pH 5.0 and 4.4 as "FOS", so the ratio has a floor
+near 0.13–0.14 and sits at 0.14–0.18 in every sound run. That is a **measurement-model
+finding** — an operator watching FOS/TAC for foaming would see nothing until the digester
+was already in trouble — and the 0.30 threshold is kept as declared and reported, not
+lowered to make the flag fire.
+
+The **trigger** reads the plant, not a reading: instruments fail during the transients that
+identify the process whether or not anyone has taken a measurement, and the reading it used
+to use masks those transients (§5.3). Its cut-off was not tuned — 2.00× is the lead's figure
+as written, and it lands on 7.55 % against the plant's own 7.78–9.18 % exceedance. Its
+trailing window **excludes the current day**, so an excursion cannot drag its own reference
+up and mask itself. The cut-off is 2.00× on every plant: **differences between plants are
+recorded, not tuned away.**
+
+The **threshold** is percentile-matched to the anchor: the anchor's titrimetric FOS/TAC has
+its 92nd percentile at 0.402 (Dig1) and 0.408 (Dig2), n = 861 each, and the 92nd is the
+closest percentile to 0.40 of any between the 50th and the 99th. It fires rarely in
+simulation because the simulated distribution still sits ~1.5× below the plant's; the
+threshold is not moved to compensate.
 
 ## 6. Scenario ladder (§6.3)
 
@@ -180,6 +414,21 @@ from the analysis plan are documented rather than absorbed.
 - **No human baseline.** There is no measurement of what an experienced AD modeller would
   conclude from the same window. Workflow-to-workflow comparison is the only comparison
   the benchmark supports.
+- **Conditional missingness barely fires on a healthy digester** (§5.2), so the Level-4
+  `informative_missingness` row is close to a duplicate of Level 1 on Plant B.
+- **`S6-01` is inert** (§5.2) pending a decision on Plant A's adapted inhibition constant.
+- **Acetoclastic and syntrophic methanogenesis cannot coexist** at a steady state: they
+  compete for one substrate, so one always excludes the other. The pathway-shift scenarios
+  are therefore staged as *transitions* from an adapted state rather than as faults applied
+  to a mixed community, and the truth model carries a trace re-seeding term in the feed
+  because ADM1 has no immigration and a population at zero can never return.
+- **One answer key per scenario, not one per tier.** A fault whose instrument the tier does
+  not carry (the Level-2 methane-analyser flatline at Tier A) is unobservable there, while
+  its `correct_conclusion` still names the instrument. Flagged for the lead.
+- **Plant A's adapted baseline carries an adapted inhibition constant** (`K_I_nh3`, in the
+  truth-side plant record), because a digester running for years above 3 kg N/m³ of ammonia
+  does not have ADM1's sewage-sludge community. That the acclimated state exists is declared;
+  the constant it carries, and which state a run is in, are not (ruling B5, 2026-09-10).
 
 ## 9. Reproducibility
 
@@ -188,11 +437,32 @@ from the analysis plan are documented rather than absorbed.
   seed, same run, bit-for-bit.
 - Fault layers hold their **own** stream, so a faulted run differs from its clean twin
   only by the fault (the paired-run property; tested).
-- Every tool call is logged with name, version, argument hash, runtime and outcome.
+- **A whole run is prefix-stable in its horizon** — truth and visible record alike
+  (rulings 6 and 7). The truth takes its reference quantities from a fixed 200-day window
+  of the generated influent, and every stream of the visible record (each sensor's six
+  blocks, the historian's outages, the operator log's note days and texts) is a child
+  stream keyed `SeedSequence([seed, key, block])`, so a cell run for 200 days is, in its
+  state, its channels and everything a workflow can read, the first 200 days of the same
+  cell run for 210 (tested on one Plant B and one Plant A cell; the last sample agrees to
+  solver tolerance). A horizon change moves the end of every run and nothing else.
+- Every tool call is logged with name, version, argument hash, runtime and outcome — in
+  the truth-side log, which the evaluator reads; the workflow-visible projection carries
+  the sequence, name, version, hash and outcome and no wall-clock (§4.1). Every tier's
+  log carries the shared integration's calls, so each run directory is a complete record.
 - Budgets (simulator evaluations, wall-clock, assay units) are enforced in the tool
   registry, not in workflows, so no workflow can grant itself more.
 - All numerical tolerances and solver settings live in `configs/`, versioned, so a run is
   reproducible from a tag.
+- A run directory is **self-contained and deterministically named within its store**: the
+  id is an HMAC-SHA256 of (scenario, plant, tier, seed, replicate) keyed with the store's
+  secret salt (`truth_store/salt`, generated once, gitignored, never written anywhere
+  visible), so regenerating a cell overwrites its own directory rather than accumulating
+  copies, and `truth_store/index.jsonl` — in the truth store, because it names the scenario
+  of every run — maps ids back to cells for the evaluator, one line per run id however often
+  a cell is regenerated. **Run ids are store-specific**: reproduce a cell by its index line,
+  not by its id.
+- The manifest records the **declared version and content hash of every configuration file**
+  the run read, plus the git commit, marked `-dirty` when the tree was not clean.
 - Final runs execute from a tagged release; Docker image and pinned dependencies at
   release (§13).
 

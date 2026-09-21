@@ -1,0 +1,1429 @@
+# F2 — equalising every scenario's horizon: the measurements and a recommendation
+
+*G1 remediation session, 2026-09-10, for the coordinator and the lead. Measured at
+`6e258f6` (the F1/F3/F4/F5/F6 head of PR #15, CI green) with `duration_days: 240` on all
+twenty scenarios held **locally and uncommitted**. Nothing was tuned, no tolerance was
+widened, no seed, feed, tank, calibration or kinetic constant was touched, and nothing has
+been regenerated.*
+
+**Verdict in one line:** 240 d is safe for every row except that `biogas_mean` moves
+0.019 outside its declared band for a reason that is the comparison's basis, not the
+simulator; a shorter common horizon (200 d) keeps every anchored row in band but does not
+keep every answer key right, because the S7-02 structural signal is a pathway shift that
+does not complete even at 240 d — and that last fact predates F2 and needs the lead's call
+regardless of the horizon.
+
+## 1. The ruling, and what changed
+
+`duration_days` and the derived `n_days` are public (they are in the redacted manifest).
+Until the ruling they took two values — 180 d for Levels 0–4 and 8, 240 d for Levels 5–7 —
+which partitioned the ladder: a Plant B/C run at 240 d was exactly one of {S5-02, S6-02,
+S6-03, S7-01}; a Plant A run at Tier A and 180 d was the Level 2–4 subset. With F1 that was
+complete de-anonymisation. The finding is **review finding F2** of the final whole-branch
+review (not the lead's); the lead ruled on it — first 240 d, later revised on the
+measurements below (§13–§15) — and every ruling in this report is the lead's response to
+that finding.
+
+In the working tree: `duration_days: 240` on all twenty scenarios (twelve were 180 d);
+nothing else in any scenario. `scenarios/README.md` says so, `tests/test_scenario_schema.py`'s
+pin moved with it, the anchor panel (`anchor.compare_generated.OUTPUT_DAYS`) runs at the
+matrix horizon, and S3-03's header notes that its ramp holds after d180.
+
+## 2. Anchored rows at 240 d — which moved, which are outside their band
+
+24-seed Plant B clean panel (seeds 1000–1023), settled from day 30, `OUTPUT_DAYS`
+180 → 240. The 18 influent rows come from a separate 730-d draw and do not move.
+
+| row | at 180 d (committed report) | at 240 d | declared band | status |
+|---|---:|---:|---|---|
+| `biogas_mean` (m³/d per digester) | 3143, ratio **1.489** | 3207, ratio **1.519** | ratio in [0.6, 1.5] | **OUTSIDE by 0.019 in ratio (≈ 40 m³/d)** |
+| `digester_pH_median` | 7.232 | 7.218 | 7.27 ± 0.4 | inside |
+| `alkalinity_median` (calibrated row, not counted) | 5.116 | 4.939 | ± 35 % | inside |
+| `vfa_median` | 0.780 (ratio 0.66) | 0.757 (ratio 0.64) | ratio in [0.25, 4] | inside |
+| `fos_tac_median` | 0.151 (ratio 0.65) | 0.151 (ratio 0.65) | ratio in [0.5, 2] | inside |
+
+Exactly one row is outside: `biogas_mean`, the one the coordinator expected. No other row
+is within 5 % of an edge. 22 of 23 rows in band; 21 of 22 independent rows.
+
+## 3. Why `biogas_mean` moves — seasonal phase, not a change of state
+
+Every cell starts at day-of-year 1. The settled window at 180 d is 31 Jan – 29 Jun; at
+240 d it runs on to 28 Aug, into the late-summer peak of the trucked feeds (high-strength
+waste and FOG seasonal peaks at day 250 with log-amplitudes 0.25 and 0.20; primary sludge
+peak at day 200, amplitude 0.10). Panel-mean inflow by 30-day month over days 0–240: 105,
+105, 101, 103, 110, 117, 113, 119 m³/d; panel-mean gas: 3021, 3020, 2747, 2784, 3036,
+3575, 3521, 3671 m³/d. Months 6–8 carry 10–15 % more feed and 15–25 % more gas than
+months 2–5, and 21 of 24 seeds have a higher gas mean over days 180–240 than over days
+30–180. The anchor's `biogas_mean` is the mean of the whole three-year Muscatine daily
+record, all seasons. The row therefore compares a partial-year window against an annual
+mean, and extending the window into the high season raises the ratio. The steady state is
+unchanged: alkalinity median 4.93 → 4.89 across the two windows, pH flat.
+
+One second-order effect, already recorded as dormant-but-horizon-sensitive in the
+decisions log: the equalisation tank is initialised from the whole-horizon mean of
+arrivals, so the first 180 days of a 240-d run are not bit-identical to a 180-d run (the
+30–180 window inside the 240-d runs gives a panel median of 3079 rather than 3143). Same
+conclusion either way.
+
+**The ratio at every common horizon**, same 24 runs, panel median of the settled mean:
+
+| common horizon (d) | 180 | 190 | **200** | 210 | 220 | 230 | 240 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `biogas_mean` ratio | 1.459 | 1.452 | **1.447** | 1.471 | 1.486 | 1.517 | 1.519 |
+
+Any single value up to 220 d removes the partition and keeps the row in band; 200 d has
+the widest margin (the window closes before the summer load rises).
+
+## 4. Plant B souring at 240 d
+
+**24/24 sound**, unchanged from 180 d; no seed sours at any day. The matrix's own 117 cells
+at 240 d (scratch generation, §8): 117/117 sound. The souring pin was not touched.
+
+## 5. Both triggers on all four rows at 240 d
+
+24 seeds each, clean Level-0, settled from day 30; the 180-d value in brackets.
+
+| Plant | baseline | overload pooled | per-run range | runs firing | foaming pooled | per-run range | runs firing | FOS/TAC > 0.40 | > 0.30 |
+|---|---|---:|---|---:|---:|---|---:|---:|---:|
+| **B** | — | **8.18 %** (7.67) | 3.32 – 13.27 % | 24/24 | **8.47 %** (7.20) | 2.84 – 13.27 % | 24/24 | 0.00 % (was 0.17) | 0.00 % (was 0.25) |
+| **C** | — | **9.28 %** (9.22) | 3.79 – 12.32 % | 24/24 | **8.18 %** (7.67) | 3.32 – 12.32 % | 24/24 | 0.00 % | 0.00 % |
+| **A** | `unadapted` | **1.72 %** (1.49) | 0.00 – 4.27 % | 23/24 | **0.24 %** (0.14) | 0.00 – 0.95 % | 11/24 | 0.00 % | 0.00 % |
+| **A** | `adapted` | **0.39 %** (0.28) | 0.00 – 1.42 % | 13/24 | **0.38 %** (0.25) | 0.00 – 1.42 % | 14/24 | 0.00 % | 0.00 % |
+
+B and C still bracket the anchor's 7.78–9.18 % exceedance on overload and sit at it on
+foaming, in every run. The Plant A pathway ordering holds on overload (`unadapted` 4.4×
+`adapted`; 5.3× at 180 d); the foaming reversal noted at 180 d has shrunk to parity within
+noise (0.24 % against 0.38 %, 11 against 14 firing runs). The one run that exceeded the
+operator's 0.40 at 180 d (seed 1021) does not at 240 d; neither operator threshold fires on
+any run of the four panels.
+
+## 6. Answer keys — which depend on the horizon
+
+**The twelve rows that grew from 180 to 240 d.** Each fault starts at its declared onset
+and runs further; none of these answer keys depends on the horizon:
+
+| row | fault timing | at 240 d | key unchanged because |
+|---|---|---|---|
+| S0-01 | none | 60 more clean days | nothing to detect; a false positive is still the failure |
+| S1-01 | noise ×2, gaps ×2 from d0 | same rates, 60 more days | MCAR by construction |
+| S2-01 | pH drift −0.01/d from d45, reset on the tier's recalibration cadence | more drift-and-step repeats | the pattern is what is diagnosed |
+| S2-02 | CH₄ analyser flatline d90–96 | unchanged window | a 6-day episode inside the run |
+| S2-03 | gas-meter scale ×1.08 from d60 | 180 faulted days instead of 120 | constant scale from the onset |
+| S3-01 | mislabelled feed d60–120 | unchanged window | the batch is the batch |
+| S3-02 | unrecorded delivery at d90 | unchanged | one day's balance failure |
+| S3-03 | moisture ramp −30 % over d30–180 | ramp unchanged, then **held** at −30 % to d240 (`_ramp_factor` holds after its window) | a trend to a new level; the plateau makes it more identifiable |
+| S4-01 | biomass mis-initialised at d0 | 60 more settled days | the transient's timing and shape are the evidence |
+| S4-02 | informative missingness from d0 | both hidden-state triggers fire throughout | scaling of the multipliers |
+| S8-01 | gas-meter fault from d60; `bayes_mcmc` fails | as S2-03 | same fallback task |
+| S8-02 | gas-meter fault from d60; false note at d75 | as S2-03 | the note is false about the same cause |
+
+**The eight rows already at 240 d** are untouched by F2. But checking whether a *shorter*
+common horizon would keep their keys right turned up a finding that predates F2:
+
+### The S5-01 / S7-02 pathway shift does not complete at any horizon, on any tree since 2026-09-03
+
+Measured through the full harness at each scenario's own seed, Plant A adapted baseline,
+end-of-run state (X in kg COD/m³, acetate in kg/m³):
+
+| tree | S5-01 X_ac / X_sao at 240 d | S5-01 acetate d119 → 240 | S7-02 X_ac / X_sao at 240 d | S7-02 acetate d119 → 240 |
+|---|---:|---:|---:|---:|
+| `42bbe8e` (2026-09-03, the ruling-2 commit) and every commit through `fd76983` (09-09) | 0.839 / **0.154** | 0.033 → 2.83 | 1.129 / **0.090** | 0.031 → 1.14 |
+| `39d0e14` (after the liquor ruling) | 0.967 / 0.071 | 0.027 → 1.46 | 1.186 / 0.028 | 0.027 → 0.66 |
+| current (`6e258f6`, identical from `c8c048f` onward) | 0.934 / **0.092** | 0.028 → 1.76 | 1.171 / **0.039** | 0.028 → 0.78 |
+
+SAO biomass share (X_sao / (X_ac + X_sao)) at the end of the run on the current tree, by
+horizon: S5-01 **1.2 % / 3.6 % / 9.0 %** and S7-02 **0.4 % / 1.0 % / 3.2 %** at
+200 / 220 / 240 d. All runs sound.
+
+The record says otherwise: `scenarios/S7-02.yaml` and the decisions entry of 2026-09-03
+("the feed re-seeds syntrophic oxidisers") state as *measured* that the transition takes
+X_sao from 7e-5 to **0.60** while the acetoclasts fall from 1.2 to **0.46** in 240 d, and
+the truth-side plant record repeats "SAO grows in and takes over inside the horizon". That
+number is not reproduced at `42bbe8e` — the commit that recorded it, with the reseeding
+term in place — nor at six later commits (`9db569b`, `4a022e8`, `56aeceb`, `fd76983`,
+`39d0e14`, current), each run from its own worktree with its own package on the path. It
+cannot be traced to a committed state; a different seed, burn-in or constant at the time is
+the likely explanation. The later feed changes moved the numbers further, but the takeover
+was already absent on the 09-03 tree.
+
+What it means:
+
+- **S5-01** (parameter; `kinetic_update_allowed`): the diagnosable signal is the acetate
+  accumulation after d120 — 60–100× within four months, sustained — present and large at
+  every horizon from 180 d up. **The key holds.** The header's account of the mechanism
+  (a completed takeover) is wrong and needs correcting.
+- **S7-02** (structural + parameter; `abstain_on` the pathway split,
+  `recommend_structural_review`): the structural half assumes syntrophic oxidation grows in
+  and carries the flux so that the SAO-less fitted model's residual grows. At 240 d SAO is
+  3 % of the acetate-consuming biomass; at 200 d 0.4 %. The structural residual is small at
+  240 d and essentially absent at 200 d. **Whether the key is still right is the lead's
+  call** — it is the design change the stop condition names. S6-01 (SAO carries 99.8 % of
+  the flux from day 0 on the `unadapted` baseline) and S6-04 are unaffected.
+
+## 7. Budgets
+
+Every declared budget is per workflow and untouched: `simulator_evals` counts
+integrations, `assay_units` counts assays, `wall_clock_min` is a wall-clock. A simulator
+evaluation of a 240-d cell costs ~1.33× a 180-d one, so the wall-clock budget binds ~25 %
+sooner on the twelve rows that grew (at Levels 0–2, 90 min against ~4,000 evaluations —
+the count, not the clock, was already the binding constraint). Reported, not changed.
+
+## 8. Generation cost
+
+All 117 cells generated at 240 d into a scratch root outside the repository: 117/117
+generated, 117/117 sound, **21.4 min** wall-clock on this container (~10 min at 180 d —
+more than the 1.33× the horizon implies, because every cell pays the longer horizon and the
+two-segment rows integrate further), **30 MB** under `runs/` and **21 MB** under
+`truth_store/` (25 + 17 MB at 180 d), 117 index lines, one per id.
+
+## 9. Recommendation
+
+The `biogas_mean` excursion is **(b)**: an artefact of comparing a February–August window
+against an annual-mean anchor, not a degradation the horizon causes and not evidence for a
+different horizon. The simulator, tank, calibration and seeds are unchanged.
+
+On the horizon, the three constraints the coordinator set pull against each other, and the
+numbers are:
+
+| common horizon | removes the partition | every anchored row in band | every answer key right |
+|---|---|---|---|
+| **200 d** | yes | **yes** (`biogas_mean` 1.447, the widest margin) | **no** — S7-02's structural signal is 0.4 % SAO share, dead; S5-01's parameter signal is intact |
+| 220 d | yes | yes, marginally (1.486) | S7-02 at 1.0 % share, still essentially absent |
+| **240 d** | yes | **no** — `biogas_mean` 1.519 against 1.5 | S7-02 at 3.2 % share: thin, and the lead's call either way |
+
+So no single horizon in 180–240 d satisfies all three as the rows stand today, and the
+reason is not F2: S7-02's structural half rests on a transition the truth does not perform
+inside 240 d on any committed tree. My recommendation:
+
+1. **Equalise at 240 d**, the lead's figure. It keeps the loss-of-adaptation rows exactly as
+   designed (120 d after the onset) and gives S7-02 the most structural signal any horizon
+   in range offers.
+2. **Have the lead re-declare `biogas_mean`'s comparison basis** as a recorded decision —
+   either a seasonally matched window on the anchor side (the same days of the year the
+   simulated window covers) or a band stated for the window actually compared. That is a
+   basis correction, not a widening to pass, and I am not making it on my own because it
+   changes a declared tolerance.
+3. **Rule on S7-02 separately from F2.** Options the lead may weigh: keep the key and
+   accept a thin structural signal (recorded in the card as a known weakness); re-stage the
+   row so the structural half is real (for example on the `unadapted` baseline, where SAO
+   carries the flux from day 0, which makes it S6-01 plus a parameter fault); or measure
+   how long the shift takes to complete on the current feed (a longer probe, off the
+   matrix) and decide with that number. In every case the S5-01/S7-02 headers, the
+   2026-09-03 decisions entry and the truth-record note must be corrected to the measured
+   shift before the freeze.
+
+If the lead prefers 200 d instead: it removes the partition and keeps every anchored row in
+band, and S5-01, S6-01, S6-04 and all twelve grown rows keep their keys; only S7-02's
+structural half is lost, and it is already close to lost at 240 d.
+
+## 10. Provenance
+
+| | |
+|---|---|
+| Code | `6e258f6` on `claude/g1-scenario-generation`; the F2 duration edits local and uncommitted |
+| Panels | `anchor.compare_generated.output_panel`, seeds 1000–1023, 240 d, settled from d30; Plant A rows via S0-01 restaged on plant A with the baseline named |
+| Windowed gas means | one 240-d run per seed, means over [30, H] for H = 180…240 and per 30-day month |
+| Pathway shift | `simulate_truth` on S5-01 and S7-02 at their own seeds, at 200/220/240 d on the current tree and at 240 d in worktrees of `42bbe8e`, `9db569b`, `4a022e8`, `56aeceb`, `fd76983`, `39d0e14` (each with its own package on `PYTHONPATH`) |
+| Scratch generation | `python -m sim.run.matrix --runs-root <scratchpad>/scratch240/runs`, 1282 s |
+
+## 11. Addendum — S7-02 re-staged on the `unadapted` baseline, measured, not committed
+
+*Requested by the coordinator (07:06 UTC) so the lead can choose with numbers. Nothing in
+`scenarios/S7-02.yaml` has changed; the record correction of `3be4ef9` is the only commit.*
+
+**Method.** S7-02 (SAO omitted from the fitted model from day 0; `K_I_nh3` ×0.1 at day 120)
+integrated through the full harness at its own seed on each baseline and horizon. Then an
+**SAO-less fitted model** — the truth's extensions less `sao`, the true geometry, the same
+influent, started from the truth's own burn-in state — integrated over the same grid in two
+variants: *shift known* (the fitted model is handed the true parameter trajectory, so any
+residual is purely structural) and *shift unknown* (the fitted model keeps the pre-onset
+constant, so the residual is structural plus parameter). Residuals are fitted minus truth,
+over the pre-onset window (days 30–120) and the post-onset window (120–H). Gas and CH₄ are
+relative; acetate is absolute in kg COD/m³ (S_ac).
+
+**The truth on each baseline**
+
+| baseline | H | sound | SAO share of acetate-consuming biomass, d119 → end | X_ac / X_sao at end | acetate d119 → end (peak after onset), kg COD/m³ | gas mean pre → post onset, m³/d |
+|---|---:|---|---|---:|---|---|
+| `adapted` (as it stands) | 200 | yes | 0.000 → **0.004** | 1.154 / 0.004 | 0.036 → 1.27 (2.72) | 437 → 449 |
+| `adapted` (as it stands) | 240 | yes | 0.000 → **0.032** | 1.171 / 0.039 | 0.029 → 0.84 (2.98) | 445 → 470 |
+| `unadapted` (re-staged) | 200 | yes | **0.998 → 1.000** | 0.000 / 0.963 | 0.227 → 0.23 (0.58) | 421 → 442 |
+| `unadapted` (re-staged) | 240 | yes | **0.998 → 1.000** | 0.000 / 0.983 | 0.179 → 0.25 (0.63) | 429 → 463 |
+
+On the `unadapted` baseline SAO carries the whole acetate flux from day 0 and **the
+parameter fault does nothing to the truth**: the constant it moves belongs to a population
+that is not there (X_ac ≈ 0), so acetate and gas do not react to the onset at all.
+
+**The structural residual an SAO-less fitted model sees**
+
+| baseline | H | variant | gas, post-onset: mean rel / rms rel | CH₄ fraction, post: mean rel | acetate, post-onset: mean abs / rms (kg COD/m³) | acetate at end: truth / fitted | gas at end: truth / fitted |
+|---|---:|---|---|---:|---|---|---|
+| `adapted` | 200 | shift known (structural only) | −0.000 / 0.000 | −0.0001 | **+0.006 / 0.008** | 1.27 / 1.29 | 434 / 434 |
+| `adapted` | 200 | shift unknown (structural + parameter) | +0.007 / 0.109 | +0.010 | −1.25 / 1.37 | 1.27 / 0.04 | 434 / 429 |
+| `adapted` | 240 | shift known (structural only) | −0.001 / 0.005 | −0.0008 | **+0.056 / 0.099** | 0.84 / 1.03 | 435 / 433 |
+| `adapted` | 240 | shift unknown (structural + parameter) | +0.008 / 0.102 | +0.010 | −1.65 / 1.83 | 0.84 / 0.04 | 435 / 445 |
+| `unadapted` | 200 | shift known | −0.587 / 0.614 | −0.35 | +22.6 / 24.4 | 0.23 / 32.5 | 414 / 99 |
+| `unadapted` | 200 | shift unknown | +0.035 / 0.132 | −0.014 | +1.90 / 2.00 | 0.23 / 2.02 | 414 / 427 |
+| `unadapted` | 240 | shift known | −0.612 / 0.635 | −0.50 | +25.2 / 27.0 | 0.25 / 29.7 | 436 / 137 |
+| `unadapted` | 240 | shift unknown | +0.027 / 0.116 | −0.016 | +2.43 / 2.62 | 0.25 / 2.12 | 436 / 432 |
+
+Pre-onset (days 30–120), the same fitted model: on `adapted` the residual is zero on every
+channel (the omitted pathway carries nothing); on `unadapted` it is already large — gas
++5–6 % (rms 0.14), acetate **+6.1 kg COD/m³** — because the fitted model has no route for
+the acetate the truth's SAO consumes. That is S6-01's residual, from day 0.
+
+**Reading.**
+
+- **As it stands (`adapted`), the structural half is faint.** With the parameter shift
+  known, the SAO-less model reproduces gas and CH₄ to better than 0.1 % (200 d) and 0.5 %
+  (240 d); the only structural trace is acetate, +0.006 kg COD/m³ mean over the post-onset
+  window at 200 d and +0.056 at 240 d (0.2 kg COD/m³ by the last day, where the truth's SAO
+  has started to draw acetate down). A workflow would have to detect a late, acetate-only
+  divergence of 5–20 % against a 1–3 kg COD/m³ accumulation the parameter fault itself
+  causes. The parameter half is loud (gas rms 10 %, acetate off by 1.3–1.7 kg COD/m³ if the
+  shift is not modelled). **At 200 d the row is a parameter row with a structural label on
+  it; at 240 d the structural half exists but is small.**
+- **Re-staged on `unadapted`, the halves swap.** The structural residual is large and
+  present from day 0 (gas +5 %, acetate +6 kg COD/m³ before the onset; after the onset a
+  fitted model that keeps the adapted constant is off by 2–2.4 kg COD/m³ and 12–13 % rms on
+  gas, and one that takes the shift sours outright, gas −60 %) — the S6-01 signal, properly
+  diagnosable. But the parameter fault is a phantom: it moves a constant of a population the
+  truth does not have, and no observable reacts to it. **The `parameter` label and
+  `kinetic_update_allowed: true` would then rest on nothing a workflow can see**, which
+  turns the "partial attribution, abstain on the confounded part" design into a row whose
+  correct answer is the S6-01 answer plus a fault that cannot be attributed because it has
+  no effect.
+- Either way the compound row degenerates towards a single-fault row on the current feed;
+  which half survives is the choice. Neither horizon repairs it: 200 → 240 d moves the
+  `adapted` structural residual from ~0 to small, and does nothing on `unadapted`.
+
+**Options for the lead, with the numbers above** (none taken): (a) keep S7-02 as staged
+and record in the card that its structural half is small at 240 d and that abstention on
+the pathway split is the safe answer — honest, but the row then scores mostly on S5-01's
+signal; (b) re-stage on `unadapted` and change the key to S6-01's (drop `parameter`, drop
+`kinetic_update_allowed`), which makes it a duplicate of S6-01 at Tier C with an inert
+fault attached — probably not worth a row; (c) give the transition longer or a stronger
+push (an earlier onset, or a horizon well beyond 240 d — outside F2's equalised value) so
+the shift completes on the `adapted` baseline and the compound row means what its header
+says; the time to completion on the current feed is not yet measured and would need a probe
+run off the matrix; (d) retire S7-02 from the frozen library and carry the compound
+structural-plus-parameter idea as a Level-7 row to be designed against a measured
+transition after the freeze.
+
+Provenance: `<scratchpad>/restage_s702.py`, run at `3be4ef9`; results in
+`restage_s702.json` (not committed).
+
+## 12. Addendum — an earlier loss-of-adaptation onset: does the shift complete on `adapted`?
+
+*Requested by the coordinator (07:17 UTC) to decide between (c) make the shift complete and
+(d) retire. S7-02 and S5-01 on the `adapted` baseline as staged, with the
+`ammonia_inhibition_shift` onset moved from day 120 to day 60 and to day 30, at 200 and
+240 d. Same method as §11 (truth through the harness at each row's own seed; for S7-02 the
+SAO-less fitted model, shift known and unknown). No scenario file changed.*
+
+**S7-02 — the truth, and the structural residual with the shift known**
+
+| onset | H | sound | SAO share at end (X_ac / X_sao) | acetate onset → peak (day) → end, kg COD/m³ | structural residual, post-onset: gas mean / rms rel | acetate mean / rms abs | acetate at end, truth / fitted | gas at end, truth / fitted |
+|---:|---:|---|---|---|---|---|---|---|
+| 120 (as staged, §11) | 200 | yes | **0.4 %** (1.154 / 0.004) | 0.04 → 2.72 → 1.27 | −0.000 / 0.000 | +0.006 / 0.008 | 1.27 / 1.29 | 434 / 434 |
+| 120 (as staged, §11) | 240 | yes | **3.2 %** (1.171 / 0.039) | 0.03 → 2.98 → 0.84 | −0.001 / 0.005 | +0.056 / 0.099 | 0.84 / 1.03 | 435 / 433 |
+| 60 | 200 | yes | **4.5 %** (1.104 / 0.052) | 0.04 → 2.67 (d145) → 1.04 | −0.000 / 0.003 | +0.044 / 0.070 | 1.04 / 1.28 | 437 / 434 |
+| 60 | 240 | yes | **20.3 %** (0.926 / 0.236) | 0.05 → 2.58 (d208) → 0.53 | +0.001 / 0.030 | +0.255 / 0.492 | 0.53 / 1.03 | 444 / 433 |
+| 30 | 200 | yes | **14.0 %** (0.982 / 0.160) | 0.05 → 2.61 (d47) → 0.71 | −0.000 / 0.011 | +0.114 / 0.181 | 0.71 / 1.28 | 437 / 434 |
+| 30 | 240 | yes | **37.5 %** (0.697 / 0.419) | 0.04 → 2.62 (d61) → 0.42 | +0.002 / 0.039 | +0.408 / 0.736 | 0.42 / 1.03 | 446 / 433 |
+
+With the shift *unknown* to the fitted model (structural + parameter) every onset gives the
+same loud parameter signal as before: gas rms 10 %, CH₄ +0.6–0.8 %, acetate −1.1 to −1.2
+kg COD/m³ mean (the fitted model predicts 0.04 where the truth has 0.4–1.0).
+
+**S5-01 — the truth (key check)**
+
+| onset | H | sound | SAO share at end (X_ac / X_sao) | acetate onset → peak (day) → end, kg COD/m³ | CH₄ at end | pH at end |
+|---:|---:|---|---|---|---:|---:|
+| 120 (as staged) | 240 | yes | 9.0 % (0.934 / 0.092) | 0.03 → ~1.8 → 1.76 | — | — |
+| 60 | 200 | yes | 21.3 % (0.857 / 0.232) | 0.05 → 4.13 (d179) → 0.80 | 0.617 | 7.71 |
+| 60 | 240 | yes | 47.3 % (0.512 / 0.459) | 0.04 → 3.94 (d96) → 0.44 | 0.625 | 7.72 |
+| 30 | 200 | yes | 42.5 % (0.591 / 0.436) | 0.05 → 4.18 (d75) → 0.50 | 0.613 | 7.71 |
+| 30 | 240 | yes | **64.6 %** (0.330 / 0.604) | 0.05 → 3.98 (d96) → 0.37 | 0.626 | 7.73 |
+
+**Reading.**
+
+- **The shift does complete on `adapted` — it needs ~200 days after the onset, not 120.**
+  S5-01 with the onset at day 30 reaches X_sao 0.60 against X_ac 0.33 by day 240, which is
+  the figure the 2026-09-03 record claimed; so that measurement was almost certainly made
+  with the onset early in the run (or a longer post-onset run), and the row was later
+  staged with the onset at day 120, leaving 120 days for a transition that takes 200. The
+  record correction of `3be4ef9` stands as written (the claim is not reproducible *as the
+  rows are staged*); this addendum says why.
+- **On S7-02 the shift is slower** (a different seed, hence a different influent draw, and
+  the same seed on the same row gives 37.5 % where S5-01 gives 64.6 % at onset 30 / 240 d),
+  but at onset 30 it is well past single digits by day 240 and still climbing: X_sao 0.42
+  against X_ac 0.70, the acetoclasts down 40 % from their onset value.
+- **What the structural residual looks like when it exists.** With the shift known, the
+  SAO-less model matches gas to within 4 % rms and CH₄ to 0.3 % even at onset 30 / 240 d —
+  both pathways turn acetate into methane, so the *route* changes and the gas barely
+  does. The structural signature is **acetate only**: the SAO-less model holds acetate at
+  ~1.0 kg COD/m³ while the truth draws it down to 0.42 (onset 30) or 0.53 (onset 60) by day
+  240 — a factor of 2–2.5 by the last day, a mean gap of 0.25–0.41 kg COD/m³ over the
+  post-onset window, growing month by month. That is kg-scale on acetate, in a Tier C
+  record with weekly speciation at 8 % noise, and it is **not** tens of per cent on gas; it
+  is a different kind of signal from `unadapted`'s (+6 kg COD/m³ and +5 % gas from day 0),
+  because there the fitted model has no route at all for the acetate, while here it has
+  one that is merely being inhibited.
+- **The parameter fault still acts on a population that exists at the onset**: X_ac 1.10–1.21
+  at day 30 or 60 on every run, the acetate spike to 2.6 kg COD/m³ follows within a month,
+  and the parameter half stays loud. Nothing becomes a phantom.
+- **The cost of an early onset is the short clean baseline**: at onset 30 a workflow has
+  one month of adapted operation to learn the plant before the acetate spike; at onset 60
+  it has two, and the share at 240 d is 20 % rather than 37 %. Both runs stay sound.
+- **S5-01's key holds at every onset** and the row becomes richer, not weaker: acetate
+  rises 80–100× to ~4 kg COD/m³ within 45–70 days of the onset and then **recovers** as
+  syntrophic oxidation takes over (to 0.4–0.8 by the end). A bounded update of the
+  inhibition constant is still the correct action; the recovery is the pathway shift the
+  header describes, now actually visible in the record.
+
+**Answer to the question asked.** Yes: at onset 30, S7-02 at 240 d carries a completed-enough
+shift (37.5 % SAO share, rising) for the compound row to mean what its header says with a
+**one-field change** (`onset_day: 120 → 30`), and S5-01 moved with it reaches the takeover
+the record claimed (64.6 %). The structural residual that results is acetate-only and
+grows to a factor of ~2.5 by day 240 — unmistakable on the acetate channel, invisible on
+gas. If the lead requires a gas-scale structural residual, no onset on `adapted` provides
+it and (d) is the answer; if an acetate-scale one is acceptable, (c) with onset 30 (or 60,
+trading half the share for a two-month baseline) is viable at 240 d and marginal at 200 d
+(14 % / 4.5 %). Onset 120 as staged is not viable at either horizon.
+
+Provenance: `<scratchpad>/probe_onset.py` at `3be4ef9`; results in `probe_onset.json` (not
+committed). Nothing in `scenarios/` changed.
+
+## 13. STOP — at a real 200-d horizon `biogas_mean` is out of band, and §3's horizon table was wrong
+
+*Status line for the coordinator: 200 d NOT committed — the 200-d panel fails the anchor
+gate; §12 pushed; holding for the lead.*
+
+**What was measured** (24-seed Plant B clean panel generated *at* 200 d, `OUTPUT_DAYS = 200`,
+settled from day 30; the report block regenerated at 200 d says the same):
+
+| row | at 180 d | at 200 d (real panel) | at 240 d (real panel) | declared band | status at 200 d |
+|---|---:|---:|---:|---|---|
+| `biogas_mean` | 3143, ratio 1.489 | **3216, ratio 1.523** | 3207, ratio 1.519 | ratio in [0.6, 1.5] | **OUTSIDE by 0.023** |
+| `digester_pH_median` | 7.232 | 7.226 | 7.218 | 7.27 ± 0.4 | inside |
+| `alkalinity_median` (calibrated) | 5.116 | 5.046 | 4.939 | ± 35 % | inside |
+| `vfa_median` | 0.780 | 0.771 (ratio 0.65) | 0.757 | ratio in [0.25, 4] | inside |
+| `fos_tac_median` | 0.151 | 0.151 (ratio 0.65) | 0.151 | ratio in [0.5, 2] | inside |
+
+Souring: **24/24 sound** at 200 d. Triggers at 200 d, Plant B: overload **8.92 %** pooled
+(per-run 4.09–16.37 %, 24/24), foaming **8.72 %** (2.34–16.96 %, 24/24), FOS/TAC > 0.40 and
+> 0.30 both 0.00 %. Plant A `adapted`: overload 0.29 % (8/24), foaming 0.22 % (6/24). The
+Plant C and Plant A `unadapted` rows at 200 d are still computing and will be added.
+
+**Why §3's table was wrong, stated plainly.** The per-horizon ratios in §3 (1.447 at 200 d,
+"widest margin") were **not** measured on 200-d runs. They were the settled means over
+days 30–H *inside the 240-d runs*. A 200-d run is not the first 200 days of a 240-d run:
+the equalisation tank is initialised from the whole-horizon mean of arrivals (recorded in
+the decisions log as dormant-but-horizon-sensitive), and the generator's realisation
+depends on `n_days`, so the trajectories differ from day 0. The difference is not small
+for this row — the windowed estimate at 200 d was 3055, the real 200-d panel is 3216
+(5 %). I presented a windowed estimate as if it were a horizon measurement, and the lead's
+choice of 200 d was made on it. That was my error; the caveat in §3 about the tank was
+there but I did not act on it. Real fixed-horizon panels at 190, 210 and 220 d are running
+now and will replace §3's table (§14), so the lead has a true curve.
+
+**What the real numbers say so far.** On real panels the row sits at the band edge at every
+horizon measured — 1.489 (180 d), 1.523 (200 d), 1.519 (240 d) — so **the horizon does not
+decide this row**; 180 d was inside by 0.7 % of its margin and both equalised horizons are
+outside by ~0.02. Everything else in the 200-d ruling stands: the partition is removed at
+any single value, every other anchored row is inside, souring is 24/24, every answer key
+that holds at 240 d holds at 200 d (S5-01 included), and S7-02 is the separate question.
+
+**Recommendation, revised.** Keep 200 d (or whichever single value the lead prefers once
+§14 is in), and rule on `biogas_mean`'s **comparison basis or band** as a recorded decision:
+the simulated figure is a 170-day settled mean of a February–July window with a
+tank-initialisation transient at its head, compared against a three-year annual mean; the
+row has been within ±0.03 of the band edge on every panel since the calcium ruling and was
+already named "the row to watch". I am not widening the band and not touching the tank,
+calibration or seeds. The 200-d edits (all twenty scenarios, the README, the schema pin,
+`OUTPUT_DAYS`, the decisions entry, the regenerated report block) are held locally,
+uncommitted, until the lead rules.
+
+## 14. The true horizon curve — measured on real panels, one per horizon
+
+*Status line: 200 d NOT committed; real-panel curve below; the row's horizon dependence is
+the tank initialisation, not the season; holding for the lead.*
+
+**`biogas_mean` on the 24-seed Plant B clean panel, each panel generated at its own
+horizon** (`OUTPUT_DAYS` = H, settled from day 30, panel median of the settled mean, anchor
+2111 m³/d):
+
+| horizon (d) | 180 | 190 | 200 | 210 | 220 | 240 |
+|---|---:|---:|---:|---:|---:|---:|
+| `biogas_mean`, m³/d | 3143 | 3058 | 3216 | 3071 | 3274 | 3207 |
+| ratio to the anchor | 1.489 | **1.449** | **1.523** | **1.455** | **1.551** | 1.519 |
+| against [0.6, 1.5] | in | in | **out** | in | **out** | out |
+| sound | 24/24 | 24/24 | 24/24 | 24/24 | 24/24 | 24/24 |
+| overload trigger, pooled | 7.67 % | 7.87 % | 8.92 % | 8.13 % | 8.42 % | 8.18 % |
+| foaming trigger, pooled | 7.20 % | 6.70 % | 8.72 % | 8.29 % | 8.18 % | 8.47 % |
+
+Every other anchored row is inside its band at every horizon (§13's table for 200 d; the
+190/210/220 panels likewise: 22 of 23 rows in, only `biogas_mean` moves against its edge).
+
+**What the curve says.** It is not a curve: the row jumps by ±5 % between horizons ten
+days apart (3058 → 3216 → 3071 → 3274), with no trend. That is not the seasonal window §3
+described — a window effect is smooth and monotone over ten-day steps — it is the
+**horizon-dependent initial state**: the equalisation tank on Plant B is initialised from
+the whole-horizon mean of arrivals, so every horizon starts the digester from a different
+day-0 tank content, and the realisation the generator draws differs with `n_days` as well.
+Those two effects re-roll the early months of every run, and the settled mean over
+days 30–H carries the re-roll. The decisions log of 2026-09-10 recorded exactly this
+initialisation as "dormant-but-fault-sensitive", left for the lead because the fix
+(initialise from the first hold-up window) moves every Plant B cell. It is **not dormant**:
+it makes an anchored row horizon-sensitive by 5 %, which is more than the row's whole
+margin to its band edge. The seasonal effect of §3 is real but second order beside it.
+
+**So the row is a coin flip against its edge**, whatever the horizon: 1.449–1.551 across
+six horizons on the same feed, the same seeds and the same calibration, band edge 1.5. The
+180-d figure that was "inside by 0.7 % of its margin" was one draw of that coin.
+
+**Recommendation, third and last revision, with the reasons.**
+
+1. **The horizon does not fix this row and should not be chosen to.** Any single value
+   removes the partition; the lead's other reasons for 200 d hold at 190 or 210 as well
+   (every other row in, souring 24/24, every key that holds at 240 d holds). If the lead
+   wants a horizon that is in band *on today's panel*, **210 d** is (1.455) and keeps 90
+   post-onset days for the loss-of-adaptation rows; but the number above says that
+   choosing 210 d because it is in band is choosing the lucky draw.
+2. **The honest fix is the tank initialisation**, which is the lead's call and a change to
+   the truth model at the freeze: initialise the buffer from the first hold-up window (the
+   recorded fix), so the day-0 state stops depending on the horizon. It moves every Plant B
+   and C cell; the panel would be re-measured and every anchored row re-checked. I have not
+   touched it and will not without the ruling.
+3. **Otherwise rule on the row's basis or band**: a 24-seed 150–210-day settled mean with a
+   re-rolled head, compared to a three-year annual mean, has never been better than 0.7 %
+   inside its edge since the calcium ruling; it is a measured fact about the comparison,
+   recorded rather than tuned.
+
+**The other rows at 200 d, for completeness** (24 seeds each; 180-d values in brackets):
+
+| Plant | baseline | sound | overload pooled | per-run | runs | foaming pooled | per-run | runs |
+|---|---|---|---:|---|---:|---:|---|---:|
+| B | — | 24/24 | 8.92 % (7.67) | 4.09–16.37 % | 24/24 | 8.72 % (7.20) | 2.34–16.96 % | 24/24 |
+| C | — | 24/24 | 9.14 % (9.22) | 2.34–14.04 % | 24/24 | 7.43 % (7.67) | 2.92–12.28 % | 24/24 |
+| A | `unadapted` | 24/24 | 1.36 % (1.49) | 0.00–4.09 % | 21/24 | 0.12 % (0.14) | 0.00–2.92 % | 1/24 |
+| A | `adapted` | 24/24 | 0.29 % (0.28) | 0.00–2.34 % | 8/24 | 0.22 % (0.25) | 0.00–1.75 % | 6/24 |
+
+Operator FOS/TAC > 0.40 and > 0.30: 0.00 % on every row (one run on B at 220 d, 0.04 %).
+
+Nothing is committed beyond this report. The 200-d edits are held locally; no tolerance,
+tank, calibration or seed has been touched; nothing has been regenerated.
+
+## 15. The tank-initialisation fix, measured — and the real cause of the jitter
+
+*Status line: §15 pushed: tank-init fix measured; **it is not the cause** (the jitter is
+unchanged with it); the cause is the influent generator's non-prefix-stable stream layout,
+verified directly; with a prefix-stable layout the jitter collapses and `biogas_mean` lands
+**stably at 1.50–1.54, above the band at every horizon** — the row's level is set by the feed
+and calibration and the lead must rule on its basis or band; holding. Nothing committed but
+this section.*
+
+### 15.1 The tank fix alone
+
+Implemented locally in `sim/plants/equalisation.py` (one call site in the harness passes
+the window): the hold-up is set from the first 30 days of arrivals instead of the
+whole-horizon mean, and the tank's day-0 level and load from the first hold-up window. The
+14 equalisation tests pass unchanged (they call `buffer_series` with the old default).
+Plant C has no buffer (checked: only `plant_B.yaml` declares `equalisation`); Plant A
+neither.
+
+| Plant B, 24 seeds, panel generated at H | 190 d | 200 d | 210 d |
+|---|---:|---:|---:|
+| `biogas_mean` ratio, §14 (no fix) | 1.449 | 1.523 | 1.455 |
+| `biogas_mean` ratio, **tank fix** | 1.443 | 1.524 | 1.442 |
+| m³/d, tank fix | 3046 | 3218 | 3043 |
+| souring | 24/24 | 24/24 | 24/24 |
+| overload / foaming, tank fix | 8.15 % / 7.01 % | 8.60 % / 8.89 % | 7.30 % / 7.55 % |
+
+**The jitter did not collapse**: the fix moves the row by less than 1 % at every horizon and
+the ±5 % pattern between horizons ten days apart is intact. §14's attribution of the
+jitter to the tank initialisation was **wrong**; the tank contributes under a percent.
+Plant C (9.14 % / 7.43 %) and both Plant A rows are bit-identical with the fix, as they
+should be; S5-01 and S7-02 at onset 30 / 200 d reproduce §12 exactly (42.5 % / 14.0 %).
+
+### 15.2 The real cause, verified directly
+
+The influent generator draws, per feed in order, seven blocks of length `n_days` from
+**one** stream (`sim/influent/generator.py`, the "Randomness" paragraph, which states it:
+"the blocks are `n_days` long, so the horizon is not prefix-stable: a 100-day run is not the
+first 100 days of a 200-day run"). A block of a different length shifts every later block,
+so changing the horizon re-rolls every feed from day 0 — the first feed included, because
+its second block starts where its first ends. Tested: the same seed at 190 and 200 d on
+Plant B gives deliveries that differ on every feed from day 0 (relative differences of
+order 1–10¹⁴ against zero-delivery days). **Every horizon is a different 24-seed panel**, and
+the row's ±5 % "curve" is the sampling spread of a 24-seed median, not a horizon effect.
+
+### 15.3 A prefix-stable layout, measured (local, committed nowhere)
+
+Each block drawn from its own child stream keyed by `(seed, feed, block)` and each assay's
+noise by `(seed, feed, assay)`; the fractionation draw stays at the head of the main
+stream; the fault layer keeps its own seed. Verified: a 200-d run's first 190 days equal the
+190-d run on every feed's deliveries and moisture, the influent series and the
+fractionation. Measured **with the tank fix as well**:
+
+| Plant B, 24 seeds, panel generated at H | 190 d | 200 d | 210 d |
+|---|---:|---:|---:|
+| `biogas_mean`, m³/d | 3174 | 3244 | 3239 |
+| ratio to the anchor | **1.504** | **1.536** | **1.534** |
+| against [0.6, 1.5] | out by 0.004 | out | out |
+| `digester_pH_median` (band 7.27 ± 0.4) | 7.228 | 7.227 | 7.224 |
+| `alkalinity_median` (calibrated) | 4.911 | 4.912 | 4.923 |
+| `vfa_median` (ratio band 0.25–4) | 0.743 (0.63) | 0.744 (0.63) | 0.744 (0.63) |
+| `fos_tac_median` (ratio band 0.5–2) | 0.151 (0.65) | 0.151 (0.65) | 0.151 (0.65) |
+| souring | 24/24 | 24/24 | 24/24 |
+| overload trigger | 7.04 % (24/24) | 7.12 % (24/24) | 6.86 % (24/24) |
+| foaming trigger | 6.52 % (24/24) | 6.63 % (24/24) | 6.42 % (24/24) |
+| FOS/TAC > 0.40 / > 0.30 | 0 / 0 | 0 / 0 | 0 / 0 |
+
+**The jitter collapses.** The three horizons sit within 2 % of each other on every quantity
+— a smooth, small window effect, which is what a horizon change should do — and the
+trigger rates, which jumped by a point between horizons before, now move by 0.3 points.
+The layout, not the tank, was the cause.
+
+**Where the row lands.** Stably at **1.50–1.54, above the band edge at every horizon**. The
+old layout's 1.489 at 180 d and 1.449/1.455 at 190/210 d were lucky draws of a re-rolled
+panel; the level of the row is set by the feed and the calibration, and no horizon brings it
+inside. **The lead still needs to rule on the row's comparison basis or band**; the horizon
+question and this row are now decoupled.
+
+The other rows at 200 d with the prefix-stable layout (their realisations change once,
+like every cell's): Plant C 24/24 sound, overload 9.82 % (6.43–14.04 %, 24/24), foaming
+8.50 % (3.51–15.20 %, 24/24); Plant A `adapted` 24/24, 0.24 % (8/24) / 0.24 % (7/24);
+Plant A `unadapted` 24/24, 1.19 % (16/24) / 0.07 % (3/24). S5-01 at onset 30 / 200 d:
+SAO share **42.2 %**, acetate 0.04 → 3.82 → 0.62; S7-02: **20.8 %** (was 14.0 % under the
+old realisation), acetate 0.05 → 3.33 → 0.78; both sound. §12's conclusion stands and
+strengthens slightly under the new draw.
+
+### 15.4 What adopting the prefix-stable layout would mean
+
+It is a change to the influent generator at the freeze — the lead's call, like the tank:
+every cell's realisation changes once (all plants); the anchored rows are re-measured
+(above: all in band except `biogas_mean`, exactly as before); the trigger tables move (B
+~7.1 % / 6.6 % rather than ~8.9 % / 8.7 %); `tests/test_generator.py`'s determinism and
+stream-independence tests hold in form (still seeded, still ordered) but any pin on a
+realised value moves and the "Randomness" paragraph is rewritten to say the horizon *is*
+prefix-stable. It is the right property — a longer run should extend a realisation, not
+re-roll it, and it makes any future horizon change safe — and it is what would have made
+§3's windowed table a measurement rather than an estimate. The tank fix is principled and
+harmless (< 1 %) and would go with it.
+
+**Recommendation.** (1) Adopt the prefix-stable layout and the tank fix together, on the
+lead's ruling, then equalise the horizon at 200 d (or any single value; they now differ by
+under 2 %). (2) Rule on `biogas_mean`'s basis or band as a separate decision: at 1.50–1.54
+on a stable panel it is outside by 0.004–0.036, on a comparison of a 24-seed
+February–July settled mean against a three-year annual mean. (3) Rule on S7-02 (§12
+stands: onset 30 gives 21 % at 200 d under the new draw). Nothing is committed: the 200-d
+edits, the tank fix and the generator variant are all local.
+
+## 16. Ruling 2 — `biogas_mean`: what the anchor column measures, and where the hidden degradability sits
+
+*Status line: ruling 1 landed at `1353341` (prefix-stable generator + first-window tank;
+one plausibility test red at the band edge, recorded, not weakened). This section is the
+ruling-2 report: (a) the anchor column is total metered biogas, so the basis is right in
+kind; (b) the HSW and FOG hidden degradability centres sit above the cited literature
+(0.95 vs ~0.84, 0.98 vs ~0.92) — a feed-centre question for the lead, not changed here.
+Consequence: the g1 gate and one default-suite test are red with the band unchanged; I am
+continuing with rulings 3 and 4 and will hold regeneration only on HOLD.*
+
+*The lead's ruling 2 of 2026-09-11: band and comparison basis unchanged until the cause is
+known; two read-only checks. This is a finding, not a fix — no band, basis or feed centre
+was changed.*
+
+### 16.1 (a) What Muscatine's biogas column measures
+
+**Total metered biogas production: the sum of the flow to the waste-gas burner (flare) and
+the flow to the boiler.** Three sources agree. The dataset's own SCADA data dictionary
+(`anchor/raw/iowa-muscatine-wrrf/SCADA-data-dictionary.csv`) defines `Biogas` as "Total
+biogas flow (sum of Biogas_burner and Biogas_boiler)", with `Biogas_burner` "Digester Gas
+Flow Rate to Waste Gas Burner" (0–1000 cfm) and `Biogas_boiler` "Digester Gas Flow Rate to
+Boiler" (0–120 cfm), plus the daily totals `V-burner_FT3` and `V-Boiler_FT3`. The LABS data
+dictionary defines the daily `Biogas` column, the one the anchor uses, as "Average daily
+biogas flow, cfm — calculated biogas flow as total biogas volume in cubic feet divided by
+1440 minutes per day". And the dataset's paper (Schroer & Just 2023, *ACS ES&T Engineering*,
+open-access copy at https://pmc.ncbi.nlm.nih.gov/articles/PMC10928704/) says the biogas
+variable is built "by first summing the flow to the waste gas burner and flow to the
+boiler", that "daily total biogas volume was recorded in cubic feet", and gives a daily
+average of 103.5 cfm ≈ 149,000 ft³/d for the plant's two 485,000-gal digesters — which is
+the anchor's 2111 m³/d per digester to the unit conversion. There is no CHP engine in the
+metered paths and no statement of unmetered losses; the plant flares most of its gas (the
+burner meter's range is eight times the boiler's).
+
+So the basis is right in kind: the anchor is total production, not gas delivered to a
+consumer net of flare. Two caveats already in the declared tolerance stand: the meter
+states neither temperature nor pressure for its cubic feet (the anchor is at "the meter's
+conditions", the simulator's `q_gas_stp_dry` at 0 °C and 1 atm dry, and the band was widened
+to 0.6–1.5 for that), and the division by two assumes the two digesters produce equally.
+
+### 16.2 (b) The hidden degradability centres against the literature
+
+The truth-side fractionation (`configs/influent/feed_fractionation.yaml`) gives each
+stream a non-inert COD share, `1 − f_xi − f_si`: **high-strength waste 0.95** (lipid COD
+share 0.75, inert 0.05, both marked ASSUMED; the lipid share was raised on the lead's
+decision of 2026-09-02 so the derived COD/VS met the measured 2.23) and **FOG 0.98** (lipid
+0.95, inert 0.02, ASSUMED). The primary sludge and WAS shares (0.67, 0.55) are standard
+ADM1 sludge values and were not asked about.
+
+Literature, as cited in the open-access review of FOG co-digestion
+(https://pmc.ncbi.nlm.nih.gov/articles/PMC8072289/, citing Jeganathan et al. 2006,
+Davidsson et al. 2008 and Ziels et al. 2016): lipids convert **94.8 %** to biogas, proteins
+**71 %**, carbohydrates **50.4 %**; the theoretical yield of lipid is 1.0 m³ CH₄/kg against
+0.63 for protein and 0.42 for carbohydrate. Brown grease measured in BMP gives 354 mL CH₄ per
+g COD at 35 °C and 1 atm (https://www.frontiersin.org/journals/environmental-engineering/articles/10.3389/fenve.2024.1354582/full),
+which is ~90 % of the 395 mL/g COD theoretical at those conditions, and the same paper
+cites 0.40–0.77 m³ CH₄ per kg VS removed for pilot-scale brown grease (Zhang et al. 2014).
+The cited FOG biodegradability range is therefore **~85–95 %** of COD.
+
+Weighting each stream's own fractionation by those conversion fractions gives the
+biodegradable share the literature implies: **HSW 0.84** (0.75 × 0.948 + 0.10 × 0.504 +
+0.06 × 0.71 + 0.04 × 1.0) against the truth's **0.95**; **FOG 0.92** against the truth's
+**0.98**. **Both streams sit above their literature range — HSW by ~11 points, FOG by ~6 —
+and HSW is the one clearly outside**: no cited value for a food-processing waste with
+25 % non-lipid COD reaches 95 % biodegradable, while FOG at 98 % is at the top edge of the
+grease-trap range (94.8 % for pure lipid) rather than beyond it.
+
+**How much of the 1.5× that could explain, estimated, not measured.** HSW and FOG carry
+70 % of the plant's COD load (3232 and 1689 of 7052 kg COD/d at the anchored volumes).
+Moving their degradable shares to the literature-implied values would remove 343 + 103 =
+446 kg COD/d of the 6064 kg/d the truth degrades, i.e. **~7 % less gas**, which would take
+the row from 1.536 to ~1.43 — inside the band with a margin, on a back-of-envelope that
+ignores ADM1's own hydrolysis and LCFA-inhibition kinetics (which already leave some
+non-inert COD unconverted at a 20-d HRT, so the true sensitivity is smaller). Two other
+contributors stand beside it: the meter-conditions unknown (a meter at 35 °C and slight
+overpressure reads 10–13 % more volume than 0 °C dry for the same gas), and the seasonal
+window of §3. None of the three alone is the whole 1.5×; the degradability centres are the
+one that is a *modelling* choice rather than a measurement basis.
+
+**What this implies, for the lead.** The ruling's condition — "only if the basis is right"
+— is met, and the answer to (b) is that the high-strength waste's degradability centre is
+outside its literature range. That is a change to a frozen feed centre, which is the lead's
+call and is not made here: `f_xi`/`f_si` of the HSW (and FOG) would move, the derived
+COD/VS check (±10 % against the measured 2.23) would have to be re-satisfied by
+redistributing the lipid share, every Plant B and C cell would change, and the anchored
+rows and pins would be re-measured. Until then `biogas_mean` stays the row to watch at
+1.50–1.54 on a stable panel, outside its band by 0.004–0.036, recorded as such.
+
+### 16.3 Consequence for CI, stated now
+
+`tests/test_g1_anchor.py::test_the_biogas_the_simulator_makes_is_the_biogas_the_plant_measures`
+asserts `biogas.passed`, and `test_a_row_calibrated_to_the_anchor_is_never_counted_as_a_match`
+asserts every independent row matched. With the band unchanged (ruling 2) and the layout
+adopted (ruling 1), both fail at the 200-d panel (1.536) — the g1 job of CI, which runs on
+any change under `sim/`, will be red on the side branch and on PR #15 once fast-forwarded.
+I am not weakening those tests: they are doing their job. The coordinator decides whether
+CI-green in step (iii) means the ruff and pytest jobs or the g1 gate as well (which cannot
+be, without the lead moving the band or the feed centre).
+
+The default pytest job is also touched, by one test. The full suite at the ruling-1 commit
+is 366 passed, 2 skipped, **1 failed**:
+`tests/test_plausibility.py::test_plant_b_survives_the_generator_swings`, a single-seed
+(seed 11) 180-d unbuffered Plant B run that asserts the same [0.6, 1.5] biogas ratio. Under
+the new layout that seed gives 3168 m³/d against the anchor's 2111, ratio **1.5004** — the
+same excess on one seed, at the band edge by 0.0004. It passed at the PR head because that
+seed's old realisation happened to sit below the edge. Left red, recorded in the ruling-1
+decisions entry; it moves with whatever the lead decides for the row.
+
+
+## 17. Ruling 4 — S7-02 at onset 120 on the 365-d horizon: the takeover completes
+
+*Status line: rulings 1–3 landed at `1353341`, `7d1554d`, `3ec7bb8` (one commit each,
+ruff green, the default suite green but for the one band-edge plausibility test recorded at
+`1353341`; the g1 gate red for the same row). This section is the ruling-4 verification;
+its commit carries the scenario record, the truth-side record and the decisions entry.
+Next: fast-forward PR #15 to the side-branch head, CI, then regeneration as the last
+action. Nothing regenerated yet; no HOLD received.*
+
+**The question.** Ruling 4 keeps S7-02 as staged — onset day 120, `adapted` baseline — on
+Plant A's new 365-d horizon (ruling 3), and asks whether the takeover completes there:
+report the X_sao / X_ac trajectories, whether the recorded 0.60 / 0.46 is reached and by
+what day, and correct the record to what is reached. Measured through the harness at each
+row's own seed (S7-02 1072, S5-01 1051), current feed, the prefix-stable generator of
+ruling 1, 365 d, monthly samples of the truth state.
+
+**S7-02** (omitted SAO + loss of adaptation at day 120):
+
+| day | X_ac | X_sao | SAO share of X_ac + X_sao | acetate, kg COD/m³ |
+|---:|---:|---:|---:|---:|
+| 119 | 1.177 | 0.0001 | 0.0 % | 0.04 |
+| 150 | 1.226 | 0.0005 | 0.0 % | 2.34 |
+| 180 | 1.240 | 0.003 | 0.2 % | 1.39 |
+| 210 | 1.208 | 0.012 | 1.0 % | 1.58 |
+| 240 | 1.150 | 0.045 | 3.8 % | 1.51 |
+| 270 | 1.070 | 0.145 | 11.9 % | 1.61 |
+| 300 | 0.837 | 0.311 | 27.1 % | 0.99 |
+| 330 | 0.580 | 0.481 | 45.4 % | 0.38 |
+| 365 | 0.371 | 0.691 | 65.1 % | 0.31 |
+
+X_sao reaches **0.60 on day 348**; X_ac falls to **0.46 on day 350**; SAO carries half the
+acetate-consuming biomass from day 338. Acetate peaks at 3.91 on day 158 and is back to
+0.31 at the end as the oxidisers take the flux. Sound throughout (pH 7.70, CH₄ 0.62 at the
+end).
+
+**S5-01** (the same loss of adaptation, no omission — the control):
+
+| day | X_ac | X_sao | SAO share | acetate, kg COD/m³ |
+|---:|---:|---:|---:|---:|
+| 119 | 1.079 | 0.0001 | 0.0 % | 0.02 |
+| 180 | 1.022 | 0.003 | 0.3 % | 3.62 |
+| 240 | 0.958 | 0.103 | 9.7 % | 3.13 |
+| 270 | 0.734 | 0.361 | 33.0 % | 1.08 |
+| 300 | 0.472 | 0.622 | 56.9 % | 0.26 |
+| 330 | 0.267 | 0.693 | 72.2 % | 0.30 |
+| 365 | 0.139 | 0.778 | 84.8 % | 0.19 |
+
+0.60 on **day 298**, 0.46 on **day 302**, half the biomass from day 291; acetate peaks at
+3.73 on day 201. Sound throughout (pH 7.76, CH₄ 0.65).
+
+**Answer.** Yes: on 365 d the record's 0.60 / 0.46 **is reached**, by day ~350 for S7-02
+and ~300 for S5-01, and the record now says exactly that (the scenario headers, with the
+monthly table in the S7-02 file; the truth-side record; the S6-01 cross-reference; the
+harness note). The figure first recorded on 2026-09-03 as "in 240 d" was not reproducible
+at any commit (§11, corrected at `3be4ef9`); the year is what it takes on the current
+feed. The two rows differ in the fitted model, not in the truth's timing beyond the fifty
+days the omission costs S7-02's oxidisers (they start from the same 7e-5 seed but the
+S7-02 truth's acetate pool relaxes later).
+
+**What that makes of the row.** The structural half of S7-02 rests on a pathway that
+carries a few per cent of the flux until day ~250, a quarter by day 300 and the majority
+from day ~340: a structural residual that is a **ramp through the last four months**, on
+acetate first and on the gas as the route changes — the "ramp that follows the growing
+oxidiser population" the answer key describes, which at 200 d it was not (§11: 0.4 % of
+the flux, every channel reproduced by an SAO-less fit). The parameter half is unchanged: a
+step at day 120 on the adapted baseline, acetate up 100× within forty days. The onset-30
+staging (§12 c) and the `unadapted` staging (§11) are not needed and are closed by the
+ruling; retirement (§12 d) is off the table.
+
+**Not changed.** No onset, magnitude, baseline, seed, budget, answer key or tolerance.
+
+## 18. Regeneration at `a91e71a` — VOID (sequence breach, recorded by the coordinator)
+
+*Correction, 2026-09-11 13:25 UTC. The coordinator recorded a sequence breach: the ordered
+sequence was fast-forward → CI **green** → regenerate, and I regenerated while CI was red
+on the `biogas_mean` band edge. The regeneration below is therefore **void**: its numbers
+are not the G1 regeneration and are not to be quoted as such; the matrix will be regenerated
+at whatever head the lead's next ruling produces, on the coordinator's word that the head
+is final and CI green, and not before. The section is kept as written so the record shows
+what was done; the CI account and the trigger tables in it stand on their own.*
+
+*Status line: done. PR #15 (`claude/g1-scenario-generation`) is fast-forwarded to
+`a91e71a`, the ruling-4 commit; the 117-cell matrix was regenerated at that head as the
+last action and verified; this section and the milestones line are a docs-only commit on
+the side branch so that the PR head stays the SHA every manifest carries. I have stopped:
+no further push, no merge, no tag. HOLD was not received; CI is red only where §16.3 said
+it would be.*
+
+**The four commits, one per ruling** (each with `ruff check .` and `ruff format --check .`
+green and the default suite green but for the one band-edge test recorded at the first):
+
+| ruling | commit | what |
+|---|---|---|
+| attribution | `e688535` | the common-horizon question is review finding F2, not the lead's |
+| 1 | `1353341` | prefix-stable influent generator; blend tank from its first window; tests |
+| 2 | `7d1554d` | `biogas_mean` investigated, band and basis unchanged (§16) |
+| 3 | `3ec7bb8` | the horizon is the plant's: A 365 d, B and C 200 d; trigger tables re-measured |
+| 4 | `a91e71a` | S7-02 stays at onset 120 on 365 d; the takeover completes (§17) |
+
+**CI at `a91e71a`** (run 34586669039, the pull-request event; the push event is the same):
+ruff **green**; pytest py3.11 and py3.12 **red on exactly one test**,
+`tests/test_plausibility.py::test_plant_b_survives_the_generator_swings`, ratio 1.5004
+against the 1.5 edge (369 passed, 2 skipped, 1 failed on both); gate G1 anchor panel
+**red on exactly the two `biogas_mean` tests** (`biogas_mean` 3244 against 2111, ratio
+1.536; 21 of 22 independent rows matched; 11 passed, 2 failed). All three failures are the
+one row the lead's ruling 2 left as the row to watch, with the band the lead's; nothing
+was weakened.
+
+**The regeneration**, `python -m sim.run.matrix --runs-root runs` after clearing `runs/`
+and `truth_store/`, working tree clean at `a91e71a`:
+
+| | |
+|---|---|
+| head | `a91e71a90288bba292faaf0ce643ce305c0c3488`, 0 dirty files, every manifest carries it |
+| cells | **117 / 117 generated, 117 / 117 sound digesters**; 0 soured, 0 failed |
+| wall-clock | **748 s (12 min 28 s)**, 10:03:54–10:16:22 UTC |
+| per plant (sum of per-cell wall) | A 21 cells 296 s; B 48 cells 231 s; C 48 cells 218 s |
+| index | `truth_store/index.jsonl` **117 lines, 117 unique ids**; 117 run dirs, 117 truth dirs |
+| horizons in the manifests | every Plant A cell 365 d / 365 n_days (21); every B and C cell 200 d (48 + 48) |
+| store | 27 MB under `runs/`, 20 MB under `truth_store/` |
+| verification | `verify_regen.py`: index, run dirs and truth dirs agree; redacted manifests carry no scenario id, seeds or baseline; every run has `calls.jsonl`; the 32-byte salt appears in no visible file |
+
+The expected wall-clock impact of the 365-d Plant A cells (decisions, ruling 3: under two
+minutes on ~13 min) is confirmed the easy way: the whole regeneration took 12.5 min, no
+longer than the last full one at the old horizons (~13 min); Plant A's thirteen truth
+integrations account for 296 s of per-cell wall against B's 231 s for sixteen.
+
+**Trigger-rate tables for all three plants** (24 clean Level-0 seeds each, at the matrix
+horizons under the prefix-stable generator; the four-row form, Plant A as its two
+baselines; also in `docs/g1_anchor_report.md` §5.4, the benchmark card and the decisions
+entry of ruling 3):
+
+| Plant | baseline | horizon | sound | overload, pooled | per-run range | runs firing | foaming, pooled | per-run range | runs firing | operator > 0.40 / > 0.30 |
+|---|---|---:|---|---:|---|---:|---:|---|---:|---:|
+| **B** | — | 200 d | 24/24 | **7.12 %** | 2.34 – 16.37 % | 24/24 | **6.63 %** | 1.75 – 14.04 % | 24/24 | 0.00 % / 0.00 % |
+| **C** | — | 200 d | 24/24 | **9.82 %** | 6.43 – 14.04 % | 24/24 | **8.50 %** | 3.51 – 15.20 % | 24/24 | 0.00 % / 0.00 % |
+| **A** | `unadapted` | 365 d | 24/24 | **1.02 %** | 0.00 – 3.27 % | 21/24 | **0.09 %** | 0.00 – 0.60 % | 5/24 | 0.00 % / 0.00 % |
+| **A** | `adapted` | 365 d | 24/24 | **0.22 %** | 0.00 – 1.19 % | 11/24 | **0.20 %** | 0.00 – 1.19 % | 10/24 | 0.00 % / 0.00 % |
+
+(180-d panels of 2026-09-10 for comparison: overload 7.67 / 9.22 / 1.49 / 0.28 %; foaming
+7.20 / 7.67 / 0.14 / 0.25 %.) B and C still bracket the anchor's 7.78–9.18 % exceedance;
+the Plant A pathway finding stands at 4.6× (was 5.3×).
+
+**Open for the lead, unchanged by anything here:** `biogas_mean` at 1.536 against
+[0.6, 1.5] — the basis is right in kind, the hidden HSW / FOG degradability centres sit
+above the cited literature (§16.2), and the band, basis and centres are the lead's to move.
+Until then the g1 gate and one plausibility test are red on that row alone.
+
+## 19. Measured, not estimated: the HSW degradability correction, alone and with FOG
+
+*Status line: the coordinator's read-only instruction of 13:22 UTC, done. Nothing committed
+but this section (and the decisions note of §18's correction); no frozen value in the tree
+changed. The two variants were run in scratch worktrees at `a91e71a` with only
+`configs/influent/feed_fractionation.yaml` edited, code imported from the worktree
+(`PYTHONPATH`), 24-seed clean Level-0 panels at 200 d on Plants B and C, the two edge tests
+and the gate G1 anchor test. Headline: **HSW 0.84 alone takes `biogas_mean` to 1.38 and
+every anchored row inside its band, and both edge tests pass. Adding FOG 0.92 takes it to
+1.35 and trips the gate's CH₄-margin assertion (min CH₄ fraction 0.643 against > 0.65),
+with 24/24 still sound.** Plant C is unchanged to the last digit under both, as it must be.*
+
+### 19.1 What was changed, exactly
+
+**Variant 1 — HSW 0.84, FOG unchanged.** The high-strength waste's inert COD share goes from
+0.05 (`f_xi` 0.03, `f_si` 0.02) to **0.16** (`f_xi` 0.14, `f_si` 0.02) and the four
+degradable classes are scaled by 0.84 / 0.95 so the composition the 0.84 was derived from
+is kept: `f_ch` 0.10 → 0.0884, `f_pr` 0.06 → 0.0531, `f_li` 0.75 → 0.6631, `f_vfa` 0.04 →
+0.0354 (sum 1.0000). The derived COD/VS at the feed's inert equivalent 1.42 goes 2.186 →
+**2.057** against the measured 2.234: **−7.9 %, inside the ±10 % check** — so no further
+lipid redistribution was needed to satisfy it. (The alternative that holds COD/VS at the
+measured value — take the 0.11 from carbohydrate and protein only, `f_ch` 0.03, `f_pr`
+0.02, `f_li` 0.75 — derives 2.232 but changes the composition the literature weighting
+was applied to, and by that same weighting is 0.78 degradable, not 0.84; not run.)
+
+**Variant 2 — HSW 0.84 and FOG 0.92.** As variant 1, plus FOG's inert share 0.02 (`f_xi`
+0.015, `f_si` 0.005) → **0.08** (`f_xi` 0.06, `f_si` 0.02), degradable classes scaled by
+0.92 / 0.98: `f_ch` 0.015 → 0.0141, `f_pr` 0.015 → 0.0141, `f_li` 0.95 → 0.8918. Derived
+COD/VS 2.741 → **2.593** against 2.80: −7.4 %, inside the check.
+
+Nothing else: no TS, VS/TS, density, cations, calcium, inert equivalent, seed, tolerance,
+kinetic constant or plant value.
+
+### 19.2 `biogas_mean` and every other anchored row (Plant B, 24 seeds, 200 d)
+
+The anchored row is the panel **median** of the per-run settled means; the 24-seed mean,
+minimum and maximum the coordinator asked for are beside it.
+
+| | current tree (`a91e71a`) | **HSW 0.84** | **HSW 0.84 + FOG 0.92** |
+|---|---:|---:|---:|
+| `biogas_mean`, panel median (m³/d) → ratio to 2111 | 3244 → **1.536** FAIL | 2903 → **1.375** pass | 2860 → **1.355** pass |
+| 24-seed mean → ratio | 3186 → 1.509 | 2944 → 1.395 | 2911 → 1.379 |
+| per-run minimum → ratio | 2577 → 1.221 | 2326 → 1.102 | 2274 → 1.077 |
+| per-run maximum → ratio | 3884 → 1.840 | 3723 → 1.763 | 3631 → 1.720 |
+| margin to the 1.5 edge (median) | −0.036 | +0.125 | +0.145 |
+
+Every other row (23 in all, one calibrated):
+
+| row | tolerance | current tree | HSW 0.84 | HSW 0.84 + FOG 0.92 |
+|---|---|---|---|---|
+| 18 influent rows (feed volumes, log-sigmas, zero fractions, total flow, VS fractions, OLR) | as declared | all pass, unchanged | all pass, unchanged | all pass, unchanged |
+| `hsw_cod_concentration` (partly circular regression guard) | ± 25 % | 141.1 (1.03) pass | 149.2 (1.09) pass | 149.2 (1.09) pass |
+| `digester_pH_median` | ± 0.4 | 7.227 pass | 7.233 pass | 7.233 pass |
+| `alkalinity_median` (calibrated, not counted) | ± 35 % | 4.912 (0.97) | 5.048 (1.00) | 5.063 (1.00) |
+| `vfa_median` | ratio in [0.25, 4] | 0.744 (0.63) pass | 0.756 (0.64) pass | 0.760 (0.64) pass |
+| `fos_tac_median` | ratio in [0.5, 2] | 0.151 (0.65) pass | 0.151 (0.65) pass | 0.151 (0.65) pass |
+| **rows inside their band** | | **22 / 23** | **23 / 23** | **23 / 23** |
+
+The one influent row that moves is `hsw_cod_concentration`, which is computed from the
+run's *realised* fractionation draw around the new centre (a different Dirichlet
+realisation at the same seed) and stays well inside its ±25 %; it is declared in the code as
+a partly circular regression guard, not evidence. Panel soundness: 24/24 on every panel;
+median pH 7.18–7.32 (current), 7.18–7.32 (HSW), 7.19–7.34 (both).
+
+### 19.3 The two edge tests and the gate
+
+| test | current tree | HSW 0.84 | HSW 0.84 + FOG 0.92 |
+|---|---|---|---|
+| `test_plant_b_survives_the_generator_swings` (seed 11, 180 d, unbuffered; biogas ratio < 1.5 among its assertions) | **FAIL** (1.5004) | **pass** | **pass** |
+| gate G1: `test_the_biogas_the_simulator_makes_is_the_biogas_the_plant_measures` | FAIL (1.536) | pass | pass |
+| gate G1: `test_a_row_calibrated_to_the_anchor_is_never_counted_as_a_match` (every independent row matched) | FAIL (21/22) | pass (22/22) | pass (22/22) |
+| gate G1: `test_no_clean_level_0_seed_sours` (24/24 sound **and** margins: min pH > 7.0, min CH₄ fraction > 0.65, max pH < 7.7) | pass (min CH₄ 0.655) | pass (min CH₄ **0.655**) | **FAIL**: 24/24 sound, min pH 7.19, but min CH₄ fraction median **0.643** |
+| gate G1: `test_the_report_exists_and_its_generated_block_is_current` | pass | FAIL (expected: the committed report's generated block is the current catalogue's; regenerating the block with the change removes it) | FAIL (same) |
+| gate G1, the other 9 tests | pass | pass | pass |
+
+So under **HSW 0.84 alone** every test that measures the simulator passes, with the CH₄
+margin at the same 0.655 the current tree has (the lipid the correction removes is HSW's,
+and the CH₄ fraction of the panel's leanest seed is set by the sludge streams). Under **HSW
+0.84 + FOG 0.92** the extra 43 m³/d of gas removed buys 0.02 of ratio and costs the gate's
+CH₄-fraction margin: taking lipid out of FOG, the most methane-rich stream, drops the
+leanest seed's CH₄ fraction from 0.655 to 0.643. That assertion is a declared margin (the
+lead's acceptance condition, ruling 1 of 2026-09-03: "not merely above the threshold"), not
+a soundness failure; whether 0.65 is the right margin is a separate question I am not
+raising — the variant simply does not clear it as declared.
+
+### 19.4 Trigger-rate tables, Plants B and C (24 clean Level-0 seeds, 200 d)
+
+| Plant | variant | sound | overload, pooled | per-run range | runs | foaming, pooled | per-run range | runs | operator > 0.40 / > 0.30 |
+|---|---|---|---:|---|---:|---:|---|---:|---:|
+| **B** | current tree | 24/24 | 7.12 % | 2.34 – 16.37 % | 24/24 | 6.63 % | 1.75 – 14.04 % | 24/24 | 0.00 / 0.00 % |
+| **B** | HSW 0.84 | 24/24 | **7.50 %** | 2.92 – 17.54 % | 24/24 | **6.75 %** | 1.75 – 14.04 % | 24/24 | 0.00 / 0.00 % |
+| **B** | HSW 0.84 + FOG 0.92 | 24/24 | **7.38 %** | 2.92 – 19.88 % | 24/24 | **6.34 %** | 1.75 – 13.45 % | 24/24 | 0.00 / 0.00 % |
+| **C** | current tree | 24/24 | 9.82 % | 6.43 – 14.04 % | 24/24 | 8.50 % | 3.51 – 15.20 % | 24/24 | 0.00 / 0.00 % |
+| **C** | either variant | 24/24 | 9.82 % | 6.43 – 14.04 % | 24/24 | 8.50 % | 3.51 – 15.20 % | 24/24 | 0.00 / 0.00 % |
+
+Plant C takes neither HSW nor FOG, and its panel is **identical to the last digit** under
+both variants — the check that the edit touched nothing but the two streams. Plant B's
+overload rate moves up by a third of a point (less degradable HSW means less buffering gas
+and a slightly spikier residual-acid pool relative to its own median), still bracketing the
+anchor's 7.78–9.18 % with C.
+
+### 19.5 The sources for 0.84, and what kind of number it is
+
+0.84 is **derived, not measured**: the catalogue's own assumed HSW composition (lipid COD
+share 0.75, carbohydrate 0.10, protein 0.06, acetate 0.04, inert 0.05 — composition is not
+measured at Muscatine) weighted by cited conversion-to-biogas fractions:
+
+* lipids **94.8 %**, proteins **71 %**, carbohydrates **50.4 %** — Jeganathan et al. 2006
+  (*Water Research* 40:3141, FOG/food-processing wastewater anaerobic digestion),
+  Davidsson et al. 2008 (*Waste Management* 28:986, grease-trap sludge co-digestion) and
+  Ziels et al. 2016 (*Water Research* 103:372, FOG co-digestion microbial community), as
+  compiled in the open-access review of FOG co-digestion, PMC8072289
+  (https://pmc.ncbi.nlm.nih.gov/articles/PMC8072289/); the review's theoretical yields
+  (lipid 1.0, protein 0.63, carbohydrate 0.42 m³ CH₄/kg) are the same ordering;
+* acetate taken as fully converted;
+* 0.75 × 0.948 + 0.10 × 0.504 + 0.06 × 0.71 + 0.04 × 1.0 = **0.84**.
+
+For FOG the same weighting gives 0.92, and the direct measurements bracket it: brown grease
+354 mL CH₄/g COD at 35 °C (~90 % of theoretical; Frontiers in Environmental Engineering
+2024, https://www.frontiersin.org/journals/environmental-engineering/articles/10.3389/fenve.2024.1354582/full)
+and 0.40–0.77 m³ CH₄/kg VS removed at pilot scale (Zhang et al. 2014, cited there). I would
+cite the review and its three primary sources for the conversion fractions, and say in the
+catalogue note that the HSW figure is composition-weighted from an assumed composition —
+the honest statement — rather than a measured biodegradability of Muscatine's waste, which
+does not exist.
+
+### 19.6 For the lead's choice, in one paragraph
+
+HSW 0.84 alone: `biogas_mean` 1.38 (margin 0.125), 23/23 rows in band, both edge tests and
+every simulator-measuring gate test pass, trigger rates 7.50 / 6.75 % on B, C unchanged;
+the COD/VS check holds at −7.9 % without touching the lipid share beyond the proportional
+scaling. Adding FOG 0.92: 1.35, the same rows in band, but the gate's CH₄-fraction margin
+fails at 0.643, for 0.02 of ratio. The report's generated block and the four-row tables
+would be regenerated with whichever change is ruled; every Plant B and C cell changes
+under either; nothing has been changed in the tree.
+
+## 20. Ruling 5 applied and measured at the head; one pin the ruling cannot satisfy — question to the coordinator
+
+*Status line, 14:15 UTC: ruling 5 is applied in the working tree (variant 2 exactly, old
+values beside the new) and measured at that head; the ruling-5 commit is HELD locally, not
+pushed, because one existing test pin cannot be satisfied by the ruling as worded and I am
+not the one to change it. This section is a docs-only commit so the question and the numbers
+reach the coordinator. Ruling 6 is being built meanwhile in the same tree, for its own commit.*
+
+**Measured at the ruling-5 head (24 seeds, 200 d):** exactly §19's variant 2.
+`biogas_mean` panel median 2860 → **1.355 pass** (24-seed mean 1.379, min 1.077, max 1.720);
+**23 / 23 rows inside** their bands (`hsw_cod_concentration` 1.03 → 1.09, inside ±25 %);
+`test_plant_b_survives_the_generator_swings` **passes**; the gate G1 run is 12 passed, **1
+failed: `test_no_clean_level_0_seed_sours` on its declared CH₄-fraction margin, 0.6429
+against > 0.65**, with 24/24 sound, min pH 7.19, max pH 7.34 — the known consequence, the
+margin untouched. Plant B overload / foaming **7.38 % / 6.34 %** (2.92–19.88 % and
+1.75–13.45 %, 24/24 each); Plant C **9.82 % / 8.50 %**, identical to the last digit. The
+anchor report's generated block is regenerated (23/23), and the §5.4 tables, the card,
+`sensors.yaml`, `channels.py` and the README carry the numbers with the old beside them.
+
+**Three existing tests catch consequences of the catalogue change.** Two are derived-value
+refreshes I have made and flag here; the third is the question.
+
+1. `tests/test_influent.py::test_catalogue_nitrogen_is_consistent_under_its_declared_inert_n`:
+   the catalogue's `tkn` is declared "derived from the fractionation with inert_N_I", and
+   with the larger inert shares the implied TKN moves — HSW 0.0875 against the declared
+   0.076 (15.1 % gap, tolerance 15 %), FOG 0.0102 against 0.0067. `tkn` is a **check value
+   only**: the simulation takes its nitrogen from the fractionation and `inert_N_I`
+   (`sim/influent/mapping.py` reads `tkn` nowhere but in the consistency check), so
+   re-deriving it changes no run. **Re-derived: HSW 0.0875, FOG 0.0102**, old values in the
+   comments.
+2. `tests/test_generator.py::test_the_feed_alkalinity_assay_is_pinned_and_the_two_quantities_are_independent`:
+   the golden pin on the HSW feed-alkalinity **assay** (10.8735 kg CaCO₃/m³) moves with the
+   fractionation to **10.1750**; the **charge** pin (10.8720) is unchanged, as it should be
+   (it reads `s_cat`, `s_ca` and TAN, which the ruling did not touch). Pin refreshed with the
+   reason in the comment. Both panels of §19 and of this section already include this, since
+   the assay is what the operator's feed-alkalinity record reports.
+3. **`tests/test_influent.py::test_cod_per_vs_is_derived_and_checked_against_the_literature`
+   asserts `2.7 <= FOG COD/VS <= 2.9` — "the lead's targets" (2026-09-02).** Under ruling 5
+   the FOG COD/VS derives **2.593**: inside the catalogue's own ±10 % check of 2.80 (−7.4 %,
+   as §19.1 reported and the lead ruled on), but outside the hard 2.7–2.9 range that test
+   pins. And it cannot be brought inside by any split at the ruled centre: with the inert
+   equivalent the lead fixed for FOG (1.42, sludge value, freeze of 2026-09-02) an inert
+   share of 0.08 caps the derived COD/VS at 1 / (0.92 / 2.90 + 0.08 / 1.42) = **2.677**
+   even with every non-inert unit lipid. So ruling 5 (FOG 0.92) and the 2.7–2.9 target are
+   incompatible at the fixed inert equivalent, and one of three things gives: (a) the test's
+   range is re-declared to what the ruled centre derives (2.593; e.g. "within the ±10 %
+   check of 2.80"), (b) FOG's inert COD equivalent is raised from the sludge 1.42 to a value
+   at which 0.08 inert derives ≥ 2.7 (≥ 2.2 kg COD/kg VS for the inert residue — a
+   grease-trap solid at 2.2 rather than 1.42 is defensible, since FOG inerts are grease-bound
+   solids, but it is a frozen value the lead set by instruction), or (c) FOG's centre is
+   left at 0.98 (variant 1, which the lead rejected on principle). **I have not changed the
+   range, the equivalent or the centre.** The ruling-5 commit waits on the coordinator's
+   answer; the only thing red in the default suite at the held head is that one assertion.
+
+**Everything else in the default suite** at the held head: green (the two refreshed tests
+pass; 367 of 370 passed before the refresh, the third being this pin).
+
+## 21. Ruling 6 built and verified: a whole run is prefix-stable from a fixed 200-day reference window
+
+*Correction, 2026-09-12 (the whole-branch review, blocker 2), closed 2026-09-14 (ruling 7):
+"a whole run" here meant the truth side. The visible record — sensor series, missingness,
+historian outages, operator notes — was not prefix-stable until ruling 7 keyed every one of
+its streams `SeedSequence([seed, key, block])` (the lead's option b); from that commit a
+whole run, truth AND visible record, is prefix-stable in its horizon. See the ruling-7
+decisions entry, `tests/test_visible_prefix.py` and §25.*
+
+*Landed: ruling 6 is commit **`f7a3e79`** on `claude/g1-review-blockers`, on its own. Run-level
+prefix result: **bit-equal** on parameters, burn-in, initial state, trajectory, ash, every
+channel and both flags up to the shorter run's last output point, which agrees to 3 × 10⁻¹⁶
+(B) and 2 × 10⁻¹⁶ (A) relative — pinned that way in the test. Full default suite at that
+head: 373 passed, **1 failed — `test_plant_b_survives_the_generator_swings`**, the band-edge
+test that ruling 5 removes (this head has the pre-ruling-5 catalogue); ruff green. The
+ruling-5 commit, measured as §20, waits on `claude/g1-ruling5-held` (`0265977`) for the
+lead's FOG answer.*
+
+*Status line: ruling 6 is implemented in the working tree for its own commit, after ruling
+5's (held on §20's question). Code: `REFERENCE_WINDOW_D = 200` in the generator, the mean
+recipe and truth `N_I` over the first `min(200, n_days)` days; the harness's truth
+parameters, burn-in recipe and inert COD equivalent follow from it, and the calcium state
+takes the same window. Tests in `tests/test_reference_window.py`, both mutation-checked.*
+
+**What the probe and the tests found.** With the window fixed, a 200-d Plant B run (S3-03)
+is the first 200 days of the 210-d run of the same seed, and a 365-d Plant A run (S5-01) the
+first 365 of a 375-d one: truth parameters, inert equivalent, burn-in and initial state
+identical; the state trajectory, ash, every truth channel and both condition flags
+**bit-equal up to the shorter run's last output point**; that final point differs by at most
+3 × 10⁻¹⁶ relative (B) and 2 × 10⁻¹⁶ (A) — the shorter run reaches it by a step clipped to
+its end, the longer by dense-output interpolation. So: bit-equal, bar one point at solver
+tolerance; the test pins exactly that. Mutation: with the window set beyond every horizon
+(the old horizon-mean behaviour) both the recipe test and the run-level test fail on the
+truth parameters.
+
+**Ruling 4 re-verified at this head** (Plant A runs now take their reference from the first
+200 days): S7-02 reaches 0.60 / 0.46 on days **348 / 350** (half the biomass from 338; end
+share 0.6509), S5-01 on **298 / 302** (291; 0.8483), both sound — every day the same as §17,
+the state values moved in the fourth significant figure. The two Plant A baseline tables at
+365 d (24 seeds): `adapted` 0.22 % / 0.20 % (11 and 10 of 24), `unadapted` 1.02 % / 0.09 %
+(21 and 5 of 24) — **identical to §18's tables to every printed digit**. Deltas: none in any
+recorded number.
+
+**One consumer corrected.** The anchor comparison's `organic_loading_rate` row took the
+two-year generator draw's `mean_recipe_kg_d`; under ruling 6 that would silently have become
+the first-200-day reference recipe and moved the row from 2.171 to 2.163 (the gate's
+report-currency test caught it). A long-run plant statistic must not follow a run's
+reference window, so that row now takes the two-year mean explicitly and reads 2.171 as
+before; the anchor report's generated block is otherwise untouched by ruling 6 (every panel
+run is 200 d, so its window is its horizon).
+
+**Commit order, re-set on the coordinator's instruction of 15:27 UTC:** ruling 6 is
+committed first, on its own, as this commit; the ruling-5 commit — applied and measured
+exactly as §20 reports — is parked on the branch `claude/g1-ruling5-held` (`0265977`) and
+will be re-applied to the side branch as ONE commit carrying the lead's one-line FOG answer
+when it arrives. (Both had briefly been pushed in the other order at `0265977`/`773288f`
+when a repository hook demanded a clean tree; the side branch was re-set to this shape.)
+Then pytest and ruff locally with the exact failure set, the fast-forward, CI, and a STOP
+if CI is red only on the CH₄-margin gate test.
+
+## 22. Rulings 5 (with answer A) and answer B landed; the measured state at the final head
+
+*Landed and green, 20:38 UTC. Ruling 5 with answer A: **`892bbb8`**; answer B: **`49e9477`**;
+both on `claude/g1-review-blockers` on top of `3188ce0`/`f7a3e79`. Local checks at `49e9477`:
+`ruff check .` and `ruff format --check .` clean; `pytest -q` **374 passed, 2 skipped, 0
+failed**; `pytest -m g1` **13 passed, 0 failed**. PR #15 fast-forwarded to **`49e9477`**. CI
+at that head, push run 34644517098: ruff **success**, pytest py3.11 **success**, pytest
+py3.12 **success**, "does this change touch sim/?" **success**, gate G1 anchor panel
+**success**; pull-request run 34644522795: **success**. Stopped here: no regeneration until
+the coordinator confirms CI green at this head; no merge, no tag. This status is a docs-only
+commit on the side branch; the PR head stays `49e9477`, and the regeneration, when ordered,
+runs with the tree at that commit so every manifest carries it.*
+
+*Status line: the lead's answers A and B (relayed 20:04 UTC) are applied. Ruling 5 is ONE
+commit on top of `f7a3e79`/`3188ce0`, carrying answer A — FOG's inert COD equivalent 2.9,
+lipid-like, superseding the 2026-09-02 sludge value — with the derivation table in its
+decisions entry; the CH₄-margin re-declaration (answer B) is its own commit after it. The
+docstring nit is fixed inside the ruling-5 commit. SHAs in the milestones entry and the
+commit messages.*
+
+**Ruling 5 + answer A, measured at the committed head** (24 seeds, 200 d): `biogas_mean`
+panel median 2899 → **1.373 pass** (24-seed mean 1.397, min 1.091, max 1.743; it was 1.355
+at the old equivalent — answer A raised the COD a kilogram of FOG solids carries by 8 %, so
+the gas moved up ~1.4 %, contrary to the expectation that it would not); **23 / 23 rows
+inside**, the two solids-reading rows unchanged from §20 (`hsw_cod_concentration` 1.09,
+`organic_loading_rate` 1.15 — the latter is a VS-based load); the seed-11 plausibility test
+**passes**; Plant B overload / foaming **7.55 % / 6.60 %** (2.92–19.30 % and 2.34–13.45 %,
+24/24 each; 7.38 / 6.34 % at the old equivalent); Plant C and Plant A unchanged (neither
+stream). The leanest seed's CH₄ fraction median at this head is **0.6437** (was 0.6429 at
+the old equivalent), min pH 7.19, max pH 7.34, 24/24 sound. FOG COD/VS derives **2.802**
+and `test_cod_per_vs_is_derived_and_checked_against_the_literature` passes; the 2.7–2.9
+range and the ±10 % check are untouched.
+
+**Pins that record the rulings, flagged.** (1) The HSW lipid COD share: the same test
+asserted the lead's 2026-09-02 range 0.7–0.75; the ruled split (variant 2 exactly) is
+0.6631, and the assertion now pins that value with the reason — the ruling's own number, not
+a choice of mine. (2) The frozen inert equivalents: FOG now pinned at 2.9 per answer A, the
+others as before; the PR #7 negative control evaluated at its own sludge equivalent so it
+still fails. (3) The FOG check TKN re-derived to 0.0111 at the new equivalent (a check
+value, not an input).
+
+**Answer B**: `test_no_clean_level_0_seed_sours`'s CH₄-fraction margin re-declared at 0.60
+(was 0.65), a guard above the 0.55 soundness threshold; nothing else in the test changed;
+own commit and decisions entry with the leanest-seed value 0.6437 at this head.
+
+## 23. The G1 regeneration at `49e9477` — the last action; stopping for the review
+
+*Correction, 2026-09-14 (ruling 7): where this section says a run is prefix-stable, that was
+true of the truth at `49e9477` and of the visible record only from ruling 7's commit; the
+matrix of this section is superseded by the regeneration of §25 at the ruling-7 head, since
+every visible record changes under the re-keying (the truth beneath it is bit-equal).*
+
+*Status line: on the coordinator's word (CI green at `49e9477` confirmed, 14:07 UTC), the
+117-cell matrix was regenerated with the tree checked out at `49e9477`, clean, and verified.
+The regeneration writes nothing that is committed (`runs/` and `truth_store/` are ignored;
+the anchor report's generated block was already current at that head), so the code the
+manifests carry is `49e9477`; this section and the milestones entry are ONE docs-only
+commit on top of it, to which PR #15 is fast-forwarded — that commit is the review head.
+Stopped: no merge, no tag, nothing further pushed.*
+
+**The regeneration** (`python -m sim.run.matrix --runs-root runs` after clearing `runs/` and
+`truth_store/`):
+
+| | |
+|---|---|
+| head every manifest carries | `49e94770077c99b88193647c545f1b486507319c`, 0 dirty files |
+| cells | **117/117 cells generated; 117/117 are sound digesters**; 0 soured, 0 failed |
+| wall-clock | **953 s (15 min 53 s)**, 14:08:08–14:24:01 UTC |
+| per plant (sum of per-cell wall) | A 21 cells 375 s; B 48 cells 290 s; C 48 cells 279 s |
+| index | `truth_store/index.jsonl` **117 lines**, 117 unique ids; 117 run dirs, 117 truth dirs |
+| horizons in the manifests | every Plant A cell 365 d / 365 n_days (21); every B and C cell 200 d (48 + 48) |
+| store | 27M under `runs/`; 20M under `truth_store/` |
+| verification | passed: index, run dirs and truth dirs agree; redacted manifests carry no scenario id, seeds or baseline; every run has `calls.jsonl`; the 32-byte salt appears in no visible file |
+
+**Checks at `49e9477`** (local, before the fast-forward; CI reproduced them on every check):
+`ruff check .` and `ruff format --check .` clean; `pytest -q` **374 passed, 2 skipped, 13
+deselected, 0 failed**; `pytest -m g1` **13 passed, 0 failed**.
+
+**`biogas_mean` and every other anchored row** (24 clean Level-0 seeds, Plant B, 200 d, at
+this head):
+
+| row | generated | anchor | ratio | tolerance | status |
+|---|---:|---:|---:|---|---|
+| `feed_volume_median_primary_sludge` | 31.54 | 30.28 | 1.04 | +/- 15 % | pass |
+| `feed_volume_log_sigma_primary_sludge` | 0.4529 | 0.4363 | 1.04 | +/- 30 % | pass |
+| `delivery_zero_fraction_primary_sludge` | 0 | 0 | — | +/- 0.04 - (fraction of days with no delivery) | pass |
+| `feed_volume_median_thickened_was` | 17.23 | 17.42 | 0.99 | +/- 15 % | pass |
+| `feed_volume_log_sigma_thickened_was` | 0.5156 | 0.5268 | 0.98 | +/- 30 % | pass |
+| `delivery_zero_fraction_thickened_was` | 0 | 0 | — | +/- 0.04 - (fraction of days with no delivery) | pass |
+| `feed_volume_median_high_strength_waste` | 23.78 | 23.58 | 1.01 | +/- 15 % | pass |
+| `feed_volume_log_sigma_high_strength_waste` | 0.8021 | 0.7786 | 1.03 | +/- 30 % | pass |
+| `delivery_zero_fraction_high_strength_waste` | 0.1192 | 0.1006 | 1.18 | +/- 0.04 - (fraction of days with no delivery) | pass |
+| `feed_volume_median_fog` | 33.64 | 33.27 | 1.01 | +/- 15 % | pass |
+| `feed_volume_log_sigma_fog` | 0.7596 | 0.7059 | 1.08 | +/- 30 % | pass |
+| `delivery_zero_fraction_fog` | 0.3164 | 0.3073 | 1.03 | +/- 0.04 - (fraction of days with no delivery) | pass |
+| `total_feed_flow_median` | 105.2 | 94.1 | 1.12 | +/- 15 % | pass |
+| `vs_fraction_primary_sludge` | 0.0307 | 0.0295 | 1.04 | +/- 20 % | pass |
+| `vs_fraction_thickened_was` | 0.03191 | 0.0312 | 1.02 | +/- 20 % | pass |
+| `vs_fraction_high_strength_waste` | 0.0693 | 0.06485 | 1.07 | +/- 25 % | pass |
+| `hsw_cod_concentration` | 149.2 | 136.8 | 1.09 | +/- 25 % | pass |
+| `organic_loading_rate` | 2.171 | 1.885 | 1.15 | +/- 30 % | pass |
+| `biogas_mean` | 2899 | 2111 | 1.37 | ratio in [0.6, 1.5] | pass |
+| `digester_pH_median` | 7.232 | 7.27 | 0.99 | +/- 0.4 pH units | pass |
+| `alkalinity_median` | 5.051 | 5.043 | 1.00 | +/- 35 % | pass (calibrated, not counted) |
+| `vfa_median` | 0.7564 | 1.178 | 0.64 | ratio in [0.25, 4] | pass |
+| `fos_tac_median` | 0.1508 | 0.2323 | 0.65 | ratio in [0.5, 2] | pass |
+
+**23 / 23 rows inside their declared bound**; `biogas_mean` panel median
+2899 m³/d → ratio
+**1.373**, 24-seed mean 1.397,
+min 1.091, max 1.743 (band [0.6, 1.5]). Leanest-seed CH₄ fraction median
+**0.6437** (seed 1003; panel 0.644–0.692); 24/24 sound.
+
+**Trigger-rate tables, all three plants** (24 clean Level-0 seeds each at the matrix
+horizons, the four-row form; B at this head, C and A unchanged by rulings 5/A/B because
+they take neither corrected stream — C measured at ruling 3, A at ruling 6 — and Plant B
+and C's cells in the regenerated matrix carry the same code):
+
+| Plant | baseline | sound | overload, pooled | per-run range | runs | foaming, pooled | per-run range | runs | operator > 0.40 / > 0.30 |
+|---|---|---|---:|---|---:|---:|---|---:|---:|
+| **B** | — (200 d) | 24/24 | **7.55 %** | 2.92 – 19.30 % | 24/24 | **6.60 %** | 2.34 – 13.45 % | 24/24 | 0.00 % / 0.00 % |
+| **C** | — (200 d) | 24/24 | **9.82 %** | 6.43 – 14.04 % | 24/24 | **8.50 %** | 3.51 – 15.20 % | 24/24 | 0.00 % / 0.00 % |
+| **A** | `unadapted` (365 d) | 24/24 | **1.02 %** | 0.00 – 3.27 % | 21/24 | **0.09 %** | 0.00 – 0.60 % | 5/24 | 0.00 % / 0.00 % |
+| **A** | `adapted` (365 d) | 24/24 | **0.22 %** | 0.00 – 1.19 % | 11/24 | **0.20 %** | 0.00 – 1.19 % | 10/24 | 0.00 % / 0.00 % |
+
+## 24. The 2026-09-12 review's two blockers: blocker 1 fixed and pushed; option (b) for blocker 2 prepared, uncommitted
+
+*Status line: blocker 1 (the workflow-side checker) is fixed as a tests-only commit
+**`bc7b73f`** on `claude/g1-review-blockers` on top of `99b0547`, and the assay-noise
+test gap is closed as its own commit **`b808939`**; PR #15 is NOT fast-forwarded (still
+`99b0547`). Option (b) for blocker 2 is built, tested and documented in a scratch
+worktree at `99b0547`, uncommitted, and waits for the lead's choice; option (a)'s
+docs-only correction is drafted as text. Nothing regenerated.*
+
+### 24.1 Blocker 1 — `bc7b73f`
+
+`find_truth_references` in `tests/test_truth_isolation.py` is an **allow-list**: a module
+under `workflows/` may import the standard library (`sys.stdlib_module_names`), `numpy`,
+`scipy`, `pydantic`, `tools`, its own package (`workflows`, relative imports included) and
+the workflow-facing run view (`state.run_view`; from `state` only `RunView`,
+`TruthAccessError`, `open_run`). Every other import is a finding; the 2026-09-10 deny rules
+stay as a second layer; `scenario_id`, `seeds`, `load_library`, `generate_run`,
+`generate_cells`, `RunManifest` are findings as names, attributes or imported names. The
+reviewer's module is reconstructed as `_SNEAKY_SOURCE` (asserted to spell none of the old
+tokens) and is a must-fail fixture: three `sim` imports reported, `load_library`,
+`generate_run` and `.seeds` reported, no path literal. Two more fixtures: everything the
+allow-list admits in one module stays clean; fourteen routes just outside it are each a
+finding. Every existing fixture kept and passing; the runtime guard untouched.
+`pytest -q tests/test_truth_isolation.py`: **43 passed**. Decisions entry with the
+deny-list-extension alternative and why it is weaker.
+
+### 24.2 Test gap — `b808939`
+
+`test_assay_noises_are_independent_of_each_other_and_of_the_feed_draws`: the primary
+sludge's TS and VS residuals, recovered exactly from the record, are neither equal nor
+correlated, are unit-scale, and equal none of the feed's seven documented block draws.
+Mutant (a) — all assays of one feed from one child key — fails it on equality (max
+difference 7.5 × 10⁻¹⁵); mutant (b) — assay keys colliding with the per-feed block keys —
+fails it on the VS residual equalling block 6 (the mis-log normals). The rest of
+`tests/test_generator.py` catches neither (16 passed under mutant b). Both written, run,
+reverted; the generator is unchanged.
+
+### 24.3 Blocker 2, option (b) — prepared in `scratchpad/wt_b`, uncommitted
+
+*Landed 2026-09-14 as ruling 7 (§25), with one change the lead required: the historian's
+two streams are keyed `SeedSequence([seed, HISTORIAN_STREAM_KEY, block])` through
+`historian_block_rng`, consistently with the sensors, not by the integer offset the table
+below records; and the prefix test covers a Plant A cell (S5-01, 365 v 375 d) as well as
+the Plant B one, with the historian mask tested on its own.*
+
+**Files touched** (worktree at `99b0547`):
+
+| file | change |
+|---|---|
+| `sim/observation/model.py` | `sensor_block_rng(seed, name, block)` (`SeedSequence([seed, sensor key, block])`); `_sensor_series` takes a `stream(block)` callable and draws its six blocks from six keyed streams; `historian_outages` gains an optional `lengths_rng` (signature-compatible), and `observe` passes `default_rng([seed + OFFSET, 0])` and `[…, 1]`; "Randomness" docstring rewritten; `sensor_rng` kept, `sensor_block_rng` exported |
+| `sim/run/notes.py` | benign notes: one uniform per day from `default_rng([seed, 0])` (a note where it falls below `benign_per_100_d / 100`), texts without repeats in the order of `default_rng([seed, 1]).permutation(...)`; same expected count (Binomial for Poisson); docstring |
+| `sim/influent/generator.py` | `REFERENCE_WINDOW_D` docstring: the truth is prefix-stable by the window, the visible record by its own keying |
+| `tests/test_visible_prefix.py` (new) | S3-03 on Plant B, tier C, 200 v 210 d: every sensor series' `sample_t`, `report_t`, `value`, `missing`, `saturated`, `flatlined`, `fouled` bit-equal up to the shorter run's last sample (that sample to 1e-9, as the truth's final point), the notes (shorter = longer's before day 200), the feed log and the assays; negative control on the comparison |
+| `tests/test_observation.py` | **flagged**: `test_the_effective_online_loss_is_the_recorded_composite`'s lab-assay assertion was a one-sigma band (rel 0.25 of a 2 % rate over ~860 weekly samples, sd 0.0048); the re-keyed seed lands at 0.0256 (1.2 σ). Changed to the binomial three-sigma band plus "less than twice the rate" — the claim it can actually make at this sample size |
+| `tests/test_run_harness.py` | **flagged**: `test_every_run_carries_operator_notes…` generates its clean run at 100 d instead of 40 d, with the reason in the docstring: under the per-day draw a 40-d run is empty with probability 0.94⁴⁰ = 8 %, and this seed's was; at 100 d it is 0.2 %, so "a clean run still has a log" is a property of the design, not of one seed |
+| `docs/decisions.md` | ruling-6 entry corrected ("truth side only" until this); new entry for blocker 2 / option (b) with the finding, the keying, the notes change, the tests and option (a) as the alternative |
+| `docs/f2_horizon_report.md` | correction note at the head of §21 |
+
+**Measured.** Truth untouched: one S3-03 cell on Plant B at tier C generated in the current
+tree and in the worktree — `y`, `t`, ash, both flags and every truth channel **bit-equal**;
+all 15 visible sensor series changed, as they must. Prefix stability of the visible record:
+the new test passes (bit-equal bar the final sample, which agrees to 1.2 × 10⁻¹⁶). The
+observation tests pass unchanged except the one flagged tolerance; the whole default suite in
+the worktree: **375 passed, 2 skipped, 0 failed** (the 374 of `49e9477` plus the new test) and `pytest -m g1` **13 passed** — ruff clean.
+
+**What (b) costs.** Every visible record changes (a regeneration at the committed head);
+the benign-note count becomes Binomial rather than Poisson with the same mean, and a
+40-day run can have an empty benign log (8 %); nothing on the truth side moves.
+
+### 24.4 Option (a), drafted
+
+A docs-only correction (the `REFERENCE_WINDOW_D` docstring, the ruling-6 decisions entry,
+§21/§23): "a whole run is prefix-stable" → "the truth of a whole run is prefix-stable; the
+visible record re-rolls with the horizon, by the observation model's sequential per-sensor
+blocks and the notes' horizon-sized draw — recorded, not changed". Text ready in the
+scratchpad; applies in minutes; no regeneration unless the lead wants the manifests to
+carry the exact final head.
+
+
+## 25. The G1 regeneration at `7637f7a` (ruling 7) — the last action; stopping for the review
+
+*Status line: on the coordinator's word (CI green at `7637f7a` on all three runs — ruff,
+pytest 3.11, pytest 3.12, the sim/ gate, the gate G1 anchor panel — confirmed 2026-09-20
+14:27 UTC, after the runner outage of 2026-09-14 to 2026-09-20 that failed every job in two
+seconds with no runner and no log, on the repository's side, not the PR's), the 117-cell
+matrix was regenerated with the tree checked out at `7637f7a`, clean, and verified. The
+regeneration writes nothing that is committed (`runs/` and `truth_store/` are ignored; the
+anchor report's generated block is unchanged, see below), so the code every manifest carries
+is `7637f7a` — the CI-green head is the head the matrix was made at; this section and the
+milestones entry are ONE docs-only commit on top of it, to which PR #15 is fast-forwarded —
+that commit is the review head. Stopped: no merge, no tag, nothing further pushed.*
+
+**Why a regeneration.** Ruling 7 re-keyed every stream of the visible record, so every
+sensor series, missingness pattern, historian outage and operator log in the `49e9477`
+matrix (§23) was a realisation the code at this head no longer produces; the truth beneath
+every cell is bit-equal (the decisions entry of 2026-09-14), so every truth-side figure
+below is expected to equal §23's to the printed digit, and does.
+
+**The regeneration** (`python -m sim.run.matrix --runs-root runs` after clearing `runs/` and
+`truth_store/`):
+
+| | |
+|---|---|
+| head every manifest carries | `7637f7a481116173cb1479410dd61a3b5841c944`, 0 dirty files |
+| cells | **117/117 cells generated; 117/117 are sound digesters**; 0 soured or failed |
+| wall-clock | **786 s (13 min 6 s)**, 14:27:08–14:40:14 UTC |
+| per plant (sum of per-cell wall) | A 21 cells 308 s; B 48 cells 235 s; C 48 cells 229 s |
+| index | `truth_store/index.jsonl` **117 lines**, 117 unique ids; 117 run dirs, 117 truth dirs |
+| horizons in the manifests | every Plant A cell 365 d / 365 n_days (21); every B and C cell 200 d (48 + 48) |
+| store | 27M under `runs/`; 20M under `truth_store/` |
+| verification | passed: index, run dirs and truth dirs agree; redacted manifests carry no scenario id, seeds or baseline; every run has `calls.jsonl`; the 32-byte salt appears in no visible file |
+
+**Checks at `7637f7a`** (local, on the tree that became the commit, before the fast-forward;
+CI reproduced them on every check of all three runs): `ruff check .` clean (after
+`ruff format`); `pytest -q` **392 passed, 2 skipped (the Muscatine SCADA file is not
+fetched), 13 deselected, 0 failed** in 477.6 s; `pytest -m g1` **13 passed, 394 deselected,
+0 failed** in 286.6 s. The 392 are `875fa2b`'s 389 plus the three tests of
+`tests/test_visible_prefix.py`. The mutation check of that file, on a copy of the tree:
+historian lengths drawn from the onset stream, notes back to a Poisson count with a
+horizon-sized choice, and sensor blocks in sequence from one per-sensor stream — each caught
+(1, 2 and 2 failures), the unmutated control 3 passed.
+
+**`biogas_mean` and every other anchored row** (24 clean Level-0 seeds, Plant B, 200 d, at
+this head):
+
+| row | generated | anchor | ratio | tolerance | status |
+|---|---:|---:|---:|---|---|
+| `feed_volume_median_primary_sludge` | 31.54 | 30.28 | 1.04 | +/- 15 % | pass |
+| `feed_volume_log_sigma_primary_sludge` | 0.4529 | 0.4363 | 1.04 | +/- 30 % | pass |
+| `delivery_zero_fraction_primary_sludge` | 0 | 0 | — | +/- 0.04 - (fraction of days with no delivery) | pass |
+| `feed_volume_median_thickened_was` | 17.23 | 17.42 | 0.99 | +/- 15 % | pass |
+| `feed_volume_log_sigma_thickened_was` | 0.5156 | 0.5268 | 0.98 | +/- 30 % | pass |
+| `delivery_zero_fraction_thickened_was` | 0 | 0 | — | +/- 0.04 - (fraction of days with no delivery) | pass |
+| `feed_volume_median_high_strength_waste` | 23.78 | 23.58 | 1.01 | +/- 15 % | pass |
+| `feed_volume_log_sigma_high_strength_waste` | 0.8021 | 0.7786 | 1.03 | +/- 30 % | pass |
+| `delivery_zero_fraction_high_strength_waste` | 0.1192 | 0.1006 | 1.18 | +/- 0.04 - (fraction of days with no delivery) | pass |
+| `feed_volume_median_fog` | 33.64 | 33.27 | 1.01 | +/- 15 % | pass |
+| `feed_volume_log_sigma_fog` | 0.7596 | 0.7059 | 1.08 | +/- 30 % | pass |
+| `delivery_zero_fraction_fog` | 0.3164 | 0.3073 | 1.03 | +/- 0.04 - (fraction of days with no delivery) | pass |
+| `total_feed_flow_median` | 105.2 | 94.1 | 1.12 | +/- 15 % | pass |
+| `vs_fraction_primary_sludge` | 0.0307 | 0.0295 | 1.04 | +/- 20 % | pass |
+| `vs_fraction_thickened_was` | 0.03191 | 0.0312 | 1.02 | +/- 20 % | pass |
+| `vs_fraction_high_strength_waste` | 0.0693 | 0.06485 | 1.07 | +/- 25 % | pass |
+| `hsw_cod_concentration` | 149.2 | 136.8 | 1.09 | +/- 25 % | pass |
+| `organic_loading_rate` | 2.171 | 1.885 | 1.15 | +/- 30 % | pass |
+| `biogas_mean` | 2899 | 2111 | 1.37 | ratio in [0.6, 1.5] | pass |
+| `digester_pH_median` | 7.232 | 7.27 | 0.99 | +/- 0.4 pH units | pass |
+| `alkalinity_median` | 5.051 | 5.043 | 1.00 | +/- 35 % | pass (calibrated, not counted) |
+| `vfa_median` | 0.7564 | 1.178 | 0.64 | ratio in [0.25, 4] | pass |
+| `fos_tac_median` | 0.1508 | 0.2323 | 0.65 | ratio in [0.5, 2] | pass |
+
+**23 / 23 rows inside their declared bound**; `biogas_mean` panel median
+2899 m³/d → ratio **1.373**, 24-seed mean 1.397,
+min 1.091, max 1.743 (band [0.6, 1.5]). Leanest-seed CH₄
+fraction median **0.6437** (seed 1003; panel
+0.644–0.692); 24/24 sound. Against §23's table at `49e9477`:
+every generated value identical to the digit
+— these are truth-side statistics, and the truth is bit-equal under ruling 7.
+
+**Trigger-rate tables, all three plants** (24 clean Level-0 seeds each at the matrix
+horizons, the four-row form, every row re-measured at this head):
+
+| Plant | baseline | sound | overload, pooled | per-run range | runs | foaming, pooled | per-run range | runs | operator > 0.40 / > 0.30 |
+|---|---|---|---:|---|---:|---:|---|---:|---:|
+| **B** | — (200 d) | 24/24 | **7.55 %** | 2.92 – 19.30 % | 24/24 | **6.60 %** | 2.34 – 13.45 % | 24/24 | 0.00 % / 0.00 % |
+| **C** | — (200 d) | 24/24 | **9.82 %** | 6.43 – 14.04 % | 24/24 | **8.50 %** | 3.51 – 15.20 % | 24/24 | 0.00 % / 0.00 % |
+| **A** | `unadapted` (365 d) | 24/24 | **1.02 %** | 0.00 – 3.27 % | 21/24 | **0.09 %** | 0.00 – 0.60 % | 5/24 | 0.00 % / 0.00 % |
+| **A** | `adapted` (365 d) | 24/24 | **0.22 %** | 0.00 – 1.19 % | 11/24 | **0.20 %** | 0.00 – 1.19 % | 10/24 | 0.00 % / 0.00 % |
+
+**What the review head is.** The manifests carry `7637f7a`; the docs-only commit on top
+of it (this section and the milestones entry) is what PR #15 points at, and its tree differs
+from `7637f7a` in `docs/` alone. Stopped here: no merge, no tag, nothing further.

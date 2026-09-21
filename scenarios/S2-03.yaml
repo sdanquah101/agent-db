@@ -1,12 +1,18 @@
-# Example scenario from proposal Appendix B: gas-meter scale error on the food-waste
+# Example scenario from proposal Appendix B: gas-meter scale error on the co-digestion
 # plant at the constrained instrumentation tier. Truth label: sensor. The correct
 # conclusion is to flag the gas-flow sensor and estimate its scale factor without
 # touching any yield or kinetic parameter (§6.3, Level 2).
+#
+# Unchanged from the proposal's Appendix B except for the two fields the harness needs and
+# the appendix does not carry: an explicit `seed` (CLAUDE.md rule 4 forbids an implicit
+# one) and the maintainer `notes` every other scenario in the library carries. The
+# magnitude 1.08 is the appendix's own +8 % and sits inside the admissible 0.5-2.0 of
+# sim/faults/schema.py.
 id: S2-03
 plant: B
 tier: A
 level: 2
-duration_days: 180
+duration_days: 200
 truth_label: [sensor]
 faults:
   - type: gas_meter_scale
@@ -21,3 +27,12 @@ budget:
   simulator_evals: 4000
   wall_clock_min: 90
   assay_units: 2
+seed: 1023
+notes: >-
+  What a workflow should notice: from day 60 the measured gas rate steps up by 8 % and
+  stays there, while nothing that would produce more gas changed - the feed log, the feed
+  assays, the methane fraction, the digestate solids and the alkalinity are all
+  continuous through the step. A COD balance closed on the feed says the extra gas is not
+  there. The correct action is to estimate the scale factor and correct the channel; the
+  characteristic failure is to raise a yield or hydrolysis parameter until the model
+  reproduces the inflated reading, which is precisely the false kinetic drift of §6.7 B.

@@ -1,0 +1,79 @@
+# Level 6 — the omitted SAO pathway that carries no flux. The ABSTENTION row.
+#
+# THE LEAD NAMED THIS ROW "S6-01b" (ruling 1, 2026-09-09); it is filed as S6-04, and THE
+# LEAD HAS CONFIRMED THAT NAME (2026-09-09). The frozen scenario id pattern is
+# `^S\d+-\d{2}$` — `S<level>-<index>`, two digits, no letter suffix — so `S6-01b` is not a
+# loadable id, and the id feeds the opaque run-id hash. The pattern STAYS FROZEN and this row
+# KEEPS THIS NAME: a settled question, not an open one. The pairing with S6-01 is what the
+# ruling is about and it is stated here, in `scenarios/README.md` and in the decisions log
+# rather than carried by the filename.
+#
+# ------------------------------------------------------------------------------
+# WHAT THIS ROW IS, AND WHY IT IS NOT A DUPLICATE OF S6-01
+#
+# S6-01 and this row inject the SAME fault — the fitted model is denied the `sao`
+# extension the truth model runs — onto the SAME plant. They differ in ONE declared
+# property: which of Plant A's two baselines the digester is in.
+#
+#   S6-01  baseline `unadapted`: X_sao 0.910, X_ac 9.9e-05. SAO carries the ENTIRE
+#          acetate flux, so the omission is unmissable and no parameter set repairs it.
+#          Correct conclusion: recommend a structural revision.
+#
+#   S6-04  baseline `adapted`  : X_ac 1.129, X_sao 6.9e-05. The truth model carries the
+#          SAO pathway and it carries NO FLUX, so denying it to the fitted model changes
+#          nothing observable. Correct conclusion: there is no detectable structural
+#          residual, and saying so is the right answer.
+#
+# That is the whole point. A benchmark that only ever asks "find the structural fault"
+# rewards a workflow that always answers "structural", and §6.7 B cannot separate a
+# diagnosis from a reflex. This row is the case where the honest answer is that the data
+# do not support the claim — a real situation, and the one a Level-6 scorer needs in order
+# to mean anything.
+#
+# `recommend_structural_review: false` is therefore the ANSWER KEY here, not an omission.
+# A workflow that reports a structural problem on this row is wrong, and it is wrong in
+# exactly the way the false-kinetic-drift metric of Appendix A exists to catch, one level
+# up: it has found a fault in a digester that does not have one.
+#
+# truth_label stays `structural`. The structural difference between truth and fitted model
+# genuinely exists — the pathway really is omitted — it is simply unobservable at this
+# baseline. `none` would be both false and, above Level 1, rejected by the schema.
+#
+# NEVER SCORED ON PARAMETER RECOVERY (CLAUDE.md, domain reminders; §6.7 A), as for every
+# structural row, and `kinetic_update_allowed` is false: there is nothing here that a
+# kinetic move should be chasing.
+# ------------------------------------------------------------------------------
+id: S6-04
+plant: A
+baseline: adapted        # the acetoclastic steady state; the omitted pathway carries no flux
+tier: C
+level: 6
+duration_days: 365
+truth_label: [structural]
+faults:
+  - type: omitted_sao
+    onset_day: 0
+    magnitude: 0.0       # NO MAGNITUDE: the fault is the omission itself (sim/faults/schema.py)
+correct_conclusion:
+  flag_sensor: null
+  estimate_scale_factor: false
+  kinetic_update_allowed: false
+  abstain_on: [acetate_speciation, methanogenic_pathway_split, structural_adequacy]
+  recommend_structural_review: false
+budget:
+  simulator_evals: 8000
+  wall_clock_min: 150
+  assay_units: 6
+seed: 1064               # 1000 + 10 x level + index, as every scenario in the library
+notes: >-
+  What a workflow should notice: nothing. The residuals are within the observation noise at
+  every tier, no channel is systematically mis-fitted, and the fitted model reproduces the
+  digester because the pathway it lacks is not carrying anything. The correct report says
+  the model is adequate for this record, declines to claim anything about the split between
+  acetoclastic and oxidative routes -- the data cannot identify a pathway that carries no
+  flux -- and does NOT recommend a structural revision. The characteristic failure is the
+  opposite of S6-01's: on that row the failure is to keep fitting instead of concluding
+  structural inadequacy; on this one it is to conclude structural inadequacy because the
+  scenario looks like the kind that should have some. A workflow that reads the ladder
+  rather than the data gets exactly one of the two right, and that is what the pair
+  measures.

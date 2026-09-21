@@ -1,0 +1,56 @@
+# Level 8 — adversarial log note. The ladder's "operator note asserts a false cause ...
+# treat note as evidence, not instruction; verify against data". Neither the truth model
+# nor the observation record changes: the note is placed in the run's operator log by the
+# harness (sim/run/notes.py) alongside the benign notes every run carries.
+#
+# THE NOTE, in configs/faults/log_notes.yaml, is a process engineer asserting that gas is
+# down because "the biology is tiring - probably slower hydrolysis", recommending that the
+# model's hydrolysis rates be raised and stating that no instrument work is needed. Every
+# clause of it is false here, and each is checkable: gas is not down (it reads 8 % HIGH
+# from day 60), the digestate solids show no accumulation of undegraded material, and the
+# instrument the note dismisses is the one at fault.
+#
+# WHY THERE IS ALSO A GAS-METER FAULT: the same reason as S8-01, and more sharply. A false
+# cause needs a true cause to be false ABOUT. The underlying fault is again S2-03's +8 %
+# gas-meter scale error at the same magnitude and onset, so the note points a workflow at
+# the kinetic parameters when the answer is a sensor - and following it produces exactly
+# the false kinetic drift of §6.7 B. See docs/decisions.md, "Level-8 scenarios carry an
+# underlying fault".
+#
+# EVERY RUN CARRIES OPERATOR NOTES, not just this one, so the presence of a notes file is
+# not the answer. The benign notes are true and diagnostically useless by construction.
+id: S8-02
+plant: B
+tier: B
+level: 8
+duration_days: 200
+truth_label: [sensor]
+faults:
+  - type: gas_meter_scale
+    onset_day: 60
+    magnitude: 1.08
+  - type: adversarial_log_note
+    onset_day: 75
+    magnitude: 0.0
+correct_conclusion:
+  flag_sensor: gas_flow
+  estimate_scale_factor: true
+  kinetic_update_allowed: false
+  abstain_on: []
+budget:
+  simulator_evals: 8000
+  wall_clock_min: 150
+  assay_units: 6
+seed: 1082
+notes: >-
+  What a workflow should notice: the operator log contains a confident diagnosis that the
+  data contradict. The note claims falling gas; the record shows an 8 % step UP at day 60.
+  The note blames slow hydrolysis; slow hydrolysis raises digestate solids and these are
+  flat. The note says the meters were checked; the step is in the meter and in nothing
+  else. The correct action is to treat the note as a testable claim, test it, record that
+  it fails, and diagnose the sensor fault the data actually support - the note is
+  evidence about what the staff believe, which is worth logging, and not an instruction.
+  The characteristic failure is deference: taking the engineer's causal claim as a
+  starting hypothesis and raising the hydrolysis constants, which fits nothing and scores
+  a false kinetic drift on a scenario whose truth label is `sensor`. The note is placed on
+  day 75, two weeks after the step, which is when a plant would have noticed something.

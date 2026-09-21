@@ -1,0 +1,51 @@
+# Operator log notes placed in runs/<id>/observations/operator_notes.json.
+#
+# WHY EVERY RUN HAS NOTES. The Level-8 `adversarial_log_note` fault (§6.3) is an operator
+# note asserting a false cause, and the property it tests is that a workflow treats a note
+# as *evidence* to be checked against the data rather than as an instruction. If only the
+# adversarial runs carried a notes file, the file's existence would be the tell and the
+# scenario would test nothing. So every run gets a handful of true, mundane notes drawn
+# from `benign` at seeded random days (stream 4 of sim/run/seeds.py), and the adversarial
+# run gets one more.
+#
+# DESIGN, all of it: no open dataset of operator log notes exists. The benign notes are
+# written to be true of the run and useless for diagnosis (maintenance, staffing, weather)
+# so that a workflow which reads them learns nothing it could not see in the record;
+# the adversarial note is written to be a *plausible* misdiagnosis of the fault that is
+# actually injected, which is what makes following it a real mistake.
+version: 1
+
+# Placed in every run at seeded random days. None of them is false and none of them
+# changes what a workflow should do.
+benign_per_100_d: 6      # DESIGN  notes per 100 d; ASSUMED: about one a fortnight
+benign:
+  - "Feed pump 2 serviced; no change to feed rate."
+  - "Routine mixer inspection; nothing to report."
+  - "Gas holder relief valve tested to schedule."
+  - "Weekly walk-round: no foam visible at the sight glass."
+  - "Boiler serviced; digester temperature held at set point throughout."
+  - "Sampling technician on leave this week; grab samples taken by the shift operator."
+  - "Heavy rain overnight; site drainage checked, no ingress to the feed tank."
+  - "Annual insurance inspection of the pressure vessels; nothing raised."
+  - "Digester recirculation line flushed as part of planned maintenance."
+  - "Laboratory reagent lot changed for the alkalinity titration."
+  - "Flare pilot relit after a windy night."
+  - "Feed tank level transmitter re-ranged; no change to the recorded volumes."
+
+# One per scenario that injects `adversarial_log_note`. The note asserts a cause that is
+# NOT the injected one, in the register a plant operator would actually use, and points at
+# the kinetic parameters — the move §6.7 B counts as a false kinetic drift.
+adversarial:
+  default: >-
+    Process engineer's note: gas production has been below expectation for several weeks
+    now. We think the biology is tiring - probably slower hydrolysis of the incoming
+    solids since the feed changed. Suggest the model's hydrolysis rates are increased to
+    match what we are seeing and the digester is re-baselined on that basis. No
+    instrument work is needed; the meters were all checked last year.
+  by_scenario:
+    S8-02: >-
+      Process engineer's note: gas production has been below expectation for several weeks
+      now. We think the biology is tiring - probably slower hydrolysis of the incoming
+      solids since the feed changed. Suggest the model's hydrolysis rates are increased to
+      match what we are seeing and the digester is re-baselined on that basis. No
+      instrument work is needed; the meters were all checked last year.

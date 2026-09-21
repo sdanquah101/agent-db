@@ -10,7 +10,7 @@ seasonal drift, mis-logged masses) are a later session's work and will consume t
 stream after this draw.
 
 The result is hidden truth. Nothing here writes to disk: the run layer owns
-``runs/<id>/truth/`` (CLAUDE.md rule 1), and this package never reads that path.
+``truth_store/<id>/`` (CLAUDE.md rule 1), and this package never reads that path.
 """
 
 from __future__ import annotations

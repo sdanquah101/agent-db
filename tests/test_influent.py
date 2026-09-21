@@ -225,7 +225,16 @@ def test_mixed_influent_is_flow_weighted_and_cod_consistent(catalogue, plants):
     assert q == pytest.approx(sum(m / catalogue.feeds[n].density for n, m in rates.items()))
     assert c[_L["S_IN"]] == pytest.approx(0.01)  # both sludges carry the BSM2 S_IN
     assert organic_loading_rate(catalogue, rates, V) > 0
-    assert extension_influent(catalogue, rates)["S_ca"] == pytest.approx(0.02)
+    # the flow-weighted calcium, derived from the catalogue rather than pinned: this line
+    # was a pin on the old 0.02 kmol/m3 and fired when the lead's ruling of 2026-09-10 made
+    # s_ca the calcite-saturated DISSOLVED calcium (primary sludge 0.00503, WAS 0.00068)
+    q_total = sum(m / catalogue.feeds[n].density for n, m in rates.items())
+    ca_expected = (
+        sum(m / catalogue.feeds[n].density * catalogue.feeds[n].s_ca for n, m in rates.items())
+        / q_total
+    )
+    assert 0.0 < ca_expected < 0.02  # the ruling was a reduction; a pin at 0.02 must not return
+    assert extension_influent(catalogue, rates)["S_ca"] == pytest.approx(ca_expected)
     # no composite: everything particulate goes to X_ch / X_pr / X_li / X_I
     assert c[_L["X_xc"]] == 0.0 and c[_L["X_ch"]] > 0 and c[_L["X_I"]] > 0
     for fn in (mix_feeds, extension_influent):
@@ -288,32 +297,48 @@ def test_cod_per_vs_is_derived_and_checked_against_the_literature(catalogue):
     assert 2.7 <= catalogue.feeds["fog"].cod_per_vs <= 2.9
     assert catalogue.feeds["high_strength_waste"].cod_per_vs_literature == pytest.approx(2.234)
     assert catalogue.feeds["primary_sludge"].cod_per_vs_literature == pytest.approx(1.60)
-    assert 0.7 <= catalogue.feeds["high_strength_waste"].fractionation.f_li <= 0.75
+    # the HSW lipid COD share was the lead's 0.7-0.75 (2026-09-02) until ruling 5 of
+    # 2026-09-11 scaled the four degradable classes by 0.84/0.95 to the cited degradability
+    # centre; the ruled split pins it at 0.6631 (docs/decisions.md, ruling 5)
+    assert catalogue.feeds["high_strength_waste"].fractionation.f_li == pytest.approx(0.6631)
     # the check is enforced by the schema, not only by this test
     fog = catalogue.feeds["fog"]
     with pytest.raises(ValidationError, match="COD/VS derived"):
         FeedFractionation.model_validate(fog.model_dump() | {"cod_per_vs_literature": 2.0})
-    # PR #7's FOG (lipid COD share 0.85 read as a mass share) fails the check it motivated
+    # PR #7's FOG (lipid COD share 0.85 read as a mass share) fails the check it motivated,
+    # at the sludge inert equivalent it was declared with (1.42; the lead's answer A of
+    # 2026-09-11 made FOG's lipid-like, 2.9, at which even that split derives 2.58)
     old = {"f_ch": 0.05, "f_pr": 0.05, "f_li": 0.85, "f_xi": 0.04, "f_si": 0.01, "f_vfa": 0.0}
     with pytest.raises(ValidationError, match="COD/VS derived"):
-        FeedFractionation.model_validate(fog.model_dump() | {"fractionation": old})
+        FeedFractionation.model_validate(
+            fog.model_dump() | {"fractionation": old, "inert_cod_equivalent": 1.42}
+        )
     assert CODFractionation(**old).cod_per_vs(1.42) == pytest.approx(2.47, abs=0.01)
 
 
 def test_inert_cod_equivalent_is_per_feed_with_the_frozen_values(catalogue):
-    """Lead's freeze: ~1.2 for lignocellulosic inerts, 1.4-1.5 for sludge-derived ones."""
+    """Lead's freeze: ~1.2 for lignocellulosic inerts, 1.4-1.5 for sludge-derived ones.
+
+    FOG's is LIPID-LIKE, 2.9 (the lead's ruling of 2026-09-11, answer A, superseding the
+    sludge value 1.42 at which the ruled 0.92 centre could not reach the 2.7-2.9 COD/VS
+    target).
+    """
     lignocellulosic = {"cattle_slurry", "grass_silage"}
     for fid, spec in catalogue.feeds.items():
         if fid in lignocellulosic:
             assert spec.inert_cod_equivalent == pytest.approx(1.2), fid
+        elif fid == "fog":
+            assert spec.inert_cod_equivalent == pytest.approx(2.9), fid
         else:
             assert 1.4 <= spec.inert_cod_equivalent <= 1.5, fid
-    # every entry names a source for it, and the two assumed ones say so
+    # every entry names a source for it; the assumed one (food waste) and the ruled one say so
     text = FEED_FRACTIONATION.read_text(encoding="utf-8")
     lines = [ln for ln in text.splitlines() if "inert_cod_equivalent:" in ln]
     assert len(lines) == len(catalogue.feeds)
     assert all("# DESIGN" in ln and "kg COD/kg VS mass" in ln for ln in lines)
-    assert sum("LEAD'S INSTRUCTION" in ln for ln in lines) == 2  # fog, food waste
+    assert sum("LEAD'S INSTRUCTION" in ln for ln in lines) == 1  # food waste
+    ruled = [ln for ln in lines if "the lead's ruling of 2026-09-11" in ln and "SUPERSEDES" in ln]
+    assert len(ruled) == 1  # fog
     # the equivalent is not cosmetic: it moves the derived COD/VS
     ps = catalogue.feeds["primary_sludge"]
     assert ps.fractionation.cod_per_vs(1.2) < ps.cod_per_vs
@@ -545,4 +570,5 @@ def test_truth_producing_packages_never_write_files(package, tmp_path):
     calls = [c for m in modules for c in _write_calls(m)]
     assert not calls, calls
     for m in modules:
-        assert "truth/" not in m.read_text(encoding="utf-8").replace("runs/<id>/truth/", "")
+        prose = m.read_text(encoding="utf-8").replace("truth_store/<id>/", "")
+        assert "truth/" not in prose and "truth_store/" not in prose

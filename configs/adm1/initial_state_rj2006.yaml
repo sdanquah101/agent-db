@@ -1,0 +1,52 @@
+# The Rosen & Jeppsson (2006) BSM2 ADM1 steady state, as reviewable data.
+#
+# WHY THIS FILE EXISTS. The run harness needs a state to start its burn-in from. Until
+# now the only copy of this vector lived in `scripts/adm1_candidates/common.py`, which is
+# disposable probe code (decision 2026-09-02, "Disposable code lives in scripts/"), so
+# `sim/` may not import it. The numbers are unchanged — `tests/test_run_harness.py`
+# asserts this file and the probe module agree state for state, so the transcription
+# cannot drift.
+#
+# It is NOT a design value the lead has frozen and it is not the initial state of any
+# scenario: the harness integrates a burn-in on the plant's own median recipe and starts
+# the scenario from *that* state (docs/decisions.md, "Run harness"). This vector is only
+# where the burn-in itself starts, and a burn-in long enough to converge forgets it.
+#
+# Source: Rosen & Jeppsson (2006), "Aspects on ADM1 implementation within the BSM2
+# framework", Table 5 (mesophilic sewage sludge, 35 degC, 3400 m3, 170 m3/d). Units:
+# kg COD/m3 for the COD-bearing states, kmol C/m3 for S_IC, kmol N/m3 for S_IN,
+# kmol/m3 for S_cat and S_an; the three gas states are kg COD/m3 (H2, CH4) and
+# kmol C/m3 (CO2).
+version: 1
+source: "Rosen & Jeppsson 2006, Table 5 (BSM2 ADM1 steady state, 35 degC)"
+liquid:
+  S_su: 0.0124
+  S_aa: 0.0055
+  S_fa: 0.1074
+  S_va: 0.0123
+  S_bu: 0.0140
+  S_pro: 0.0176
+  S_ac: 0.0893
+  S_h2: 2.5055e-7
+  S_ch4: 0.0555
+  S_IC: 0.0951
+  S_IN: 0.0945
+  S_I: 0.1309
+  X_xc: 0.1079
+  X_ch: 0.0205
+  X_pr: 0.0842
+  X_li: 0.0436
+  X_su: 0.3122
+  X_aa: 0.9317
+  X_fa: 0.3384
+  X_c4: 0.3258
+  X_pro: 0.1011
+  X_ac: 0.6772
+  X_h2: 0.2848
+  X_I: 17.2162
+  S_cat: 3.5659e-43
+  S_an: 0.0052
+gas:
+  S_gas_h2: 1.1032e-5
+  S_gas_ch4: 1.6535
+  S_gas_co2: 0.0135

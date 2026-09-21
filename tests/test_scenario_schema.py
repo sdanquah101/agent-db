@@ -29,7 +29,7 @@ def test_example_scenario_loads_with_every_field_from_appendix_b():
     assert scenario.plant is Plant.B
     assert scenario.tier is Tier.A
     assert scenario.level == 2
-    assert scenario.duration_days == 180
+    assert scenario.duration_days == 200  # Plant B's horizon: the lead's ruling 3, 2026-09-11
     assert scenario.truth_label == (TruthLabel.SENSOR,)
 
     assert len(scenario.faults) == 1
@@ -46,7 +46,12 @@ def test_example_scenario_loads_with_every_field_from_appendix_b():
     assert conclusion.abstain_on == ()
 
     assert scenario.budget == Budget(simulator_evals=4000, wall_clock_min=90, assay_units=2)
-    assert scenario.seed is None
+    # Appendix B carries no `seed`, and this test asserted its absence until the run harness
+    # landed (2026-09-03). It is there now, because CLAUDE.md rule 4 forbids an implicit seed
+    # and `sim.run.matrix` refuses a scenario without one: every library scenario carries a
+    # seed of 1000 + 10 x level + index, so this row's is 1023. Nothing else about the
+    # appendix's example changed, which is what the assertions above are for.
+    assert scenario.seed == 1023
 
 
 def test_example_scenario_round_trips_through_yaml(tmp_path: Path):
@@ -91,7 +96,7 @@ def test_unknown_fault_type_is_rejected():
 
 def test_fault_after_end_of_run_is_rejected():
     raw = _base()
-    raw["faults"][0]["onset_day"] = 181
+    raw["faults"][0]["onset_day"] = raw["duration_days"] + 1  # one day past the horizon
     with pytest.raises(ValidationError, match="after the run ends"):
         Scenario.model_validate(raw)
 

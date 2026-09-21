@@ -850,3 +850,924 @@ coordinating session, after this salvage merges. It still needs the run harness
 | Full suite | ≈ 5 min per run | — | |
 
 No LLM-agent compute inside the benchmark; development cost only.
+
+---
+
+## Milestone 3 — Observation model and fault-injection API (weeks 7–9)
+
+### Session 2026-09-03 (eighth session) — the run harness, the 19-scenario library, gate G1
+
+Branched from `main` at `b469317` (PR #11 merged). This is the gate-G1 session: build the
+`runs/<id>/` layer, write the other 18 scenarios, generate the §7 matrix, and compare the
+generated statistics with the Muscatine anchor inside tolerances declared in advance.
+
+**Done**
+
+- **The run harness** (`sim/run/`, `state/`). `generate_run` wires every frozen component
+  together — `build_plan` → hidden geometry → `generate_influent` → a burn-in on the
+  plant's median recipe → the truth model, segmented where a parameter fault has an onset
+  → channels → the tier's mask → files. Two writers, one per region, so the rule-1
+  boundary is structural rather than procedural. `generate_cells` integrates the truth
+  **once** per (plant, scenario) and masks it three times, which is how §6.4's "tiers are
+  masks on identical truth" becomes a guarantee rather than a hope.
+- **`state/provenance.py`**: the append-only `calls.jsonl` of rule 3, with an argument
+  *fingerprint* rather than the arguments (a trajectory is not a log line). A second
+  writer continues the sequence, which is what the tool registry will do.
+- **`state/run_view.py`**: the workflow-facing loader. Hidden truth is not refused, it is
+  unnameable — the view is rooted at `observations/` and every path is resolved and
+  required to stay inside it. `tests/test_truth_isolation.py` now drives that on a real
+  run, after first asserting the truth *is* on disk.
+- **The manifest is redacted, not truncated.** Written complete (scenario, seeds, fault
+  layers, config hashes, git SHA) because reproducibility needs it; a workflow gets a
+  projection with no field for any of the three. `REDACTED_FIELDS` and a test partition
+  the manifest exactly, so a new field cannot be forgotten on one side.
+- **All 19 scenarios**, each with its answer key and a `notes` field saying what a workflow
+  should notice and what the characteristic failure is. Every magnitude is inside the range
+  `sim/faults/schema.py` publishes and its choice is argued in the file's own header.
+- **The §7 matrix generates end to end: 114 of 114 cells**, 44 distinct truth integrations,
+  13 min wall-clock, 40 MB. 96 factorial cells on B and C, 18 on Plant A.
+- **`docs/g1_anchor_report.md`** plus `anchor/compare_generated.py` and
+  `tests/test_g1_anchor.py`, which recomputes the report's generated block verbatim.
+- Tests 233 → **296** at the time this entry was first written; the entry's own numbers
+  were left at their first-pass values and are corrected below (L2 of the 2026-09-04
+  review).
+
+**Gate G1: the stated criterion is met, and there is a blocking finding underneath it**
+
+*Met.* Every scenario generates; hidden truth is written only to `runs/<id>/truth/` and is
+unreachable through the workflow API; **every influent statistic is inside its declared
+tolerance** — per-stream delivery medians (ratios 0.95–1.00), spreads (1.01–1.08), zero
+fractions, total feed flow (1.08), the VS fractions, the HSW COD and the organic loading
+rate (1.13). Biogas is **1.41×** the plant's measured mean, inside the inherited 0.6–1.5
+band. *(This entry originally said 1.37×, the first-pass figure measured before the lead's
+rulings 1 and 3 of the same day moved it; corrected 2026-09-04.)*
+
+*Blocking.* **Plant B acidifies on 5 of 12 clean Level-0 seeds** (pH 4.6–5.0, 0–0.31
+methane) under the frozen configuration. It reproduces with declared geometry, the
+published initial state and no burn-in, so it is not the harness.
+`test_plant_b_survives_the_generator_swings` missed it because it tests one seed — and that
+seed is one of the seven that survive. Across the matrix: 87 of 114 cells sound, all 27
+that are not being Plant B. The likeliest cause is that `plant_B.yaml` documents the
+high-strength waste as "blended in a 65,000-gal tank" (~6 d of hold-up) and the generator
+feeds truck arrivals straight to the digester. **Not fixed** — it changes the frozen
+generator — but every run is now labelled sound or soured and the rate is pinned by a test
+that fails if it goes to zero as well as if it gets worse.
+
+*Three output rows fail their declared tolerance,* and they are one finding: VFA 0.054
+against 1.178 kg m⁻³, alkalinity 2.78 against 5.04 kg CaCO₃ m⁻³, FOS/TAC 0.021 against
+0.232. This is the realism gap the PR-#11 review recorded, now measured on a panel. Its
+consequence is worse than the rows: the overload flag fires on 0 % of days in five of the
+seven sound runs, so conditional missingness — and with it the Level-4
+`informative_missingness` row — has nothing to act on in most healthy Plant B cells.
+
+**Flagged to the lead (needs a decision; none of it was changed here)**
+
+1. **Plant B's stability** and the missing HSW/FOG buffer tank (above).
+2. **The VFA/FOS-TAC gap** and what closing it would take (`g1_anchor_report.md` §6). Two
+   of the five options actually change the answer: the acetate-uptake kinetics, and the
+   buffer tank.
+3. **Plant A never reaches a steady state.** Its SAO succession completes at ~800 d with
+   the acetoclastic methanogens washed out entirely, at which point all three ammonia
+   scenarios are inert (doubling `K_I_nh3` moves gas by 0.002 %). The burn-in is therefore
+   set to leave a mixed community at 200 d, and the succession is documented rather than
+   hidden. Either `k_m_sao` is too fast, or Plant A's ammonia envelope is too high, or
+   Plant A is defined as a digester in transition — the third is implemented.
+4. **There is one answer key per scenario, not one per tier**, so S2-02 (methane-analyser
+   flatline, a Tier-B instrument) has an unreachable conclusion at Tier A.
+5. **Level-8 rows now carry an underlying fault**, because the frozen schema requires a
+   truth label and forbids `none` above Level 1 — and the constraint turns out to improve
+   the rows.
+6. **Plant A's ammonia rows run at all three tiers** (§7 pins Tier A only for its Level 2–5
+   subset and is silent on these).
+7. **Budgets** are a three-band proposal (4,000/6,000/8,000 simulator evaluations by level);
+   the proposal fixes only the Appendix-B example.
+
+**Changed, with the reason stated**
+
+- `tests/test_scenario_schema.py` asserted `S2-03.seed is None`. The Appendix-B example now
+  carries seed 1023, because rule 4 forbids an implicit seed and the matrix refuses a
+  scenario without one. Nothing else about the example changed and the test still pins the
+  rest of it.
+- `configs/adm1/initial_state_rj2006.yaml` is new: the published steady state as data, so
+  `sim/` need not import the disposable probe code. A test asserts the two agree.
+
+**Next session should start on**
+
+1. The lead's answers to items 1–3 above. Item 1 in particular gates the factorial: until
+   Plant B is reliably stable, roughly a third of its cells are crashed digesters.
+2. The tool registry v1.0 (§6.2, weeks 10–13), appending to the same `calls.jsonl` and
+   enforcing the budgets the scenarios declare — and applying the Level-8 `tool_failure`
+   directive the harness hands it in memory.
+3. The Weinrich R3/R4 ports as the *fitted* models, which is what makes the Level-6 rows
+   scoreable; `fitted_extensions` is computed and written to truth but nothing consumes it
+   yet.
+
+**Resource cost**
+
+| Item | Wall-clock | Notes |
+|---|---|---|
+| Run harness, provenance, run view | ≈ 70 min | |
+| 18 scenario YAMLs | ≈ 40 min | |
+| Full matrix generation | 13 min | 114 cells, 44 integrations, 40 MB |
+| Diagnosing the Plant B souring | ≈ 35 min | seed sweeps, cause isolation |
+| Anchor comparison, report, tests | ≈ 60 min | |
+| Docs | ≈ 30 min | |
+| Test suite | ≈ 8 min per full run | 4 full runs |
+
+### Session 2026-09-03 (eighth session, continued) — the lead's three rulings on G1
+
+The lead read the G1 status and ruled: **G1 not passed — the infrastructure criterion is
+met, the plant criterion is not.** Three rulings, all implemented on the same branch. The
+five interpretations of the first pass were approved.
+
+**Ruling 1 — Plant B's blend tank.** Added to the *plant contract* as a declared, well-mixed
+buffer (`configs/plants/plant_B.yaml`, `sim/plants/equalisation.py`): 123.02 m³, holding the
+trucked high-strength waste, about 4–5 d of hold-up. The influent generator is untouched, as
+ruled. Mass closes to machine precision and at zero volume it is a pass-through exactly.
+
+**Ruling 3 — feed alkalinity calibrated.** The Muscatine feeds' strong cations calibrated to
+the anchor's own digester alkalinity: 2.78 → **5.12** kg CaCO₃ m⁻³ against the plant's 5.04,
+with pH landing at **7.29** against 7.27 at the same time. Inert-N untouched; no kinetic
+parameter touched.
+
+**The acceptance condition is met, and either change alone would have met it.** Measured on
+the twelve-seed panel with the other held back — original cations/no tank 7/12 sound (min pH
+4.50), tank alone 12/12 (6.53), calibration alone 12/12 (7.06), both 12/12 (7.13). On the
+twenty-four-seed panel with both: **24 of 24 sound**, and **all 114 matrix cells sound**.
+
+**Ruling 2 — Plant A.** The 200-d burn-in workaround and its guard test are gone; the burn-in
+is 400 d and converges on all three plants. `PlantConfig` gains a declared `adaptation` block
+and Plant A declares `K_I_nh3 = 0.02` kmol N/m³ (the **bottom** of the ruled 0.02–0.05: the
+frozen ×0.1 fault magnitude reaches below the pathway-exchange threshold from 0.02 and not
+from the midpoint). S5-01 and S7-02 are redesigned as loss-of-adaptation transitions and
+both now produce strong, correctly-signed signals through the full harness.
+
+**Two things ruling 2 asked for could not be delivered, and both are measured, not asserted.**
+Coexistence of acetoclasts and SAO is impossible at *any* adapted K_I — they compete for one
+substrate, so one always excludes the other, and the exchange point is at K_I ≈ 0.003, an
+order of magnitude below the ruled range; the stochastic feed does not change it. The
+ruling's fallback, reducing `k_m_sao` towards 3.0, has the **wrong sign**: it weakens SAO and
+moves the exchange point down. `k_m_sao` was therefore not changed.
+
+**One change beyond the rulings, flagged.** A trace of syntrophic oxidisers in the feed
+(`influent_extension_states: {X_sao: 1e-4}`). ADM1 has no immigration, so a population at
+zero can never return: without it a loss of adaptation produces no pathway shift at all and
+the Level-6/7 rows stay inert. It is not a kinetic change, it is physically standard, and
+it is flagged in the config, the decisions log and the PR.
+
+**Open, needing the lead**
+
+1. **S6-01 is inert.** The pure structural omission has no transition by construction, so at
+   Plant A's adapted acetoclastic baseline the truth's SAO carries no flux and omitting it
+   produces no residual. Three ways out are written into the scenario file; this session
+   recommends setting Plant A's adapted K_I to the ~0.003 exchange point, or rescoring the
+   row as an abstention row, and changed nothing.
+2. **The VFA gap.** 0.067 against 1.178 kg m⁻³, so FOS/TAC 0.013 against 0.232 — the
+   alkalinity half is closed, the VFA half is the coordinator's list. The overload flag now
+   fires on no day at all in most sound runs, so S4-02 is close to a duplicate of Level 1.
+3. **Plant A's baseline TAN is 3.1–3.7 kg N/m³**, above the 2.3–2.8 the ruling named and
+   inside Tisocco et al. 2024's published 2.3–4.3. Nothing was adjusted to move it.
+
+**CI.** The G1 panel is behind a `g1` marker, deselected by default, run nightly and on any
+PR touching `sim/`, `configs/`, `scenarios/` or the comparison module.
+
+**Next session should start on** the two open items above, then the tool registry (§6.2).
+
+---
+
+### Session 2026-09-04 (ninth session) — the G1 remediation: five rulings and four defects
+
+Continues PR #15 on `claude/g1-scenario-generation`. An independent review of the gate-G1
+work found nine defects; the lead ruled on five and left four as pure test/correctness work.
+This session applied all nine and referred three design questions back. **No plant ruling was
+redone** — the blend tank, the adapted `K_I_nh3` and the alkalinity calibration are as the
+previous session left them, and no generated number moved.
+
+**Done**
+
+- **H1 — hidden truth is structurally unreachable.** The review broke `state/run_view.py`
+  twice on a real run without writing the string `truth`, so the AST checker saw neither:
+  `view.root` was a public field, and `view.path(".")` resolved to the observations
+  directory whose `.parent` is the run root. Truth now lives in a **separate top-level
+  tree**, `truth_store/<id>/`, with the complete manifest and the run index; `runs/<id>/`
+  holds the observations, the **redacted** manifest (written redacted, not redacted on the
+  way out) and `calls.jsonl`. Defence in depth on top: private root, contents-not-paths,
+  `""`/`"."`/traversal/symlinks rejected. An adversarial bypass suite drives every route
+  including the attribute one, **with a negative control**.
+- **H3 — per-sensor RNG streams.** `observe()` consumed one serial stream over
+  `sorted(tier.sensors)`, so a shared instrument's realisation changed with the tier and
+  §6.4's tier comparison was confounded. Each sensor's stream is now derived from
+  `(observation_seed, sensor_name)`. The new test generates the tiers **separately** and
+  carries a different-seed control; the old one compared a shared object with itself.
+- **H2 — the blend tank's guard.** `sum(a) - sum(b) == sum(a - b)` is an identity of
+  addition and was true for any `load_out`. Replaced by a per-component comparison against
+  the closed-form solution of `dV/dt = q - V/tau`. The implementation is correct (Radau
+  cross-check, 1.2e-13); mutation confirms `load_out[t] = load_in[t]` now fails four tests
+  and failed none before.
+- **M1 — the alkalinity row is a calibration, not a match.** Labelled *calibrated to
+  anchor*, excluded from the anchor-match count (now stated in the report: 20 of 22
+  independent rows), rationale corrected, and the pH-corroboration claim withdrawn. Recorded
+  as a finding: the high-strength waste supplies **91 % of the `S_cat` increment the
+  calibration added** — the basis the lead ruled this is reported on (2026-09-09), stated
+  wherever the number appears. The other two bases (78 % of absolute cation charge, 86 % of
+  the alkalinity produced) stay in the report as the measurement record.
+- **M7 — the gap list is merged**, which also brings the branch up to `main` (PR #13's
+  offline SCADA anchor and PR #14's historian dropout).
+- **M5** golden pins on the seed derivation and the run ids; **M6** two determinism
+  regressions, one in-process and one across two `PYTHONHASHSEED` values in a subprocess;
+  **L7** `write_index_entry` no longer duplicates a regenerated cell's line; **L2** stale
+  numbers corrected in the report and here, with the correction marked in place.
+- Three existing observation tests asserted a realisation rather than a property and are
+  **re-expressed, not relaxed** — the drift reset, the flatline hold and the
+  conditional-missingness rate. Each is now measured over seeds or against an expectation
+  derived from the config.
+- Tests 305 → **339** (327 in the default suite, 12 in the `g1` panel, 2 skipped without the
+  git-ignored SCADA parent).
+- **The matrix regenerates end to end into the new layout: 114 of 114 cells, 114 of 114
+  sound**, 44 truth integrations, ~10 min wall-clock, 25 MB under `runs/` and 17 MB under
+  `truth_store/`. Verified on the generated store rather than asserted: every `runs/<id>/`
+  contains exactly `observations/`, `manifest.json` and `calls.jsonl`; no visible manifest
+  carries a redacted field; no truth directory lacks its complete manifest; `index.jsonl` is
+  in the truth store with 114 unique lines and no duplicates.
+- **Regenerated a second time from a clean tree**, because the first pass was not one: its
+  114 manifests carried **five different `git_sha` values, three of them `-dirty`**, having
+  been generated across three commits while docstrings were still being edited. Proposal §13
+  wants final runs from a clean tree and the manifest marks `-dirty` exactly so that is
+  visible; all 114 now carry the single clean `d57546c`. Checking one's own provenance record
+  is cheap and this is what it is for.
+- **CI: the paths filter needed `pull-requests: read`.** `does this change touch sim/?`
+  failed on every pull_request event while passing on push for the same commit —
+  `dorny/paths-filter` asks the pull-request Files API, and declaring a `permissions:` block
+  sets every unlisted scope to none. The consequence was worse than a red check: the G1 panel
+  is gated on that job's output, so it was silently **skipped** on every PR run. Fixed; both
+  event types now run the panel and all ten checks are green.
+- **The G1 report's generated block is byte-identical apart from the M1 relabelling and the
+  new match-count line.** The remediation changed where truth is written and how a sensor is
+  realised, not what the digester does.
+
+**Referred to the lead, unchanged — all three independently re-measured and confirmed**
+
+1. **M2.** The HSW's visible alkalinity assay is 0.0214 kg CaCO₃ m⁻³ while the strong-cation
+   charge the simulator feeds is 10.26 — a factor of **480**. The other streams agree to
+   within 2.4×. It is specifically the stream ruling 3 calibrated.
+2. **M3.** `observations/sensors.json` flags the methane analyser `flatlined` on exactly the
+   samples the Level-2 fault injected, so the visible record labels that row.
+3. **M4.** The adversarial note is the only entry authored by a `process_engineer`; every
+   benign note is an `operator`'s, so the field alone identifies it without reading it.
+
+**Still open from the previous session:** S6-01 is inert; the VFA gap (`docs/vfa_gap.md`);
+Plant A's baseline TAN sits above the range the ruling named.
+
+**Next session should start on** the lead's answers to M2/M3/M4 and to S6-01, then the tool
+registry (§6.2).
+
+---
+
+### Session 2026-09-09 (continued) — the lead's four rulings on S6-01, TAN, the titrimetric convention and the gap
+
+**Done**
+
+- **Ruling 1 — Plant A declares two baselines, and S6-01 bites.** The row was inert:
+  acetoclasts and syntrophic oxidisers compete for one substrate, so Plant A is one or the
+  other, and at its adapted constant it was acetoclastic with the omitted pathway carrying
+  no flux. The contract now declares `adapted` (K_I 0.02, X_ac 1.129, acetate 0.038) and
+  `unadapted` (ADM1 default, X_sao 0.910, acetate 0.240) — both sound digesters, measured —
+  and each scenario names the one its answer key assumes. **S6-04** is new: the same
+  omission on the adapted baseline, scored on **abstention**, so the pair distinguishes a
+  diagnosis from a workflow that always answers "structural". Matrix 114 → **117 cells**.
+  The X_sao feed trace is recorded as **approved**, not flagged.
+- **Ruling 2 — baseline TAN 3.1–3.7 accepted**, the earlier 2.3–2.8 recorded as withdrawn.
+- **Ruling 3 — the titrimetric transfer function is approved in principle and NOT built.**
+  `sim/observation/channels.py` is untouched pending its form and band. What is in force
+  meanwhile is stated in three places rather than left implicit.
+- **Ruling 4 — the gap is a finding, the threshold is percentile-matched.** No kinetic
+  parameter moved. The bistability stays in `docs/vfa_gap.md` and is referenced as a
+  property of the model. The 0.40 threshold is now pinned to the anchor's own 92nd
+  percentile (0.402 / 0.408, n = 861 each), and the 92nd is the *closest* percentile to
+  0.40 of any between the 50th and the 99th — the old guard only required 5–15 % of days
+  above it and would have accepted 0.35 or 0.45 equally.
+- **The overload firing rate is in the generated block**, per-run and pooled as ruling 4
+  requires: **0.14 % of days pooled, no day at all in 23 of 24 sound runs**, 3.31 % in the
+  one that fires, against the plant's 8.25 % and 9.18 %.
+- Benchmark card gains **§5.3, "Two FOS/TAC conventions, and which one each number is in"**.
+- Tests 339 → **342** (330 default + 12 in the `g1` panel, 2 skipped without the SCADA
+  parent). Matrix regenerated from a clean tree: **117 of 117 cells, 117 of 117 sound**,
+  9 min 43 s, every manifest on one clean SHA, 0 visible manifests carrying a redacted
+  field, index 117 lines / 117 unique.
+
+**Flagged to the coordinator, not decided here**
+
+1. The new row is filed as **`S6-04`, not `S6-01b`**: the frozen id pattern `^S\d+-\d{2}$`
+   admits no letter suffix and the id feeds the opaque run-id hash. A one-line schema
+   change plus a rename if the lead wants the literal id.
+2. The unadapted baseline's digestate TAN is **3.5–3.7, not the ruled 3.7–4.3**. The
+   unadapted constant does not raise TAN — it is slightly *lower* than the adapted
+   baseline's — and reaching that band would move Plant A's frozen feed nitrogen. The
+   mechanism the ruling needs is delivered in full by the constant alone.
+3. Two relayed anchor numbers did not reproduce: Dig2 max 0.80 (measured 0.636) and the
+   exceedance fractions 7.78 / 8.59 % (measured 8.25 / 9.18 %), on the same n = 861. The
+   percentiles the ruling turns on agree to the third decimal, so the ruling is unaffected.
+
+**Next session should start on** the titrimetric transfer function once the coordinator
+brings its form and band, the still-open M2/M3/M4 findings, and then the tool registry
+(§6.2).
+
+---
+
+### Session 2026-09-09 (continued) — rulings A–E: the titrimetric convention and the hidden-state trigger
+
+**Done**
+
+- **Ruling A — the titrimetric FOS transfer function, κ frozen at 1.0.** The `vfa_total`
+  *sensor* reports what a two-point Nordmann/Kapp titration would report; `fos_tac` is
+  computed from that reading; **true VFA stays the hidden channel and no sensor sees it**.
+  No fitted parameter: every equilibrium constant is the truth model's own. Re-derived
+  independently and matching the relay exactly — pK_a(ac) 4.760, pK_a(CO₂) 6.305, carry-over
+  0.0349 of S_IC, f_ac 0.3309, scale-up ×3.022. Measured FOS 0.775 against the anchor's
+  1.178, FOS/TAC 0.150 against 0.233, **90 % of the reading bicarbonate carry-over**; the gap
+  falls **17.5× → 1.52×** with nothing fitted.
+- **The consequence is that `vfa_median` and `fos_tac_median` now PASS — 20 of 22 independent
+  rows became 22 of 22.** No bound was moved and the model did not change; the row now
+  compares like with like. The test that pinned those rows as *failing* in both directions
+  did exactly what it was written to do: it failed, and now pins the **residual 1.52× gap**
+  just as hard.
+- **Ruling B — conditional missingness triggers on the hidden state**: true VFA > 2.00× its
+  30-day trailing median, the window excluding the current day. Measured **7.92 %** of days
+  on 24 sound Plant B runs against the anchor's 7.78 %, nothing tuned. Cross-plant on
+  24 seeds per row, same cut-off, **four rows because Plant A is two digesters**: **B 7.92 %,
+  C 9.96 %, A-`unadapted` 2.54 %, A-`adapted` 0.52 %** — the last reproducing the
+  coordinator's independent figure exactly. Recorded, not tuned away, and accepted by the
+  lead as the physical answer.
+- **The four-row table separates two effects.** The feed pattern is the larger — B and C take
+  trucked batches, Plant A is fed steadily — but **within Plant A, on the same feed, the
+  SAO-dominated baseline fires nearly five times as often** (2.54 % in 24/24 runs against
+  0.52 % in 11/24). The pathway matters, not only the feed.
+- **S4-02 is given back** on B and C: the flag now fires in every sound run, where before it
+  fired on no day at all in 23 of 24.
+- **Ruling C** — FOS/TAC > 0.40 stays operator-facing only; both rates are reported in one
+  table so they cannot be confused.
+- **Ruling D** — the "variance deficit" diagnosis is **withdrawn**. True VFA is *more*
+  variable than the anchor's FOS/TAC (2.06 against 1.74); what is flat is the titrimetric
+  reading, because most of it is carry-over. The paper's finding is that **the titrimetric
+  convention masks the VFA dynamics it is meant to report**.
+- **Ruling E** — the run root moves into closures; `RunView` holds no instance attribute at
+  all, and `view.files` now filters through the resolver so the listing cannot advertise what
+  a read would refuse.
+- Tests 342 → **349** (336 default + 13 in the `g1` panel, 2 skipped).
+
+**Settled since**
+
+- **`S6-04` keeps its name and the id pattern stays frozen** (the lead, 2026-09-09). The flag
+  was the right call; the question is closed in the scenario header, `scenarios/README.md`
+  and the decisions log.
+- **Plant A's low trigger rate is accepted as the physical answer.** Its exposure is smaller
+  than an earlier draft of this entry implied: the §7 factorial is B and C only, so `S4-02`'s
+  six factorial cells all sit where the trigger fires in every run. Plant A runs S4-02 as one
+  Tier-A cell in its separately-reported subset, and that cell is thin.
+- **`docs/g1_anchor_report.md` §6.1 now says what closing the remaining 1.52× would take** —
+  non-VFA titratable species ADM1 does not carry; a fitted κ (rejected: ruling M1 would then
+  exclude the row from the match count) or a new extension (Phase 2). The g1 guard caught
+  that this was missing after the rewrite; **the report was fixed, not the test**.
+
+**Still open**
+
+- The unadapted baseline's TAN band (3.5–3.7 measured against the ruling's 3.7–4.3), the two
+  relayed anchor numbers that did not reproduce, and M2/M3/M4.
+
+**Recorded as a follow-up for the next session that touches the plant configs**: Plants B and
+C need a **declared design organic loading rate** from Muscatine's design or permit figures.
+Nothing depends on it today — the trigger uses the VFA signal alone — and no design OLR is to
+be invented in the meantime.
+
+**Next session should start on** the lead's answers to the flagged items, then the tool
+registry (§6.2).
+
+---
+
+### Session 2026-09-09 (close-out) — the lead's remaining rulings; G1 PASSES CONDITIONALLY
+
+**Status: G1 passes conditionally.** The lead's close-out is under way; the merge waits on an
+independent fresh-context engineering review of the branch, which was still running when this
+entry was written. Not merged, not tagged, no session spawned.
+
+**Done**
+
+- **The unadapted baseline's TAN is settled.** 3.5–3.7 kg N/m³ **accepted as measured**; the
+  earlier 3.7–4.3 **withdrawn**. `configs/plants/plant_A.yaml`'s `source:` note no longer
+  reads `FLAGGED ... with the coordinator` — it records the ruling, so the log and the plant
+  contract stop disagreeing. Same disposition, and same reason, as the adapted baseline's
+  3.1–3.7 earlier the same day. No code change.
+- **The HSW buffering share is reported on one declared basis: 91 % of the `S_cat` increment
+  the calibration added**, with the basis stated in the sentence carrying the number, in the
+  report, this file and the decisions log. Not the absolute-charge 78 %, and never a bare
+  percentage — the three bases genuinely disagree and a percentage without its basis cannot
+  be checked. The three-basis table stays as the measurement record.
+- **The pathway effect is written up as a finding**, not a table row: `docs/g1_anchor_report.md`
+  §5.4 now carries a controlled within-plant comparison. Same geometry, feed, schedule, seeds
+  and 2.00× cut-off; one declared difference (`K_I_nh3`, and so which community carries the
+  acetate flux). **2.54 % of days in 24/24 runs against 0.52 % in 11/24 — 4.9×.** Because the
+  trigger measures a *relative* excursion, this is not the SAO baseline sitting at a higher
+  VFA level: the same load fluctuations move the residual acetate pool further relative to
+  where it has been when it drains through the slower syntrophic route. It also means the
+  S6-01 / S6-04 pair differs in the observable record and not only in the answer key.
+- **§7 of the report states which commit the shipped manifests carry**: the final
+  **branch-head** SHA, not the merge commit, with the reason (the merge commit does not exist
+  until after the merge, and regenerating afterwards means regenerating on `main`) and the one
+  condition under which the record goes stale.
+- **The matrix is regenerated at the final head as the last action before the merge**, so
+  every manifest's `git_sha` is the code that produced it.
+- **M2, M3 and M4 stay referred and unchanged**, recorded as a decision so a later session
+  does not fix them on sight: M3 in particular is a design question (whether a Level-2 row is
+  labelled in its own metadata), not a tidy-up.
+- **Nothing further on H1**: the closure residual is accepted as stated.
+
+**Still open**
+
+- **M2** (the 480× between the HSW's visible alkalinity assay and its fed cation charge) — the
+  decisions entry is with the lead verbatim; they rule after reading it. **M3** and **M4**
+  likewise. Change nothing.
+- The two relayed anchor numbers that did not reproduce (Dig2 max 0.636 not 0.80; exceedance
+  8.25 / 9.18 % not 7.78 / 8.59 %). Every percentile the rulings turn on agrees to the third
+  decimal, so no ruling is affected.
+- **Plants B and C still need a declared design organic loading rate**, for the next session
+  that touches the plant configs. Nothing depends on it and none is to be invented.
+
+**Next session should start on** the tool registry (§6.2), once the review comes back and the
+merge lands.
+
+---
+
+### Session 2026-09-09 (M2) — the assay and the fed charge now describe the same stream
+
+**The lead ruled on M2** as an amendment to ruling 3 of 2026-09-03, and as an approved change
+to a frozen config. Sequence set by the lead: the coordinator's fresh-context review verdict,
+then this fix, then the matrix regeneration at the final head, then the merge and the tag.
+The merge and the tag are the coordinator's; this session does neither.
+
+**Done**
+
+- **Part 1 — the feed alkalinity assay is computed from the full charge balance**, on every
+  catalogue stream. `total_alkalinity` reports what a titration to the CO₂ end point measures
+  at the stream's own pH — bicarbonate, free acetate, water — in the **same convention as the
+  effluent channel** `alkalinity_total`. Its pair `feed_cation_charge` is what ADM1's charge
+  balance must balance, `S_cat − S_an + [NH₄⁺]`. Electroneutrality makes the two equal exactly
+  when a stream's declared pH is consistent with its composition.
+- **The guard covers every stream**, names the stream and both numbers on failure, and was
+  **checked against the pre-fix catalogue first**: it fails there on `high_strength_waste`
+  (4.00×, and 503× against the pre-ruling assay) and on `food_waste` (0.33×, the same defect
+  with the sign reversed). Mutation-measured: of the 12 ±50 % `s_cat` perturbations on the
+  **six** fed streams, **10 fail, 1 is skipped by the floor and 1 survives** (cattle slurry
+  at half its cations moves towards the centre of the band); `s_ic` and pH perturbations are
+  caught only near the band edge. **This entry first claimed "10 of 10 on five streams" and
+  the review of 2026-09-09 corrected it** — it was 9 of 10 on five, and there are six.
+- **Part 2 — the HSW's implied pH was 13.04**, so the ruling's condition was met and the
+  redistribution was made: `S_IC` 0.01 → **0.1607** kmol C m⁻³, declared pH 5.0 → **7.0**,
+  **`S_cat` unchanged at 0.225**. `S_IC` is not fitted — it is the carbon that closes the
+  charge balance at the declared pH. The visible assay goes 0.0214 → **10.75**, meeting the
+  fed charge of 10.75 exactly.
+- **Reconfirmed where ruling 3 put the digester**: alkalinity **5.125** (target ~5.0), median
+  pH **7.262** (target ~7.3), **24 of 24 sound**. Alkalinity barely moves because the
+  strong-ion difference sets it and that was held fixed.
+- **`food_waste` fixed too** (`s_cat` 0.05 → 0.152, the assumed field; the cited pH kept). No
+  plant feeds it, so nothing generated moves.
+- **What moved, measured, nothing tuned to compensate** — Plant B only: biogas ratio
+  1.41 → **1.45**, CH₄ fraction 0.722 → **0.700**, pH 7.293 → **7.262**, alkalinity
+  5.12 → **5.125**, `vfa_median` 0.7753 → **0.7778**, `fos_tac_median` 0.1495 → **0.1501**,
+  residual gap 1.52× → **1.51×**, trigger 7.92 % → **7.70 %**, operator overload
+  0.17 % → **0.19 %**. **All 23 rows stayed inside their declared bounds and no tolerance was
+  touched.** The report, the benchmark card, the sensor config and the channel docstring were
+  updated to the new numbers rather than left stale.
+
+**Flagged to the lead**
+
+- **`biogas_mean` is now 1.45 against an upper bound of 1.5** — inside, but the least margin
+  anywhere in the report, and the next thing that raises gas will breach it. The extra gas is
+  CO₂, not methane, which is the expected consequence of putting the missing inorganic carbon
+  in.
+- Three catalogue streams sit at 1.35–1.47× inside the 1.5× band (`thickened_was`,
+  `cattle_slurry`, `primary_sludge`). They pass as they stand and were **not** touched: their
+  pH values carry sources, and moving a frozen config value that passes is the lead's call,
+  not this session's.
+
+**Still open**: M3 and M4, unchanged and with the lead. The two relayed anchor numbers that
+did not reproduce. Plants B and C still need a declared design organic loading rate.
+
+**Next**: the matrix regeneration at the final head once the review clears, then the tool
+registry (§6.2) in a later session.
+
+---
+
+### Session 2026-09-09 (M2 review) — M2 is NOT closed; B3 fixed, B1 and B2 with the lead
+
+An independent fresh-context review of the M2 fix (`d5fe13c`) found **three blockers**. The
+coordinator confirmed every other number in that commit by independent recomputation. The
+matrix regeneration and the merge are **held**.
+
+**Fixed here: B3 — the M2 ratio guard was vacuous.** Two mutants were built and run, not
+reasoned about, and both passed the whole 337-test suite: both functions returning `0.0`
+(every stream falls under the guard's floor and is skipped), and `total_alkalinity`
+returning `feed_cation_charge(...)` — which is exactly the strong-ion-difference definition
+the decisions entry claims to reject because a test of it "could not fail". Nothing pinned
+the absolute value of the feed alkalinity assay. The new guard pins both quantities on every
+stream to the numbers the report quotes, asserts that `s_ic` moves one and `s_cat` the
+other, and reproduces one stream from the ADM1 constants without calling the implementation.
+**Both mutants were rebuilt and both now fail.**
+
+**Open, with the lead, nothing changed:**
+
+1. **B1 — `feed_cation_charge` omits the fed calcium.** The truth model's balance carries
+   `+ 2 × S_ca`, the extension declares it with charge 2, all three plants enable it and the
+   harness feeds it. Counted properly, **four of seven streams breach 1.5×** (primary sludge
+   2.94, thickened WAS 2.71, cattle slurry 1.83, grass silage 1.69). **M2 is reduced from
+   503× to about 2.9×, not closed.** The honest fix may mean redistributing the sludge
+   streams — a further change to a frozen config.
+2. **B2 — the invariant holds at catalogue TS, not for the assay a workflow reads.** The
+   acetate term scales with a delivery's solids and the charge side does not scale at all.
+   On real assay records the HSW's reported alkalinity ranges 6.1–38.0 against a fed charge
+   of 10.75; primary sludge is outside 1.5× on 45 % of records, cattle slurry on 27 %.
+
+**Also corrected, and it was this session's error:** the mutation claim "10 of 10 on five
+fed streams" is **10 of 12 on six** — FOG is a Plant B feed, and cattle slurry at half its
+cations survives by moving towards the centre of the band. Fixed in the test, the decisions
+log, this file and the report. A claim stated as a measurement has to be reproducible.
+
+`primary_sludge` at 1.470 against the 1.5 limit is now named in the report as a row to
+watch, beside `biogas_mean` at 1.45.
+
+**Next**: the lead's ruling on B1 and B2. Nothing is regenerated, merged or tagged until
+then.
+
+---
+
+### Session 2026-09-10 — the calcium ruling; B1 closed against derived calcium; M2 closed
+
+**The lead's three rulings of 2026-09-10 are done**, on `claude/g1-b1-redistribution`; PR #15's
+head is unchanged until the coordinator confirms the pre-regeneration report. Nothing merged,
+tagged or regenerated.
+
+**Done**
+
+- **`s_ca` is dissolved calcium and is DERIVED.** Unit check first: 0.05–0.15 g Ca/L is
+  0.00125–0.00374 kmol/m³; the catalogue carried 0.4–1.6 g/L, i.e. total-calcium numbers
+  in a dissolved-calcium field — a reduction of 10–30×, confirmed against the coordinator's
+  conversion before editing. For the three calcite-buffered streams `s_ca` is the
+  calcite-saturated value at the declared pH (truth model's `pK_sp_calcite`, `pK_a2` 10.33,
+  γ = 1 ASSUMED, supersaturation 2.5× ASSUMED in the ruled 2–3×), solved jointly with the
+  `s_ic` that closes the stream's own charge balance; mechanism Hjorth et al. 2010. Silage,
+  HSW, FOG (and `food_waste`) are declared assumptions, flagged. Plausibility: Plant B 0.083
+  and Plant C 0.138 g/L inside the sewage-liquor range; Plant A 0.026, below it, as calcite
+  control at pH 7.5 predicts.
+- **B1 redone against the corrected calcium, and both of the lead's tests passed with
+  nothing tuned towards them**: `biogas_mean` **1.489** against 0.6–1.5 (was 1.532 in the
+  first attempt), and the B/C control pair **restored** (C 7.252 > B 7.238; was inverted).
+  All 23 anchored rows inside their declared bounds; Plant B 24/24 sound; alkalinity 5.116
+  and pH 7.232 where ruling 3 put them.
+- **Ruling 2 (liquor scaling) and the invariance-plus-physics guard approved as landed.** B2
+  on real assay records is now 0.00 / 0.31 / 0.00 / 0.88 % outside 1.5× (slurry, primary
+  sludge, WAS, HSW); the HSW remainder is the true-fractionation draw, a finding.
+- **Ruling 3 (silage at 4.28) recorded as accepted**; with its assumed calcium the balance
+  would close at 4.20 and at 4.28 the ratio is 0.771×, inside the band — reported, not moved.
+- **Four trigger rows re-measured**: B 7.67 %, C 9.22 %, A-unadapted 1.49 %, A-adapted
+  0.28 %. Both Plant A rows fell with the deeper slurry buffer and the pathway ratio widened
+  4.9× → 5.3×; the finding survived a feed change that moved both its numbers.
+- **M2 is closed**, and the report, the decisions log, the benchmark card, the sensor config
+  and the channel docstring say so with the numbers of this round.
+
+**Flagged, not decided here**
+
+- `biogas_mean` at **1.489** against 1.5 — 0.7 % of margin, the row to watch.
+- Primary sludge's derived calcium (0.20 g/L) sits just above the plausibility range; at
+  pH 6.0 carbonate is scarce. Reported as-is.
+- Plant A's baseline tables in `plant_A.yaml` were measured on the old slurry feed and not
+  re-measured; both baselines ran 24/24 sound with pH 7.62–7.76.
+- `S_I` still scales with the COD, not the liquor (previous entry).
+
+**Next**: the coordinator confirms the pre-regeneration report → matrix regeneration at the
+final head as the last action → the coordinator's review verdict → merge and tag by the
+coordinator. Then the tool registry (§6.2).
+
+---
+
+### Session 2026-09-10 (final close-out) — M2 accepted closed; Plant A re-measured; rows to watch; regeneration next
+
+**The lead accepted the pre-regeneration report and closed M2 at `c8c048f`.** The side branch
+was a clean fast-forward onto PR #15's branch (merge-base `fd76983`, checked), so the PR now
+carries every ruling. Final steps in the lead's order.
+
+**Done**
+
+- **Plant A's two baseline tables re-measured on the current feed** (full harness, 400-d
+  burn-in, 180 d, seed 1000): adapted X_ac 1.129 → 1.065, X_sao unchanged, TAN 3.695 → 3.703;
+  unadapted X_sao 0.910 → 0.853, X_ac 9.9e-05 → 0.0019, TAN 3.605 → 3.614; pH down 0.07 and
+  CH₄ down 6 points on both, the slurry's newly present inorganic carbon leaving as CO₂. SAO
+  shares 0.000 and 0.998 — **both baselines are still the communities they declare**, so the
+  lead's stop condition was not met and `K_I_nh3` was not touched. `plant_A.yaml` updated
+  with the old numbers beside the new; recorded in the decisions log.
+- **The rows to watch, as ruled**: anchor side **`biogas_mean` 1.489** against its unchanged
+  0.6–1.5 band; catalogue side re-checked — **`grass_silage` at 0.771×** is now the nearest a
+  band edge (its accepted pH 4.28 kept while its assumed calcium fell); `primary_sludge` is
+  exactly on the balance. Named in the report and the log.
+
+**Next, in order**: commit and push; CI green; **regenerate the matrix at that head as the
+last action** and report the SHA, cell count, wall-clock, index line count, the four trigger
+rows and the operator-visible rate on the regenerated matrix; then **stop** — nothing pushed
+after the regeneration, so every manifest's `git_sha` matches the merged head. The
+coordinator reruns the independent whole-branch review at that head (the earlier one covered
+`f8b27c4`), the verdict goes to the lead, and the coordinator merges and tags `g1-frozen`.
+Then the tool registry (§6.2).
+
+---
+
+### Session 2026-09-10 (second review) — regeneration HELD; five blockers verified, two fixed, three with the lead
+
+The independent whole-branch review at `f8b27c4` found **five blockers** in code no later
+commit touched, two of which change what a regeneration writes. **The matrix was not
+regenerated**; the wait armed for it was killed. Steps 1–3 of the close-out stand at `0cf564a`.
+Everything below is on `claude/g1-review-blockers` (branched at `0cf564a`), not pushed to PR #15.
+
+**Verified at the source, awaiting the lead's ruling, untouched**
+
+- **B1** — the run id is the SHA-256 of a repo-literal salt and a fully public tuple; the
+  review brute-forced two ids back to their scenarios. Needs a ruling on the id scheme; it
+  changes every run id, so it must land before regeneration.
+- **B3** — the foaming flag compares the titrimetric FOS/TAC (0.14–0.18 on every sound run)
+  with 0.30, so it never fires and the foaming stress is dead in every cell. Needs a ruling on
+  the trigger; the obvious shape is the hidden-state one the lead chose for overload.
+- **B5** — redacting `baseline` does not hide it: the plant contract publishes per-baseline
+  tables, the scenarios publish baseline → answer, and the Tier-C `vfa_ac` sensor reads true
+  acetate (5.3× between S6-01 and S6-04 through `open_run`). Needs a ruling on the
+  visible-information contract.
+
+**Fixed, no ruling needed, mutation-checked**
+
+- **B2** — the visible `calls.jsonl` hashed the scenario id, and *every* other harness call's
+  real arguments too (derived seeds, fault plans, mixing structure, segment spans). The
+  record is now kept twice: the full log truth-side, and a visible projection hashed over
+  nothing the redacted manifest does not state, with the segments collapsed to one record;
+  both logs start fresh on each generation (which also ends the append-on-regeneration).
+  Tests reproduce every visible hash from public facts alone, with the truth-side log as
+  the negative control.
+- **B4** — the static checker now flags any import from `sim.run.layout`, the
+  truth-reaching names, and any `truth…` attribute; the review's three-line bypass is
+  planted and caught, seven routes one per line (the first draft missed
+  `from sim.run import layout` — the test caught it), and the loader-only module stays clean.
+- Four mutants built and run, all four fail their test.
+
+**Non-blocking, done**: seeded shuffle of the matrix execution order (results still in cell
+order); atomic `write_index_entry`; two stale notes corrected; the equalisation tank's
+whole-horizon-mean initialisation recorded in code and the log as dormant-but-fault-sensitive,
+behaviour unchanged.
+
+`pytest -q` 345 passed, 2 skipped; `-m g1` 13 passed; ruff clean.
+
+**Next**: the lead's rulings on B1, B3 and B5 → apply them (B1 and B3 both change what a
+regeneration writes) → merge the side branch into PR #15's branch → CI green → regenerate at
+that head as the last action → the review is rerun at that head → merge and tag by the
+coordinator.
+
+---
+
+### Session 2026-09-10 (rulings applied) — B1, B3, B5 landed; four rows measured; regeneration pending CI
+
+The lead's rulings on all five review blockers arrived at 03:32 UTC and are applied on
+`claude/g1-review-blockers`, mutation-checked, documented in `docs/decisions.md` ("The lead's
+rulings on the five review blockers, applied").
+
+- **B1** — run ids are HMAC-SHA256 over the public cell keyed with a per-store secret salt
+  (`truth_store/salt`, gitignored). Three required tests: two salts → different ids for every
+  cell; no visible file carries salt, scenario or seed in any form; the brute-force inversion
+  recovers nothing without the salt and finds the cell exactly once with it. Plus the lead's
+  B2 addition: S0-01 and S5-01 visible logs are indistinguishable in structure.
+- **B3** — foaming is a hidden-state trigger (gas > 1.80× its 30-d trailing median AND true
+  VFA > its 30-d trailing median, current sample excluded from both); FOS/TAC > 0.30 stays
+  visible, unwired, and its structural deadness is written up as a measurement-model finding
+  in the report (§5.4) and the card (§5.4). Six mutants killed.
+- **B5 option two** — Plant A's baseline tables and `K_I_nh3` moved to the truth-side record
+  `sim/plants/truth/plant_A.yaml`; the visible contract is qualitative (no truth-side name,
+  no digit in a baseline's prose; tested); `scenarios/` is barred by the AST checker and the
+  loader; the card's §4.1 states what a workflow may and may not see. Five mutants killed.
+- **Measured, recorded, not tuned** (24 seeds × B, C, A-adapted, A-unadapted): overload
+  7.67 % / 9.22 % / 0.28 % / 1.49 %; foaming 7.20 % / 7.67 % /
+  0.25 % / 0.14 %; operator FOS/TAC > 0.40 on Plant B 0.17 %.
+
+**Next, in order**: merge the side branch into `claude/g1-scenario-generation`; push; CI green;
+**regenerate the matrix at that head as the last action** and report the SHA, cell count,
+wall-clock, index line count, the four-row overload table, the four-row foaming table and the
+operator-visible rate; then **stop pushing**. The coordinator reruns the whole-branch review
+at that head, then merges and tags.
+
+---
+
+### Session 2026-09-10 (final review) — F1/F3/F4/F5/F6 fixed; regeneration stopped and HELD for F2
+
+The coordinator's final whole-branch review at `99a8947` found a leak that changes what a
+regeneration writes; the regeneration was stopped a few cells in and its output discarded.
+
+- **F1** — the seeded generation-order shuffle was a public permutation, so the visible
+  timestamps mapped position to cell. Fixed both ways: the order is keyed with the store's
+  secret salt, and `created_utc`, `t_utc`, `runtime_s` and real mtimes are gone from
+  everything under `runs/<id>/`. Tests on the order (unit and end-to-end, salt-predicted)
+  and on the absence of any visible timestamp; the decisions entry that claimed the leak
+  closed is corrected.
+- **F3** — no runtime in the visible projection (the burn-in's wall-clock marked S6-03).
+- **F4** — the shared integration's calls are copied into every tier's logs; tested on all
+  three tiers.
+- **F5** — a no-write generation creates nothing, not even the salt; the salt is 0600.
+- **F6** — `scenarios/README.md` known gaps and baseline table settled; report §5.4 numbers
+  current and its stray row back in the table; the superseded table in the decisions log
+  annotated.
+- Nine mutants built, nine killed (one no-op survivor explained in the decisions log).
+
+**F2 is with the lead** (the public horizon partitions the ladder; durations cannot change
+after the tag). No `duration_days` was touched. **Do not regenerate until the coordinator
+says so.** Next: push, CI green, report to the coordinator; then regenerate on instruction,
+as the last action.
+
+
+---
+
+### Session 2026-09-11 (G1 remediation, the lead's §15 rulings) — C0–C4 on `claude/g1-review-blockers`
+
+Four rulings, one commit each, on top of the F2 investigation (§1–§16 of
+`docs/f2_horizon_report.md`; attribution corrected at `e688535`: the common-horizon
+question is review finding F2, not the lead's):
+
+- **Ruling 1 (`1353341`)** — the influent generator is prefix-stable in the horizon (child
+  streams per (seed, feed, block) and per (seed, feed, assay)), so a longer run is the same
+  realisation extended; the blend tank's hold-up and day-0 state come from the first 30
+  days of arrivals. Prefix-stability test with a negative control; tank-window test; the
+  fourteen equalisation tests unchanged. **One test left red at the band edge**:
+  `test_plant_b_survives_the_generator_swings` (seed 11, 180 d, biogas ratio 1.5004) — the
+  `biogas_mean` excess on one seed, recorded, not weakened.
+- **Ruling 2 (`7d1554d`)** — `biogas_mean` investigated read-only (§16): the anchor column is
+  total metered biogas (burner + boiler), so the basis is right in kind; the hidden HSW /
+  FOG degradability centres (0.95 / 0.98) sit above the cited literature (~0.84 / ~0.92,
+  an estimated ~7 % of gas). Band, basis and feed centres unchanged; the row to watch. The
+  g1 gate is red at 1.54.
+- **Ruling 3 (`3ec7bb8`)** — the horizon is the plant's: `horizon_days` A 365, B and C 200;
+  every scenario at its own plant's horizon; `at_plant_horizon` in the matrix (mutation
+  tested). Four-row trigger tables re-measured at the matrix horizons: overload B 7.12 %,
+  C 9.82 %, A-unadapted 1.02 %, A-adapted 0.22 %; foaming 6.63 / 8.50 / 0.09 / 0.20 %.
+  Expected regeneration cost of the 365-d Plant A cells: under two minutes on ~13 min.
+- **Ruling 4 (`a91e71a`)** — S7-02 stays at onset 120 on 365 d; the takeover completes:
+  X_sao 0.60 / X_ac 0.46 by day 348 / 350 (S5-01: 298 / 302), SAO 65 % / 85 % of the
+  acetate-consuming biomass at the end. Record corrected to what is reached (§17).
+
+**Done, in the coordinator's order:** PR #15 fast-forwarded to `a91e71a`; CI there is ruff
+green, the default suite red on the one recorded band-edge test (both Pythons), the g1 gate
+red on the two `biogas_mean` tests (1.536; 21 of 22 independent rows) and nothing else; the
+117-cell matrix **regenerated at `a91e71a`** as the last action — 117/117 generated,
+117/117 sound, 748 s wall-clock, 117 index lines, every manifest at the clean head, every
+Plant A cell 365 d and every B/C cell 200 d, salt absent from every visible file
+(`docs/f2_horizon_report.md` §18). This entry is a docs-only commit on the side branch so
+the PR head stays that SHA. **That regeneration is VOID** (the coordinator, 13:22 UTC: the
+sequence was fast-forward → CI green → regenerate, and CI was red on the band edge); it is
+redone only at the head the lead's next ruling produces, on the coordinator's word. No
+merge, no tag. Open for the lead: `biogas_mean` (band, basis or feed centres); the
+coordinator's recommendation is HSW's hidden degradability to the cited 0.84, FOG left; the
+read-only measurement of both options is in `docs/f2_horizon_report.md` §19.
+
+---
+
+### Session 2026-09-11 (continued) — rulings 5 and 6; the regeneration at `a91e71a` void
+
+- **Sequence breach recorded** (the coordinator): the regeneration at `a91e71a` was made
+  while CI was red on the band edge; it is void and is redone only at the final head on the
+  coordinator's word.
+- **§19** (`650e54b`): the HSW / FOG degradability corrections measured read-only, alone and
+  together.
+- **Ruling 5** — HSW 0.84 and FOG 0.92 as feed-centre corrections, band unchanged. Applied
+  and measured at the head: `biogas_mean` 1.355 pass, 23/23 rows, both edge tests pass, the
+  gate's CH₄-margin assertion trips at 0.643 (untouched; with the lead). Two derived check
+  values re-derived (`tkn` of HSW and FOG) and one golden pin refreshed (the HSW alkalinity
+  assay). **Held**: `test_cod_per_vs_is_derived_and_checked_against_the_literature` pins FOG
+  COD/VS to the lead's 2.7–2.9, which the ruled centre cannot reach at the fixed inert
+  equivalent (ceiling 2.677; derives 2.593) — question to the coordinator (`docs/f2_horizon_report.md` §20).
+- **Ruling 6** — whole-run prefix stability from a fixed 200-day reference window; built,
+  tested (bit-equal bar the last output point), mutation-checked; ruling 4 and the Plant A
+  tables re-verified with no recorded number changed (§21).
+
+- **The lead's answers A and B** (20:04 UTC): FOG's inert COD equivalent 2.9 (lipid-like,
+  superseding 1.42) inside the ruling-5 commit — `biogas_mean` 1.373 pass, 23/23 rows,
+  both edge tests pass, B 7.55 % / 6.60 %, leanest-seed CH₄ 0.6437; the gate's CH₄ margin
+  re-declared at 0.60 in its own commit (`docs/f2_horizon_report.md` §22). Ruling 6 was
+  committed first on its own at `f7a3e79` (the coordinator, 15:27 UTC).
+
+**Next:** pytest, ruff and the g1 gate at the final head with the exact result; fast-forward; CI; STOP if red only on the CH₄-margin gate test; no
+regeneration until told the head is final and CI is green.
+
+---
+
+### Session 2026-09-12 — the G1 regeneration at `49e9477`; stopped for the whole-branch review
+
+**Done.** The lead's answers A (FOG inert COD equivalent 2.9, lipid-like) and B (the gate's
+CH₄-fraction margin re-declared at 0.60) landed as `892bbb8` (ruling 5 with answer A) and
+`49e9477` (answer B) on top of ruling 6 (`f7a3e79`). At `49e9477`: ruff clean, `pytest -q`
+374 passed / 0 failed, `pytest -m g1` 13 passed / 0 failed; PR #15 fast-forwarded there and
+CI green on every check (ruff, pytest 3.11 and 3.12, the sim/ gate, the gate G1 anchor
+panel). On the coordinator's word the **117-cell matrix was regenerated with the tree at
+`49e9477`**: 117/117 generated, 117/117 sound, 953 s wall-clock, 117 index lines, every
+manifest carrying `49e9477`, every Plant A cell 365 d and every B/C cell 200 d, the salt in
+no visible file (`docs/f2_horizon_report.md` §23, with the anchored rows, the three-plant
+trigger tables and the leanest-seed CH₄ fraction). The regeneration writes nothing that is
+committed; this docs-only commit on top of `49e9477` is the review head, and PR #15 is
+fast-forwarded to it. **Stopped**: no merge, no tag, nothing further pushed.
+
+**The review at `99b0547` found two blockers** (the coordinator, 2026-09-12 15:05 UTC).
+Blocker 1 (the workflow-side checker was a deny-list; a module using only the public
+generator recovered a run's answer key) is fixed as the tests-only commit `bc7b73f` — an
+allow-list checker with the reviewer's module as a must-fail fixture — and the assay-noise
+test gap is closed at `b808939` (both mutants caught). Blocker 2 (the visible record was
+not prefix-stable; the truth was) awaits the lead's choice: option (b), per-block keyed
+observation and note streams, is built, tested (375 passed, gate 13 passed, truth bit-equal)
+and documented in a scratch worktree, uncommitted; option (a), a docs-only correction, is
+drafted (`docs/f2_horizon_report.md` §24). PR #15 stays at `99b0547`.
+
+**Blocked on.** The lead's choice for blocker 2, relayed by the coordinator; then one commit,
+pytest/ruff, fast-forward, CI, regeneration on the coordinator's word (needed under b), and
+the fresh review — not this session's to merge or tag.
+
+**The next session starts on:** hold for the lead's `launch: tool-registry` to the
+coordinating session (proposal §9.2, `tools/`: the registry every workflow must use, with
+budgets enforced there — CLAUDE.md rule 2). Nothing in `runs/` or `truth_store/` is
+committed; a later regeneration is made only at a reviewed head on the coordinator's word,
+never while CI is red (the void regeneration of 2026-09-11 is the record of why).
+
+### Session 2026-09-14 — ruling 7: the visible record made prefix-stable (blocker 2, option b)
+
+**Done.** Blocker 1's hardening closed at `875fa2b` (three rounds; the checker's limit and
+the structural defence recorded in the decisions log and card §4.1). The lead chose option
+(b) for blocker 2 as **ruling 7** (2026-09-14): every stream of the visible record is keyed
+`SeedSequence([seed, key, block])` — each sensor's six blocks by `sensor_block_rng`, the
+historian's onsets and lengths by `historian_block_rng` with a key hashed from the
+historian's own domain (the integer offset retired), the operator log's note days by a
+per-day Bernoulli draw and its texts by a keyed permutation, both keyed `(seed, stage)` —
+landed as ONE commit on `claude/g1-review-blockers` on top of `875fa2b`. Truth channels,
+state, ash and flags of an S3-03/B/tier-C cell bit-equal to `875fa2b`'s (27 keys); all 15
+visible series changed. `tests/test_visible_prefix.py` covers one Plant B cell (200 v 210 d)
+and one Plant A cell (365 v 375 d): every sensor series, missingness, historian dropout,
+note days and texts, feed log and assays equal over the shared prefix, with negative
+controls. Ruling-6 entry, `REFERENCE_WINDOW_D` docstring, F2 §21/§23/§24 and the benchmark
+card §9 now say a whole run — truth and visible record — is prefix-stable, which is true.
+
+**Blocked on.** In order: CI on the fast-forwarded PR #15 head; the coordinator's word for
+the regeneration at that head (the last action; §25 of the F2 report and this file as one
+docs commit on top); then the coordinator's review and, only on the lead's say-so, the
+merge of #15 and the `g1-frozen` tag — neither is this session's to do.
+
+**The next session starts on:** unchanged — hold for the lead's `launch: tool-registry`.
+
+### Session 2026-09-20 — the G1 regeneration at `7637f7a` (ruling 7); stopped for the fresh review
+
+**Done.** Ruling 7 landed as `7637f7a` on 2026-09-14 (local: `pytest -q` 392 passed / 2
+skipped / 0 failed, `ruff check .` clean, `pytest -m g1` 13 passed / 0 failed) and PR #15
+was fast-forwarded to it the same day. CI at that head was red for six days for a reason
+outside the PR — every job on all three runs failed within two seconds with no runner and
+no log, on the repository's side; the lead cleared it (the repository is public now) and on
+2026-09-20 every check is green on all three runs: ruff, pytest 3.11, pytest 3.12, the sim/
+gate, the gate G1 anchor panel. On the coordinator's word the **117-cell matrix was
+regenerated with the tree clean at `7637f7a`**: 117/117 generated, 117/117 sound, 786 s
+wall-clock, 117 index lines and unique ids, 117 run dirs and truth dirs, every manifest
+carrying `7637f7a`, every Plant A cell 365 d and every B/C cell 200 d, redacted manifests
+without scenario id / seeds / baseline, `calls.jsonl` in every run, the salt in no visible
+file. Every truth-side figure re-measured at this head equals §23's to the printed digit
+(23/23 anchored rows inside; `biogas_mean` 1.373 / 1.397 / 1.091 / 1.743; leanest-seed CH₄
+0.6437; B 7.55 / 6.60 %, C 9.82 / 8.50 %, A unadapted 1.02 / 0.09 %, A adapted 0.22 /
+0.20 %), as it must with the truth bit-equal under ruling 7; every visible record is new.
+`docs/f2_horizon_report.md` §25 has the full tables. The regeneration writes nothing that is
+committed; this docs-only commit on top of `7637f7a` is the review head, and PR #15 is
+fast-forwarded to it. **Stopped**: no merge, no tag, nothing further pushed.
+
+**Blocked on.** The coordinator's fresh whole-branch review at the review head, the verdict
+to the lead, and — only on the lead's say-so — the merge of #15 and the `g1-frozen` tag,
+neither of which is this session's to do.
+
+**The next session starts on:** hold for the lead's `launch: tool-registry` to the
+coordinating session (proposal §9.2, `tools/`: the registry every workflow must use, with
+budgets enforced there — CLAUDE.md rule 2; its structural defence for the truth store is a
+recorded design requirement, decisions 2026-09-12 round two). Nothing in `runs/` or
+`truth_store/` is committed; a later regeneration is made only at a reviewed head on the
+coordinator's word, never while CI is red.
+
+### Session 2026-09-20 (docs fix on the lead's approval) — FREEZE with two non-blocking findings fixed
+
+**Done.** The coordinator's fresh whole-branch review at `8909772` returned FREEZE with no
+blocking findings; the lead's word was "Approved, fix the docs" — one docs-only commit, then
+the coordinator merges #15 and tags `g1-frozen` on green. Fixed, docs only, no code or test
+change, no regeneration (the tree still differs from `7637f7a` in `docs/` alone and every
+manifest carries `7637f7a`): (1) `docs/g1_anchor_report.md` presented the pre-ruling-5
+`biogas_mean` 1.489 as current in the intro, the §3.3 history table and §5 — the table has a
+fourth column with the at-head values (1.373, CH₄ 0.681, pH 7.232, alkalinity 5.051, VFA
+0.7564, FOS/TAC 0.1508, 24/24 sound, the B/C control pair at the declared median feed
+re-measured), and the least-margin statement is re-derived from the current table
+(`total_feed_flow_median` at 1.12 against ± 15 %, then `biogas_mean` at 1.373, then
+`fos_tac_median`); 1.489 stays only where it is historical. (2) The checker's recorded limit
+(decisions, round three; card §4.1) names `str(<bytes>, <encoding>)` as an unnamed sibling of
+the denied `.decode`/`.fromhex`, demonstrated by the reviewer of 2026-09-20 reading the
+truth store through a runtime-assembled path — the recorded blind spot, not a new class;
+`tests/test_truth_isolation.py` untouched, hardening stopped at round three by decision.
+
+**Blocked on.** The coordinator's merge of #15 and the `g1-frozen` tag on green, on the
+lead's approval — not this session's to do.
+
+**The next session starts on:** hold for the lead's `launch: tool-registry`.

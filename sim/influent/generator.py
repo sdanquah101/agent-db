@@ -36,14 +36,22 @@ by ``anchor/ingest_muscatine.py`` and ``tests/test_generator.py``):
    record cannot leak it), each with its assay's noise (relative sd, or absolute for pH)
    and turnaround lag, reported with unit and solids basis (:class:`AssayRecord`). TKN
    is the per-feed one (the intentional inert-N mismatch, :mod:`sim.influent.nitrogen`).
-   Alkalinity is the bicarbonate alkalinity of the feed's inorganic carbon at its pH
-   (``50 x S_IC x K_a1 / (K_a1 + 10^-pH)`` kg CaCO3/m3, ``pK_a1`` the ADM1 base value), a
-   stated proxy for a total-alkalinity titration. **Solids vary, the liquor does not:**
+   Alkalinity is the **total** alkalinity of the feed at its own pH, from the full charge
+   balance — bicarbonate, the free acetate the fractionation carries, and water
+   (:func:`total_alkalinity`) — which is the quantity the strong ions the simulator is fed
+   have to balance (:func:`feed_cation_charge`; the lead's M2 ruling, 2026-09-09). It was
+   the bicarbonate term alone until then, which on the high-strength waste read 480x below
+   the charge the digester actually received. **Solids vary, the liquor does not:**
    the per-delivery TS scales the particulate COD and its organic N (and so COD and TKN),
-   while the dissolved species per m3 (TAN, inorganic C, strong ions, calcium, pH) stay
-   at the catalogue values; the reported TAN/TKN ratio therefore moves with the
+   while the *declared* dissolved species per m3 (TAN, inorganic C, strong ions, calcium,
+   pH) stay at the catalogue values; the reported TAN/TKN ratio therefore moves with the
    moisture, by construction (decisions log, "Influent generator: stochastic structure",
-   addendum).
+   addendum). **The alkalinity assay is the one exception, and since the M2 ruling it is
+   the strongest TS proxy of any assay here**: its bicarbonate term is declared liquor and
+   does not scale, but its free-acetate term comes from the COD and does, so a drier
+   delivery reports more alkalinity. That asymmetry is real -- the fed stream carries the
+   extra acetate anion with no extra cation to balance it, so the stream is exactly
+   electroneutral only at catalogue TS -- and it is the open finding B2 of 2026-09-09.
 8. The **influent series** for :mod:`sim.adm1`: one sample per day, concentrations the
    flow-weighted mix of that day's true deliveries (true fractionation, true moisture,
    derived COD/VS), ``Q`` the true daily volume, **sample-and-hold** (a day's deliveries
@@ -51,19 +59,27 @@ by ``anchor/ingest_muscatine.py`` and ``tests/test_generator.py``):
    a piecewise-constant input, decision "Solver defaults and influent handling").
    The truth ``N_I`` is the inert-COD-weighted mean over the horizon's mean true recipe.
 
-**Randomness.** One ``numpy.random.default_rng(seed)`` stream per run (CLAUDE.md rule 4),
-consumed in this fixed order: the true-fractionation draw (feeds in sorted id order);
-then per feed in sorted id order: ``n`` uniforms for delivery days (always consumed,
-whatever the model, so the stream layout is independent of the model), ``n`` normals for
-the amount AR(1), ``n`` normals for the moisture AR(1), ``n`` uniforms and ``n`` normals
-for unrecorded deliveries, ``n`` uniforms and ``n`` normals for mis-logs; then per feed
-in sorted id order, per assay in sorted name order, ``n`` normals of assay noise. A
-change to a later stage cannot alter an earlier one (tested). The blocks are ``n_days``
-long, so the horizon is **not prefix-stable**: a 100-day run is not the first 100 days of
-a 200-day run with the same seed (the seed and the horizon together identify a run).
+**Randomness.** Seeded and **prefix-stable** (CLAUDE.md rule 4; the lead's ruling 1 of
+2026-09-11 on `docs/f2_horizon_report.md` §15). The true-fractionation draw is the head of
+the run's main ``default_rng(seed)`` stream, as before. Every other block is drawn from its
+own child stream keyed by what it is: per feed in sorted id order, ``default_rng([seed,
+1 + k_feed, block])`` for the seven per-feed blocks (delivery days, amount AR(1), moisture
+AR(1), unrecorded-delivery uniforms and normals, mis-log uniforms and normals), and
+``default_rng([seed, 1000 + k_feed, k_assay])`` for each assay's noise. A block of length
+``n_days`` therefore never shifts another block, and **the first n days of a longer run are
+the first n days of a shorter one** — deliveries, moisture, logs and assays alike (tested).
+Until 2026-09-11 all blocks came from the one stream in sequence, so a change of horizon
+re-rolled every feed from day 0 and every horizon was a different realisation of the same
+seed; that is what made the anchored `biogas_mean` jump by ±5 % between horizons ten days
+apart (sections 14-15 of the report). A change to a later stage still cannot alter an earlier one
+(tested), and the fault layer keeps its own seed. The run's *reference* quantities -- the
+mean recipe and the truth inert nitrogen here, and the truth parameters, burn-in recipe,
+inert COD equivalent and calcium state the harness derives from them -- are means over the
+first ``REFERENCE_WINDOW_D`` (200) days, not the horizon (the lead's ruling 6 of 2026-09-11),
+so a whole run is prefix-stable too.
 
 **Hidden truth and the visible record.** :class:`InfluentTruth` is hidden truth (the run
-layer writes it to ``runs/<id>/truth/``; nothing here writes anything); the
+layer writes it to ``truth_store/<id>/``; nothing here writes anything); the
 :class:`OperatorRecord` (the feed log with its omissions and mis-logs, and the assay
 records with noise and lag) is what a workflow may see.
 
@@ -83,20 +99,33 @@ from typing import Annotated, Literal
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from sim.adm1.schema import LIQUID_STATE_NAMES, ADM1Parameters, Influent
+from sim.adm1.physchem import COD_PER_KMOL_AC as COD_PER_KMOL_ACETATE
+from sim.adm1.schema import (
+    LIQUID_STATE_NAMES,
+    ADM1Parameters,
+    Influent,
+    PhysicoChemicalParameters,
+)
 from sim.faults.plan import InfluentFaults
 from sim.influent.fractionation import (
     TrueFractionations,
     draw_true_fractionations,
     sample_fractionation,
 )
-from sim.influent.mapping import KG_PER_TONNE, feed_cod_per_m3, feed_concentrations
+from sim.influent.mapping import (
+    KG_PER_TONNE,
+    feed_cod_per_m3,
+    feed_concentrations,
+    feed_free_acetate,
+    liquor_fraction,
+)
 from sim.influent.nitrogen import feed_tkn, truth_inert_nitrogen
 from sim.influent.schema import CODFractionation, FeedFractionation, FeedFractionationCatalogue
 from sim.plants.schema import PlantConfig
 
 __all__ = [
     "ASSAY_NAMES",
+    "REFERENCE_WINDOW_D",
     "AmountModel",
     "AssayModel",
     "AssayRecord",
@@ -113,8 +142,10 @@ __all__ = [
     "PlantGenerator",
     "bicarbonate_alkalinity",
     "check_generator_against_plant",
+    "feed_cation_charge",
     "generate_influent",
     "seasonal_factor",
+    "total_alkalinity",
 ]
 
 _Frac = Annotated[float, Field(ge=0.0, le=1.0)]
@@ -385,7 +416,7 @@ class FeedTruth:
 
 @dataclass(frozen=True)
 class InfluentTruth:
-    """The hidden truth of one generated run (the run layer writes it to ``runs/<id>/truth/``)."""
+    """The hidden truth of one generated run (the run layer writes it to ``truth_store/<id>/``)."""
 
     plant_id: str
     seed: int
@@ -401,7 +432,8 @@ class InfluentTruth:
     s_ca: np.ndarray
     """Daily dissolved calcium of the influent, kmol/m3 (precipitation extension)."""
     mean_recipe_kg_d: dict[str, float]
-    """Mean true wet mass of each feed over the horizon, kg wet/d."""
+    """Mean true wet mass of each feed over the first ``min(REFERENCE_WINDOW_D, n_days)``
+    days, kg wet/d (the run's reference recipe; ruling 6 of 2026-09-11)."""
 
 
 @dataclass(frozen=True)
@@ -467,9 +499,114 @@ def _delivery_days(model: DeliveryModel, u: np.ndarray, start_weekday: int) -> n
 
 
 def bicarbonate_alkalinity(s_ic: float, ph: float, pK_a1: float) -> float:
-    """Bicarbonate alkalinity of a feed, kg CaCO3/m3, from its inorganic carbon and pH."""
+    """Partial (bicarbonate) alkalinity of a feed, kg CaCO3/m3, from its inorganic carbon and pH.
+
+    What a titration to ~pH 5.75 sees, and **not** the routine alkalinity assay: that is
+    :func:`total_alkalinity`. Kept because partial alkalinity is a real, separately reported
+    quantity (the effluent channels report both) and because it is the bicarbonate term of
+    the total.
+    """
     k_a = 10.0**-pK_a1
     return KG_CACO3_PER_KMOL_HCO3 * s_ic * k_a / (k_a + 10.0**-ph)
+
+
+def total_alkalinity(
+    spec: FeedFractionation,
+    fractionation: CODFractionation,
+    physchem: PhysicoChemicalParameters,
+    ts: float | None = None,
+) -> float:
+    """Total alkalinity of a wet feed at its declared pH, kg CaCO3/m3.
+
+    The proton-accepting capacity a two-point titration to the CO2 end point measures:
+    every weak-base charge present at the feed's own pH, in the same convention as the
+    effluent channel ``alkalinity_total`` (bicarbonate plus the VFA anions,
+    :mod:`sim.observation.channels`)::
+
+        Alk = 50 x ( [HCO3-] + [Ac-] + [OH-] - [H+] )
+
+    **Why this and not the bicarbonate term alone** (the lead's M2 ruling, 2026-09-09, an
+    amendment to ruling 3 of 2026-09-03). The previous assay reported
+    :func:`bicarbonate_alkalinity` of ``s_ic``, which on the high-strength waste read
+    0.0214 kg CaCO3/m3 against the 10.75 kg CaCO3/m3 of cation charge the simulator was
+    actually fed — a factor of 480 between the number a workflow reads and the buffering the
+    digester gets, on the one stream ruling 3 calibrated. An assay and a fed composition that
+    describe the same stream have to be the same quantity, so the assay is now computed from
+    the **full charge balance**: strong ions are what must be balanced, and the weak-acid
+    species are what balance them.
+
+    The pair to it is :func:`feed_cation_charge`. Electroneutrality makes the two equal when
+    a stream's declared pH is consistent with its declared composition, and that identity is
+    the invariant ``tests/test_generator.py`` asserts on **every** catalogue stream — a
+    future calibration that moves a stream's ions without its inorganic carbon reopens M2,
+    and the test is there to fail when it does.
+
+    ADM1 feeds only one free acid (``S_ac``, from the fractionation's VFA share), so acetate
+    is the only organic term. **Every term here is a solute, so every term carries the
+    delivery's liquor fraction** (:func:`sim.influent.mapping.liquor_fraction`; the lead's
+    ruling of 2026-09-10). That is what makes this assay and :func:`feed_cation_charge` one
+    quantity at *every* delivery rather than only at catalogue solids -- the defect recorded
+    as finding B2 of 2026-09-09, when the acetate term scaled with the solids while the
+    declared liquor did not scale at all. Constants are the ADM1 base
+    values, not temperature-corrected: a feed assay is run on a cooled grab sample, and
+    ``pK_a`` at ambient is what the laboratory titrates at.
+
+    Args:
+        spec: The catalogue entry.
+        fractionation: The fractionation in force (declared, true, or mislabelled).
+        physchem: ADM1 acid-base constants.
+        ts: Total solids of this delivery, kg TS/kg wet; the catalogue value if omitted.
+
+    Returns:
+        Total alkalinity, kg CaCO3/m3. **May be negative** for an acidic stream carrying no
+        base, which is physically what "no alkalinity, free acid instead" means.
+    """
+    h = 10.0**-spec.ph
+    k_co2 = 10.0**-physchem.pK_a_co2_base
+    k_ac = 10.0**-physchem.pK_a_ac
+    k_w = 10.0**-physchem.pK_w_base
+    liquor = liquor_fraction(spec, ts)
+    s_ac = feed_free_acetate(spec, fractionation, ts) / COD_PER_KMOL_ACETATE
+    hco3 = spec.s_ic * liquor * k_co2 / (k_co2 + h)
+    ac = s_ac * k_ac / (k_ac + h)
+    return KG_CACO3_PER_KMOL_HCO3 * (hco3 + ac + k_w / h - h)
+
+
+def feed_cation_charge(
+    spec: FeedFractionation, physchem: PhysicoChemicalParameters, ts: float | None = None
+) -> float:
+    """The cation charge of a wet feed that weak bases must balance, kg CaCO3/m3.
+
+    **The convention is the truth model's own**, read off
+    :func:`sim.adm1.physchem_ext._residual` rather than restated from ADM1's textbook form::
+
+        charge = 50 x ( S_cat + 2 S_ca - S_an + [NH4+] )
+
+    Calcium is **divalent** and is in the balance because the plants put it there: every
+    plant contract enables the ``precipitation`` extension, ``configs/adm1/extensions.yaml``
+    declares ``S_ca`` with ``charge: 2``, and :mod:`sim.run.harness` feeds it. Ammonium is in
+    it because it is a cation in that balance and a titration to the CO2 end point leaves it
+    protonated, so it sits on the same side of the reference as the strong cations. Every
+    term is a solute and carries the delivery's liquor fraction, for the same reason
+    :func:`total_alkalinity` does.
+
+    **The calcium term was missing until 2026-09-09 and that is why it is named here.** The
+    first version of this function computed ``50 x (S_cat - S_an + [NH4+])`` while its
+    docstring called the result "what the simulator hands the digester" -- a claim that was
+    false in a way nothing could see, because the guard built on it was measuring the same
+    wrong quantity on both sides of its own comparison. Counting the calcium put four streams
+    outside the 1.5x band (primary sludge 2.94x, thickened WAS 2.71x, cattle slurry 1.83x,
+    grass silage 1.69x), which is the residual of M2 that the omission had hidden. The lead's
+    ruling of 2026-09-09 corrected the definition and approved redistributing those streams.
+
+    :func:`total_alkalinity` is the quantity this must equal, and
+    ``tests/test_generator.py`` asserts that on every catalogue stream.
+    """
+    h = 10.0**-spec.ph
+    k_in = 10.0**-physchem.pK_a_IN_base
+    liquor = liquor_fraction(spec, ts)
+    nh4 = spec.tan * liquor * h / (k_in + h)
+    return KG_CACO3_PER_KMOL_HCO3 * (liquor * (spec.s_cat + 2.0 * spec.s_ca - spec.s_an) + nh4)
 
 
 def _amount_to_kg(amount: float, unit: str, spec: FeedFractionation) -> float:
@@ -477,6 +614,25 @@ def _amount_to_kg(amount: float, unit: str, spec: FeedFractionation) -> float:
 
 
 # ------------------------------------------------------------------- generator
+
+
+REFERENCE_WINDOW_D = 200
+"""Days of the generated influent the run's REFERENCE quantities are the mean of.
+
+The truth parameters (the inert nitrogen ``N_I`` and, through the harness, the truth
+stoichiometry), the burn-in recipe, the influent's inert COD equivalent and the calcium
+extension state all derive from ``mean_recipe_kg_d``. Until the lead's ruling 6 of
+2026-09-11 that was the mean over the WHOLE horizon, so a run's starting point and its
+truth parameters depended on how long the run was and a 200-d run was not the first 200
+days of a 210-d one even with a prefix-stable generator (the coordinator's check of
+``1353341``: ~2 % apart). They are now the mean over the first ``min(REFERENCE_WINDOW_D,
+n_days)`` days, regardless of horizon. 200 because it is the shorter of the two matrix
+horizons (Plants B and C 200 d, Plant A 365 d; ruling 3), so every cell's reference window
+is the same first 200 days and the TRUTH of a whole run is prefix-stable in its horizon
+(tested at the run level in ``tests/test_reference_window.py``). The visible record --
+sensor series, missingness, operator notes -- is prefix-stable by its own keying
+(``sim/observation/model.py``, ``sim/run/notes.py``; the whole-branch review of
+2026-09-12, blocker 2; tested in ``tests/test_visible_prefix.py``)."""
 
 
 def generate_influent(
@@ -496,8 +652,8 @@ def generate_influent(
         plant: The frozen plant configuration (feed identity and delivery pattern).
         catalogue: The feed-fractionation catalogue.
         config: Generator statistics (``configs/influent/generator.yaml``).
-        params: ADM1 parameters; only ``N_aa`` (assay TKN) and ``pK_a_co2_base``
-            (alkalinity proxy) are read.
+        params: ADM1 parameters; only ``N_aa`` (assay TKN) and the acid-base constants
+            (the total-alkalinity assay) are read.
         seed: Seed of the run's single ``default_rng`` stream.
         n_days: Horizon, d (one influent sample per day).
         start_doy: Day of year of day 0 (seasonal phase), d.
@@ -531,16 +687,25 @@ def generate_influent(
     feeds_truth: dict[str, FeedTruth] = {}
     logged: dict[str, np.ndarray] = {}
     # 2-6. deliveries, amounts, moisture, unrecorded deliveries, mis-logs
-    for fid in feed_ids:
+    for k_feed, fid in enumerate(feed_ids):
         g = gen.feeds[fid]
         spec = catalogue.feeds[fid]
-        u_days = rng.uniform(size=n_days)
-        z_amount = rng.standard_normal(n_days)
-        z_ts = rng.standard_normal(n_days)
-        u_unrec = rng.uniform(size=n_days)
-        z_unrec = rng.standard_normal(n_days)
-        u_mislog = rng.uniform(size=n_days)
-        z_mislog = rng.standard_normal(n_days)
+
+        # PREFIX-STABLE STREAMS (the lead's ruling 1, 2026-09-11): each block is drawn from
+        # its own child stream keyed by (seed, feed, block), so the first n days of a longer
+        # run are the first n days of a shorter one. With one shared stream a block of
+        # length n_days shifted every later block, and every horizon was a different
+        # realisation from day 0 (docs/f2_horizon_report.md sections 14-15).
+        def _stream(block: int, _k: int = k_feed) -> np.random.Generator:
+            return np.random.default_rng([int(seed), 1 + _k, block])
+
+        u_days = _stream(0).uniform(size=n_days)
+        z_amount = _stream(1).standard_normal(n_days)
+        z_ts = _stream(2).standard_normal(n_days)
+        u_unrec = _stream(3).uniform(size=n_days)
+        z_unrec = _stream(4).standard_normal(n_days)
+        u_mislog = _stream(5).uniform(size=n_days)
+        z_mislog = _stream(6).standard_normal(n_days)
 
         delivered = _delivery_days(g.delivery, u_days, start_weekday)
         season_amt = seasonal_factor(
@@ -588,7 +753,7 @@ def generate_influent(
 
     # 7. assays
     n_aa = params.stoichiometry.N_aa
-    pk_a1 = params.physchem.pK_a_co2_base
+    physchem = params.physchem
     records: list[AssayRecord] = []
     for fid in feed_ids:
         g = gen.feeds[fid]
@@ -604,13 +769,15 @@ def generate_influent(
         # (an assay on an unlogged truck would leak hidden truth into the record)
         first = int(np.argmax(eligible)) if eligible.any() else 0
         sampled = eligible & ((day - first) % sched.interval_d == 0) & (logged[fid] > 0.0)
-        for assay in sorted(sched.assays):
-            z = rng.standard_normal(n_days)
+        for k_assay, assay in enumerate(sorted(sched.assays)):
+            z = np.random.default_rng(
+                [int(seed), 1000 + feed_ids.index(fid), k_assay]
+            ).standard_normal(n_days)
             model = config.assays[assay]
             unit, basis = ASSAY_UNITS[assay]
             for t in np.flatnonzero(sampled):
                 frac_t = _fractionation_at(frac, mislabelled.get(fid), windows, float(t))
-                true_value = _true_assay(assay, spec, frac_t, float(ft.ts[t]), n_aa, pk_a1)
+                true_value = _true_assay(assay, spec, frac_t, float(ft.ts[t]), n_aa, physchem)
                 noisy = true_value * (1.0 + model.cv * z[t]) + model.sd_abs * z[t]
                 records.append(
                     AssayRecord(
@@ -645,7 +812,10 @@ def generate_influent(
     s_ca[fed] /= q[fed]
     influent = Influent(t=day.astype(float), concentrations=conc, q=q, interpolation="hold")
 
-    mean_recipe = {fid: float(feeds_truth[fid].delivered_kg.mean()) for fid in feed_ids}
+    # the reference window (ruling 6): the first min(REFERENCE_WINDOW_D, n_days) days, so the
+    # recipe -- and everything the harness derives from it -- does not depend on the horizon
+    n_ref = min(REFERENCE_WINDOW_D, int(n_days))
+    mean_recipe = {fid: float(feeds_truth[fid].delivered_kg[:n_ref].mean()) for fid in feed_ids}
     n_i = truth_inert_nitrogen(catalogue, mean_recipe, truth_frac.fractionations)
 
     truth = InfluentTruth(
@@ -716,7 +886,7 @@ def _true_assay(
     frac: CODFractionation,
     ts: float,
     n_aa: float,
-    pk_a1: float,
+    physchem: PhysicoChemicalParameters,
 ) -> float:
     """The true value of one assay on a delivery with total solids ``ts``."""
     if assay == "ts":
@@ -730,7 +900,7 @@ def _true_assay(
     if assay == "tan":
         return spec.tan
     if assay == "alkalinity":
-        return bicarbonate_alkalinity(spec.s_ic, spec.ph, pk_a1)
+        return total_alkalinity(spec, frac, physchem, ts)
     if assay == "ph":
         return spec.ph
     raise ValueError(f"unknown assay {assay!r}")

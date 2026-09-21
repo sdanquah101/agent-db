@@ -1,0 +1,80 @@
+# Level 6 — omitted SAO pathway. The ladder's "truth includes SAO; fitted model does not";
+# truth label `structural`. The second of the three AMMONIA scenarios and therefore PLANT
+# A ONLY: syntrophic acetate oxidation only takes over where free ammonia is high enough
+# to suppress the acetoclastic route, which is Plant A's 180-250 mg NH3-N/L and not
+# Muscatine's (decisions log, 2026-09-02).
+#
+# NO MAGNITUDE. sim/faults/schema.py says so: the fault is the omission itself. The truth
+# model keeps the `sao` extension - every plant declares all four - and the FITTED model
+# is denied it. The magnitude is written as 0.0 because the schema requires a number.
+#
+# THIS ROW IS NEVER SCORED ON PARAMETER RECOVERY (CLAUDE.md, domain reminders; §6.7 A).
+# When the truth has a pathway the fitted model lacks, "the right value" of a parameter
+# does not exist, and the schema enforces the consequence: a purely structural scenario
+# may not declare a kinetic update as correct.
+#
+# =============== RESOLVED BY THE LEAD'S RULING 1 OF 2026-09-09 ================
+# This row was INERT and is no longer. The history matters, because the fix is a plant
+# property and not a scenario edit.
+#
+# What was wrong (gate G1, 2026-09-03): ruling 2 asked for the three ammonia rows to be
+# staged from a steady state with BOTH acetoclasts and SAO present. Measured, that state
+# does not exist - the two compete for one substrate, so one always excludes the other, and
+# the exchange is at K_I_nh3 ~ 0.003 kmol N/m3, an order of magnitude below the adapted
+# range 0.02-0.05. S5-01 and S7-02 were unaffected because they are TRANSITIONS: a loss of
+# adaptation at the onset day STARTS the shift inside the run and, on Plant A's 365-d
+# horizon, completes it (measured 2026-09-11: SAO reaches 0.60 of biomass by day ~300 in
+# S5-01 and ~350 in S7-02 -- see those files; 9 % / 3 % by day 240). This row has no transition by
+# construction, so at Plant A's ADAPTED, acetoclastic baseline the truth's SAO carried no
+# flux and omitting it from the fitted model produced no residual at all.
+#
+# The ruling: Plant A declares a SECOND BASELINE, `unadapted` - the same plant with an
+# unacclimated community at ADM1's default K_I_nh3 - and this row is staged on it. Measured
+# at the 400-d burn-in (configs/plants/plant_A.yaml carries the table):
+#
+#     baseline     X_ac      X_sao     acetate       pH     CH4     sound
+#     adapted      1.129     6.9e-05   0.038 kg/m3   7.80   0.688   yes
+#     unadapted    9.9e-05   0.910     0.240 kg/m3   7.79   0.692   yes
+#
+# On the unadapted baseline syntrophic acetate oxidation carries the ENTIRE acetate flux, so
+# a fitted model without it cannot reproduce the digester by any parameter set. The omission
+# bites. Both are sound digesters; they are two different ones, and both are declared.
+#
+# Option (c) of the three that were offered - rescoring the non-biting case as an abstention
+# row - was ALSO taken by the ruling, as its own row rather than as a replacement for this
+# one: see S6-01b, which is this omission on the ADAPTED baseline, where it correctly
+# produces nothing.
+# ==============================================================================
+id: S6-01
+plant: A
+baseline: unadapted     # the SAO-dominated steady state; the omission bites here
+tier: C
+level: 6
+duration_days: 365
+truth_label: [structural]
+faults:
+  - type: omitted_sao
+    onset_day: 0
+    magnitude: 0.0
+correct_conclusion:
+  flag_sensor: null
+  estimate_scale_factor: false
+  kinetic_update_allowed: false
+  abstain_on: [acetate_speciation, methanogenic_pathway_split, acetoclastic_parameters]
+  recommend_structural_review: true
+budget:
+  simulator_evals: 8000
+  wall_clock_min: 150
+  assay_units: 6
+seed: 1061
+notes: >-
+  What a workflow should notice: a persistent, structured residual that appears wherever
+  free ammonia is highest and that no admissible parameter set removes. The truth makes
+  methane from acetate by a route the fitted model does not have, so the fitted model can
+  only reproduce the gas by pushing its acetoclastic parameters to values that then get
+  the acetate concentration and the hydrogen wrong; every fit trades one channel against
+  another and none of them closes. The correct action is to report that the residual is
+  not attributable to any parameter, recommend a structural revision, and ABSTAIN on the
+  split between acetoclastic and oxidative routes - the data at any tier cannot identify
+  it. The characteristic failure is to keep fitting: a good gas fit here is evidence of a
+  wrong model, not a right one.

@@ -41,30 +41,111 @@ version: 2
 
 # When the condition flags that drive missingness are raised.
 conditions:
-  fos_tac_overload: 0.40      # DESIGN  -; APPROVED by the lead 2026-09-02. ANCHORED: the
-                              # Muscatine daily file's own FOS/TAC (Dig1-FOS-TAC, n = 861)
-                              # has median 0.23, p90 0.37, p95 0.44, max 0.93, so 0.40 is
-                              # the ~92nd percentile: an overload flag raised on roughly
-                              # 8 % of days at a real co-digestion plant. Our channel is
-                              # the same ratio on the same units (kg/m3 over kg CaCO3/m3):
-                              # feeding the plant's own VFA and alkalinity through the
-                              # channel formula returns the plant's own FOS/TAC column
-                              # (tested). NOTE this describes the ANCHOR's distribution,
-                              # not ours: a healthy simulated digester sits at FOS/TAC
-                              # 0.01-0.07 against the plant's median 0.23, because a
-                              # converged ADM1 steady state carries far less residual VFA
-                              # than a real plant and a titrimetric FOS over-reads. The
-                              # threshold is reachable under load (VFA 1.0 kg/m3 at the
-                              # anchor's median alkalinity crosses it, and the anchor
-                              # exceeds that VFA on a third of its days) but it will fire
-                              # on fewer simulated days than on the plant's. FLAGGED.
-  fos_tac_foaming: 0.30       # DESIGN  -; ASSUMED: the ~78th percentile of the same column;
-                              # foaming needs acidification AND a gas surge, so its FOS/TAC
-                              # threshold is lower than the overload one.
-  gas_surge_ratio: 1.35       # DESIGN  -; ASSUMED: gas rate 35 % above its own trailing
-                              # median. Not anchored: Muscatine records no foaming events.
-  gas_median_window_d: 14.0   # DESIGN  d; ASSUMED: two weeks of trailing gas history.
-  source: "fos_tac_overload APPROVED by the lead, ANCHORED to muscatine_daily Dig1-FOS-TAC; the foaming rule is ASSUMED"
+  # THE CONDITIONAL-MISSINGNESS TRIGGER (lead's ruling B, 2026-09-09). It fires on the
+  # HIDDEN PROCESS STATE, not on an instrument reading: conditional missingness is a
+  # property of the plant -- instruments fail during the transients that identify the
+  # process, whether or not anyone has read them yet -- and the reading it used to fire on
+  # is 86-90 % bicarbonate carry-over, which MASKS the VFA dynamics the flag exists to
+  # detect (true VFA's day-to-day spread is p92/median 2.06; the titrimetric FOS/TAC's is
+  # 1.087).
+  #
+  # MEASURED on 24 sound Plant B runs, 3,624 settled digester-days, by the coordinator:
+  #
+  #   signal (ratio to its own reference)   median   p92     at the cut-off
+  #   VFA / 30-d trailing median            1.002    1.989   > 2.00x  ->  7.92 %   ADOPTED
+  #   gas / 30-d trailing median            1.001    1.780   > 1.35x  -> 21.80 %
+  #   OLR / mean (design proxy)             0.834    1.860   > design -> 37.20 %
+  #   any of the three (OR)                                            -> 47.27 %
+  #
+  # THAT TABLE IS THE PRE-M2 MEASUREMENT and is left as measured: all four rows come from
+  # one panel at one code version, and re-measuring only the adopted row would make them
+  # four numbers from two simulators. AFTER the M2 fix of 2026-09-09 (inorganic carbon
+  # paired to the high-strength waste's cations) the ADOPTED trigger fired on 7.70 % of the
+  # same 24 sound Plant B runs, on 7.67 % after the calcium and liquor rulings of
+  # 2026-09-10 (180-d panel), on 7.12 % at the 200-d matrix horizon under the
+  # prefix-stable generator (the lead's rulings 1 and 3, 2026-09-11), and on 7.55 %
+  # after ruling 5 set the HSW and FOG degradability centres to their cited values and its
+  # answer A FOG's inert COD equivalent to 2.9 (7.38 % at the old 1.42). The three rejected
+  # candidates were not re-measured; they lost by factors of 3 to 6, which a sub-point
+  # shift does not touch.
+  #
+  # 7.55 % against the anchor's own 7.78 % exceedance, with NOTHING TUNED. The other two
+  # each overshoot alone and the OR gives 47 %, so they are NOT combined. If a combination
+  # is ever wanted the equivalent 7.8 % cut-offs are gas > 1.796x trailing and
+  # OLR > 1.871x mean; recorded, not used.
+  #
+  # The cut-off stays 2.00x on every plant: differences between plants are to be RECORDED,
+  # NOT TUNED AWAY (the lead), and there is no per-plant cut-off. All four rows are recorded
+  # (2026-09-11, at the matrix horizons of ruling 3 -- B and C 200 d, Plant A 365 d -- 24
+  # seeds each; B and C after ruling 5 and answer A, from 7.12 / 9.82 %): B 7.55 %, C 9.82 %, A-unadapted 1.02 %, A-adapted
+  # 0.22 % (180-d panel of 2026-09-10: 7.67 / 9.22 / 1.49 / 0.28 %).
+  # docs/g1_anchor_report.md section 5.4 has the
+  # ranges and the pathway finding the Plant A pair carries.
+  vfa_surge_ratio: 2.00       # DESIGN  -; the lead's cut-off, unchanged from as written
+  vfa_median_window_d: 30.0   # DESIGN  d; trailing, EXCLUDING the current day, so a large
+                              # excursion cannot drag its own reference up and mask itself
+  fos_tac_overload: 0.40      # DESIGN  -; PERCENTILE-MATCHED to the anchor (lead's ruling 4,
+                              # 2026-09-09), not a transferred absolute value. The lead's
+                              # rule was "0.40 if the anchor's 92nd percentile lands near it
+                              # under the titrimetric convention, else the simulated
+                              # titrimetric 92nd percentile". The anchor's FOS/TAC column IS
+                              # titrimetric, so no conversion is needed on the anchor side,
+                              # and the percentile was measured on
+                              # anchor/raw/iowa-muscatine-wrrf/LABS-raw.csv (n = 861 per
+                              # digester, verified independently by the G1 session):
+                              #
+                              #   Dig1  p50 0.232  p90 0.371  p92 0.402  p95 0.439  max 0.930
+                              #   Dig2  p50 0.231  p90 0.390  p92 0.408  p95 0.453  max 0.636
+                              #
+                              # The anchor's 92nd percentile is 0.402 and 0.408, i.e. 0.40
+                              # within 0.01 on both digesters (Dig1 rounds to 0.40, Dig2 to
+                              # 0.41), so the threshold stands and is now DEMONSTRABLY
+                              # percentile-matched rather than merely transferred. Days above
+                              # 0.40: 8.25 % (Dig1), 9.18 % (Dig2). The 92nd is also the
+                              # CLOSEST percentile to 0.40 of any in 50-99, which is what
+                              # tests/test_observation.py pins -- a band would have admitted
+                              # 0.35 or 0.45 equally.
+                              #
+                              # THE TWO CONVENTIONS NOW MATCH (this note was stale until
+                              # 2026-09-10; the review caught it). The titrimetric transfer
+                              # function on the vfa_total SENSOR landed under the lead's
+                              # ruling A of 2026-09-09 (kappa 1.0, frozen), so the fos_tac
+                              # channel this threshold reads IS titrimetric, like the
+                              # anchor's column it was matched to. A healthy simulated
+                              # digester sits at 0.14-0.18 (24-seed panel), below the
+                              # threshold, and the flag fires on 0.00 % of sound Plant B
+                              # days at the 200-d matrix horizon (0.17 % on the 180-d
+                              # panel of 2026-09-10); the residual 1.5x gap to the anchor is in
+                              # docs/g1_anchor_report.md section 6.1 and docs/vfa_gap.md.
+  fos_tac_foaming: 0.30       # DESIGN  -; ASSUMED: the ~78th percentile of the same column.
+                              # OPERATOR-VISIBLE ONLY, NOT A TRIGGER (lead's ruling B3,
+                              # 2026-09-10). It was the foaming trigger's FOS/TAC term until
+                              # the review of 2026-09-10 found the flag had never fired in
+                              # any cell: the titrimetric ratio has a structural floor near
+                              # 0.13-0.14 (bicarbonate carry-over) and sits at 0.14-0.18 in
+                              # every sound run, so 0.30 is unreachable by a working
+                              # digester under this measurement model. That is a
+                              # MEASUREMENT-MODEL FINDING (docs/g1_anchor_report.md, the
+                              # benchmark card) and the number is kept as declared, not
+                              # lowered; it is reported beside the 0.40 overload threshold
+                              # and wired to nothing.
+  # THE FOAMING TRIGGER (lead's ruling B3, 2026-09-10) fires on the HIDDEN STATE, like the
+  # overload one: the gas rate above gas_surge_ratio x its trailing median AND true VFA
+  # above foaming_vfa_ratio x the overload trigger's own trailing median -- a digester that
+  # is gassing hard while its acids are rising. Same trailing-median convention as overload:
+  # the previous gas_median_window_d days, current sample EXCLUDED. MEASURED on the four
+  # rows (B, C, A-adapted, A-unadapted; 24 seeds each) and RECORDED, NOT TUNED: see
+  # docs/g1_anchor_report.md section 5.4.
+  gas_surge_ratio: 1.80       # DESIGN  -; the lead's cut-off (B3). Not anchored: Muscatine
+                              # records no foaming events. The pre-M2 measurement table above
+                              # put the sound-run p92 of gas / 30-d trailing median at 1.780,
+                              # so 1.80 is a top-decile gas day.
+  gas_median_window_d: 30.0   # DESIGN  d; the lead's window (B3): the same 30 trailing days
+                              # the overload trigger uses, current day excluded.
+  foaming_vfa_ratio: 1.00     # DESIGN  -; the lead's cut-off (B3): true VFA above its own
+                              # 30-d trailing median (any excess; the gas surge carries the
+                              # magnitude condition).
+  source: "fos_tac_overload APPROVED by the lead, ANCHORED to muscatine_daily Dig1-FOS-TAC; the foaming trigger is the lead's ruling B3 of 2026-09-10 on the hidden state, unanchored; fos_tac_foaming is operator-visible only"
 
 # Conditional missingness (proposal §6.1). Base rate by TIER, stress multipliers by
 # instrument KIND (lead's decision 2026-09-02). One rate is MEASURED - Tier C online, from
@@ -285,12 +366,24 @@ sensors:
 
   vfa_total:
     name: vfa_total
-    channel: vfa_total
+    # TITRIMETRIC, not the true VFA (lead's ruling A, 2026-09-09). The plant's "VFA" column
+    # is the FOS half of a two-point Nordmann/Kapp titration, which counts everything
+    # titratable between pH 5.0 and 4.4 -- and in a digester 86-90 % of that is BICARBONATE
+    # carry-over, not volatile acid. The sensor therefore reads the `vfa_titrimetric`
+    # channel; `vfa_total` stays the hidden true-VFA channel and no sensor sees it.
+    #
+    # The transfer function (sim.observation.channels.titrimetric_fos) has NO FITTED
+    # PARAMETER: kappa is frozen at 1.0 and every equilibrium constant is the truth model's
+    # own, through sim.adm1.physchem.temperature_corrected. At Plant B's 308.48 K it gives
+    # pK_a_ac 4.760, pK_a_co2 6.305, a carry-over fraction of 0.0349 of S_IC and an implicit
+    # scale-up of 1/f_ac = 3.02 -- the Nordmann formula's own factor, derived rather than
+    # asserted.
+    channel: vfa_titrimetric
     kind: lab
-    unit: kg/m3 as acetic acid
+    unit: kg/m3 as acetic acid (titrimetric FOS; see the channel's own unit string)
     sampling_interval_d: 7.0    # DESIGN  d; §6.4 Tier B: weekly total VFA
     noise: {cv: 0.08, sd_abs: 0.0, source: "ASSUMED (lead's default)"}   # DESIGN  -
-    source: "ASSUMED (lead's default)"
+    source: "ASSUMED (lead's default) for the noise; the CHANNEL is the declared titrimetric transfer function of the lead's ruling A of 2026-09-09"
 
   tan:
     name: tan

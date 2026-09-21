@@ -69,8 +69,10 @@ from sim.influent import (
 from sim.observation import (
     DriftModel,
     NoiseModel,
+    TruthChannels,
     channel_series,
     channels_from_two_zone,
+    condition_flags,
     load_observation_config,
     observe,
 )
@@ -462,18 +464,48 @@ def test_random_gaps_adds_gaps_that_carry_no_information_about_the_state():
     originals, and indistinguishable from the Level-4 `informative_missingness` fault that
     exists precisely to be the informative one. The added term is therefore unconditional.
     """
+    from tests.test_observation import _sawtooth_channels
+
     config = load_observation_config()
-    channels = _flat_channels(n_days=8000, stress_from=4000)
+    # The stress half must keep DEPARTING from its own recent history: since the lead's
+    # ruling B of 2026-09-09 the flag fires on true VFA against a 30-day trailing median, so
+    # a step raises it only until the median catches up. A sawtooth keeps firing, and the
+    # calm/stress split is taken from the FLAG rather than from the day index, so this
+    # measures the rates conditional on the flag whatever fraction of days it covers.
+    n_days, stress_from = 8000, 4000
+    calm_part = _flat_channels(n_days=n_days)
+    saw = _sawtooth_channels(n_days=n_days, period=8, high=3.0)
+    series = {name: calm_part[name].copy() for name in calm_part.names}
+    for name in series:
+        series[name][stress_from:] = saw[name][stress_from:]
+    channels = TruthChannels(calm_part.t, series)
+
+    overload, _ = condition_flags(
+        channels,
+        vfa_surge_ratio=config.conditions.vfa_surge_ratio,
+        vfa_median_window_d=config.conditions.vfa_median_window_d,
+        gas_surge_ratio=config.conditions.gas_surge_ratio,
+        gas_median_window_d=config.conditions.gas_median_window_d,
+        foaming_vfa_ratio=config.conditions.foaming_vfa_ratio,
+    )
+    assert not overload[:stress_from].any() and overload[stress_from:].any()
+
     base_rate = config.missingness.base_rate_by_tier["B"]
     multiplier = config.missingness.stress_multipliers_by_kind["online"]["overload"]
     faults = ObservationFaults(missing_scale=3.0)
     added_calm = added_stress = calm_n = stress_n = 0
+    clean_calm = clean_stress = 0
     for seed in range(6):
         clean = observe(channels, config, "B", seed=seed)["gas_flow"]
         dirty = observe(channels, config, "B", seed=seed, faults=faults)["gas_flow"]
-        calm = clean.sample_t < 4000
+        idx = np.clip(
+            np.searchsorted(channels.t, clean.sample_t, side="right") - 1, 0, channels.t.size - 1
+        )
+        calm = ~overload[idx]
         added_calm += int(dirty.missing[calm].sum() - clean.missing[calm].sum())
         added_stress += int(dirty.missing[~calm].sum() - clean.missing[~calm].sum())
+        clean_calm += int(clean.missing[calm].sum())
+        clean_stress += int(clean.missing[~calm].sum())
         calm_n += int(calm.sum())
         stress_n += int((~calm).sum())
     rate_calm = added_calm / calm_n
@@ -483,11 +515,10 @@ def test_random_gaps_adds_gaps_that_carry_no_information_about_the_state():
     assert rate_stress / rate_calm == pytest.approx(1.0, abs=0.20), (rate_calm, rate_stress)
     # which is a real distinction: scaling the base rate would have made it `multiplier`
     assert multiplier > 2.0
-    # the conditional structure itself is untouched — the CLEAN gaps still cluster
-    clean_ratio = (
-        clean.missing[~calm].mean() / clean.missing[calm].mean()  # last seed is enough here
-    )
-    assert clean_ratio == pytest.approx(multiplier, rel=0.35)
+    # the conditional structure itself is untouched — the CLEAN gaps still cluster, pooled
+    # over every seed rather than read off the last one
+    clean_ratio = (clean_stress / stress_n) / (clean_calm / calm_n)
+    assert clean_ratio == pytest.approx(multiplier, rel=0.35), clean_ratio
 
 
 # --------------------------------------- the Level-6 imperfect-mixing truth variant
@@ -589,7 +620,7 @@ def test_two_zone_channels_come_from_where_the_instrument_is():
     sample (alkalinity, VFA, COD, TAN, solids). Taking VFA from the sample while taking
     alkalinity from the reactor — which is what happens if the effluent's speciation is not
     computed — leaves FOS/TAC a ratio across two different liquids, and FOS/TAC is what
-    raises the overload and foaming flags behind the missingness model.
+    is the operator's ratio a workflow reads off its record.
     """
     T_op = load_all_plants()["C"].temperature.setpoint_K
     # magnitude 0: no bypass, so sample and reactor are the same liquid, exactly
@@ -611,10 +642,18 @@ def test_two_zone_channels_come_from_where_the_instrument_is():
     # the grab sample is the effluent: alkalinity moves with it, not with the reactor
     assert sampled["alkalinity_total"][-1] != pytest.approx(reactor["alkalinity_total"][-1])
     assert sampled["vfa_total"][-1] > reactor["vfa_total"][-1]  # bypassed feed carries acetate
-    # and FOS/TAC is the ratio of the two SAMPLED quantities, not a mixture of liquids
+    # and FOS/TAC is the ratio of the two SAMPLED quantities, not a mixture of liquids.
+    # Its numerator is the TITRIMETRIC FOS since the lead's ruling A of 2026-09-09 -- the
+    # plant's own convention -- so the identity is checked against that channel, and the
+    # true-VFA ratio is checked separately so both stay on the sampled liquid.
     assert sampled["fos_tac"][-1] == pytest.approx(
+        sampled["vfa_titrimetric"][-1] / sampled["alkalinity_total"][-1]
+    )
+    assert sampled["fos_tac_true_vfa"][-1] == pytest.approx(
         sampled["vfa_total"][-1] / sampled["alkalinity_total"][-1]
     )
+    # the titrimetric reading also moved with the sample rather than staying at the reactor's
+    assert sampled["vfa_titrimetric"][-1] != pytest.approx(reactor["vfa_titrimetric"][-1])
     hybrid = sampled["vfa_total"][-1] / reactor["alkalinity_total"][-1]
     assert sampled["fos_tac"][-1] != pytest.approx(hybrid, rel=1e-3)  # the two really differ
 

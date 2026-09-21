@@ -1,0 +1,55 @@
+# Level 8 — tool failure. The ladder's "`bayes_mcmc` returns non-converged chains ...
+# detect failure; fall back; do not report posterior". The fault is in the TOOL REGISTRY:
+# neither the truth model nor the observation record is touched, and the run harness passes
+# the directive to the registry in memory rather than through anything a workflow reads.
+#
+# WHY THERE IS ALSO A GAS-METER FAULT. The ladder gives Level 8 no truth label ("-"), but
+# the frozen scenario schema requires at least one and forbids `none` above Level 1, so a
+# Level-8 row cannot be written as a workflow fault alone. That constraint turns out to be
+# the right design: a tool-failure scenario needs a diagnostic task for the tool to fail
+# *at*, or "did the workflow fall back correctly?" has no answer to fall back to. So this
+# row is the Appendix-B gas-meter scale error (S2-03, same magnitude and onset) with
+# `bayes_mcmc` guaranteed to fail on top of it, and it is scored on both: the sensor
+# attribution AND the handling of the failed tool. Recorded in docs/decisions.md
+# ("Level-8 scenarios carry an underlying fault") and flagged to the lead.
+#
+# MAGNITUDE 1.0 = the probability that the named tool returns a non-converged result
+# (admissible 0-1). Certainty, not a coin flip: a benchmark row that fires half the time
+# would need twice the seeds to measure the same thing, and the property under test is the
+# response to a failure, not its frequency. The tool is `bayes_mcmc`, which is the target
+# sim/faults/schema.py declares for this fault type (and the only one it can name today -
+# a recorded limitation).
+id: S8-01
+plant: B
+tier: B
+level: 8
+duration_days: 200
+truth_label: [sensor]
+faults:
+  - type: gas_meter_scale
+    onset_day: 60
+    magnitude: 1.08
+  - type: tool_failure
+    onset_day: 0
+    magnitude: 1.0
+correct_conclusion:
+  flag_sensor: gas_flow
+  estimate_scale_factor: true
+  kinetic_update_allowed: false
+  abstain_on: [posterior_intervals]
+budget:
+  simulator_evals: 8000
+  wall_clock_min: 150
+  assay_units: 6
+seed: 1081
+notes: >-
+  What a workflow should notice: two independent things. In the data, the same +8 % step
+  in the gas meter as S2-03, with nothing else moving - a sensor fault. In the tool chain,
+  that `bayes_mcmc` returns chains that have not converged, every time it is called. The
+  correct actions are to flag the gas sensor and estimate its scale factor, and to fall
+  back to a non-Bayesian uncertainty statement while declining to report posterior
+  intervals from the failed sampler. The characteristic failures are to report the
+  non-converged posterior as if it were one, to retry the same tool until the budget is
+  exhausted, and - the most damaging - to let the tool failure derail the diagnosis, so
+  that the sensor fault goes unreported because the workflow spent the run fighting its
+  own sampler.

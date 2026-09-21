@@ -69,7 +69,9 @@ tests/
 ```
 
 Two rules are enforced by tests rather than convention: nothing under `workflows/` may
-import from, or open a path containing, `truth/` (`tests/test_truth_isolation.py`), and
+import from, or open a path containing, `truth/` or `truth_store/`
+(`tests/test_truth_isolation.py`, which also drives the workflow-facing loader
+adversarially, with a negative control), and
 every committed scenario must satisfy the Appendix-B schema
 (`tests/test_scenario_schema.py`).
 

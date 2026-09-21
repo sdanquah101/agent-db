@@ -1,0 +1,44 @@
+# Level 3 — unrecorded delivery. The ladder's "extra mass not logged"; truth label
+# `influent`. The correct conclusion is to detect the balance violation and flag the LOG,
+# not the model.
+#
+# MAGNITUDE 3.0 = three times the feed's median delivery, arriving on the onset day and
+# never entering the operator's log (admissible 0-10). Three medians is the smallest size
+# that is unambiguous against the generator's own background of unrecorded deliveries: the
+# generator already drops the occasional truck at a rate of a few per cent of days, each
+# of about one median, so a one-median injection would be indistinguishable from the
+# background this plant always has. At Plant B a FOG median is ~22 t wet, so the injected
+# delivery is ~67 t against a total daily feed of ~94 m3 - a load spike a COD balance
+# closed over a week cannot miss.
+#
+# ONSET day 90, mid-run, with plenty of clean record either side.
+id: S3-02
+plant: B
+tier: A
+level: 3
+duration_days: 200
+truth_label: [influent]
+faults:
+  - type: unrecorded_delivery
+    onset_day: 90
+    magnitude: 3.0
+correct_conclusion:
+  flag_sensor: null
+  estimate_scale_factor: false
+  kinetic_update_allowed: false
+  abstain_on: []
+  revise_influent_mapping: true
+budget:
+  simulator_evals: 6000
+  wall_clock_min: 120
+  assay_units: 4
+seed: 1032
+notes: >-
+  What a workflow should notice: on and just after day 90 the digester produces gas that
+  the logged feed cannot account for, and the COD balance over that window fails in one
+  direction only - output exceeds recorded input. Nothing about the model is wrong; the
+  input record is incomplete. The correct action is to flag the feed log for that day and
+  either reconstruct the missing mass from the balance or exclude the window from the fit.
+  The characteristic failure is to accept the log as exact and raise a yield or hydrolysis
+  parameter until the model makes the unexplained gas, which then over-predicts for the
+  remaining ninety days.

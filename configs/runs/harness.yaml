@@ -1,0 +1,99 @@
+# Run-harness settings (sim/run/harness.py). Numerical choices live in configs/, never
+# hard-coded (CLAUDE.md conventions).
+#
+# All values here are DESIGN choices of the harness, not anchored quantities: they say how
+# a scenario is *staged*, not what the plant is. The plant, the feeds, the sensors and the
+# fault magnitudes are frozen elsewhere and this file does not touch them.
+version: 1
+
+# ---------------------------------------------------------------- burn-in
+# A scenario begins on a digester that is already running, so the harness integrates the
+# plant's own median recipe from the published Rosen & Jeppsson (2006) state
+# (configs/adm1/initial_state_rj2006.yaml) and starts the scenario from the state that
+# burn-in ends at.
+#
+# 400 d, MEASURED to be a converged steady state on all three plants (tests/test_run_harness.py
+# checks it by integrating 50 % longer and comparing): no state above 1e-3 kg COD/m3 moves
+# by more than 5 %, pH by more than 0.005 and the gas rate by more than 1 %.
+#
+# It was 200 d, chosen so that Plant A would still be mid-succession, because at the ADM1
+# default inhibition constant Plant A's acetoclasts washed out entirely by ~800 d and all
+# three ammonia scenarios went inert. That workaround is GONE (lead's ruling 2 of
+# 2026-09-03): Plant A now declares an adapted acetoclastic inhibition constant, holds a
+# stable acetoclastic steady state, and the ammonia rows are staged as transitions away
+# from it rather than as a fault applied to a population in the middle of washing out.
+burn_in_days: 400.0        # DESIGN  d
+burn_in_output_interval_d: 10.0   # DESIGN  d; only the final state is used, so the
+                                  # burn-in needs no dense output
+
+# ---------------------------------------------------------------- scenario integration
+# One output per day, which is the influent's own sample-and-hold cadence and the highest
+# frequency any sensor of §6.4 reports at. A finer grid would change no observation and
+# would multiply the size of truth_store/<id>/states.npz.
+output_interval_d: 1.0     # DESIGN  d
+
+# Extension states at the start of the burn-in. X_sao must be seeded: syntrophic acetate
+# oxidiser growth is proportional to the biomass present, so a run started at exactly zero
+# stays at zero for ever and the SAO extension would be silently inert — which is the
+# whole signal of the Level-5/6 ammonia scenarios. 0.01 kg COD/m3 is ~1 % of the smallest
+# ADM1 biomass state at the published steady state: enough to grow from where the
+# thermodynamics allow it, small enough to wash out where they do not (tests/test_plants.py
+# shows both). X_caco3 starts at zero: precipitate is formed in the reactor, not inherited.
+initial_extension_states:
+  X_sao: 0.01              # DESIGN  kg COD/m3; ASSUMED, see above
+  X_caco3: 0.0             # DESIGN  kmol/m3
+
+# Extension components carried by the FEED, on top of the dissolved calcium the catalogue
+# declares per feed.
+#
+# X_sao is a trace re-seeding term and it is FLAGGED FOR THE LEAD as the one change this
+# session made beyond the letter of ruling 2, because the ruling's own goal needs it.
+# ADM1 has no immigration: a population that reaches zero can never return, however
+# favourable conditions become. Measured (gate G1, 2026-09-03): with Plant A adapted, its
+# syntrophic oxidisers wash out to ~1e-8 during the burn-in, and a loss of adaptation at
+# the onset day then produces NO pathway shift at all -- acetate simply accumulates to
+# 1.4 kg/m3 while nothing grows to consume it, and the Level-6/7 structural rows are inert
+# because the fitted model omits a pathway that carries no flux. With this term the same
+# transition STARTS: SAO grows in behind the inhibited acetoclasts. CORRECTED 2026-09-10:
+# the figure once recorded here (X_sao to 0.60 and X_ac to 0.46 in 240 d) is not
+# reproducible at 42bbe8e, the commit that recorded it, nor at any later commit, and
+# cannot be traced to a committed state. Measured through the harness at the scenarios'
+# own seeds on the current feed, SAO reaches 9.0 % (S5-01) and 3.2 % (S7-02) of the
+# acetate-consuming biomass by day 240 (1.2 % / 0.4 % at 200 d, 3.6 % / 1.0 % at 220 d),
+# while acetate rises 30-100x after the onset. MEASURED AGAIN 2026-09-11 on Plant A's
+# 365-d horizon (the lead's rulings 3 and 4): the takeover completes -- X_sao 0.60 / X_ac
+# 0.46 by day 298 / 302 in S5-01 and 348 / 350 in S7-02, SAO 85 % / 65 % of the
+# acetate-consuming biomass at the end. See docs/f2_horizon_report.md sections 11-12, 17.
+#
+# It is physically the right correction, not a fudge: syntrophic acetate oxidisers are
+# continuously re-introduced with the substrate and in a real digester are never absent,
+# only rare. 1e-4 kg COD/m3 is ~1e-5 of the smallest ADM1 biomass state -- far too small
+# to matter anywhere it is not selected for, which the measurements above show.
+influent_extension_states:
+  X_sao: 1.0e-4            # DESIGN  kg COD/m3; ASSUMED, see above. FLAGGED
+
+# ---------------------------------------------------------------- health check
+# Every generated run is labelled sound or soured, because a scenario staged on a digester
+# that has acidified is not the scenario it claims to be: a Level-0 "clean" run that
+# crashed is not a control, and a fault injected into a crash is unattributable.
+#
+# The two thresholds are INHERITED from tests/test_plausibility.py, which already applies
+# pH > 6.5 and mean methane content > 0.55 to a generator-driven Plant B run; they are not
+# invented here. The margin is wide in practice - across a 12-seed panel the sound runs sit
+# at pH 6.9-7.1 with 0.65-0.70 methane and the soured ones at pH 4.6-5.0 with 0.00-0.36 -
+# so the label does not depend on where in that gap the line is drawn.
+#
+# MEASURED (docs/g1_anchor_report.md): with the anchor-calibrated feed alkalinity and the
+# declared blend tank on Plant B, all three plants are sound on every clean Level-0 seed of
+# the declared panel. Before those two changes Plant B soured on 5 of 12. The labelling
+# stays as instrumentation now that nothing sours, at the lead's instruction.
+health:
+  min_pH_median: 6.5       # DESIGN  pH; inherited from tests/test_plausibility.py
+  min_ch4_fraction_mean: 0.55   # DESIGN  -; inherited from tests/test_plausibility.py
+  settling_days: 30.0      # DESIGN  d; days dropped from the head before the statistic
+
+# The dissolved calcium of the feed is a per-day series in the influent truth, but
+# `simulate_extended` takes one constant extension influent, so the harness passes the
+# flow-weighted mean over the horizon. `mean` is the only option implemented; the field
+# exists so the choice is visible rather than buried in the code.
+extension_influent: mean   # DESIGN

@@ -122,10 +122,21 @@ feeds:
     tkn: 0.314                   # DESIGN  kmol N/m3; T2024 Table 1 total N (65.3 / 57.8 g N per kg TS, mean 61.6) x 71.5 g TS/kg FM = 4.40 g N/kg FM (/14.007), the value the 2024 ESM Table S2 lists as the slurry S_IN (4.35-5.95 kg N/m3); implied under inert_N_I and the fractionation: 0.286 (-9 %)
     tkn_tolerance: 0.15          # DESIGN  -; accepted gap between the declared TKN and the ADM1-implied one (tests/test_influent.py)
     inert_N_I: 0.001   # DESIGN  kmol N/kg COD; PR #7 Plant A override: assumed, lignocellulosic inerts of slurry and silage carry ~0.014 g N/g COD (BSM2 0.00429 is for sludge-derived inerts); applied by the truth model only (lead's decision)
-    s_ic: 0.05                   # DESIGN  kmol C/m3; assumed: bicarbonate of stored cattle slurry (~3 g HCO3-/L); not published
+    s_ic: 0.1249                   # DESIGN  kmol C/m3; DERIVED: the root of this stream's own charge
+                                 # balance at the declared pH with the divalent calcium counted,
+                                 # solved jointly with s_ca (lead's rulings B1 and calcium,
+                                 # 2026-09-09/10). Not fitted.
     s_cat: 0.10                  # DESIGN  kmol/m3; assumed: Tisocco 2024 ESM Table S2 lists S_cat 0.2 mol/L "manually adjusted"; halved so the digester alkalinity lands at ~10 g CaCO3/L with the TAN below (PR #7 tests)
     s_an: 0.02                   # DESIGN  kmol/m3; assumed (Table S2: 0.015 mol/L, manually adjusted)
-    s_ca: 0.04                   # DESIGN  kmol/m3; assumed: ~1.6 g Ca/L, order of magnitude for cattle slurry; not published
+    s_ca: 4.8e-05                  # DESIGN  kmol/m3; DERIVED, not cited (lead's ruling 2026-09-10):
+                                 # the calcite-SATURATED dissolved calcium at the declared pH and
+                                 # the paired s_ic, K_sp from the truth model's own pK_sp_calcite
+                                 # (Plummer & Busenberg 1982; 8.480 at 25 C, the feed taken cold),
+                                 # pK_a2 10.33, gamma = 1 at the feed (ASSUMED), supersaturation
+                                 # 2.5x (ASSUMED; bracket 2-3x). Mechanism: calcite precipitation
+                                 # in slurry is Ca-controlled because carbonate is in excess (Hjorth
+                                 # et al. 2010, Agron. Sustain. Dev. 30:153-180). s_ca is DISSOLVED
+                                 # calcium; the value it replaces read like TOTAL calcium.
   grass_silage:
     feed_id: grass_silage
     kind: silage
@@ -145,7 +156,16 @@ feeds:
     inert_cod_equivalent: 1.2    # DESIGN  kg COD/kg VS mass; lignocellulosic inerts (lead's freeze): silage inerts are lignin-bound fibre, ~1.2 g COD/g VS, close to the carbohydrate equivalent
     cod_per_vs_literature: 1.274 # DESIGN  kg COD/kg VS; CHECK, derived from T2024 Table 1 per kg TS: carbohydrate (XC less the acids) 0.4898 kg, protein 0.1475, lipid 0.029, acids 0.1342 kg at their own COD equivalents = 1038 g COD per kg TS over 815 g VS; the fractionation below derives 1.275 (+0.1 %)
     cod_per_vs_tolerance: 0.10   # DESIGN  -
-    ph: 4.0                      # DESIGN  pH; assumed: well-preserved grass silage 3.8-4.3 (McDonald et al. 1991); not published
+    ph: 4.28                     # DESIGN  pH; assumed: well-preserved grass silage 3.8-4.3
+                                 # (McDonald et al. 1991); not published. RAISED from 4.0 by
+                                 # the lead's B1 ruling of 2026-09-09, and it is the ONE
+                                 # breaching stream that could not be fixed by pairing s_ic:
+                                 # at pH 4 bicarbonate is four pK units below pK_a1 and no
+                                 # amount of inorganic carbon balances anything -- silage
+                                 # juice cannot hold bicarbonate, it would evolve CO2. 4.28
+                                 # is the root of its own charge balance and sits INSIDE the
+                                 # cited 3.8-4.3, so the declared pH moves rather than the
+                                 # composition. Nothing the simulator is fed changes.
     fractionation:               # DESIGN  kg COD/kg COD; RE-DERIVED on the 2024 basis (lead's freeze): raw COD shares are ch 0.578, pr 0.202, li 0.081, acids 0.139 (acetic + butyric + propionic + lactic at 1.07 / 1.82 / 1.51 / 1.07 kg COD/kg); the inert share is carved out of the carbohydrate as before
       f_ch: 0.328                #   carbohydrates (XC less the silage acids) after removing the non-degradable 0.25
       f_pr: 0.202                #   proteins, T2024 Table 1 XP (mean 147.5 g/kg TS)
@@ -161,7 +181,9 @@ feeds:
     s_ic: 0.0                    # DESIGN  kmol C/m3; assumed: silage at pH ~4 carries no bicarbonate
     s_cat: 0.10                  # DESIGN  kmol/m3; assumed: K+ of grass silage is 2-3 % TS (~0.2 kmol/m3 FM); half taken as balanced by organic anions already in f_vfa
     s_an: 0.05                   # DESIGN  kmol/m3; assumed
-    s_ca: 0.02                   # DESIGN  kmol/m3; assumed: ~0.8 g Ca/L; not published
+    s_ca: 0.00499                  # DESIGN  kmol/m3; ASSUMED 0.2 g Ca/L (lead's ruling 2026-09-10: 0.1-0.3 g/L,
+                                 # FLAGGED). At pH 4.3 calcite is not governing, so this is not derived.
+                                 # Was 0.02 (0.8 g/L, a total-calcium number).
   # ------------------------------------------------------------------ Plant B feeds
   food_waste:
     feed_id: food_waste
@@ -194,9 +216,22 @@ feeds:
     tkn_tolerance: 0.15          # DESIGN  -
     inert_N_I: 0.0015  # DESIGN  kmol N/kg COD; PR #7 Plant B override: assumed, food-waste inerts (fibre) carry far less N than sludge-derived inerts (BSM2 0.00429)
     s_ic: 0.0                    # DESIGN  kmol C/m3; assumed: acidified feed carries no bicarbonate
-    s_cat: 0.05                  # DESIGN  kmol/m3; assumed: Na+/K+ of food waste
+    s_cat: 0.152                 # DESIGN  kmol/m3; assumed: Na+/K+ of food waste. RAISED from
+                                 # 0.05 by the lead's M2 ruling of 2026-09-09, applied to every
+                                 # catalogue stream. At 0.05 the stream carried 0.152 kmol/m3 of
+                                 # acetate ANION at its cited pH 5.1 and only 0.05 kmol/m3 of
+                                 # net cations to balance it -- the assay read 3.0x the charge
+                                 # the simulator would be fed, the same defect as the HSW's 503x
+                                 # with the sign reversed. The CITED pH is kept (Fisgativa et al.
+                                 # 2016 measured it; the cation content was only ever assumed)
+                                 # and 0.152 kmol/m3 is 3.5 g Na+K per litre, mid-range for food
+                                 # waste and consistent with its 14 g/L of free acetic acid.
+                                 # NO PLANT FEEDS THIS STREAM (Plant A: slurry + silage; B:
+                                 # sludges + HSW + FOG; C: sludges), so nothing generated moves.
     s_an: 0.03                   # DESIGN  kmol/m3; assumed
-    s_ca: 0.015                  # DESIGN  kmol/m3; assumed: ~0.6 g Ca/L
+    s_ca: 0.001248                 # DESIGN  kmol/m3; ASSUMED LOW, 0.05 g Ca/L (2026-09-10, FLAGGED; the ruling
+                                 # named HSW and FOG, this stream is treated the same way and no plant feeds
+                                 # it). Was 0.015 (0.6 g/L).
   high_strength_waste:
     feed_id: high_strength_waste
     kind: hsw
@@ -211,25 +246,58 @@ feeds:
     ts: 0.0733                   # DESIGN  kg TS/kg wet; derived: VS 6.16 % w/w (LABS-raw mean) at an assumed VS/TS of 0.84
     vs_of_ts: 0.84               # DESIGN  kg VS/kg TS; assumed (food-processing waste)
     inert_cod_equivalent: 1.42   # DESIGN  kg COD/kg VS mass; sludge-derived value (lead's freeze: the Muscatine feeds); HSW inerts are biological solids of food-processing origin, taken at the C5H7O2N 1.42
-    cod_per_vs_literature: 2.234 # DESIGN  kg COD/kg VS; CHECK, MEASURED: LABS-raw means 137.6 kg COD/m3 / 61.6 kg VS/m3 (Muscatine); the fractionation below derives 2.186 (-2.2 %) at this feed's inert equivalent of 1.42
+    cod_per_vs_literature: 2.234 # DESIGN  kg COD/kg VS; CHECK, MEASURED: LABS-raw means 137.6 kg COD/m3 / 61.6 kg VS/m3 (Muscatine); the fractionation below derives 2.057 (-7.9 %) at this feed's inert equivalent of 1.42 (2.186, -2.2 %, before ruling 5 of 2026-09-11)
     cod_per_vs_tolerance: 0.10   # DESIGN  -
-    ph: 5.0                      # DESIGN  pH; assumed: fermenting food-processing waste; not measured at Muscatine
-    fractionation:               # DESIGN  kg COD/kg COD; ADJUSTED (lead's decision 2026-09-02, answer 1): PR #7's split (ch 0.20 / pr 0.10 / li 0.55 / xi 0.08 / si 0.02 / vfa 0.05) derived only 1.79 kg COD/kg VS, 20 % under the measured 2.23; the lipid COD share is raised to 0.75 (the lead's 0.7-0.75), which by the equivalents is 0.56 of the VS mass, and the carbohydrate, protein and inert shares reduced in proportion, so the derived COD/VS passes the +/- 10 % check against the measured value; composition is not measured at Muscatine
-      f_ch: 0.10                 #   assumed (was 0.20)
-      f_pr: 0.06                 #   assumed (was 0.10)
-      f_li: 0.75                 #   assumed: lipid COD share needed for the measured COD/VS (was 0.55)
-      f_xi: 0.03                 #   assumed (was 0.08)
+    ph: 7.0                      # DESIGN  pH; assumed. RAISED from 5.0 by the lead's M2 ruling
+                                 # of 2026-09-09 (amendment to ruling 3). At the declared
+                                 # composition the charge balance of this stream closes only
+                                 # at pH 13.04 -- 0.205 kmol/m3 of net strong-cation charge
+                                 # with 0.01 kmol C/m3 of inorganic carbon leaves nothing but
+                                 # hydroxide to balance it, i.e. a caustic solution, which no
+                                 # food or beverage waste is. Ruling 3's caustic is spent
+                                 # neutralising the stream's own acidity, so it arrives as
+                                 # sodium bicarbonate: cations PAIRED with S_IC below, at a
+                                 # pH a real CIP-buffered industrial waste is delivered at.
+    fractionation:               # DESIGN  kg COD/kg COD; ADJUSTED (lead's decision 2026-09-02, answer 1): PR #7's split (ch 0.20 / pr 0.10 / li 0.55 / xi 0.08 / si 0.02 / vfa 0.05) derived only 1.79 kg COD/kg VS, 20 % under the measured 2.23; the lipid COD share is raised to 0.75 (the lead's 0.7-0.75), which by the equivalents is 0.56 of the VS mass, and the carbohydrate, protein and inert shares reduced in proportion, so the derived COD/VS passes the +/- 10 % check against the measured value; composition is not measured at Muscatine.
+                                 # CORRECTED (the lead's ruling 5, 2026-09-11): the hidden degradability centre
+                                 # (non-inert COD share) is set to its CITED value 0.84, from 0.95. 0.84 is the
+                                 # composition above weighted by cited conversion-to-biogas fractions -- lipid
+                                 # 94.8 % (Jeganathan et al. 2006), protein 71 % (Davidsson et al. 2008),
+                                 # carbohydrate 50.4 % (Ziels et al. 2016), as compiled in the FOG co-digestion
+                                 # review PMC8072289; acetate fully -- 0.75 x 0.948 + 0.10 x 0.504 + 0.06 x 0.71
+                                 # + 0.04 = 0.84: a DERIVED figure from an assumed composition, not a measured
+                                 # biodegradability of Muscatine's waste. Inert 0.05 -> 0.16, the four degradable
+                                 # classes scaled by 0.84/0.95 so the composition is unchanged; the derived COD/VS
+                                 # is 2.057 (-7.9 % of the measured 2.234, inside the check; was 2.186).
+                                 # docs/f2_horizon_report.md sections 16 and 19, docs/decisions.md 2026-09-11.
+      f_ch: 0.0884               #   assumed; was 0.10 (0.20 in PR #7)
+      f_pr: 0.0531               #   assumed; was 0.06 (0.10)
+      f_li: 0.6631               #   assumed: lipid COD share; was 0.75 (0.55)
+      f_xi: 0.14                 #   the non-degradable share the cited conversions imply; was 0.03 (0.08)
       f_si: 0.02                 #   assumed
-      f_vfa: 0.04                #   assumed (was 0.05)
+      f_vfa: 0.0354              #   assumed; was 0.04 (0.05)
     fractionation_concentration: 30.0    # DESIGN  -; assumed: the HSW COD varies by 70 % (sd/mean, LABS-raw), its composition is not measured
     tan: 0.01                    # DESIGN  kmol N/m3; assumed: not measured at Muscatine
-    tkn: 0.076                   # DESIGN  kmol N/m3; derived from the fractionation with inert_N_I (not measured at Muscatine; was 0.127 with the old split)
+    tkn: 0.0875                  # DESIGN  kmol N/m3; derived from the fractionation with inert_N_I (not measured at Muscatine); RE-DERIVED under ruling 5 of 2026-09-11 for the larger inert share (was 0.076 with the 0.95 centre, 0.127 with the PR #7 split). A check value: the simulation takes its nitrogen from the fractionation and inert_N_I, not from this field
     tkn_tolerance: 0.15          # DESIGN  -
     inert_N_I: 0.0015  # DESIGN  kmol N/kg COD; PR #7 Plant B override (see food_waste)
-    s_ic: 0.01                   # DESIGN  kmol C/m3; assumed
-    s_cat: 0.03                  # DESIGN  kmol/m3; assumed
+    s_ic: 0.1638                   # DESIGN  kmol C/m3; DERIVED: re-solved 2026-09-10 against the reduced s_ca
+                                 # (the balance root at the declared pH 7.0). Was 0.1607 against the old
+                                 # calcium; not fitted.
+    s_cat: 0.225                 # DESIGN  kmol/m3; CALIBRATED to the anchor's digester
+                                 # alkalinity (lead's ruling 3 of 2026-09-03). The Muscatine
+                                 # daily file measures alkalinity in the DIGESTER (median
+                                 # 5.04 kg CaCO3/m3), which fixes only the flow-weighted
+                                 # strong-cation excess of the feed blend, not its split
+                                 # between streams; the split is assumed. Most of it is put
+                                 # on this stream because caustic from clean-in-place is the
+                                 # usual source of alkalinity in food and beverage
+                                 # industrial waste, and because at 137 kg COD/m3 this is by
+                                 # far the most concentrated feed: 225 meq/L is ~5 g Na/L on
+                                 # a stream carrying 137 g COD/L. Was 0.03.
     s_an: 0.02                   # DESIGN  kmol/m3; assumed
-    s_ca: 0.01                   # DESIGN  kmol/m3; assumed
+    s_ca: 0.001248                 # DESIGN  kmol/m3; ASSUMED LOW, 0.05 g Ca/L (lead's ruling 2026-09-10, FLAGGED):
+                                 # a food/beverage waste with no calcite control at its pH. Was 0.01 (0.4 g/L).
   fog:
     feed_id: fog
     kind: fog
@@ -260,20 +328,29 @@ feeds:
                                  # FLAGGED FOR THE LEAD: an order-of-magnitude change to a
                                  # provisional assumed value, forced by the anchor.
     vs_of_ts: 0.95               # DESIGN  kg VS/kg TS; assumed
-    inert_cod_equivalent: 1.42   # DESIGN  kg COD/kg VS mass; SLUDGE VALUE BY THE LEAD'S INSTRUCTION (freeze 2026-09-02): FOG's small inert residue is grease-trap solids, taken at the sludge-derived 1.42, an assumption
-    cod_per_vs_literature: 2.80  # DESIGN  kg COD/kg VS; CHECK: FOG taken as ~95 % lipid by mass at the stoichiometric COD of triolein C57H104O6 (2.89 g COD/g) with the rest carbohydrate-like, i.e. 2.7-2.9 (the lead's range); PR #7's 2.75 came from treating the 0.85 lipid COD share as a mass share; the fractionation below derives 2.741 (-2.1 %) at this feed's inert equivalent of 1.42
+    inert_cod_equivalent: 2.9    # DESIGN  kg COD/kg VS mass; LIPID-LIKE (the lead's ruling of 2026-09-11, answer A): FOG's inert residue is grease-bound solids, taken at the lipid COD equivalent 2.9. SUPERSEDES the sludge value 1.42 of the 2026-09-02 freeze, at which the ruled 0.92 centre (ruling 5) could derive at most 2.677 kg COD/kg VS (2.593 with the ruled split) against the lead's 2.7-2.9 target; at 2.9 it derives 2.802. Derivation table in docs/decisions.md, ruling 5
+    cod_per_vs_literature: 2.80  # DESIGN  kg COD/kg VS; CHECK: FOG taken as ~95 % lipid by mass at the stoichiometric COD of triolein C57H104O6 (2.89 g COD/g) with the rest carbohydrate-like, i.e. 2.7-2.9 (the lead's range); PR #7's 2.75 came from treating the 0.85 lipid COD share as a mass share; the fractionation below derives 2.802 (+0.1 %) at this feed's inert equivalent of 2.9 (2.593 at the old 1.42 with the ruled split; 2.741, -2.1 %, before ruling 5 of 2026-09-11)
     cod_per_vs_tolerance: 0.10   # DESIGN  -
     ph: 5.0                      # DESIGN  pH; assumed: grease-trap waste is acidic (4.5-6); not measured at Muscatine
-    fractionation:               # DESIGN  kg COD/kg COD; FIXED (lead's decision 2026-09-02, answer 1): PR #7's f_li 0.85 was a COD share that derives only 2.43 kg COD/kg VS; a lipid-dominated FOG needs a lipid COD share of ~0.93-0.95 to land at 2.7-2.9
-      f_ch: 0.015                #   assumed (was 0.05)
-      f_pr: 0.015                #   assumed (was 0.05)
-      f_li: 0.95                 #   assumed: lipid COD share for a ~95 % lipid mass share (was 0.85)
-      f_xi: 0.015                #   assumed (was 0.04)
-      f_si: 0.005                #   assumed (was 0.01)
+    fractionation:               # DESIGN  kg COD/kg COD; FIXED (lead's decision 2026-09-02, answer 1): PR #7's f_li 0.85 was a COD share that derives only 2.43 kg COD/kg VS; a lipid-dominated FOG needs a lipid COD share of ~0.93-0.95 to land at 2.7-2.9.
+                                 # CORRECTED (the lead's ruling 5, 2026-09-11): the hidden degradability centre
+                                 # is set to its CITED value 0.92, from 0.98 -- the same composition-weighted
+                                 # derivation as the high-strength waste (0.95 x 0.948 + 0.015 x 0.504 + 0.015
+                                 # x 0.71 = 0.92), bracketed by brown grease at ~90 % of theoretical (354 mL
+                                 # CH4/g COD at 35 C; Frontiers Environ. Eng. 2024) and 0.40-0.77 m3 CH4/kg VS
+                                 # removed at pilot scale (Zhang et al. 2014). Inert 0.02 -> 0.08, the three
+                                 # degradable classes scaled by 0.92/0.98; the derived COD/VS is 2.802 at the
+                                 # lipid-like inert equivalent 2.9 (answer A, below: 2.593 at the old 1.42; was
+                                 # 2.741). Every stream's centre is derived the same way.
+      f_ch: 0.0141               #   assumed; was 0.015 (0.05 in PR #7)
+      f_pr: 0.0141               #   assumed; was 0.015 (0.05)
+      f_li: 0.8918               #   assumed: lipid COD share for a ~95 % lipid mass share; was 0.95 (0.85)
+      f_xi: 0.06                 #   the non-degradable share the cited conversions imply; was 0.015 (0.04)
+      f_si: 0.02                 #   was 0.005 (0.01)
       f_vfa: 0.0
     fractionation_concentration: 60.0    # DESIGN  -; assumed
     tan: 0.0                     # DESIGN  kmol N/m3; assumed
-    tkn: 0.0067                  # DESIGN  kmol N/m3; derived from the fractionation with inert_N_I at the anchor-derived TS (0.033 at the old 10 % TS)
+    tkn: 0.0111                  # DESIGN  kmol N/m3; derived from the fractionation with inert_N_I at the anchor-derived TS; RE-DERIVED under ruling 5 of 2026-09-11 for the larger inert share and the lipid-like inert equivalent of answer A (was 0.0067 with the 0.98 centre; 0.033 at the old 10 % TS). A check value, not a simulation input
     tkn_tolerance: 0.15          # DESIGN  -
     inert_N_I: 0.0015  # DESIGN  kmol N/kg COD; PR #7 Plant B override (see food_waste)
     s_ic: 0.0                    # DESIGN  kmol C/m3; PR #7 value, no note
@@ -312,10 +389,29 @@ feeds:
     tkn: 0.142                   # DESIGN  kmol N/m3; derived from the fractionation with the BSM2 N contents (2.0 g N/L; was 0.180 with the old split)
     tkn_tolerance: 0.15          # DESIGN  -
     inert_N_I: 0.004285714285714286   # DESIGN  kmol N/kg COD; BSM2 N_I (0.06/14): sewage sludge is what ADM1's N contents were derived for (PR #7 Plant C, no override)
-    s_ic: 0.04                   # DESIGN  kmol C/m3; BSM2 influent S_IC
-    s_cat: 0.04                  # DESIGN  kmol/m3; BSM2 influent S_cat
+    s_ic: 0.114                    # DESIGN  kmol C/m3; DERIVED: the root of this stream's own charge
+                                 # balance at the declared pH with the divalent calcium counted,
+                                 # solved jointly with s_ca (lead's rulings B1 and calcium,
+                                 # 2026-09-09/10). Not fitted.
+    s_cat: 0.05                  # DESIGN  kmol/m3; CALIBRATED (lead's ruling 3 of
+                                 # 2026-09-03), from BSM2's 0.04. Net of s_an this is
+                                 # 30 meq/L, about 1,500 mg/L as CaCO3 in the sludge liquor
+                                 # - the upper end of what thickened municipal sludge with
+                                 # digester recycle carries, and the smaller share of the
+                                 # calibration; see high_strength_waste for the split.
+                                 # NOTE (2026-09-09): that realism argument counted the
+                                 # monovalent ions only. With s_ca the stream's cation charge
+                                 # is 80 meq/L, not 30.
     s_an: 0.02                   # DESIGN  kmol/m3; BSM2 influent S_an
-    s_ca: 0.02                   # DESIGN  kmol/m3; assumed (~0.8 g Ca/L)
+    s_ca: 0.00503                  # DESIGN  kmol/m3; DERIVED, not cited (lead's ruling 2026-09-10):
+                                 # the calcite-SATURATED dissolved calcium at the declared pH and
+                                 # the paired s_ic, K_sp from the truth model's own pK_sp_calcite
+                                 # (Plummer & Busenberg 1982; 8.480 at 25 C, the feed taken cold),
+                                 # pK_a2 10.33, gamma = 1 at the feed (ASSUMED), supersaturation
+                                 # 2.5x (ASSUMED; bracket 2-3x). Mechanism: calcite precipitation
+                                 # in slurry is Ca-controlled because carbonate is in excess (Hjorth
+                                 # et al. 2010, Agron. Sustain. Dev. 30:153-180). s_ca is DISSOLVED
+                                 # calcium; the value it replaces read like TOTAL calcium.
   thickened_was:
     feed_id: thickened_was
     kind: thickened_was
@@ -343,7 +439,18 @@ feeds:
     tkn: 0.218                   # DESIGN  kmol N/m3; derived from the fractionation with the BSM2 N contents; implied 0.236 at the derived COD/VS 1.443 (+8 %, inside tkn_tolerance)
     tkn_tolerance: 0.15          # DESIGN  -
     inert_N_I: 0.004285714285714286   # DESIGN  kmol N/kg COD; BSM2 N_I (see primary_sludge)
-    s_ic: 0.04                   # DESIGN  kmol C/m3; BSM2
-    s_cat: 0.04                  # DESIGN  kmol/m3; BSM2
+    s_ic: 0.056                    # DESIGN  kmol C/m3; DERIVED: the root of this stream's own charge
+                                 # balance at the declared pH with the divalent calcium counted,
+                                 # solved jointly with s_ca (lead's rulings B1 and calcium,
+                                 # 2026-09-09/10). Not fitted.
+    s_cat: 0.05                  # DESIGN  kmol/m3; CALIBRATED (see primary_sludge)
     s_an: 0.02                   # DESIGN  kmol/m3; BSM2
-    s_ca: 0.02                   # DESIGN  kmol/m3; assumed
+    s_ca: 0.000679                 # DESIGN  kmol/m3; DERIVED, not cited (lead's ruling 2026-09-10):
+                                 # the calcite-SATURATED dissolved calcium at the declared pH and
+                                 # the paired s_ic, K_sp from the truth model's own pK_sp_calcite
+                                 # (Plummer & Busenberg 1982; 8.480 at 25 C, the feed taken cold),
+                                 # pK_a2 10.33, gamma = 1 at the feed (ASSUMED), supersaturation
+                                 # 2.5x (ASSUMED; bracket 2-3x). Mechanism: calcite precipitation
+                                 # in slurry is Ca-controlled because carbonate is in excess (Hjorth
+                                 # et al. 2010, Agron. Sustain. Dev. 30:153-180). s_ca is DISSOLVED
+                                 # calcium; the value it replaces read like TOTAL calcium.

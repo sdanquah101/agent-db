@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import yaml
 
 from sim.adm1.extensions import ExtensionsConfig
+from sim.adm1.model import state_vector
 from sim.adm1.petersen import PetersenMatrix, load_petersen
 from sim.adm1.schema import ADM1Parameters, PlantGeometry, SolverConfig
 
@@ -20,6 +22,7 @@ PLANT_BSM2 = CONFIG_DIR / "plant_bsm2.yaml"
 SOLVER_DEFAULT = CONFIG_DIR / "solver.yaml"
 PETERSEN_MATRIX = CONFIG_DIR / "petersen_matrix.yaml"
 EXTENSIONS_YAML = CONFIG_DIR / "extensions.yaml"
+INITIAL_STATE_RJ2006 = CONFIG_DIR / "initial_state_rj2006.yaml"
 
 
 def _mapping(path: Path) -> dict:
@@ -52,3 +55,21 @@ def load_matrix(path: Path = PETERSEN_MATRIX) -> PetersenMatrix:
 def load_extensions(path: Path = EXTENSIONS_YAML) -> ExtensionsConfig:
     """The truth-model extension declarations (``extensions.yaml``)."""
     return ExtensionsConfig.model_validate(_mapping(path))
+
+
+def load_initial_state(path: Path = INITIAL_STATE_RJ2006) -> np.ndarray:
+    """The published Rosen & Jeppsson (2006) steady state as a 29-vector.
+
+    Only the run harness's burn-in starts here (``sim.run.harness``); no scenario does.
+    The values are the same ones ``scripts/adm1_candidates/common.py`` carries for the
+    ring test, moved into ``configs/`` because ``sim/`` may not import disposable probe
+    code (decision 2026-09-02).
+
+    Raises:
+        ValueError: If the file is not a mapping with ``liquid`` and ``gas`` blocks.
+    """
+    raw = _mapping(path)
+    for block in ("liquid", "gas"):
+        if not isinstance(raw.get(block), dict):
+            raise ValueError(f"{path}: missing the {block!r} mapping")
+    return state_vector(raw["liquid"], raw["gas"])
