@@ -5096,3 +5096,37 @@ coordinator is asked to confirm it falls under the approval. **Not yet ruled:** 
 the budgets per (scenario, tier); the lead rules once the pilot table is in, on the
 measured numbers and the proposed re-declaration, with no scenario's budget block edited
 by this session.
+
+## 2026-09-21 — The P0 pilot at the frozen budgets: the wall clock binds, MCMC is never reached, two rule paths read the background (findings for the lead's budget ruling)
+
+**Finding** (`reports/p0_pilot.csv`; `docs/milestones.md`, milestone 5, has the table and
+the arithmetic). Ten cells (S0-01 B at Tiers A/B/C, S1-01 B/B, S2-01 B/B, S3-01 C/B,
+S4-01 B/B, S5-01 A/A, S6-02 B/B, S8-01 B/B) at their frozen budgets on the matrix
+regenerated at `5099c18`: every cell completed inside its allowance (50–94 min of 90–150)
+using 214–449 evaluations, 4–7 % of the declared 4,000–8,000, because a 200-day
+evaluation costs 11.8 s (a 365-day Plant A one 22–25 s) and P0's declared plan shrank
+by its fallback ladders to fit the wall clock: no cell reached MCMC, so every cell
+reports Fisher intervals, abstains on `posterior_intervals`, and the Level-8 directive
+of S8-01 was never exercised. Two of ten primary labels match the truth; the misses are
+systematic: R1c (charge consistency) fired on 8/10 cells and the QC-missingness path of
+R5 on 9/10, both on the plants' own background (the observation model's conditional
+missingness; the implied strong-ion difference drifting 0.30–0.32 across windows on a
+clean run), and after a 2–4-parameter fit every channel keeps a 5–19σ background bias,
+so the post-fit rules cannot separate a fault from it.
+
+**Proposed, for the lead (nothing changed here: the thresholds are frozen by the
+approval and the budget blocks are frozen under G1).** (1) `simulator_evals` re-declared
+as allowance × 60 / 12 s, rounded down to 50: 450 / 600 / 750 for the 90 / 120 / 150-minute
+cells (Plant A: the allowance doubled or the count halved), so the two envelopes agree;
+or the allowances raised (the full declared plan needs ~3.5 h per 200-day cell). (2) A
+plan the allowance can hold with MCMC in it (Morris 4, Sobol 8, one LSQ start, DE 2,
+MCMC 8 × 10 ≈ 330 evaluations ≈ 66 min), so the Level-8 row is met. (3) Four threshold
+rulings: drop the QC-missingness path from R5 or bound it by the tier's declared stress
+multiplier; fold R1c into R1b or raise `charge_drift`'s band above the background;
+`balance_windows_min` 3; `step_day_tolerance_d` 30. (4) The full Level 0–5 sweep (78
+cells) is ~88 h of runner time serial, ~29 h three in parallel; not run in this PR.
+
+**Alternatives.** Running the sweep now at the frozen budgets (rejected: 29 h to
+measure a plan the pilot already shows never reaches its sampler); changing thresholds
+in this PR (rejected: approved values change only by a decisions entry with the lead's
+approval).

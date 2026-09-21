@@ -1878,3 +1878,169 @@ first task, a pilot on one Plant C cell to measure the cost of a full-horizon
 evaluation against the frozen budgets (§7: "chosen from pilot runs so P0 completes
 comfortably"). If the ADM1 state-space adapter is wanted for the Level-4 row, it is a
 registry follow-up, not P0's.
+
+---
+
+## Milestone 5 — P0, the scripted pipeline (weeks 14–16)
+
+Exit criterion: completes all Level 0–5 scenarios at all tiers; results plausible.
+
+### Session 2026-09-21 — P0 built, tested through the jail, and piloted (`claude/p0-scripted`, draft PR #18)
+
+Milestone 4 (tool registry v1.0) merged at `21424f2`, 2026-09-21. Launched by the
+coordinator on the lead's "Launch now", read as `launch: p0-scripted` (decisions, first
+entry of this session). Zero open PRs at launch; branched from `21424f2`; nothing under
+`sim/`, `scenarios/` or the frozen configs touched; the registry's tested behaviour
+(budgets, logging, the jail, the fitted model, the tool numerics) unchanged.
+
+**Done.**
+
+- **The three jail-review nits** (`96489ba`): the sandbox test's own probe runs in a
+  scrubbed environment; a workflow's exit 111 is told from a jail failure by a marker
+  file the jail script writes just before it starts the interpreter (tested with a
+  workflow that exits 111 and a second launch in the same directory); the `launch`
+  docstring says a sandbox directory is single-use.
+- **The design note** (`docs/p0_design.md`, before any pipeline code): the fixed sequence,
+  every threshold as a key of `configs/workflows/p0.yaml`, the ordered attribution rule,
+  the abstentions, the deterministic plan with its fallback ladders, the output contract,
+  the open points for the lead. **APPROVED by the lead via the coordinator** (points 1–3, 2026-09-21; the budgets are ruled after the pilot).
+- **The task state** (`state/task_state.py`): one Pydantic schema for P0/P1/P2 — data
+  quality per sensor, tier, candidate model, the classification with evidence and
+  confidence, the screening trail, residual summaries, every action named as the call
+  log names it (seq, args hash, version), tool failures, the budget left, validation,
+  abstentions, the final label and estimates with intervals and their method, the plan
+  and its fallbacks, the notes seen (day, author, length). Validated on the privileged
+  side; a workflow builds the JSON to it.
+- **Two registry additions** (decisions): `run.write_output` (`tools.server.OutputSink`,
+  restricted to `runs/<id>/workflows/<workflow>/`, traversal / absolute / symlink /
+  directory / empty refused, tested directly and over the wire with a negative control;
+  `launch(workflow=...)`), and the visible log line's `seq`, `args_hash` and version in
+  every call envelope (`tools.last_call()`).
+- **The pipeline** (`workflows/p0_scripted/pipeline.py`, inside the jail; the rule-1
+  checker reports nothing): QC on every sensor → the exclusion rules (a flatline ≥ 3 d
+  flags; a drift flags only beyond the instrument's declared drift bound; spikes dropped;
+  informative missingness abstains) → mass balance over 30-day windows → Morris on the 20
+  declared parameters → Sobol with second order on the Morris subset → Fisher at the
+  defaults (profiles when the plan allows) → LSQ multistart then DE → MCMC on the approved
+  subset → residual diagnostics by feed batch, load, temperature, time → the assay spend
+  at the day of the largest gas residual → validation on the frozen last quarter with a
+  predictive ensemble → the attribution rule (R1 sensor → R2 influent → R5 state → R4
+  parameter → R3 structural → R6 none, a pure function of the evidence) → `state.json`
+  and `report.json`, checkpointed after every step. The plan is deterministic (a declared
+  12 s per evaluation, set from measurement; declared ladders and replacements, each
+  recorded); a non-converged
+  sampler is a recorded failure with no posterior and no retry; notes are data.
+- **The runner** (`tools/runner.py`): `run_workflow` and the CLI for one run or a batch
+  over the truth-side index, `summary.json` per cell, one row per cell to
+  `reports/p0_pilot.csv`.
+- **Tests** (`tests/test_p0_pipeline.py`, `tests/test_workflow_output.py`): 13 tests —
+  the checker on every workflow module; the sandbox document carries nothing of a run;
+  a 30-day S0-01 cell of Plant C with a 40-evaluation budget completes through the
+  fallbacks (schema, output contract, budget accounting, the action/log match line for
+  line, no truth-side token in the outputs); the same cell twice gives the same state;
+  the Level-8 row on a short S8-01 cell (one `bayes_mcmc` call, failure recorded, no
+  posterior, truth-side `injected_failure` vs visible `ok`); the attribution rule on
+  constructed evidence; the runner's selection and table; the write op's refusals.
+- **Records**: seven decisions entries (the launch reading, the rules, the two registry
+  additions, the stiffness pocket, the 12 s measurement, the lead's approval, the pilot's
+  findings), card §4.2, `configs/README.md`, this entry.
+
+**Measured.** `ruff check .` and `ruff format --check .` clean; `python -m pytest -q`
+without `PYTHONPATH`: 462 passed, 2 skipped (the pre-existing Muscatine SCADA skips), 13
+deselected, 14 min 49 s. A 200-day evaluation of `adm1_fitted` on a generated cell costs
+11.4–11.8 s (the daily feed log caps the integrator step at one day; 2.5–4.4 s on a
+constant log, 2.1 s at 30 days; one constant-log vector, `k_dis` × 2 with `k_m_aa` × 0.5
+on Plant B, 274 s); a 365-day Plant A evaluation 22–25 s. The
+117-cell matrix regenerated at `5099c18` (12 min 38 s; 117/117 generated and sound;
+every manifest carries `5099c18`; nothing committed).
+
+**The pilot** (`reports/p0_pilot.csv`; ten cells at their FROZEN budgets on the matrix
+regenerated at `5099c18`, three cells in parallel on this 4-core machine, 11:00–15:08 UTC;
+"flag" is P0's flagged sensor against `correct_conclusion.flag_sensor`; "recovery" is
+estimate / truth multiplier / whether the interval covers it, Levels 0–5 only):
+
+| cell | truth | P0 label (rule) | flag | ok | wall min / allow | evals / declared | assays | fallbacks | guards | intervals | recovery |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| S0-01 B/A | none | state (R5) | - vs - | yes | 55 / 90.0 | 266 / 4000 | 2 / 2 | 6 | 1 | fisher | Y_ac:0.500/1.000/out Y_h2:0.500/1.000/in |
+| S0-01 B/B | none | sensor (R1) +influent+state | ph vs - | yes | 50 / 90.0 | 235 / 4000 | 2 / 2 | 7 | 1 | fisher | Y_ac:1.052/1.000/in k_dec_X_ac:0.885/1.000/in |
+| S0-01 B/C | none | sensor (R1) +influent+state | ph vs - | yes | 55 / 90.0 | 251 / 4000 | 2 / 2 | 9 | 1 | fisher | Y_ac:1.126/1.000/out Y_h2:1.427/1.000/in k_m_h2:0.809/1.000/in k_m_pro:1.108/1.000/out |
+| S1-01 B/B | none | sensor (R1) +influent+state | ph vs - | yes | 60 / 90.0 | 280 / 4000 | 2 / 2 | 8 | 1 | fisher | Y_ac:0.500/1.000/in Y_h2:0.500/1.000/in k_dec_X_ac:0.536/1.000/in |
+| S2-01 B/B | sensor | sensor (R1) +influent+state | ph vs ph | yes | 52 / 90.0 | 251 / 4000 | 2 / 2 | 7 | 0 | fisher | Y_ac:0.836/1.000/in Y_h2:0.833/1.000/in k_dec_X_ac:0.780/1.000/in |
+| S3-01 C/B | influent | sensor (R1) +state | ph vs - | yes | 71 / 120.0 | 337 / 6000 | 3 / 4 | 5 | 0 | fisher | Y_h2:1.500/1.000/in k_m_ac:0.527/1.000/out |
+| S4-01 B/B | state | sensor (R1) +state | ph vs - | yes | 68 / 120.0 | 331 / 6000 | 3 / 4 | 5 | 0 | fisher | Y_ac:0.761/1.000/in k_m_ac:0.667/1.000/out |
+| S5-01 A/A | parameter | none (R6) | - vs - | yes | 85 / 120.0 | 214 / 6000 | 3 / 4 | 9 | 4 | fisher | Y_ac:0.816/1.000/in Y_h2:1.484/1.000/out |
+| S6-02 B/B | structural | sensor (R1) +state | ph vs - | yes | 94 / 150.0 | 449 / 8000 | 3 / 6 | 5 | 0 | fisher | - |
+| S8-01 B/B | sensor | sensor (R1) +state | ph vs gas_flow | yes | 89 / 150.0 | 413 / 8000 | 3 / 6 | 4 | 0 | fisher | - |
+
+**Budget findings for the lead** (point 4 of the sign-off; no scenario's budget block
+edited). (1) **The evaluation count is not the binding constraint at these allowances**:
+at the measured 11.8 s per 200-day evaluation (22–25 s per 365-day Plant A evaluation;
+three cells in parallel on four cores) a 90-minute allowance buys ~450 evaluations, 120
+minutes ~600, 150 minutes ~750, against the declared 4,000 / 6,000 / 8,000. The ten cells
+used 214–449 evaluations — 4–7 % of their evaluation budgets — while using 56–71 % of
+their wall clock. **Proposed re-declaration**, so the two envelopes say the same thing:
+`simulator_evals` = allowance × 60 / `eval_seconds_assumed` (12 s), rounded down to 50:
+**450 / 600 / 750** for the 90 / 120 / 150-minute cells; for Plant A, whose evaluations
+cost twice as much, either the allowance doubles or the count halves (225 / 300 / 375).
+The alternative is raising the allowances: P0's declared plan at full size (Morris 8,
+Sobol 32, 3 LSQ starts, DE 8, MCMC 8 × 30, ensemble 8 ≈ 1,060 evaluations) needs ~3.5 h
+per 200-day cell at 12 s. (2) **P0 completed inside every frozen allowance** (10/10 cells,
+50–94 min of 90–150), but only through the declared fallbacks: **no cell reached MCMC**
+(the smallest sampler, 8 walkers × 10 steps = 88 evaluations, never fitted the plan's
+share after the fit), so every cell reports Fisher intervals and abstains on
+`posterior_intervals`, and **the Level-8 directive of S8-01 was never exercised** — a
+tool failure can only be met by a workflow that reaches the tool, which at 12 s per
+evaluation needs either a larger allowance or a smaller declared plan (e.g. Morris 4,
+Sobol 8, one LSQ start, DE 2, MCMC 8 × 10 ≈ 330 evaluations ≈ 66 min). Sobol ran at
+N = 8–16 of 32, LSQ with one start, DE with 2–8 generations; 8 guard trips across 5 cells
+(DE, LSQ and Sobol at the measured rate under parallel load, 4 of them on the Plant A
+cell). Profiles never fitted. (3) **Attribution at the approved thresholds**: 2/10 primary
+labels match the truth (S2-01: sensor with pH correctly flagged; S8-01: sensor, but pH
+flagged instead of the gas meter), 8/10 do not, and the misses are systematic rather than
+random. Two rule paths read the plants' background and set the primary label: **R1c**
+(`charge_consistent` false with a serially-structured pH residual) fired on 8/10 cells —
+every Plant B and C cell at Tiers B and C, the three clean S0-01 cells included — and the
+**QC informative-missingness path of R5** fired on 9/10 (every Plant B and C cell): the
+observation model makes gaps 4× likelier during overload on every run, so the ratio
+measures the plant, not a fault. **R2's COD path** (exactly 2 of 6 windows inadmissible)
+fired as a secondary on 4 Plant B cells, S2-01 among them — the background's unrecorded
+deliveries. Behind all three: after a fit of 2–4 parameters every calibrated channel keeps
+a bias of 5–19σ (χ²/n of 10–100; the declared instrument noise is far below the model's
+background misfit), so the post-fit rules that need "the others clean" (R1b) or "still
+structured" (R3) cannot separate a fault from the background, and R4 saw S5-01's change
+points (gas day 229, pH day 251, z 6.9 and 11) 22 days apart against its 20-day
+tolerance. Proposed for the lead's ruling (a decisions entry, not made here: the
+thresholds are frozen): (a) drop the QC-missingness path from R5 (keep the early-window
+bias path) or require `event_missing_ratio` above a declared multiple of the tier's
+declared stress multiplier; (b) fold R1c into R1b (the pH residual must be the single
+offender) or raise `charge_drift`'s band above the background's 0.30–0.32; (c)
+`balance_windows_min` 3; (d) `step_day_tolerance_d` 30. With (a)–(c) the ten primary
+labels would have been `none` on every cell but S8-01 — the honest statement that at the
+frozen budgets P0's residual rules see nothing through the background, which is what a
+scripted baseline is for and what §6.7 B scores. (4) **Parameter recovery** (Levels 0–5,
+20 approved-parameter estimates): the Fisher interval covers the truth multiplier 1.0 in
+14 of 20; the estimates range 0.50–1.50 and 5 sit at a bound; intervals are wide because
+the residual variance is the background's, not because the estimates are close.
+**Not done / limits, stated plainly.** (1) P0's rules are approved and frozen; the four threshold changes the
+pilot suggests are proposals for a decisions entry with the lead's approval, not made here. (2) The full Level 0–5 sweep is not
+in this PR: 78 cells at Levels 0–5 (Plants B and C: 15 + 15 at 90 min, 18 + 18 at 120 min; Plant A: 3 at
+90, 9 at 120); at the measured 52–60 min per 90-minute B/C cell, ~70 min per 120-minute
+B/C cell and ~85 min per Plant A cell that is ~88 h of runner time serial, ~29 h with
+three cells in parallel on this 4-core machine (~22 h with four, at the cost of the
+guard trips the measured rate then causes). The batch runner does it in one command
+(`python -m tools.runner --workflow p0 --all --level 0-5`), resumable by table.. (3) MCMC at the sizes the wall clock allows does not converge on
+ADM1, so P0 reports Fisher intervals by the same rule the Level-8 row exercises. (4) The
+profile likelihood never ran inside the frozen allowances (its registry bound is
+`n_grid · n_starts · 201` evaluations). (5) The checker forbids the bare token `state`
+in workflow code, so the label vocabulary is read from the configuration.
+
+**The next session (milestone 6, the evaluation suite, §6.7) starts on:** `eval/`
+reading `truth_store/<id>/` and `runs/<id>/workflows/<workflow>/state.json` only —
+the label against `truth_label` (primary and secondary), the false kinetic-drift rate
+from `final.parameters` and `kinetic_update`, correct abstention against `abstain_on`,
+unsupported claims as report lines not traceable to an action's `seq`, parameter recovery
+from the truth's segment parameters for Levels 0–5 only, the information-efficiency
+counters from the truth-side log (runtimes) and `summary.json`, completion from
+`final.completed`; and, on the lead's ruling, the budgets per (scenario, tier) from the
+pilot table. P1 starts after the lead's budget ruling and, if any, the threshold rulings
+of the pilot's proposal (rule 5: P0 is frozen before any agent code).

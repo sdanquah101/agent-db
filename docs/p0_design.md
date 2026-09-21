@@ -280,8 +280,10 @@ completion, the final label) from its privileged side, and one row per cell to
    would take over thirteen hours, and a 90-minute allowance buys about 450, so the
    wall-clock allowance is what binds and P0's sizes are set by it (§4): at 12 s the
    declared plan runs Morris with 4 trajectories, Sobol with N = 8, one LSQ start, two DE
-   generations and no MCMC inside 90 minutes. Whether the budgets should be re-declared is
-   the pilot's question.
+   generations and no MCMC inside 90 minutes. The pilot's answer (`docs/milestones.md`, milestone 5): ten cells
+   completed inside their allowances using 4–7 % of the declared evaluations and never
+   reaching MCMC; proposed `simulator_evals` 450 / 600 / 750 for the 90 / 120 / 150-minute
+   cells, and four threshold rulings on the paths that read the background.
 
 ## 7. Recorded limits
 
