@@ -49,7 +49,9 @@ from state.provenance import read_calls
 from tests.conftest import REPO_ROOT
 from tools import AnalyticModel, Budget, make_registry, open_registry
 from tools.sandbox import (
+    _SCRUBBED_ENV,
     FORBIDDEN_MODULES,
+    JAIL_EXIT,
     SandboxError,
     _library_directories,
     launch,
@@ -373,6 +375,26 @@ def test_launch_raises_rather_than_run_unjailed(tmp_path, monkeypatch):
     assert not (box / "cwd" / "RAN").exists()
 
 
+def test_a_workflow_exiting_with_the_jail_status_is_not_a_jail_failure(tmp_path):
+    """A workflow's own exit code 111 is reported as the workflow's, not as a broken jail.
+
+    The jail script writes a marker once it has pivoted and is about to start the
+    interpreter; a JAIL_EXIT without the marker is the jail's, with it the workflow's.
+    """
+    registry = make_registry(budget=Budget(5, 60.0, 0), seed=1, models={"linear": linear_model()})
+    script = tmp_path / "workflow.py"
+    script.write_text(f"import sys\nprint('RAN')\nsys.exit({JAIL_EXIT})\n", encoding="utf-8")
+    box = tmp_path / "box"
+    box.mkdir()
+    result = launch(script, registry, sandbox=box, timeout_s=60.0)
+    assert result.returncode == JAIL_EXIT
+    assert result.stdout.strip() == "RAN"
+    # a second launch in the same directory starts from a fresh marker
+    script.write_text("print('AGAIN')\n", encoding="utf-8")
+    again = launch(script, registry, sandbox=box, timeout_s=60.0)
+    assert again.returncode == 0 and again.stdout.strip() == "AGAIN"
+
+
 def test_the_jail_leaves_no_mount_behind(clean_run, tmp_path):
     run, _, _ = clean_run
     registry = make_registry(budget=Budget(5, 60.0, 0), seed=1, models={"linear": linear_model()})
@@ -397,14 +419,21 @@ def test_the_sandbox_interpreter_is_clean_and_cached(tmp_path):
         f"print(json.dumps([n for n in {list(FORBIDDEN_MODULES)!r} "
         "if importlib.util.find_spec(n) is not None]))"
     )
+    # in a scrubbed environment, as `_forbidden_resolving` runs its own probe (finding C1):
+    # an ambient PYTHONPATH would fail this spuriously
     out = subprocess.run(
-        [str(python), "-c", probe], capture_output=True, text=True, check=True, cwd=str(tmp_path)
+        [str(python), "-c", probe],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=str(tmp_path),
+        env=dict(_SCRUBBED_ENV),
     )
     assert json.loads(out.stdout) == []
     # and it carries what the stub needs
     out = subprocess.run(
         [str(python), "-c", "import numpy, scipy, pydantic; print('ok')"],
-        capture_output=True, text=True, check=True,
+        capture_output=True, text=True, check=True, env=dict(_SCRUBBED_ENV),
     )  # fmt: skip
     assert out.stdout.strip() == "ok"
     assert sandbox_interpreter() == python  # cached, not rebuilt
