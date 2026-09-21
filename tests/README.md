@@ -146,7 +146,11 @@ The tool registry (`tools/`, `configs/tools/`; milestone 4):
 - `test_tool_sandbox.py` — the structural defence: a workflow launched in the sandbox
   cannot import `sim`, `scenarios`, `anchor`, `eval` or `state` by any spelling, cannot
   open `truth_store/…`, `scenarios/…` or its own run's truth file by relative path, finds
-  nothing walking upwards, and — the negative control — calls tools, reads the sensors
-  and gets the right exceptions through the stub; the bootstrap fails closed when a
-  forbidden module resolves; the staged stub equals its source; the transport carries
-  arrays bit for bit.
+  nothing walking upwards, and — the child-interpreter route the coordinator found at
+  acceptance — spawns a plain child interpreter that fails to `import sim` and so cannot
+  derive the truth store's path from it; and — the negative control — calls tools, reads
+  the sensors and gets the right exceptions through the stub. The bootstrap refuses the
+  host interpreter of the editable install (its plain child resolves `sim`); the sandbox
+  environment is clean, carries numpy, scipy and pydantic, and is cached; `launch`
+  refuses a sandbox inside the repository, the run store or its parent; the staged stub
+  equals its source; the transport carries arrays bit for bit.

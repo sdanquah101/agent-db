@@ -147,17 +147,18 @@ def test_the_fitted_model_of_a_clean_run_sits_near_the_truth(clean_run):
 
 def test_open_registry_reads_the_cell_the_directive_and_the_budget(clean_run, tmp_path):
     run, scenario, root = clean_run
+    before = read_calls(run.paths.root)
     reg = open_registry(run.run_id, runs_root=root)  # the cell through the index
     assert reg.budget.simulator_evals == scenario.budget.simulator_evals
     assert reg.budget.assay_units == scenario.budget.assay_units
     assert reg._failures == {}
-    # the visible log continues the harness's records
-    before = read_calls(run.paths.root)
+    # the visible log continues the harness's records: the registry's opening, then the call
     reg.call("describe_model")
     after = read_calls(run.paths.root)
-    assert [r.name for r in after] == [*[r.name for r in before], "describe_model"]
-    assert after[-1].seq == len(before) and after[-1].t_utc is None
+    assert [r.name for r in after] == [*[r.name for r in before], "registry.open", "describe_model"]
+    assert after[-1].seq == len(before) + 1 and after[-1].t_utc is None
     assert read_calls(run.paths.truth)[-1].name == "describe_model"
+    assert read_calls(run.paths.truth)[-2].name == "registry.open"
     # the registry seed is a keyed child of the observation stream
     assert reg.seed == registry_seed(run.manifest.seeds["observation"])
     assert reg.seed != run.manifest.seeds["observation"]

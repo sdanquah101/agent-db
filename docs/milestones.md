@@ -1803,9 +1803,13 @@ nothing under `sim/`, `scenarios/`, `state/` or the frozen configs is touched.
   built as a socket server in the privileged process and a workflow subprocess in which
   `sim`, `scenarios`, `anchor`, `eval` and `state` do not resolve (`-I -S`, a staged stub
   as `tools`, a fail-closed bootstrap, an empty cwd). `tests/test_tool_sandbox.py` drives
-  every named route and a negative control. **With the coordinator**, to whom the lead
-  delegated the decision (2026-09-21, conditions (i)–(iii) recorded in the decisions
-  entry); the limit — an absolute path a workflow is *told* — is recorded.
+  every named route and a negative control. **Accepted by the coordinator** under the
+  lead's delegation (2026-09-21) with one required hardening, built: the child-interpreter
+  route (a plain child of the host interpreter ran `site` and the editable install's hook
+  resolved `sim`) is closed by a dedicated sandbox environment without the project
+  install, a child-interpreter check in the bootstrap, a sandbox-location refusal, and
+  the test that spawns the child; the limit — an absolute path a workflow is *told* — is
+  recorded.
 - **Part C, requested assays** (`tools/assays.py`, `configs/tools/assays.yaml`): eight
   assays priced and timed, served from the truth channels with the lab sensor's noise
   model, keyed by day, charged from `assay_units`.
@@ -1839,9 +1843,10 @@ nothing under `sim/`, `scenarios/`, `state/` or the frozen configs is touched.
   `pyproject.toml` (emcee, cma; the three new sub-packages).
 
 **Measured.** `ruff check .` and `ruff format --check .` clean; the four new test files:
-52 tests. Full default suite at `a15bfc7`: 444 passed, 2 skipped (the pre-existing
-Muscatine SCADA skips), 13 deselected (the g1 panel), 7 min 52 s. The g1 panel was not
-run: nothing under `sim/` or the frozen configs changed.
+55 tests. Full default suite at `a15bfc7`: 444 passed, 2 skipped (the pre-existing
+Muscatine SCADA skips), 13 deselected (the g1 panel), 7 min 52 s; the count at the
+hardening commit is in the PR body. The g1 panel was not run locally: nothing under
+`sim/` or the frozen configs changed (CI runs it because `configs/tools/` is new).
 
 **Not done / limits, stated plainly.** (1) The process boundary is proposed, built and
 tested, not ruled on; the container form is deferred to release. (2) The fitted model is
@@ -1856,10 +1861,10 @@ check is the digestate's implied strong-ion difference, not a full charge closur
 against effluent, because the feed's charge is declared only as strong cations minus
 anions.
 
-**Open** (`docs/tool_registry_design.md` §6): the process boundary, with the coordinator on
-the lead's delegation; and, for the lead through the coordinator, the fitted model's
-visible contract, the `(tool, probability)` reading of the Level-8 directive, and wall
-clock as time since opening.
+**Decided under delegation** (`docs/tool_registry_design.md` §6; the lead may overrule at
+the gate): the process boundary; the fitted model's visible contract; the `(tool,
+probability)` reading of the Level-8 directive; wall clock as time since opening, with the
+clock start written as the registry's first record (`registry.open`) to both logs.
 
 **The next session (P0, §6.5) starts on:** `workflows/p0_scripted/`, a workflow script
 run through `tools.sandbox.launch` against `tools.open_registry(run_id)`: QC → balance

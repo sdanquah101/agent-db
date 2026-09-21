@@ -317,6 +317,25 @@ class Registry:
                 ),
             )
         self.last: CallOutcome | None = None
+        # the clock start is a record (the coordinator's condition on wall clock as time
+        # since opening, 2026-09-21): the truth-side copy carries the timestamp the
+        # evaluator reconstructs the allowance from; the projection carries the fact that
+        # the registry opened and the budget it opened with, which the workflow can read
+        # from `remaining()` anyway
+        self._log(
+            "registry.open",
+            self.configs.registry.registry_version,
+            {
+                "simulator_evals": budget.simulator_evals,
+                "wall_clock_min": budget.wall_clock_min,
+                "assay_units": budget.assay_units,
+            },
+            self._opened,
+            "ok",
+            "clock start: the wall-clock allowance runs from this record",
+            0,
+        )
+        self._n_calls = 0
 
     # -- privileged side ---------------------------------------------------------
     def register_model(self, name: str, model: Model) -> None:

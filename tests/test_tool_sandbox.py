@@ -10,13 +10,19 @@ attempts every route the requirement names --
 * ``open("truth_store/...")`` and ``open("scenarios/...")``, the repository-relative
   spellings, and the run's own truth file by its relative path;
 * walking upwards from the working directory to find a ``truth_store`` or ``scenarios``;
+* **a plain child interpreter** (``subprocess.run([sys.executable, "-c", ...])``, no
+  flags, site processing on) attempting ``import sim`` and, through ``sim.__file__``, the
+  repository's ``truth_store/index.jsonl`` -- the coordinator's acceptance finding of
+  2026-09-21, closed by the dedicated sandbox environment;
 
 -- and reports each as failed. The **negative control** in the same process calls a tool
 through ``import tools``, reads the run's sensors through ``tools.run``, and gets a budget
 refusal as the right exception, so the test cannot pass by a sandbox that runs nothing.
 
 The stub is also checked to be a copy of the source (no drift), the bootstrap to refuse a
-process in which a forbidden module resolves (fail closed), and the transport to carry
+process in which a forbidden module resolves (fail closed) -- including the host
+interpreter of the editable install, whose plain child resolves ``sim`` -- the launcher to
+refuse a sandbox inside the repository or the run store, and the transport to carry
 arrays bit for bit.
 """
 
@@ -24,6 +30,8 @@ from __future__ import annotations
 
 import json
 import socket
+import subprocess
+import sys
 import textwrap
 from pathlib import Path
 
@@ -36,7 +44,7 @@ from sim.run.harness import generate_run
 from state.provenance import read_calls
 from tests.conftest import REPO_ROOT
 from tools import AnalyticModel, Budget, make_registry, open_registry
-from tools.sandbox import FORBIDDEN_MODULES, launch, site_directories, stage
+from tools.sandbox import FORBIDDEN_MODULES, SandboxError, launch, sandbox_interpreter, stage
 from tools.server import RegistryServer
 from tools.transport import decode_arrays, encode_arrays, read_message, write_message
 
@@ -101,6 +109,30 @@ WORKFLOW = textwrap.dedent(
     report["sys_path_has_repo"] = any(
         os.path.exists(os.path.join(p, "sim", "__init__.py")) for p in sys.path if p
     )
+
+    # the child-interpreter route: a plain interpreter, no flags, site processing on
+    import subprocess
+
+    probe = (
+        "import json, os\\n"
+        "out = {}\\n"
+        "try:\\n"
+        "    import sim\\n"
+        "    out['import'] = 'IMPORTED ' + sim.__file__\\n"
+        "    root = os.path.dirname(os.path.dirname(sim.__file__))\\n"
+        "    try:\\n"
+        "        open(os.path.join(root, 'truth_store', 'index.jsonl')).read(10)\\n"
+        "        out['index'] = 'OPENED'\\n"
+        "    except OSError as exc:\\n"
+        "        out['index'] = type(exc).__name__\\n"
+        "except ImportError as exc:\\n"
+        "    out['import'] = 'ImportError: ' + str(exc)[:40]\\n"
+        "    out['index'] = 'no root to derive'\\n"
+        "print(json.dumps(out))\\n"
+    )
+    child = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True)
+    report["child"] = json.loads(child.stdout) if child.returncode == 0 else {"error": child.stderr}
+    report["child_executable"] = sys.executable
 
     # the negative control: legitimate work through the registry
     import tools
@@ -183,6 +215,10 @@ def test_a_workflow_in_the_sandbox_cannot_reach_sim_scenarios_or_the_truth_store
     # ... nothing hidden is reachable by walking up from the working directory ...
     assert report["walk"] == []
     assert report["sys_path_has_repo"] is False
+    # ... a plain child interpreter fails the same way (the acceptance finding) ...
+    assert report["child"]["import"].startswith("ImportError"), report["child"]
+    assert report["child"]["index"] == "no root to derive"
+    assert report["child_executable"] == str(sandbox_interpreter())
 
     # ... and the negative control did legitimate work through the stub
     control = report["control"]
@@ -219,24 +255,61 @@ def test_a_workflow_in_the_sandbox_cannot_reach_sim_scenarios_or_the_truth_store
     assert result.n_requests == 10
 
 
-def test_the_bootstrap_refuses_to_run_when_a_forbidden_module_resolves(tmp_path, monkeypatch):
-    """Fail closed: a process in which ``sim`` resolves never runs the workflow."""
+def test_the_bootstrap_refuses_the_host_interpreter_whose_child_resolves_sim(tmp_path):
+    """Fail closed: the editable install's interpreter runs no workflow.
+
+    Its own process passes (``-I -S`` keeps the ``.pth`` hook dormant) but the plain child
+    it spawns does not -- the route the coordinator found -- so the bootstrap exits 3.
+    """
     registry = make_registry(budget=Budget(5, 60.0, 0), seed=1, models={"linear": linear_model()})
     script = tmp_path / "workflow.py"
     script.write_text("print('RAN')\n", encoding="utf-8")
     box = tmp_path / "box"
     box.mkdir()
-    # pretend the repository root is a package directory: the bootstrap must notice
-    import tools.sandbox as sandbox_module
-
-    monkeypatch.setattr(
-        sandbox_module, "site_directories", lambda: [*site_directories(), str(REPO_ROOT)]
-    )
-    result = launch(script, registry, sandbox=box, timeout_s=60.0)
+    result = launch(script, registry, sandbox=box, timeout_s=60.0, python=sys.executable)
     assert result.returncode == 3
-    assert "forbidden modules resolve" in result.stderr
+    assert "a plain child interpreter resolves" in result.stderr and "'sim'" in result.stderr
     assert "RAN" not in result.stdout
     assert result.n_requests == 0
+
+
+def test_the_sandbox_interpreter_is_clean_and_cached(tmp_path):
+    python = sandbox_interpreter()
+    assert python.is_file()
+    assert str(REPO_ROOT) not in str(python)
+    # a plain run of it, from the repository root as cwd, resolves nothing forbidden
+    probe = (
+        "import importlib.util, json; "
+        f"print(json.dumps([n for n in {list(FORBIDDEN_MODULES)!r} "
+        "if importlib.util.find_spec(n) is not None]))"
+    )
+    out = subprocess.run(
+        [str(python), "-c", probe], capture_output=True, text=True, check=True, cwd=str(tmp_path)
+    )
+    assert json.loads(out.stdout) == []
+    # and it carries what the stub needs
+    out = subprocess.run(
+        [str(python), "-c", "import numpy, scipy, pydantic; print('ok')"],
+        capture_output=True, text=True, check=True,
+    )  # fmt: skip
+    assert out.stdout.strip() == "ok"
+    assert sandbox_interpreter() == python  # cached, not rebuilt
+
+
+def test_launch_refuses_a_sandbox_inside_the_repository_or_the_run_store(clean_run, tmp_path):
+    run, _, root = clean_run
+    registry = make_registry(budget=Budget(5, 60.0, 0), seed=1, models={"linear": linear_model()})
+    script = tmp_path / "workflow.py"
+    script.write_text("print('RAN')\n", encoding="utf-8")
+    for box in (
+        REPO_ROOT / "runs" / "box",  # under the repository root
+        root / "box",  # under the run store
+        root.parent / "box",  # under the run store's parent, beside the truth store
+        run.paths.root / "box",  # inside the run itself
+    ):
+        with pytest.raises(SandboxError, match="lies under"):
+            launch(script, registry, sandbox=box, run_dir=run.paths.root, timeout_s=60.0)
+        assert not box.exists()
 
 
 def test_the_staged_stub_is_a_copy_of_the_source(tmp_path):

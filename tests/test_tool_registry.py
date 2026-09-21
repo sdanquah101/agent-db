@@ -112,8 +112,8 @@ def test_a_call_validates_returns_a_typed_output_with_units_and_is_logged(tmp_pa
     with pytest.raises(UnknownToolError):
         reg.call("no_such_tool")
     visible = read_calls(run_dir)
-    assert [r.outcome for r in visible] == ["ok", "error", "error", "error"]
-    assert all(r.name == "simulate" for r in visible)
+    assert [r.outcome for r in visible] == ["ok", "ok", "error", "error", "error"]
+    assert [r.name for r in visible] == ["registry.open", *["simulate"] * 4]
     assert reg.remaining().n_calls == 4
 
 
@@ -144,17 +144,20 @@ def test_the_registry_continues_the_sequence_the_harness_wrote(tmp_path):
     reg.call("describe_model", model="linear")
     reg.call("simulate", model="linear")
     records = read_calls(run_dir)
-    assert [r.seq for r in records] == [0, 1, 2, 3]
+    assert [r.seq for r in records] == [0, 1, 2, 3, 4]
     assert [r.name for r in records] == [
-        "sim.generate_influent", "sim.observe", "describe_model", "simulate"
+        "sim.generate_influent", "sim.observe", "registry.open", "describe_model", "simulate"
     ]  # fmt: skip
     for r in records:
         assert r.t_utc is None and r.runtime_s is None  # the projection (findings F1, F3)
         assert len(r.args_hash) == 16
     full = read_calls(truth_dir)
-    assert [r.name for r in full] == ["describe_model", "simulate"]
+    assert [r.name for r in full] == ["registry.open", "describe_model", "simulate"]
     for r in full:
         assert r.t_utc is not None and r.runtime_s is not None and r.runtime_s >= 0.0
+    # the clock start the evaluator reconstructs the wall-clock allowance from
+    assert full[0].detail.startswith("clock start") and full[0].runtime_s == 0.0
+    assert full[0].version == reg.configs.registry.registry_version
     # the raw lines of the projection carry no timestamp key at all
     for line in run_dir.joinpath("calls.jsonl").read_text().splitlines():
         assert "t_utc" not in json.loads(line)
@@ -292,7 +295,7 @@ def test_a_fractional_directive_fires_at_its_rate_from_a_keyed_stream(tmp_path):
     reg2, _, truth2 = registry(tmp_path / "again", failures=[("bayes_mcmc", 0.5)])
     for i in range(20):
         reg2.call("bayes_mcmc", **mcmc_args(seed=i, n_steps=10))
-    assert [r.outcome for r in read_calls(truth2)] == outcomes
+    assert [r.outcome for r in read_calls(truth2) if r.name == "bayes_mcmc"] == outcomes
 
 
 # ------------------------------------------------------------------ 5. determinism

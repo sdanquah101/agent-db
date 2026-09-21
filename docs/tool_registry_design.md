@@ -136,15 +136,21 @@ the registry.
   I/O schemas (`tools.schemas`, Pydantic + numpy, no `sim`), the frame encoder and the
   proxy `call`, `remaining`, `describe` and `run` (the run view served over the wire:
   `sensors()`, `feed_log()`, `feed_assays()`, `operator_notes()`, `manifest()`).
-- The **sandbox** launches the workflow with `python -I -S` (no site processing, so the
-  editable install's `.pth` finder never runs and the repository root is never added),
-  `sys.path` set to the stub directory plus the interpreter's standard library and the
-  site-packages directory (for numpy, scipy, pydantic — a directory on `sys.path` does not
-  process `.pth` files, so the editable install's hook is not triggered), cwd a scratch
-  directory that contains nothing, and an environment holding only the socket path. At
-  startup the bootstrap **fails closed**: it refuses to run the workflow if
-  `importlib.util.find_spec` resolves `sim`, `scenarios`, `anchor`, `eval`, `state` or the
-  repository's `tools` (a non-editable install into site-packages would).
+- The **sandbox** launches the workflow on a **dedicated interpreter environment**
+  (`tools.sandbox.sandbox_interpreter`): a virtual environment of the host interpreter
+  holding numpy, scipy and pydantic pinned to the host's versions and *not* the project
+  install, built once per host interpreter and package set and cached under
+  `AD_AGENTBENCH_SANDBOX_HOME` (default `~/.cache/ad-agentbench`), re-checked on every use
+  to resolve none of `sim`, `scenarios`, `anchor`, `eval`, `state`. The workflow runs on
+  it with `-I -S` (no site processing), `sys.path` set to the stub directory plus the
+  standard library and that environment's own package directory, cwd a scratch directory
+  that contains nothing, and an environment holding the socket path and little else. At
+  startup the bootstrap **fails closed twice**: in its own process, if
+  `importlib.util.find_spec` resolves a forbidden module or `tools` resolves to anything
+  but the stub; and in a **plain child interpreter** it spawns with the same environment
+  and no flags, if a forbidden module resolves there. The launcher also refuses a sandbox
+  directory under the repository root, the run store or the run store's parent, because
+  the stub and socket paths are in the workflow's environment.
 - The **test** launches a workflow-side script that attempts `import sim`,
   `open("truth_store/…")`, `open("scenarios/…")` and the repository-relative equivalents,
   and asserts each fails; a **negative control** in the same process calls a tool and
@@ -162,12 +168,22 @@ the registry.
   the sandbox).
 - *Two copies of the schemas*: the stub's copy is made from `tools/schemas` at launch, so
   it cannot drift, and a test asserts the staged package equals the source.
-- *What it does not buy.* A process boundary stops imports and reads; it does not stop a
-  workflow from reading the run's own `runs/<id>/` (which it may) or from measuring wall
-  clock. A container boundary would also stop filesystem reads outside the sandbox; the
-  sandbox here relies on there being nothing to find (the truth store is a sibling tree
-  the workflow is never told the path of, and the cwd is empty), which is the same
-  argument the layout ruling of 2026-09-04 made.
+- *What it does not buy, and the route it had to close.* A process boundary stops
+  imports and relative reads; it does not stop a workflow that is *told* an absolute path
+  from opening it, nor stop it measuring wall clock. **The child-interpreter route** (the
+  coordinator's acceptance finding, 2026-09-21, reproduced): as first built, the sandbox
+  ran on the host interpreter, so a plain child the workflow spawned
+  (`subprocess.run([sys.executable, "-c", ...])`, no `-I -S`) ran `site`, the editable
+  install's `.pth` hook installed its finder, and the child resolved `sim` at the
+  repository root and derived `<root>/truth_store/index.jsonl` from `sim.__file__` — a
+  path *discovered*, not told. Closed by the dedicated environment above (no hook exists
+  to run in any child), the child-interpreter check in the bootstrap, and the
+  sandbox-location refusal; `tests/test_tool_sandbox.py` spawns that child from the
+  workflow and shows both the import and the derived read failing, and shows the host
+  interpreter refused at startup. A container boundary would also stop filesystem reads
+  outside the sandbox; the sandbox otherwise relies on there being nothing to find (the
+  truth store is a sibling tree the workflow is never told the path of, and the cwd is
+  empty), which is the same argument the layout ruling of 2026-09-04 made.
 
 **Alternatives considered.**
 
@@ -182,9 +198,9 @@ the registry.
 - *In-process registry with the workflow importing `tools` directly.* Cheapest; gives the
   workflow `sim` by transitive import. Rejected: it is exactly what the requirement forbids.
 
-**Question for the coordinator (on the lead's delegation).** Does the socket-and-sandbox
-design above meet conditions (i)–(iii)? The container boundary is proposed for release, not
-now; that is a deviation only if the coordinator reads (i) as requiring it.
+**Decided by the coordinator on the lead's delegation (2026-09-21, ~02:05 UTC): ACCEPTED**,
+with the child-interpreter hardening above as a required condition, now built. The
+container boundary stays a release-time proposal.
 
 ## 5. Layout
 
@@ -204,15 +220,18 @@ tools/
 configs/tools/      one YAML per tool; assays.yaml; model.yaml; budget.yaml
 ```
 
-## 6. Open points for the lead
+## 6. Decided under delegation (the coordinator, 2026-09-21; the lead may overrule at the gate)
 
-1. Part B (§4): socket-and-sandbox now, container at release? (With the coordinator, on
-   the lead's delegation; the lead is not to be interrupted for it.)
-2. The fitted model's *behaviour* differs on a Level-6 row (it must); its interface does
-   not. Confirm that exposing the same parameter list and output list on every run, with
-   extension parameters fixed and not calibratable, is the intended visible contract.
-3. `WorkflowFaults.tool_failure` carries `(tool, probability)`; the launch note said
-   `(tool, onset)`. Built as the fault plan says: a per-call Bernoulli with the row's
-   probability from a keyed stream (S8-01 is 1.0, so every call fails).
-4. Wall-clock is enforced as time **since the registry was opened** for the run (agent
-   thinking time included, which is what §6.7 C measures), not as summed tool runtime.
+1. Part B (§4): the socket server and the sandboxed subprocess — **accepted**, with the
+   child-interpreter hardening required and built; a container at release.
+2. The fitted model's visible contract — **accepted**: the same parameter list and output
+   list on every run, extension parameters fixed and not calibratable. It is what §6.7 A
+   implies (structural rows are never scored on parameter recovery) and it stops the
+   interface leaking the rung. Recorded in the benchmark card §4.1.
+3. `WorkflowFaults.tool_failure` as `(tool, probability)` — **accepted**; the launch note's
+   `(tool, onset)` was wrong, the frozen fault plan is right. A per-call Bernoulli from a
+   keyed stream (S8-01 is 1.0, so every call fails).
+4. Wall clock as time **since the registry was opened** — **accepted**, with the
+   requirement that the clock start is written to the truth-side log: the registry's
+   first record, `registry.open`, carries the budget as its arguments and the opening
+   timestamp in the truth-side copy, so the evaluator can reconstruct the allowance.

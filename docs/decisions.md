@@ -4778,10 +4778,59 @@ the run store's path never enters its environment). A container at release (§7'
 image) is the stronger boundary and is proposed on top, not instead.
 
 **Alternatives.** A `sys.meta_path` blocker in the workflow process (removable by the code
-it guards — the runtime form of the checker whose limit is recorded); a virtual
-environment per run (the same guarantee as `-S` with a manual path, more setup); a
-container now (stronger; a runtime the benchmark does not yet ship); an in-process
-registry (gives the workflow `sim` by transitive import — the thing forbidden).
+it guards — the runtime form of the checker whose limit is recorded); a container now
+(stronger; a runtime the benchmark does not yet ship); an in-process registry (gives the
+workflow `sim` by transitive import — the thing forbidden). A virtual environment per run
+was first rejected as "the same guarantee as `-S` with a manual path, more setup"; the
+acceptance finding below shows it is not the same guarantee, and it is now the mechanism.
+
+## 2026-09-21 — Part B ACCEPTED by the coordinator under the lead's delegation, with one required hardening: the child-interpreter route
+
+**Finding** (the coordinator, ~02:05 UTC, reproduced at `c962708` and by this session). A
+workflow run through `tools.sandbox.launch` did `subprocess.run([sys.executable, "-c",
+probe])` with no `-I -S`. The child inherited the sandbox's environment but was a normal
+interpreter: `site` ran, the editable install's `__editable__.ad_agentbench-0.1.0.pth` in
+the host's package directory installed its finder, and the child resolved `sim` at
+`/home/user/agent-db/sim/__init__.py`, from which `sim.__file__` gives the repository root
+and `<root>/truth_store/index.jsonl` — present in any production run. CI installs with
+`pip install -e ".[dev]"`, so the hook is everywhere the tests run. The design's recorded
+limit ("an absolute path the workflow is told") did not cover it: the path was
+*discovered*. Conditions (ii) and (iii) held; condition (i) held for the workflow process
+and not for a process it spawns.
+
+**Decision (built as required).** (1) The sandbox runs on a **dedicated interpreter
+environment** — the coordinator's option (a): a virtual environment of the host
+interpreter holding numpy, scipy and pydantic pinned to the host's versions and nothing
+else (not the project, not emcee or cma), built once per host interpreter and package set
+with the host's pip into the venv's site-packages, cached under
+`AD_AGENTBENCH_SANDBOX_HOME` (default `~/.cache/ad-agentbench`), and re-checked on every
+use to resolve none of `sim`, `scenarios`, `anchor`, `eval`, `state`
+(`tools.sandbox.sandbox_interpreter`; `launch(python=...)` defaults to it). Neither the
+sandbox process nor any child of it has a hook to run, in CI as well. (2) The bootstrap's
+fail-closed check also spawns a **plain child** with the sandbox's environment and no
+flags and refuses to run the workflow if a forbidden module resolves there; the host
+interpreter of the editable install trips it (tested: exit 3, "a plain child interpreter
+resolves ['sim']"). (3) `launch` **refuses a sandbox directory** under the repository
+root, the run store or the run store's parent (tested on all four placements). (4) The
+sandbox test's workflow spawns a plain child that attempts `import sim` and the truth-index
+read through `sim.__file__`; both fail, the negative control is unchanged, and the child
+is shown to be the sandbox environment's interpreter. Recorded in
+`docs/tool_registry_design.md` §4 and the benchmark card §4.1.
+
+**Also decided under the delegation, as recorded interpretations the lead may overrule at
+the gate.** (2) The fitted model's visible contract — the same parameter and output list
+on every run, extension parameters not calibratable — accepted: it is what §6.7 A implies
+and it stops the interface leaking the rung; recorded in the card. (3) `(tool,
+probability)` per `WorkflowFaults` — accepted; the launch note was wrong. (4) Wall clock as
+time since the registry was opened — accepted, with the requirement that the clock start
+is written to the truth-side log: the registry's first record is `registry.open` (the
+budget as arguments, the opening timestamp in the truth-side copy, runtime 0, detail
+"clock start"), so the evaluator can reconstruct the allowance; the visible projection
+carries the same record without the timestamp.
+
+**Cost.** One venv per environment (~8 s from a warm pip cache, longer cold; it needs
+network or a populated cache the first time), ~1 GB of disk for scipy and numpy, and two
+extra interpreter starts per launch (the site query and the child probe).
 
 ## 2026-09-21 — Libraries of the registry: emcee and cma in, SALib out (own Morris and Sobol)
 

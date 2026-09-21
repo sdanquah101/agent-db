@@ -160,14 +160,23 @@ Three consequences follow, and each is enforced by a test rather than by the lis
   view only, in a process or container where those paths are absent. That is a design
   requirement for the tool-registry and workflow-harness components (rule 2), recorded as a
   deferred requirement for the lead's launch of those components; G1 cannot enforce it.
-- **The tool registry's process boundary (milestone 4, 2026-09-21; proposed, the decision
-  delegated by the lead to the coordinator).** The registry (`tools.Registry`: `sim`, the budgets, both call logs, the assay
-  channel into the truth store) lives in a privileged process and is served on a
-  Unix-domain socket; a workflow runs in a subprocess started with `python -I -S`, a path
-  of the standard library, a staged copy of the client stub as `tools`, and the
-  interpreter's package directories, an empty working directory and an environment
-  holding the socket path, and a bootstrap that refuses to run it if `sim`, `scenarios`,
-  `anchor`, `eval` or `state` resolves. `tests/test_tool_sandbox.py` launches a workflow
+- **The tool registry's process boundary (milestone 4, 2026-09-21; accepted by the
+  coordinator under the lead's delegation, with one required hardening, built).** The
+  registry (`tools.Registry`: `sim`, the budgets, both call logs, the assay channel into
+  the truth store) lives in a privileged process and is served on a Unix-domain socket; a
+  workflow runs in a subprocess on a **dedicated interpreter environment** — a virtual
+  environment holding numpy, scipy and pydantic and not the project install, built once
+  and cached — started with `python -I -S`, a path of the standard library, a staged copy
+  of the client stub as `tools`, and that environment's package directory, an empty
+  working directory and an environment holding the socket path, and a bootstrap that
+  refuses to run it if `sim`, `scenarios`, `anchor`, `eval` or `state` resolves in its own
+  process **or in a plain child interpreter it spawns**. The launcher refuses a sandbox
+  directory under the repository, the run store or the run store's parent. **The
+  child-interpreter route, found at acceptance and closed:** on the host interpreter a
+  plain child the workflow spawned ran `site`, the editable install's hook resolved `sim`,
+  and `sim.__file__` gave the repository root and its `truth_store/` — a path discovered,
+  not told; the sandbox test now spawns that child and shows both the import and the
+  derived read failing. `tests/test_tool_sandbox.py` launches a workflow
   that attempts every named route (`import sim` and its siblings by three spellings,
   `open("truth_store/…")`, `open("scenarios/…")`, the repository-relative forms, the run's
   own truth file, walking upwards from the cwd) and asserts each fails, with a negative
@@ -179,10 +188,14 @@ Three consequences follow, and each is enforced by a test rather than by the lis
   from opening it; the layout ruling of 2026-09-04 covers that (the truth store is a
   sibling the workflow is never told the path of), and a container at release is the
   stronger boundary, proposed on top.
-- **What a workflow learns from the registry, and what it does not.** The fitted model
-  `adm1_fitted` exposes the same twenty multiplier parameters, the same outputs and the
-  same units on every run; the extensions it carries (the plant's, less what a Level-6
-  row removes) are applied silently on the privileged side. The visible call log records
+- **What a workflow learns from the registry, and what it does not** (the fitted model's
+  visible contract, decided by the coordinator under the lead's delegation, 2026-09-21).
+  The fitted model `adm1_fitted` exposes the same twenty multiplier parameters, the same
+  outputs and the same units on every run; extension parameters are not calibratable; the
+  extensions it carries (the plant's, less what a Level-6 row removes) are applied
+  silently on the privileged side, and what differs on a structural row is what the model
+  predicts — the diagnostic task; structural rows are never scored on parameter recovery
+  (§6.7 A). The visible call log records
   an injected Level-8 failure as `ok` — the truth-side log says `injected_failure` — so a
   workflow cannot read the row off its own log. Requested assays (`request_assay`, priced
   in `configs/tools/assays.yaml`) are drawn from the truth channels with the lab sensor's
