@@ -39,7 +39,7 @@ correct_conclusion:
   abstain_on: []
   revise_influent_mapping: true
 budget:
-  simulator_evals: 6000
+  simulator_evals: 600   # the lead's budget ruling of 2026-09-21 on the P0 pilot: allowance x 60 / 12 s per evaluation (was 6000)
   wall_clock_min: 120
   assay_units: 4
 seed: 1031

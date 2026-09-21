@@ -227,7 +227,7 @@ likely to be lost from an online probe during overload and three times during fo
 gaps coincide with exactly the transients that identify the process, and naive
 interpolation across a gap destroys information rather than merely losing precision.
 
-### 4.2 The P0 baseline (milestone 5, 2026-09-21; rules APPROVED by the lead, budgets pending the pilot)
+### 4.2 The P0 baseline (milestone 5, 2026-09-21; rules and budgets APPROVED by the lead on the pilot)
 
 P0 (`workflows/p0_scripted/pipeline.py`, `configs/workflows/p0.yaml`, `docs/p0_design.md`)
 is the scripted baseline of §6.5, the strongest fair one rule 5 asks for: what a competent
@@ -245,7 +245,21 @@ least squares then differential evolution → MCMC on the approved subset → re
 structure by feed batch, load, temperature and time → the declared assay spend at the day
 of the largest residual → validation on the frozen last quarter of the record → an
 ordered attribution rule (sensor → influent → state → parameter → structural → none) that
-is a pure function of the collected evidence. Its outputs are the shared task state
+is a pure function of the collected evidence, at the thresholds the lead approved with the
+2026-09-21 amendments on the pilot (decisions log: the QC-missingness path dropped from
+the state rule, a charge inconsistency counted only with pH as the single offending
+channel, three inadmissible COD windows for the influent rule, a 30-day tolerance for a
+common change point). **The budgets of §7** were re-declared on the same pilot:
+`simulator_evals` = allowance × 60 / 12 s per evaluation (450 / 600 / 750 for the 90 /
+120 / 150-minute cells; Plant A scenarios 225 / 300 / 375), the wall-clock allowances and
+assay units unchanged; and P0's declared plan is the one that allowance holds with MCMC
+in it (Morris 4, Sobol 8, one LSQ start, DE 2, MCMC 8 × 10, ≈ 330 evaluations). A
+recorded benchmark property, not tuned away: after a 2–4-parameter fit every channel keeps
+a 5–19σ residual against the declared instrument noise even on Level-0 cells (χ²/n of
+10–100), because the fitted model on the visible feed log differs from the truth even
+when the structure matches; a `none` verdict where P0 cannot resolve a fault is the
+honest baseline of rule 5. The ten pilot cells are development cells; the held-out
+variants of §7 are the evaluation set. Its outputs are the shared task state
 (`state/task_state.py`: data quality per sensor, the classification with its evidence and
 confidence, the screening trail, the residual summaries, every tool call named as the
 call log names it, tool failures, the budget left, the validation, the abstentions, the

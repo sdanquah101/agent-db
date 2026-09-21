@@ -77,6 +77,18 @@ three tiers and nowhere but Plant A (`sim/run/matrix.py`, and the decisions entr
   to be false about. Both carry the Appendix-B gas-meter fault (decisions log,
   2026-09-03).
 
+## The budgets (the lead's ruling of 2026-09-21 on the P0 pilot)
+
+Every `budget` block declares the same envelope for every workflow on that scenario (§7).
+`simulator_evals` was 4,000 / 6,000 / 8,000 by level until the P0 pilot measured a
+200-day evaluation of the fitted model at 11.8 s (a 365-day Plant A one at ~24 s) and
+showed the wall-clock allowance binding at 4–7 % of those counts; the lead re-declared it
+as allowance × 60 / 12 s per evaluation, rounded down to 50: **450 / 600 / 750** for the
+90 / 120 / 150-minute scenarios of Plants B and C and **225 / 300 / 375** for the Plant A
+scenarios. Wall-clock allowances and assay units are unchanged. The block is per scenario,
+so a Plant B row generated on Plant A at Tier A carries the B/C count (recorded limit).
+Appendix B of the proposal still shows the original 4,000.
+
 ## Known gaps, recorded rather than worked around
 
 * **`S6-01b` is filed as `S6-04`, and the lead has confirmed it** (2026-09-09). The frozen

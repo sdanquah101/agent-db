@@ -1,16 +1,17 @@
 # P0 — the scripted pipeline (milestone 5, proposal §6.5)
 
-Status: **APPROVED by the lead, 2026-09-21, via the coordinator** ("Approve" on the design
-as proposed at `5099c18`: the declared instrument noise as the weights, the rules and
-thresholds of §3 and `configs/workflows/p0.yaml`, the plan and fallback ladder of §4, and
-the two registry additions). The values are frozen from that commit; any later change to
-a threshold is a decisions entry with the lead's approval. The one value changed between
-the proposal and the sign-off is `plan.eval_seconds_assumed` (4 → 12 s, from the
-measurement in §2, `1496cf4`, its own decisions entry). **Point 4, the budgets (§6), is
-not yet ruled**: the lead rules once the pilot table is in. CLAUDE.md rule 5 makes P0 the
-baseline of the whole benchmark, so the lead decides its rules; every threshold, size and
-seed is a key of `configs/workflows/p0.yaml`, named here in `code`, and the pipeline reads
-that file and nothing else for its settings, so a ruling changes a value, never the code.
+Status: **APPROVED by the lead, 2026-09-21, via the coordinator**, as proposed at `5099c18`
+(the declared instrument noise as the weights, the rules and thresholds of §3, the plan
+and fallback ladder of §4, the two registry additions), **with the 2026-09-21 amendments
+of the lead's rulings A and B on the pilot** (decisions log): the plan sizes of §4 (Morris
+4, Sobol 8, one LSQ start, DE 2, MCMC 8 × 10), `balance_windows_min` 3,
+`step_day_tolerance_d` 30, the QC-missingness path dropped from R5 and R1c folded into
+R1b; and the budgets of every scenario re-declared as allowance × 60 / 12 s (450 / 600 /
+750; Plant A 225 / 300 / 375). The values are frozen; any later change to a threshold is
+a decisions entry with the lead's approval. CLAUDE.md rule 5 makes P0 the baseline of the
+whole benchmark, so the lead decides its rules; every threshold, size and seed is a key of
+`configs/workflows/p0.yaml`, named here in `code`, and the pipeline reads that file and
+nothing else for its settings, so a ruling changes a value, never the code.
 
 ## 1. What P0 is
 
@@ -99,12 +100,14 @@ absolute value.
 
 ### 3.2 Screening (`screening.*`)
 
-Morris on all parameters of the model's interface, `gsa.morris_trajectories` (8),
+Morris on all parameters of the model's interface, `gsa.morris_trajectories` (4; ruling A,
+was 8),
 outputs = the mean over the calibration window of every calibrated channel, seed
 `seeds.morris`. A parameter is kept if its μ* normalised by the largest μ* of that output
 exceeds `screening.morris_min_relative` (0.10) on any output; the kept set is capped at
 `screening.morris_keep` (4) by the maximum normalised μ*. Sobol on the kept set with
-`gsa.sobol_samples` (32; a power of two), second order on, seed `seeds.sobol`: a
+`gsa.sobol_samples` (8; ruling A, was 32; a power of two), second order on, seed
+`seeds.sobol`: a
 parameter stays if its total-order index exceeds `screening.sobol_min_total` (0.05) on any
 output; at least `screening.min_subset` (2) stay, by descending ST. The second-order table
 is reported as interaction evidence and does not change the subset.
@@ -125,9 +128,9 @@ closed profile interval replaces the Fisher one.
 
 ### 3.4 The fit (`fit.*`) and the second pass
 
-`fit_lsq` from the defaults with `fit.lsq_starts` (3) starts and
+`fit_lsq` from the defaults with `fit.lsq_starts` (1; ruling A, was 3) starts and
 `fit.lsq_max_nfev_per_start` (40), seed `seeds.lsq`; then `fit_de` with `fit.de_popsize`
-(4) and `fit.de_generations` (8), seed `seeds.de`. The optimum is the lower χ². One
+(4) and `fit.de_generations` (2; ruling A, was 8), seed `seeds.de`. The optimum is the lower χ². One
 `simulate` at the optimum gives the point prediction over the whole record.
 
 **Second pass.** If the sensor rule (§3.7, R1b) fires on the post-fit residuals, the
@@ -139,7 +142,7 @@ parameters are provisional.
 ### 3.5 Uncertainty and the Level-8 fallback (`mcmc.*`)
 
 `bayes_mcmc` on the approved subset, Gaussian likelihood, `mcmc.walkers` (8, or 2k if
-larger) walkers and `mcmc.steps` (30) steps, seed `seeds.mcmc`, from the optimum. If
+larger) walkers and `mcmc.steps` (10; ruling A, was 30) steps, seed `seeds.mcmc`, from the optimum. If
 `converged` is true the reported intervals are the posterior 5–95 % quantiles. If it is
 false — a genuine non-convergence or the Level-8 injected failure, which P0 cannot and
 must not tell apart — **the posterior is not reported**: the event is recorded under
@@ -172,21 +175,25 @@ tested on constructed evidence. In order:
   means before and after the best split differ by more than `attribution.sensor_step_z`
   (3.0) standard errors), while every other calibrated channel is within
   `attribution.clean_bias_z` (1.5) and not serially structured, and the COD balance is
-  admissible. (c) `charge_consistent` is false and the pH residual is serially structured.
-  For `gas_flow` the scale factor is estimated as the median of observed / predicted after
+  admissible; a charge inconsistency (`charge_consistent` false) is recorded as further
+  evidence when that single offender is pH — never on its own (ruling B(b): as a rule of
+  its own it fired on the plants' background on 8 of 10 pilot cells). For `gas_flow` the
+  scale factor is estimated as the median of observed / predicted after
   the step (`estimate_scale_factor`). The second pass of §3.4 follows R1b.
 - **R2 influent.** The COD closure is inadmissible in at least
-  `attribution.balance_windows_min` (2) windows, or the primary channel's residual is
+  `attribution.balance_windows_min` (3; ruling B(c), was 2) windows, or the primary channel's residual is
   explained most by a feed covariate (the dominant feed of the day, or a feed's mass
   fraction) with η² of at least `attribution.feed_eta2_min` (0.15). The action is
   `revise_influent_mapping`; kinetics are not moved.
 - **R5 state.** The primary residual is biased beyond `attribution.state_bias_z` (3.0)
   in the first `attribution.transient_d` (30 d) of the record and within `clean_bias_z`
-  after it, or informative missingness was found (§3.1). Parameters are reported
-  unchanged.
+  after it. Parameters are reported unchanged. (The QC informative-missingness finding of
+  §3.1 abstains on `missing_transient` but no longer fires this rule: ruling B(a), after it
+  fired on 9 of 10 pilot cells on the observation model's own conditional missingness.)
 - **R4 parameter.** A common change point: at least `attribution.parameter_channels_min`
   (2) calibrated channels show a step beyond `attribution.parameter_step_z` (3.0) whose
-  split days lie within `attribution.step_day_tolerance_d` (20 d) of each other, the COD
+  split days lie within `attribution.step_day_tolerance_d` (30 d; ruling B(d), was 20) of
+  each other, the COD
   balance is admissible and no feed covariate explains the primary residual. The bounded
   update of the approved subset is offered (`kinetic_update`).
 - **R3 structural.** No common change point, and at least
@@ -283,7 +290,9 @@ completion, the final label) from its privileged side, and one row per cell to
    generations and no MCMC inside 90 minutes. The pilot's answer (`docs/milestones.md`, milestone 5): ten cells
    completed inside their allowances using 4–7 % of the declared evaluations and never
    reaching MCMC; proposed `simulator_evals` 450 / 600 / 750 for the 90 / 120 / 150-minute
-   cells, and four threshold rulings on the paths that read the background.
+   cells, and four threshold rulings on the paths that read the background — **ruled**
+   2026-09-21 (rulings A and B above): the budgets re-declared, the plan shrunk to what
+   reaches MCMC, the two paths silenced, the two tolerances widened.
 
 ## 7. Recorded limits
 

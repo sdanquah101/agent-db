@@ -45,7 +45,9 @@ def test_example_scenario_loads_with_every_field_from_appendix_b():
     assert conclusion.kinetic_update_allowed is False
     assert conclusion.abstain_on == ()
 
-    assert scenario.budget == Budget(simulator_evals=4000, wall_clock_min=90, assay_units=2)
+    # 450, not Appendix B's 4000: the lead's budget ruling of 2026-09-21 on the P0 pilot
+    # re-declared simulator_evals as allowance x 60 / 12 s per evaluation (decisions log)
+    assert scenario.budget == Budget(simulator_evals=450, wall_clock_min=90, assay_units=2)
     # Appendix B carries no `seed`, and this test asserted its absence until the run harness
     # landed (2026-09-03). It is there now, because CLAUDE.md rule 4 forbids an implicit seed
     # and `sim.run.matrix` refuses a scenario without one: every library scenario carries a

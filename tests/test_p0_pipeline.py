@@ -362,12 +362,20 @@ def test_clean_evidence_is_none_and_every_rule_fires_on_its_own_evidence():
     two = dict(off, pH=_residual(bias_z=4.0))
     assert _classify(two)["classification"]["label"] != "sensor"
 
-    # R1c: the charge balance disagrees with a structured pH
+    # a charge inconsistency alone is not sensor evidence (the lead's ruling B(b),
+    # 2026-09-21: it fired on the plants' background on 8 of 10 pilot cells) ...
     v = _classify(
         dict(clean, pH=_residual(serially_structured=True)),
         balance={**CLEAN_BALANCE, "charge_consistent": False, "charge_drift": 0.4},
     )
+    assert v["classification"]["label"] == "none"
+    # ... it counts only when the pH residual is the single offender, as extra evidence
+    v = _classify(
+        dict(clean, pH=_residual(bias_z=5.0)),
+        balance={**CLEAN_BALANCE, "charge_consistent": False, "charge_drift": 0.4},
+    )
     assert v["classification"]["label"] == "sensor" and v["classification"]["flag_sensor"] == "ph"
+    assert sum(1 for e in v["evidence"] if e["rule"] == "R1b") == 2
 
     # R2: the COD balance does not close, or the feed batch explains the residual
     v = _classify(clean, balance={**CLEAN_BALANCE, "admissible": False, "n_cod_inadmissible": 3})
@@ -383,8 +391,11 @@ def test_clean_evidence_is_none_and_every_rule_fires_on_its_own_evidence():
     early = dict(clean, q_gas_stp_dry=_residual(early_bias_z=5.0, late_bias_z=0.5))
     v = _classify(early)
     assert (v["classification"]["label"], v["classification"]["rule"]) == ("state", "R5")
-    # ... and informative missingness found by QC
-    assert _classify(clean, abstentions=["missing_transient"])["classification"]["label"] == "state"
+    # ... but QC's informative missingness alone no longer does (the lead's ruling B(a),
+    # 2026-09-21: it fired on 9 of 10 pilot cells on the plants' conditional missingness);
+    # the abstention it carries is kept
+    v = _classify(clean, abstentions=["missing_transient"])
+    assert v["classification"]["label"] == "none" and "missing_transient" in v["abstentions"]
 
     # R4: a common change point in two channels
     shift = dict(

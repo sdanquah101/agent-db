@@ -6,10 +6,11 @@
 # `sensor_noise` (design §1.1). Schema: tools/workflow_config.py::P0Config.
 #
 # STATUS: APPROVED by the lead 2026-09-21 via the coordinator, as proposed at 5099c18
-# (rule 5); values frozen from that commit -- any later change to a threshold is a
-# decisions entry with the lead's approval. The one value changed since the proposal is
-# plan.eval_seconds_assumed (4 -> 12 s, measured; 1496cf4, its own decisions entry). The
-# budgets per (scenario, tier) are the lead's separate ruling after the pilot. Every value
+# (rule 5), WITH THE 2026-09-21 AMENDMENTS of the lead's rulings A and B on the pilot
+# (decisions log): the plan sizes (Morris 4, Sobol 8, one LSQ start, DE 2, MCMC 8 x 10),
+# balance_windows_min 3, step_day_tolerance_d 30, the QC-missingness path of R5 dropped
+# and R1c folded into R1b (both in the pipeline). Values frozen from that commit -- any
+# later change to a threshold is a decisions entry with the lead's approval. Every value
 # is DESIGN unless marked otherwise.
 version: 1
 workflow: p0
@@ -59,9 +60,10 @@ mass_balance:
   window_d: 30.0              # DESIGN  d; consecutive closure windows over the record
 
 gsa:
-  morris_trajectories: 8      # DESIGN  r; cost r (k + 1) = 168 evaluations at k = 20
-  sobol_samples: 32           # DESIGN  N, a power of two; cost N (2 k_s + 2) with second
-                              # order = 320 evaluations at k_s = 4
+  morris_trajectories: 4      # DESIGN  r; cost r (k + 1) = 84 evaluations at k = 20 (the
+                              # lead's ruling A, 2026-09-21: was 8)
+  sobol_samples: 8            # DESIGN  N, a power of two; cost N (2 k_s + 2) with second
+                              # order = 80 evaluations at k_s = 4 (ruling A: was 32)
   summary: mean               # DESIGN  the scalar of each output the indices are on
 
 screening:
@@ -77,15 +79,15 @@ identifiability:
   profile_starts: 1           # DESIGN
 
 fit:
-  lsq_starts: 3               # DESIGN  multistarts (Latin hypercube + the defaults)
+  lsq_starts: 1               # DESIGN  multistarts, the defaults only (ruling A: was 3)
   lsq_max_nfev_per_start: 40  # DESIGN
   de_popsize: 4               # DESIGN  per parameter (scipy's convention)
-  de_generations: 8           # DESIGN
+  de_generations: 2           # DESIGN  (ruling A: was 8)
   second_pass: true           # DESIGN  refit without a channel the sensor rule flagged
 
 mcmc:
   walkers: 8                  # DESIGN  even, at least 2 k (the tool raises it if not)
-  steps: 30                   # DESIGN
+  steps: 10                   # DESIGN  (ruling A: was 30; 8 x 11 = 88 evaluations)
   likelihood: gaussian        # DESIGN
 
 uncertainty:
@@ -105,14 +107,15 @@ attribution:
   sensor_bias_z: 3.0          # DESIGN  R1b: |mean residual| / se
   sensor_step_z: 3.0          # DESIGN  R1b: before/after split difference in se units
   clean_bias_z: 1.5           # DESIGN  what "the other channels are fine" means
-  balance_windows_min: 2      # DESIGN  R2: inadmissible COD windows
+  balance_windows_min: 3      # DESIGN  R2: inadmissible COD windows (ruling B(c): was 2)
   feed_eta2_min: 0.15         # DESIGN  R2: eta^2 of the feed-batch covariate
   structural_channels_min: 2  # DESIGN  R3: channels still structured after the fit
   structural_rmse_z_min: 2.0  # DESIGN  R3: RMS standardised residual a channel needs to
                               # count as "still structured" (well above declared noise)
   parameter_step_z: 3.0       # DESIGN  R4: a change point's before/after difference, se units
   parameter_channels_min: 2   # DESIGN  R4: channels sharing the change point
-  step_day_tolerance_d: 20.0  # DESIGN  R4: how close two change points must be, d
+  step_day_tolerance_d: 30.0  # DESIGN  R4: how close two change points must be, d
+                              # (ruling B(d): was 20)
   transient_d: 30.0           # DESIGN  R5: the initial window, d
   state_bias_z: 3.0           # DESIGN  R5: bias in the initial window
   confidence:

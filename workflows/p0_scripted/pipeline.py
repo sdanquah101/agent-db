@@ -523,7 +523,7 @@ class Pipeline:
         if out.charge_consistent is False:
             self.evidence.append(
                 _ev(
-                    "R1c",
+                    "balance",
                     self.lab["sensor"],
                     "the implied strong-ion difference drifts across windows",
                     {"charge_drift": _f(out.charge_drift)},
@@ -1635,19 +1635,21 @@ def classify(
                     [],
                 )
             )
+    # the lead's ruling B(b) of 2026-09-21: a charge inconsistency is sensor evidence only
+    # when the pH residual is the single offending channel (it was R1c on its own, and it
+    # fired on the plants' background on 8 of 10 pilot cells)
     ph_channel = channel_of.get("ph")
     if (
         balance.get("charge_consistent") is False
         and ph_channel is not None
-        and residuals.get(ph_channel, {}).get("serially_structured")
-        and "ph" not in flagged
+        and offender == ph_channel
+        and "ph" in flagged
     ):
-        flagged.append("ph")
         evidence.append(
             _ev(
-                "R1c",
+                "R1b",
                 lab["sensor"],
-                "the charge balance disagrees with the reported pH",
+                "the charge balance also disagrees with the reported pH",
                 {"charge_drift": balance.get("charge_drift")},
                 [],
             )
@@ -1677,7 +1679,10 @@ def classify(
                 )
             )
 
-    # R5: the initial transient only, or informative missingness
+    # R5: the initial transient only. The QC informative-missingness path was dropped by
+    # the lead's ruling B(a) of 2026-09-21 (it fired on 9 of 10 pilot cells: the
+    # observation model's conditional missingness is the plant's, not a fault); the QC
+    # finding is still recorded and still abstains on `missing_transient`.
     early = primary_res.get("early_bias_z")
     late = primary_res.get("late_bias_z")
     transient_only = (
@@ -1686,7 +1691,7 @@ def classify(
         and abs(early) >= float(attr["state_bias_z"])
         and abs(late) <= float(attr["clean_bias_z"])
     )
-    if transient_only or "missing_transient" in abstentions:
+    if transient_only:
         fired.append(("R5", lab["initial_state"]))
         if transient_only:
             evidence.append(

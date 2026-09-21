@@ -61,7 +61,7 @@ correct_conclusion:
   abstain_on: [acetate_speciation, methanogenic_pathway_split, structural_adequacy]
   recommend_structural_review: false
 budget:
-  simulator_evals: 8000
+  simulator_evals: 375   # the lead's budget ruling of 2026-09-21 on the P0 pilot: allowance x 60 / 12 s per evaluation (was 8000)
   wall_clock_min: 150
   assay_units: 6
 seed: 1064               # 1000 + 10 x level + index, as every scenario in the library

@@ -5130,3 +5130,40 @@ cells) is ~88 h of runner time serial, ~29 h three in parallel; not run in this 
 measure a plan the pilot already shows never reaches its sampler); changing thresholds
 in this PR (rejected: approved values change only by a decisions entry with the lead's
 approval).
+
+## 2026-09-21 — The lead's budget ruling on the P0 pilot (ruling A) and the four attribution thresholds (ruling B), via the coordinator
+
+**Ruling A — budgets (§7: budgets are chosen from pilot runs so P0 completes comfortably).**
+An approved change to the frozen scenario files: `simulator_evals` in every scenario's
+`budget` block is re-declared as allowance × 60 / 12 s per evaluation, rounded down to
+50 — **450 / 600 / 750** for the 90 / 120 / 150-minute cells of the Plant B and C
+scenarios, and **225 / 300 / 375** for the Plant A scenarios (S5-01 300, S6-01 375, S6-04
+375, S7-02 375; a 365-day evaluation costs ~24 s). Wall-clock allowances and assay units
+unchanged. Recorded limit: the budget block is per scenario, so a Plant B row generated
+on Plant A at Tier A (the Level 2–5 rows) carries the B/C count. With it, **the declared
+plan that reaches MCMC** (`configs/workflows/p0.yaml`): `gsa.morris_trajectories` 4,
+`gsa.sobol_samples` 8, `fit.lsq_starts` 1, `fit.de_generations` 2, `mcmc.walkers` 8 ×
+`mcmc.steps` 10 — ≈ 330 evaluations, ≈ 66 min at 12 s — with the fallback ladders' minima
+at or below these values (they already were: 4 / 8 / 2 / 10) and the validation ensemble
+as the plan allows.
+
+**Ruling B — the attribution thresholds (approved values; applied in the config and the
+pipeline).** (a) The QC informative-missingness path is dropped from R5; the early-window
+bias path stays, and the QC finding still abstains on `missing_transient`. Alternative
+considered: bounding the ratio by the tier's declared stress multiplier. (b) R1c is folded
+into R1b: a charge inconsistency counts as sensor evidence only when the pH residual is
+the single offending channel. Alternative considered: raising `charge_drift`'s band
+above the 0.30–0.32 background. (c) `attribution.balance_windows_min` 3 (was 2).
+(d) `attribution.step_day_tolerance_d` 30 (was 20). Two conditions the coordinator set
+and the lead accepted: (i) the ten pilot cells are development cells; the held-out
+variants of §7 are the evaluation set; (ii) the background misfit — 5–19σ post-fit
+residuals against the declared noise even on Level-0 cells, χ²/n of 10–100: the fitted
+model on the visible feed log differs from the truth even when the structure matches —
+is a recorded benchmark property, not something to tune away, and a `none` verdict where
+P0 cannot resolve a fault is the honest baseline of rule 5. The rules are APPROVED with
+these 2026-09-21 amendments; the pilot is re-run at the new budgets and plan.
+
+**Alternatives.** Raising the allowances instead of the counts (the full declared plan
+needs ~3.5 h per 200-day cell; rejected by the lead in favour of option a); keeping the
+thresholds and reporting the false positives as P0's baseline behaviour (rejected: two
+of the paths read the plant, not the data).
