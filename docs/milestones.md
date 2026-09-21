@@ -1844,8 +1844,8 @@ nothing under `sim/`, `scenarios/`, `state/` or the frozen configs is touched.
 
 **Measured.** `ruff check .` and `ruff format --check .` clean; the four new test files:
 55 tests. Full default suite at `a15bfc7`: 444 passed, 2 skipped (the pre-existing
-Muscatine SCADA skips), 13 deselected (the g1 panel), 7 min 52 s; the count at the
-hardening commit is in the PR body. The g1 panel was not run locally: nothing under
+Muscatine SCADA skips), 13 deselected (the g1 panel), 7 min 52 s; at the hardening
+commit `5d7a7da`: 446 passed, 2 skipped, 13 deselected, no warnings, 7 min 51 s. The g1 panel was not run locally: nothing under
 `sim/` or the frozen configs changed (CI runs it because `configs/tools/` is new).
 
 **Not done / limits, stated plainly.** (1) The process boundary is proposed, built and
