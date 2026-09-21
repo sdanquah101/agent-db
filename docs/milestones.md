@@ -1839,8 +1839,9 @@ nothing under `sim/`, `scenarios/`, `state/` or the frozen configs is touched.
   `pyproject.toml` (emcee, cma; the three new sub-packages).
 
 **Measured.** `ruff check .` and `ruff format --check .` clean; the four new test files:
-52 tests. The full default suite at the head is reported in the PR body with the exact
-counts.
+52 tests. Full default suite at `a15bfc7`: 444 passed, 2 skipped (the pre-existing
+Muscatine SCADA skips), 13 deselected (the g1 panel), 7 min 52 s. The g1 panel was not
+run: nothing under `sim/` or the frozen configs changed.
 
 **Not done / limits, stated plainly.** (1) The process boundary is proposed, built and
 tested, not ruled on; the container form is deferred to release. (2) The fitted model is

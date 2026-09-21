@@ -23,6 +23,8 @@ bootstrap percentiles over the sample index.
 
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 from scipy.stats import qmc
 
@@ -260,8 +262,11 @@ def run_sobol(inp: GSASobolInput, ctx: ToolContext) -> GSASobolOutput:
             if not samples:
                 return np.full_like(samples[0] if samples else np.zeros(k), np.nan)
             stack = np.stack(samples)
-            lo = np.nanpercentile(stack, 100 * alpha / 2, axis=0)
-            hi = np.nanpercentile(stack, 100 * (1 - alpha / 2), axis=0)
+            with warnings.catch_warnings():
+                # the second-order matrix carries NaN on its diagonal by construction
+                warnings.filterwarnings("ignore", "All-NaN slice", RuntimeWarning)
+                lo = np.nanpercentile(stack, 100 * alpha / 2, axis=0)
+                hi = np.nanpercentile(stack, 100 * (1 - alpha / 2), axis=0)
             return (hi - lo) / 2.0
 
         s1_conf = half_width(s1_b) if s1_b else np.full(k, np.nan)
