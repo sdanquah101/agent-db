@@ -136,25 +136,37 @@ the registry.
   I/O schemas (`tools.schemas`, Pydantic + numpy, no `sim`), the frame encoder and the
   proxy `call`, `remaining`, `describe` and `run` (the run view served over the wire:
   `sensors()`, `feed_log()`, `feed_assays()`, `operator_notes()`, `manifest()`).
-- The **sandbox** launches the workflow on a **dedicated interpreter environment**
-  (`tools.sandbox.sandbox_interpreter`): a virtual environment of the host interpreter
-  holding numpy, scipy and pydantic pinned to the host's versions and *not* the project
-  install, built once per host interpreter and package set and cached under
-  `AD_AGENTBENCH_SANDBOX_HOME` (default `~/.cache/ad-agentbench`), re-checked on every use
-  to resolve none of `sim`, `scenarios`, `anchor`, `eval`, `state`. The workflow runs on
-  it with `-I -S` (no site processing), `sys.path` set to the stub directory plus the
-  standard library and that environment's own package directory, cwd a scratch directory
-  that contains nothing, and an environment holding the socket path and little else. At
-  startup the bootstrap **fails closed twice**: in its own process, if
-  `importlib.util.find_spec` resolves a forbidden module or `tools` resolves to anything
-  but the stub; and in a **plain child interpreter** it spawns with the same environment
-  and no flags, if a forbidden module resolves there. The launcher also refuses a sandbox
-  directory under the repository root, the run store or the run store's parent, because
-  the stub and socket paths are in the workflow's environment.
-- The **test** launches a workflow-side script that attempts `import sim`,
-  `open("truth_store/…")`, `open("scenarios/…")` and the repository-relative equivalents,
-  and asserts each fails; a **negative control** in the same process calls a tool and
-  reads the run's sensors successfully.
+- The **sandbox** runs the workflow in a **user + mount + pid namespace with a private
+  root** (`tools.sandbox.launch`: `unshare --user --map-root-user --mount --pid --fork
+  --kill-child`, then a shell script that mounts a tmpfs root, bind-mounts into it only
+  what the sandbox interpreter needs, and `pivot_root`s into it, unmounting the old root).
+  Inside the root: `/usr/lib` read-only (the C library and, on Debian, the standard
+  library) and the interpreter's own library directory where it lies elsewhere, with
+  every `site-packages` and `dist-packages` inside them hidden under an empty tmpfs; the
+  interpreter **binary alone** at `/usr/bin/python-jail` plus the symlinks the venv's
+  `bin/python` chain needs; the **sandbox environment** at `/venv` — a virtual
+  environment holding numpy, scipy and pydantic pinned to the host's versions and *not*
+  the project install (`tools.sandbox.sandbox_interpreter`, built once per host
+  interpreter and package set, cached under `AD_AGENTBENCH_SANDBOX_HOME`, re-checked in
+  a scrubbed environment on every use); the sandbox directory at `/box` (the stub, the
+  workflow, its cwd, the socket); `/dev/{null,zero,random,urandom}`; `/etc/ld.so.cache`;
+  a fresh `/proc` of the pid namespace. Nothing else: no `/home`, no host `/tmp`, no
+  repository, no run store, no `/usr/bin/python3`. The workflow runs on `/venv/bin/python
+  -I -S` with `PATH=/venv/bin`, `sys.path` set by a bootstrap to the stub, the standard
+  library and the venv's package directory. The bootstrap **fails closed** before the
+  script runs: if a forbidden module resolves in its own process, or in a plain child of
+  the sandbox interpreter, or in a plain child of any other interpreter name it can find
+  (`/usr/bin/python3`, `/usr/local/bin/python3`, `shutil.which("python3")`), it exits
+  without running the workflow. `launch` raises `SandboxError` — never runs unjailed — if
+  `unshare` is missing or the jail cannot be built, and refuses a sandbox directory under
+  the repository root, the run store or the run store's parent.
+- The **test** launches a workflow-side script that attempts `import sim` by every
+  spelling, `open("truth_store/…")`, `open("scenarios/…")` and the repository-relative
+  equivalents, a plain child interpreter, the host interpreters by name, `/proc/<ppid>`
+  of the privileged process, and the repository root, the run store and its parent by
+  their absolute paths, and asserts each fails; a **negative control** in the same
+  process calls a tool, reads the run's sensors and gets a budget refusal as the right
+  exception.
 
 **What it costs.**
 
@@ -164,26 +176,27 @@ the registry.
   points ≈ 50 kB). Measured cost per call: well under a millisecond of encoding against
   seconds of ADM1 integration. The registry stays sequential, so nothing is lost to
   contention.
-- *One extra process per run*, plus one thread. Startup ~0.3 s (numpy + pydantic import in
-  the sandbox).
+- *One extra process per run*, plus one thread, plus the namespace and mount setup
+  (~50 ms) and two probe interpreter starts. Startup ~0.5 s. The sandbox venv is built
+  once per environment (~8 s from a warm pip cache).
 - *Two copies of the schemas*: the stub's copy is made from `tools/schemas` at launch, so
   it cannot drift, and a test asserts the staged package equals the source.
-- *What it does not buy, and the route it had to close.* A process boundary stops
-  imports and relative reads; it does not stop a workflow that is *told* an absolute path
-  from opening it, nor stop it measuring wall clock. **The child-interpreter route** (the
-  coordinator's acceptance finding, 2026-09-21, reproduced): as first built, the sandbox
-  ran on the host interpreter, so a plain child the workflow spawned
-  (`subprocess.run([sys.executable, "-c", ...])`, no `-I -S`) ran `site`, the editable
-  install's `.pth` hook installed its finder, and the child resolved `sim` at the
-  repository root and derived `<root>/truth_store/index.jsonl` from `sim.__file__` — a
-  path *discovered*, not told. Closed by the dedicated environment above (no hook exists
-  to run in any child), the child-interpreter check in the bootstrap, and the
-  sandbox-location refusal; `tests/test_tool_sandbox.py` spawns that child from the
-  workflow and shows both the import and the derived read failing, and shows the host
-  interpreter refused at startup. A container boundary would also stop filesystem reads
-  outside the sandbox; the sandbox otherwise relies on there being nothing to find (the
-  truth store is a sibling tree the workflow is never told the path of, and the cwd is
-  empty), which is the same argument the layout ruling of 2026-09-04 made.
+- *What it does not buy, and the routes it had to close.* Two findings on the way here,
+  both reproduced. **The child-interpreter route** (the coordinator's acceptance finding,
+  2026-09-21): on the host interpreter, a plain child the workflow spawned ran `site`, the
+  editable install's `.pth` hook installed its finder, and the child resolved `sim` at the
+  repository root and derived `<root>/truth_store/index.jsonl` from `sim.__file__`. A
+  dedicated venv closed `sys.executable` only. **The host-interpreter route** (the
+  fresh-context review's finding B1, 2026-09-21): `subprocess.run(["/usr/bin/python3",
+  …])` or `shutil.which("python3")` reached the host interpreter and its hook anyway, and
+  `/proc/<ppid>/cwd` and `/proc/<ppid>/environ` gave the privileged process's working
+  directory and environment — paths *discovered*, not told. Both are closed by the jail
+  above, structurally rather than by enumeration: no host interpreter, no hook, no
+  repository, no run store and no parent process exist inside it, so the "told an
+  absolute path" limit closes too. What the jail is not: a boundary against a kernel
+  exploit, or a limit on CPU, memory or wall clock beyond the registry's budget. It needs
+  `unshare(1)` and unprivileged user namespaces (or root); CI enables them on the Ubuntu
+  24.04 runner with one `sysctl` (`.github/workflows/ci.yml`).
 
 **Alternatives considered.**
 
@@ -198,9 +211,11 @@ the registry.
 - *In-process registry with the workflow importing `tools` directly.* Cheapest; gives the
   workflow `sim` by transitive import. Rejected: it is exactly what the requirement forbids.
 
-**Decided by the coordinator on the lead's delegation (2026-09-21, ~02:05 UTC): ACCEPTED**,
-with the child-interpreter hardening above as a required condition, now built. The
-container boundary stays a release-time proposal.
+**Decided by the coordinator on the lead's delegation (2026-09-21): ACCEPTED** at ~02:05
+UTC with the child-interpreter hardening as a required condition; the fresh-context review
+at `b9ca487` (~02:50 UTC) returned DO NOT MERGE on the host-interpreter route and required
+the namespace jail above, built in the one fix round. A container stays a release-time
+option; the jail is the boundary now.
 
 ## 5. Layout
 
@@ -222,8 +237,9 @@ configs/tools/      one YAML per tool; assays.yaml; model.yaml; budget.yaml
 
 ## 6. Decided under delegation (the coordinator, 2026-09-21; the lead may overrule at the gate)
 
-1. Part B (§4): the socket server and the sandboxed subprocess — **accepted**, with the
-   child-interpreter hardening required and built; a container at release.
+1. Part B (§4): the socket server and the jailed subprocess — **accepted**, with the
+   child-interpreter hardening and then, after review finding B1, the namespace jail
+   required and built; a container stays a release-time option.
 2. The fitted model's visible contract — **accepted**: the same parameter list and output
    list on every run, extension parameters fixed and not calibratable. It is what §6.7 A
    implies (structural rows are never scored on parameter recovery) and it stops the

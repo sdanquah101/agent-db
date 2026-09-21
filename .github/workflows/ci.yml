@@ -53,6 +53,16 @@ jobs:
           cache: pip
       - name: Install dev dependencies
         run: python -m pip install --upgrade pip && pip install -e ".[dev]"
+      - name: Allow unprivileged user namespaces (the tool registry's sandbox jail)
+        # tools/sandbox.py runs every workflow in a user+mount+pid namespace built with
+        # unshare(1). Ubuntu 24.04 runners restrict unprivileged user namespaces through
+        # AppArmor (kernel.apparmor_restrict_unprivileged_userns=1) for unconfined
+        # binaries; 22.04 has no such key. The sandbox tests fail closed without this.
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          unshare --user --map-root-user --mount --pid --fork true
       - name: pytest
         run: pytest -q
 
@@ -93,5 +103,15 @@ jobs:
           cache: pip
       - name: Install dev dependencies
         run: python -m pip install --upgrade pip && pip install -e ".[dev]"
+      - name: Allow unprivileged user namespaces (the tool registry's sandbox jail)
+        # tools/sandbox.py runs every workflow in a user+mount+pid namespace built with
+        # unshare(1). Ubuntu 24.04 runners restrict unprivileged user namespaces through
+        # AppArmor (kernel.apparmor_restrict_unprivileged_userns=1) for unconfined
+        # binaries; 22.04 has no such key. The sandbox tests fail closed without this.
+        run: |
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          unshare --user --map-root-user --mount --pid --fork true
       - name: pytest -m g1
         run: pytest -q -m g1

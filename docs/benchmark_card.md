@@ -161,27 +161,31 @@ Three consequences follow, and each is enforced by a test rather than by the lis
   requirement for the tool-registry and workflow-harness components (rule 2), recorded as a
   deferred requirement for the lead's launch of those components; G1 cannot enforce it.
 - **The tool registry's process boundary (milestone 4, 2026-09-21; accepted by the
-  coordinator under the lead's delegation, with one required hardening, built).** The
-  registry (`tools.Registry`: `sim`, the budgets, both call logs, the assay channel into
-  the truth store) lives in a privileged process and is served on a Unix-domain socket; a
-  workflow runs in a subprocess on a **dedicated interpreter environment** — a virtual
-  environment holding numpy, scipy and pydantic and not the project install, built once
-  and cached — started with `python -I -S`, a path of the standard library, a staged copy
-  of the client stub as `tools`, and that environment's package directory, an empty
-  working directory and an environment holding the socket path, and a bootstrap that
-  refuses to run it if `sim`, `scenarios`, `anchor`, `eval` or `state` resolves in its own
-  process **or in a plain child interpreter it spawns**. The launcher refuses a sandbox
-  directory under the repository, the run store or the run store's parent. **The
-  child-interpreter route, found at acceptance and closed:** on the host interpreter a
-  plain child the workflow spawned ran `site`, the editable install's hook resolved `sim`,
-  and `sim.__file__` gave the repository root and its `truth_store/` — a path discovered,
-  not told; the sandbox test now spawns that child and shows both the import and the
-  derived read failing. `tests/test_tool_sandbox.py` launches a workflow
+  coordinator under the lead's delegation; hardened twice on its findings).** The registry
+  (`tools.Registry`: `sim`, the budgets, both call logs, the assay channel into the truth
+  store) lives in a privileged process and is served on a Unix-domain socket; a workflow
+  runs in a **user + mount + pid namespace with a private root** (`tools/sandbox.py`):
+  inside it exist only `/usr/lib` (read-only, its package directories hidden), the
+  interpreter binary alone, a virtual environment holding numpy, scipy and pydantic and
+  not the project install, the sandbox directory (stub, workflow, cwd, socket), four
+  device nodes and a fresh `/proc` of the pid namespace — no `/usr/bin/python3`, no
+  `/home`, no repository, no run store, no parent process. A bootstrap refuses to run the
+  workflow if `sim`, `scenarios`, `anchor`, `eval` or `state` resolves in its own process
+  or in a plain child of any interpreter name it can find; the launcher raises rather
+  than run unjailed when the jail cannot be built, and refuses a sandbox directory under
+  the repository, the run store or its parent. **Two routes found and closed on the
+  way:** a plain child of the host interpreter resolving `sim` through the editable
+  install's hook (the acceptance finding), then the host interpreters reached by name or
+  `PATH` and the privileged process through `/proc/<ppid>` (review finding B1) — paths
+  discovered, not told; the jail leaves none of them in existence. What it is not: a
+  boundary against a kernel exploit, or a limit on CPU or memory. `tests/test_tool_sandbox.py` launches a workflow
   that attempts every named route (`import sim` and its siblings by three spellings,
   `open("truth_store/…")`, `open("scenarios/…")`, the repository-relative forms, the run's
-  own truth file, walking upwards from the cwd) and asserts each fails, with a negative
-  control that calls a tool, reads the sensors and gets a budget refusal as the right
-  exception in the same process. The run's observations reach the workflow through the
+  own truth file, walking upwards from the cwd, a plain child interpreter, the host
+  interpreters by name, `/proc/<ppid>/cwd` and `/proc/<ppid>/environ`, the repository
+  root, the run store, its parent and the truth index by their absolute paths) and
+  asserts each fails, with a negative control that calls a tool, reads the sensors and
+  gets a budget refusal as the right exception in the same process. The run's observations reach the workflow through the
   registry as contents (`tools.run.sensors()` and the rest of the run view), never as a
   path, and the loader's refusals are relayed without the path they name. **The limit,
   stated:** a process boundary does not stop a workflow that is *told* an absolute path

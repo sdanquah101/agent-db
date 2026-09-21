@@ -13,17 +13,22 @@ attempts every route the requirement names --
 * **a plain child interpreter** (``subprocess.run([sys.executable, "-c", ...])``, no
   flags, site processing on) attempting ``import sim`` and, through ``sim.__file__``, the
   repository's ``truth_store/index.jsonl`` -- the coordinator's acceptance finding of
-  2026-09-21, closed by the dedicated sandbox environment;
+  2026-09-21;
+* **the host interpreters by name** -- ``/usr/bin/python3``, ``/usr/local/bin/python3``,
+  ``/usr/bin/python3.11``, ``shutil.which("python3")`` -- each absent or, run plain,
+  unable to resolve ``sim`` (review finding B1 of 2026-09-21, closed by the jail);
+* **the privileged process** through ``/proc/<ppid>/cwd`` and ``/proc/<ppid>/environ``,
+  and the repository root, the run store and its parent **by their absolute paths**;
 
 -- and reports each as failed. The **negative control** in the same process calls a tool
 through ``import tools``, reads the run's sensors through ``tools.run``, and gets a budget
 refusal as the right exception, so the test cannot pass by a sandbox that runs nothing.
 
-The stub is also checked to be a copy of the source (no drift), the bootstrap to refuse a
-process in which a forbidden module resolves (fail closed) -- including the host
-interpreter of the editable install, whose plain child resolves ``sim`` -- the launcher to
-refuse a sandbox inside the repository or the run store, and the transport to carry
-arrays bit for bit.
+The stub is also checked to be a copy of the source (no drift), the bootstrap to refuse
+to run when a forbidden module resolves (fail closed), the launcher to raise rather than
+run unjailed when the jail cannot be built, the launcher to refuse a sandbox inside the
+repository or the run store, the jail to leave no mount behind, and the transport to
+carry arrays bit for bit.
 """
 
 from __future__ import annotations
@@ -31,7 +36,6 @@ from __future__ import annotations
 import json
 import socket
 import subprocess
-import sys
 import textwrap
 from pathlib import Path
 
@@ -134,6 +138,41 @@ WORKFLOW = textwrap.dedent(
     report["child"] = json.loads(child.stdout) if child.returncode == 0 else {"error": child.stderr}
     report["child_executable"] = sys.executable
 
+    # the host-interpreter route (review finding B1): every name a workflow could run
+    import shutil
+
+    report["hosts"] = {}
+    for name in ("/usr/bin/python3", "/usr/local/bin/python3", "/usr/bin/python3.11",
+                 "/usr/local/bin/python", shutil.which("python3"), shutil.which("python")):
+        if not name or not os.path.exists(name):
+            report["hosts"][str(name)] = "absent"
+            continue
+        r = subprocess.run([name, "-c", probe], capture_output=True, text=True)
+        ok = r.returncode == 0
+        report["hosts"][name] = json.loads(r.stdout) if ok else {"error": r.stderr[-80:]}
+    report["path_env"] = os.environ.get("PATH")
+
+    # the privileged process, and the hidden trees by their absolute paths
+    report["ppid"] = os.getppid()
+    report["absolute"] = {}
+    for label, path in (("ppid_cwd", "/proc/%d/cwd" % os.getppid()),
+                        ("ppid_environ", "/proc/%d/environ" % os.getppid()),
+                        ("repo", "REPO_ROOT_PLACEHOLDER"),
+                        ("store_parent", "STORE_PARENT_PLACEHOLDER"),
+                        ("truth_index", "STORE_PARENT_PLACEHOLDER/truth_store/index.jsonl"),
+                        ("run_dir", "RUN_DIR_PLACEHOLDER"),
+                        ("home", "/home")):
+        try:
+            if os.path.isdir(path):
+                os.listdir(path)
+            else:
+                open(path, "rb").read(10)
+            report["absolute"][label] = "READ"
+        except OSError as exc:
+            report["absolute"][label] = type(exc).__name__
+    report["root"] = sorted(os.listdir("/"))
+    report["tmp_listing"] = os.listdir("/tmp")  # the jail's own, not the host's
+
     # the negative control: legitimate work through the registry
     import tools
 
@@ -199,7 +238,14 @@ def test_a_workflow_in_the_sandbox_cannot_reach_sim_scenarios_or_the_truth_store
         models={"linear": linear_model()},
     )
     script = tmp_path / "workflow.py"
-    script.write_text(WORKFLOW, encoding="utf-8")
+    store_parent = run.paths.root.parent.parent
+    script.write_text(
+        WORKFLOW.replace("REPO_ROOT_PLACEHOLDER", str(REPO_ROOT))
+        .replace("STORE_PARENT_PLACEHOLDER", str(store_parent))
+        .replace("RUN_DIR_PLACEHOLDER", str(run.paths.root)),
+        encoding="utf-8",
+    )
+    assert (store_parent / "truth_store" / "index.jsonl").is_file()  # it exists, out here
     box = tmp_path / "box"
     box.mkdir()
     result = launch(script, registry, sandbox=box, run_dir=run.paths.root, timeout_s=120.0)
@@ -218,11 +264,28 @@ def test_a_workflow_in_the_sandbox_cannot_reach_sim_scenarios_or_the_truth_store
     # ... a plain child interpreter fails the same way (the acceptance finding) ...
     assert report["child"]["import"].startswith("ImportError"), report["child"]
     assert report["child"]["index"] == "no root to derive"
-    assert report["child_executable"] == str(sandbox_interpreter())
+    assert report["child_executable"] == "/venv/bin/python"  # the jail's view of the venv
+    # ... every host interpreter name is absent or resolves nothing (finding B1) ...
+    for name, outcome in report["hosts"].items():
+        if outcome != "absent":  # the venv's own link is the one interpreter that exists
+            assert outcome["import"].startswith("ImportError"), (name, outcome)
+            assert outcome["index"] == "no root to derive", (name, outcome)
+    assert report["hosts"]["/usr/bin/python3"] == "absent"
+    assert report["hosts"]["/usr/local/bin/python3"] == "absent"
+    assert report["path_env"] == "/venv/bin"
+    # ... the privileged process and the hidden trees are not there by absolute path ...
+    assert report["ppid"] == 0  # PID 1 of its own pid namespace
+    for label, outcome in report["absolute"].items():
+        assert outcome != "READ", (label, outcome)
+    assert "home" not in report["root"] and "root" not in report["root"]
+    assert report["tmp_listing"] == []
+    assert set(report["root"]) <= {
+        "box", "dev", "etc", "lib", "lib64", "oldroot", "proc", "tmp", "usr", "venv"
+    }  # fmt: skip
 
     # ... and the negative control did legitimate work through the stub
     control = report["control"]
-    assert control["tools_origin"].startswith(str(box / "site" / "tools"))
+    assert control["tools_origin"] == "/box/site/tools/__init__.py"  # the jail's view
     assert control["parameters"] == ["a", "b"]
     assert control["y_last"] == pytest.approx(20.0)
     assert control["units"] == {"y": "-"}
@@ -255,22 +318,62 @@ def test_a_workflow_in_the_sandbox_cannot_reach_sim_scenarios_or_the_truth_store
     assert result.n_requests == 10
 
 
-def test_the_bootstrap_refuses_the_host_interpreter_whose_child_resolves_sim(tmp_path):
-    """Fail closed: the editable install's interpreter runs no workflow.
+def test_the_bootstrap_refuses_to_run_when_a_forbidden_module_resolves(tmp_path, monkeypatch):
+    """Fail closed: the check is live. With numpy declared forbidden, the venv trips it."""
+    import tools.sandbox as sandbox_module
 
-    Its own process passes (``-I -S`` keeps the ``.pth`` hook dormant) but the plain child
-    it spawns does not -- the route the coordinator found -- so the bootstrap exits 3.
-    """
+    monkeypatch.setattr(sandbox_module, "FORBIDDEN_MODULES", (*FORBIDDEN_MODULES, "numpy"))
     registry = make_registry(budget=Budget(5, 60.0, 0), seed=1, models={"linear": linear_model()})
     script = tmp_path / "workflow.py"
     script.write_text("print('RAN')\n", encoding="utf-8")
     box = tmp_path / "box"
     box.mkdir()
-    result = launch(script, registry, sandbox=box, timeout_s=60.0, python=sys.executable)
+    # the sandbox interpreter's own clean-check sees numpy as forbidden and refuses first
+    with pytest.raises(SandboxError, match="resolves"):
+        launch(script, registry, sandbox=box, timeout_s=60.0)
+    # ... and, past that check, the bootstrap inside the jail refuses too
+    monkeypatch.setattr(sandbox_module, "_forbidden_resolving", lambda python: [])
+    result = launch(script, registry, sandbox=box, timeout_s=60.0)
     assert result.returncode == 3
-    assert "a plain child interpreter resolves" in result.stderr and "'sim'" in result.stderr
+    assert "sandbox refused to start" in result.stderr and "numpy" in result.stderr
     assert "RAN" not in result.stdout
     assert result.n_requests == 0
+
+
+def test_launch_raises_rather_than_run_unjailed(tmp_path, monkeypatch):
+    """No weak mode: without unshare, or with a jail that cannot be built, nothing runs."""
+    import tools.sandbox as sandbox_module
+
+    registry = make_registry(budget=Budget(5, 60.0, 0), seed=1, models={"linear": linear_model()})
+    script = tmp_path / "workflow.py"
+    script.write_text("print('RAN')\n", encoding="utf-8")
+    box = tmp_path / "box"
+    box.mkdir()
+    monkeypatch.setattr(sandbox_module.shutil, "which", lambda name: None)
+    with pytest.raises(SandboxError, match="unshare"):
+        launch(script, registry, sandbox=box, timeout_s=60.0)
+    monkeypatch.undo()
+    # a jail script that fails before the pivot exits JAIL_EXIT: the launcher raises
+    monkeypatch.setattr(
+        sandbox_module, "_JAIL_SCRIPT", "#!/bin/sh\necho 'jail: forced failure' >&2\nexit 111\n"
+    )
+    with pytest.raises(SandboxError, match="could not be built"):
+        launch(script, registry, sandbox=box, timeout_s=60.0)
+    assert not (box / "cwd" / "RAN").exists()
+
+
+def test_the_jail_leaves_no_mount_behind(clean_run, tmp_path):
+    run, _, _ = clean_run
+    registry = make_registry(budget=Budget(5, 60.0, 0), seed=1, models={"linear": linear_model()})
+    script = tmp_path / "workflow.py"
+    script.write_text("import tools; print(tools.remaining().simulator_evals)\n", encoding="utf-8")
+    box = tmp_path / "box"
+    box.mkdir()
+    result = launch(script, registry, sandbox=box, run_dir=run.paths.root, timeout_s=60.0)
+    assert result.returncode == 0 and result.stdout.strip() == "5"
+    mounts = Path("/proc/self/mounts").read_text(encoding="utf-8")
+    assert str(box) not in mounts
+    assert not any((box / "root").iterdir())  # the tmpfs root was private to the namespace
 
 
 def test_the_sandbox_interpreter_is_clean_and_cached(tmp_path):

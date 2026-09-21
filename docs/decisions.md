@@ -4934,3 +4934,58 @@ only TAN is observed in the effluent.
 tier does not already have); an unkeyed draw per request (averaging attack); the
 generator's feed-assay noise model (a digestate assay is the observation layer's, not the
 influent generator's).
+
+## 2026-09-21 — Review at `b9ca487`: DO NOT MERGE on the host-interpreter route (B1); the sandbox becomes a namespace jail
+
+**Finding B1** (the coordinator's fresh-context adversarial review, ~02:50 UTC, reproduced
+by the coordinator and by this session). The dedicated venv closed `sys.executable` only.
+A workflow that ran `subprocess.run(["/usr/local/bin/python3", "-c", …])` or
+`["/usr/bin/python3", …]`, or `shutil.which("python3")` (the host `PATH` was passed
+through), got the host interpreter, whose editable-install `.pth` resolved `sim` at the
+repository root; `dirname(dirname(sim.__file__))` is the root and `<root>/truth_store/
+index.jsonl` the live answer key of any production run. Two more of the same class:
+`os.readlink("/proc/<ppid>/cwd")` gave the privileged process's working directory (the
+repository) and `/proc/<ppid>/environ` its environment. The bootstrap probed only
+`sys.executable`; the test spawned only `sys.executable`; the design, the decisions entry
+and card §4.1 claimed the class closed. **Finding C1**: `_forbidden_resolving` and the
+venv clean-check inherited the environment, so an ambient `PYTHONPATH` made the clean
+venv look dirty.
+
+**Decision (built in the one fix round the delegation allowed).** The sandbox is a
+**user + mount + pid namespace with a private root** (`tools/sandbox.py`): `unshare
+--user --map-root-user --mount --pid --fork --kill-child` runs a shell script that mounts
+a tmpfs root, bind-mounts into it `/usr/lib` (read-only), the interpreter's own library
+directory where it lies elsewhere — with every `site-packages` and `dist-packages` inside
+them hidden under an empty tmpfs — the interpreter **binary alone** as
+`/usr/bin/python-jail` with the symlinks the venv's chain needs, the venv at `/venv`, the
+sandbox directory at `/box`, four device nodes, `ld.so.cache` and a fresh `/proc`, then
+`pivot_root`s and unmounts the old root. Nothing of the host but those exists inside: no
+`/usr/bin/python3`, no `/usr/local/bin/python3`, no `/home`, no repository, no run store,
+and the privileged process is not in the pid namespace (`os.getppid()` is 0, `/proc/0`
+does not exist). `PATH` inside is `/venv/bin`. The bootstrap's fail-closed probe spawns a
+plain child of every interpreter name it can find (its own, `/usr/bin/python3`,
+`/usr/local/bin/python3`, `/usr/bin/python3.11`, `shutil.which("python3")`) and exits
+without running the workflow if any resolves a forbidden module. **Fail closed**: `launch`
+raises `SandboxError` when `unshare` is missing or the jail script exits before the pivot
+(exit 111); there is no unjailed mode (tested with `which` patched out and with a jail
+script forced to fail). Both probes run in a scrubbed environment (C1). The test's
+workflow now attempts the host interpreters by name (each absent), `/proc/<ppid>/cwd` and
+`/proc/<ppid>/environ` (absent), the repository root, the run store, its parent and the
+truth index by their absolute paths (absent), `/home` and the host `/tmp` (absent), the
+plain-child route as before, and the negative control unchanged; a further test shows
+the jail leaves no mount behind.
+
+**CI.** GitHub's Ubuntu 24.04 runner restricts unprivileged user namespaces through
+AppArmor; `.github/workflows/ci.yml` sets
+`kernel.apparmor_restrict_unprivileged_userns=0` with `sudo sysctl` where the key exists
+(22.04 has none) and proves `unshare --user --map-root-user --mount --pid --fork true`
+before pytest, in the test and g1 jobs.
+
+**What the jail is not.** A boundary against a kernel exploit, or a limit on CPU or
+memory. The record now claims exactly what the test demonstrates.
+
+**Alternatives.** A container now (docker is present here; a heavier runtime the tests
+would then require everywhere, and the same guarantee); `chroot` + `setuid(nobody)` when
+root (needs root, which CI's runner user is not without `sudo`); enumerating the host
+interpreter names and `/proc` paths (the deny-list shape the 2026-09-12 rounds already
+showed does not close).

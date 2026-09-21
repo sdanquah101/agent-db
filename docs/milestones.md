@@ -1804,12 +1804,15 @@ nothing under `sim/`, `scenarios/`, `state/` or the frozen configs is touched.
   `sim`, `scenarios`, `anchor`, `eval` and `state` do not resolve (`-I -S`, a staged stub
   as `tools`, a fail-closed bootstrap, an empty cwd). `tests/test_tool_sandbox.py` drives
   every named route and a negative control. **Accepted by the coordinator** under the
-  lead's delegation (2026-09-21) with one required hardening, built: the child-interpreter
-  route (a plain child of the host interpreter ran `site` and the editable install's hook
-  resolved `sim`) is closed by a dedicated sandbox environment without the project
-  install, a child-interpreter check in the bootstrap, a sandbox-location refusal, and
-  the test that spawns the child; the limit — an absolute path a workflow is *told* — is
-  recorded.
+  lead's delegation (2026-09-21) with one required hardening (the child-interpreter
+  route: a plain child of the host interpreter ran `site` and the editable install's
+  hook resolved `sim`), built as a dedicated sandbox venv; then the fresh-context review
+  at `b9ca487` returned DO NOT MERGE on the host-interpreter route (B1: `/usr/bin/python3`
+  by name or `PATH`, and `/proc/<ppid>` of the privileged process) and the sandbox became
+  a **user + mount + pid namespace with a private root** in the one fix round: nothing of
+  the host but `/usr/lib`, the bare interpreter binary, the venv, the box and a fresh
+  `/proc` exists inside; fail closed; C1 (probes inheriting `PYTHONPATH`) fixed; CI
+  enables unprivileged user namespaces on the Ubuntu 24.04 runner.
 - **Part C, requested assays** (`tools/assays.py`, `configs/tools/assays.yaml`): eight
   assays priced and timed, served from the truth channels with the lab sensor's noise
   model, keyed by day, charged from `assay_units`.

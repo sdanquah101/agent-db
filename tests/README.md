@@ -143,14 +143,17 @@ The tool registry (`tools/`, `configs/tools/`; milestone 4):
   near the truth on a generated Level-0 run; `open_registry` reading the cell, the S8-01
   directive (never in the visible tree) and the budget; the same interface on a Level-6
   cell; `request_assay` with the sensor's noise, keyed by day, priced and logged.
-- `test_tool_sandbox.py` — the structural defence: a workflow launched in the sandbox
-  cannot import `sim`, `scenarios`, `anchor`, `eval` or `state` by any spelling, cannot
-  open `truth_store/…`, `scenarios/…` or its own run's truth file by relative path, finds
-  nothing walking upwards, and — the child-interpreter route the coordinator found at
-  acceptance — spawns a plain child interpreter that fails to `import sim` and so cannot
-  derive the truth store's path from it; and — the negative control — calls tools, reads
-  the sensors and gets the right exceptions through the stub. The bootstrap refuses the
-  host interpreter of the editable install (its plain child resolves `sim`); the sandbox
+- `test_tool_sandbox.py` — the structural defence: a workflow launched in the namespace
+  jail cannot import `sim`, `scenarios`, `anchor`, `eval` or `state` by any spelling,
+  cannot open `truth_store/…`, `scenarios/…` or its own run's truth file by relative
+  path, finds nothing walking upwards, cannot reach the host interpreters by name or
+  `PATH` (absent), the privileged process through `/proc/<ppid>` (absent), or the
+  repository, the run store, its parent and the truth index by absolute path (absent);
+  a plain child interpreter fails to `import sim` too; and — the negative control —
+  calls tools, reads the sensors and gets the right exceptions through the stub. The
+  bootstrap fails closed when a forbidden module resolves; `launch` raises rather than
+  run unjailed when `unshare` is missing or the jail cannot be built; the sandbox
   environment is clean, carries numpy, scipy and pydantic, and is cached; `launch`
-  refuses a sandbox inside the repository, the run store or its parent; the staged stub
+  refuses a sandbox inside the repository, the run store or its parent; the jail leaves
+  no mount behind; the staged stub
   equals its source; the transport carries arrays bit for bit.
