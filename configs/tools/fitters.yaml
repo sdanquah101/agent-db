@@ -1,0 +1,32 @@
+# fit_lsq, fit_de, fit_cmaes (proposal §6.2). Schema tools/config.py::FittersConfig.
+# Every entry is a CEILING or a tolerance; a workflow may ask for fewer starts, a smaller
+# population or fewer generations, never more. Cost bounds (simulator evaluations):
+#   fit_lsq:   n_starts x max_nfev_per_start
+#   fit_de:    (max_generations + 1) x popsize x k      (scipy's popsize is per parameter)
+#   fit_cmaes: max_evaluations
+version: 1
+
+lsq:
+  n_starts: 10                 # DESIGN  ceiling on multistarts (Latin hypercube over the bounds)
+  max_nfev_per_start: 300      # DESIGN
+  method: trf                  # scipy least_squares method with bounds
+  ftol: 1.0e-8                 # DESIGN  scipy defaults
+  xtol: 1.0e-8
+  gtol: 1.0e-8
+  loss: linear                 # DESIGN  a robust loss is a modelling choice a workflow must log
+
+de:
+  popsize: 15                  # DESIGN  scipy default (per parameter)
+  max_generations: 100         # DESIGN  ceiling
+  tol: 0.01                    # DESIGN  scipy default relative convergence tolerance
+  mutation: [0.5, 1.0]         # DESIGN  scipy default dithering
+  recombination: 0.7           # DESIGN  scipy default
+  strategy: best1bin           # DESIGN  scipy default
+  init: latinhypercube         # DESIGN  scipy default
+
+cmaes:
+  max_evaluations: 2000        # DESIGN  ceiling
+  sigma0_fraction: 0.25        # DESIGN  initial step as a fraction of the bound width
+  popsize: null                # DESIGN  null = cma's default 4 + floor(3 ln k)
+  tolfun: 1.0e-8               # DESIGN  cma defaults
+  tolx: 1.0e-11

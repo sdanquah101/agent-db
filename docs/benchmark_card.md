@@ -160,6 +160,50 @@ Three consequences follow, and each is enforced by a test rather than by the lis
   view only, in a process or container where those paths are absent. That is a design
   requirement for the tool-registry and workflow-harness components (rule 2), recorded as a
   deferred requirement for the lead's launch of those components; G1 cannot enforce it.
+- **The tool registry's process boundary (milestone 4, 2026-09-21; accepted by the
+  coordinator under the lead's delegation; hardened twice on its findings).** The registry
+  (`tools.Registry`: `sim`, the budgets, both call logs, the assay channel into the truth
+  store) lives in a privileged process and is served on a Unix-domain socket; a workflow
+  runs in a **user + mount + pid namespace with a private root** (`tools/sandbox.py`):
+  inside it exist only `/usr/lib` (read-only, its package directories hidden), the
+  interpreter binary alone, a virtual environment holding numpy, scipy and pydantic and
+  not the project install, the sandbox directory (stub, workflow, cwd, socket), four
+  device nodes and a fresh `/proc` of the pid namespace — no `/usr/bin/python3`, no
+  `/home`, no repository, no run store, no parent process. A bootstrap refuses to run the
+  workflow if `sim`, `scenarios`, `anchor`, `eval` or `state` resolves in its own process
+  or in a plain child of any interpreter name it can find; the launcher raises rather
+  than run unjailed when the jail cannot be built, and refuses a sandbox directory under
+  the repository, the run store or its parent. **Two routes found and closed on the
+  way:** a plain child of the host interpreter resolving `sim` through the editable
+  install's hook (the acceptance finding), then the host interpreters reached by name or
+  `PATH` and the privileged process through `/proc/<ppid>` (review finding B1) — paths
+  discovered, not told; the jail leaves none of them in existence. What it is not: a
+  boundary against a kernel exploit, or a limit on CPU or memory. `tests/test_tool_sandbox.py` launches a workflow
+  that attempts every named route (`import sim` and its siblings by three spellings,
+  `open("truth_store/…")`, `open("scenarios/…")`, the repository-relative forms, the run's
+  own truth file, walking upwards from the cwd, a plain child interpreter, the host
+  interpreters by name, `/proc/<ppid>/cwd` and `/proc/<ppid>/environ`, the repository
+  root, the run store, its parent and the truth index by their absolute paths) and
+  asserts each fails, with a negative control that calls a tool, reads the sensors and
+  gets a budget refusal as the right exception in the same process. The run's observations reach the workflow through the
+  registry as contents (`tools.run.sensors()` and the rest of the run view), never as a
+  path, and the loader's refusals are relayed without the path they name. **The limit,
+  stated:** a process boundary does not stop a workflow that is *told* an absolute path
+  from opening it; the layout ruling of 2026-09-04 covers that (the truth store is a
+  sibling the workflow is never told the path of), and a container at release is the
+  stronger boundary, proposed on top.
+- **What a workflow learns from the registry, and what it does not** (the fitted model's
+  visible contract, decided by the coordinator under the lead's delegation, 2026-09-21).
+  The fitted model `adm1_fitted` exposes the same twenty multiplier parameters, the same
+  outputs and the same units on every run; extension parameters are not calibratable; the
+  extensions it carries (the plant's, less what a Level-6 row removes) are applied
+  silently on the privileged side, and what differs on a structural row is what the model
+  predicts — the diagnostic task; structural rows are never scored on parameter recovery
+  (§6.7 A). The visible call log records
+  an injected Level-8 failure as `ok` — the truth-side log says `injected_failure` — so a
+  workflow cannot read the row off its own log. Requested assays (`request_assay`, priced
+  in `configs/tools/assays.yaml`) are drawn from the truth channels with the lab sensor's
+  own noise model, keyed by day so a repeated request returns the same value.
 - **The visible call log cannot tell a faulted run from a clean one**: S0-01 and S5-01
   produce logs of the same length, the same names and the same field set.
 - **Nothing visible says when a run was generated, or how long it took.** The generation

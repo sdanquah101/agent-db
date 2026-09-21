@@ -1,0 +1,23 @@
+# bayes_mcmc (proposal §6.2): reduced-parameter MCMC with a configurable likelihood
+# (gaussian / ar1 / heteroscedastic). Schema tools/config.py::MCMCConfig. emcee's
+# affine-invariant ensemble sampler (decisions log, 2026-09-21); uniform box prior over
+# the bounds. Cost bound: n_walkers x n_steps model evaluations (plus the walkers' initial
+# positions).
+version: 1
+
+n_walkers: 32                  # DESIGN  ceiling (emcee needs at least 2k, even)
+n_steps: 2000                  # DESIGN  ceiling on steps per walker
+burn_in_fraction: 0.25         # DESIGN  discarded from the head of every chain
+thin: 1                        # DESIGN
+max_samples_returned: 4000     # DESIGN  posterior draws returned to the caller (thinned)
+rhat_threshold: 1.1            # DESIGN  Gelman-Rubin split R-hat above which a chain has not converged
+ess_floor: 100                 # DESIGN  effective sample size below which the posterior is not reported
+initial_ball_fraction: 0.05    # DESIGN  walkers start in a ball of this fraction of the bound width
+ar1_rho_default: 0.5           # DESIGN  residual lag-1 correlation of the ar1 likelihood when not given
+heteroscedastic_cv_default: 0.1  # DESIGN  sd = sd_abs + cv |prediction| when the series gives no cv
+
+injected_failure:              # the Level-8 payload: chains that have NOT converged
+  n_walkers: 8                 # DESIGN  few, dispersed walkers ...
+  n_steps: 40                  # DESIGN  ... that barely move: R-hat far above 1.1, ESS tiny
+  spread_fraction: 0.6         # DESIGN  walkers seeded across this fraction of the bound width
+  jitter_fraction: 0.002       # DESIGN  and jittering by this much

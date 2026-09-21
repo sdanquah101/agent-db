@@ -1771,3 +1771,110 @@ truth store through a runtime-assembled path — the recorded blind spot, not a 
 lead's approval — not this session's to do.
 
 **The next session starts on:** hold for the lead's `launch: tool-registry`.
+
+---
+
+## Milestone 4 — Tool registry v1.0, frozen (weeks 10–13)
+
+Exit criterion: every tool unit-tested; call logging complete; budgets enforceable.
+
+### Session 2026-09-21 — the tool registry (`claude/tool-registry`, draft PR)
+
+Gate G1 frozen at `9f635df` (PR #15 merged 2026-09-21; tag pending on the lead). Launched
+by the coordinator on the lead's "Lets move to the next task", read as
+`launch: tool-registry` (decisions, first entry of 2026-09-21). Branched from `9f635df`;
+nothing under `sim/`, `scenarios/`, `state/` or the frozen configs is touched.
+
+**Done.**
+
+- **Part A, the core** (`tools/registry.py`, `tools/models.py`, `tools/schemas/`,
+  `tools/config.py`): `Registry.call(name, **args)` validates against a Pydantic input
+  with a unit on every numeric field, checks the budget (declared evaluation bound,
+  wall clock since opening, assay units) and refuses with `budget_exceeded` before
+  running, meters every model evaluation inside the tool and stops an overrun mid-way,
+  applies the Level-8 directive in memory (`bayes_mcmc` returns non-converged chains:
+  R-hat > 1.1, ESS below the floor, `converged=False`, a warning, a return value not an
+  exception; truth-side outcome `injected_failure`, visible outcome `ok`), logs one
+  record per call through `state.provenance.CallLog` in projection mode continuing the
+  harness's sequence (and a full record truth-side), and reports the remaining budget for
+  the task state. Every stochastic tool takes a seed; same seed, bit-equal output.
+- **Part B, the process boundary** (`tools/transport.py`, `tools/server.py`,
+  `tools/client/`, `tools/sandbox.py`; `docs/tool_registry_design.md` §4): proposed and
+  built as a socket server in the privileged process and a workflow subprocess in which
+  `sim`, `scenarios`, `anchor`, `eval` and `state` do not resolve (`-I -S`, a staged stub
+  as `tools`, a fail-closed bootstrap, an empty cwd). `tests/test_tool_sandbox.py` drives
+  every named route and a negative control. **Accepted by the coordinator** under the
+  lead's delegation (2026-09-21) with one required hardening (the child-interpreter
+  route: a plain child of the host interpreter ran `site` and the editable install's
+  hook resolved `sim`), built as a dedicated sandbox venv; then the fresh-context review
+  at `b9ca487` returned DO NOT MERGE on the host-interpreter route (B1: `/usr/bin/python3`
+  by name or `PATH`, and `/proc/<ppid>` of the privileged process) and the sandbox became
+  a **user + mount + pid namespace with a private root** in the one fix round: nothing of
+  the host but `/usr/lib`, the bare interpreter binary, the venv, the box and a fresh
+  `/proc` exists inside; fail closed; C1 (probes inheriting `PYTHONPATH`) fixed; CI
+  enables unprivileged user namespaces on the Ubuntu 24.04 runner.
+- **Part C, requested assays** (`tools/assays.py`, `configs/tools/assays.yaml`): eight
+  assays priced and timed, served from the truth channels with the lab sensor's noise
+  model, keyed by day, charged from `assay_units`.
+- **Part D, the tools of §6.2**, each a pure function of its validated input, a metered
+  model and a seed, each with a known-answer test (`tests/test_tools_known_answers.py`):
+  `data_qc` (planted flatline, spike, drift, event gaps), `mass_balance` (a balanced
+  digester closes at 0; an unrecorded delivery opens it; charge consistency from pH,
+  alkalinity, VFA, TAN), `gsa_morris` (linear-additive: μ = μ* = coefficient × range,
+  σ = 0), `gsa_sobol` (Ishigami closed form and scipy's estimator), `profile_likelihood`
+  (flat on the ridge y = a + b, closed on y = at + b with the OLS interval),
+  `fisher_info` (rank-one FIM, null direction (1, −1)/√2, correlation −1),
+  `fit_lsq`/`fit_de`/`fit_cmaes` (the OLS optimum from synthetic data), `bayes_mcmc`
+  (posterior N(ȳ, σ²/n) recovered; 90 % intervals cover at the nominal rate over 16
+  seeds; three likelihoods agree), `filter_enkf` (tracks the Kalman filter on a linear
+  system through a gap), `filter_mhe` (recovers a slow parameter of a driven system),
+  `residual_diag` (names the load covariate; white noise unstructured; AR(1) serially
+  structured), `voi_assay` (the Gaussian closed form ½ ln(1 + σ²ₚ/σ²ₙ)), `validate`
+  (hand-computed MAE/RMSE/bias/coverage/interval score/CRPS, the Gaussian CRPS constant),
+  plus `describe_model`, `simulate`, `feed_loads`, `request_assay`. Every numerical
+  setting is in `configs/tools/*.yaml` (twelve files) behind Pydantic schemas.
+- **The fitted model** (`tools/fitted.py`, `tools/privileged.py`): `adm1_fitted` from
+  declared quantities only, the extensions declared as fitted applied silently, twenty
+  multiplier parameters with the same interface on a Level-0 and a Level-6 cell; ~0.8 s
+  per evaluation at 40 d on Plant C including the 400-d burn-in. `open_registry(run_id)`
+  reads the cell through the truth-side index, the directive from `faults.json`, the
+  fitted extensions from `parameters.json`, the seed as a keyed child of the observation
+  stream, and continues both logs (`tests/test_tool_fitted_model.py`).
+- **Records**: six decisions entries (the launch reading; the process boundary; the
+  libraries; the fitted model; the eval-counting rule, wall clock and visible outcome;
+  the assays); the benchmark card §4.1; `configs/README.md`; `tests/README.md`;
+  `pyproject.toml` (emcee, cma; the three new sub-packages).
+
+**Measured.** `ruff check .` and `ruff format --check .` clean; the four new test files:
+59 tests. Full default suite (no `PYTHONPATH`) at the jail commit: 448 passed, 2 skipped
+(the pre-existing Muscatine SCADA skips), 13 deselected, no warnings, 7 min 49 s; the g1
+panel: 13 passed, 4 min 32 s (nothing under `sim/` or the frozen configs changed; CI
+runs it because `configs/tools/` is new). CI on the GitHub runner builds the jail
+through the sysctl step and passes the same tests.
+
+**Not done / limits, stated plainly.** (1) The process boundary is proposed, built and
+tested, not ruled on; the container form is deferred to release. (2) The fitted model is
+not exercised through a full-horizon fit in the tests (a 200-d evaluation is ~4 s and a
+Morris screen of 100 trajectories over 20 parameters is 2,100 of them); P0 will be the
+first full-horizon user and the budgets of the scenario files were set before the cost
+per evaluation was measured. (3) `filter_enkf`/`filter_mhe` run on registered
+state-space models; the ADM1 state-space adapter (one-day transitions of the fitted
+model with augmented slow parameters) is not built — the Level-4 row can be answered
+with `simulate(biomass_scale=…)` and the fitters until it is. (4) `mass_balance`'s charge
+check is the digestate's implied strong-ion difference, not a full charge closure of feed
+against effluent, because the feed's charge is declared only as strong cations minus
+anions.
+
+**Decided under delegation** (`docs/tool_registry_design.md` §6; the lead may overrule at
+the gate): the process boundary; the fitted model's visible contract; the `(tool,
+probability)` reading of the Level-8 directive; wall clock as time since opening, with the
+clock start written as the registry's first record (`registry.open`) to both logs.
+
+**The next session (P0, §6.5) starts on:** `workflows/p0_scripted/`, a workflow script
+run through `tools.sandbox.launch` against `tools.open_registry(run_id)`: QC → balance
+check → Morris → Sobol → profiles → screened fit (LSQ then DE) → MCMC on the screened
+subset → validate, with its thresholds declared in `configs/` before any agent code;
+first task, a pilot on one Plant C cell to measure the cost of a full-horizon
+evaluation against the frozen budgets (§7: "chosen from pilot runs so P0 completes
+comfortably"). If the ADM1 state-space adapter is wanted for the Level-4 row, it is a
+registry follow-up, not P0's.

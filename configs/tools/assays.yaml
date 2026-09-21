@@ -1,0 +1,25 @@
+# Requested assays (proposal §6.4): "Assays beyond the tier's schedule can be requested
+# by a workflow at a declared cost and turnaround from a fixed budget."
+# Served by tools/assays.py from the run's truth-side channels with the SAME noise model
+# the observation layer applies to the corresponding lab sensor
+# (configs/observation/sensors.yaml), priced here in the dimensionless `assay_units` of
+# the scenario's budget block. Schema: tools/config.py::AssayCatalogue.
+#
+# Every value is DESIGN: no open price list of digester laboratory assays exists. The
+# relative prices follow effort — a titration or a solids oven is cheap and same-day, a GC
+# speciation or a COD digest costs more and takes longer — and the unit costs are small
+# integers so that the frozen budgets (2-8 units per cell, scenarios/*.yaml) buy a handful
+# of extra samples, which is what RQ4 needs to measure.
+version: 1
+
+assays:
+  alkalinity:     {channel: alkalinity_total, sensor: alkalinity,   unit_cost: 1, turnaround_d: 1}   # DESIGN
+  vfa_total:      {channel: vfa_titrimetric,  sensor: vfa_total,    unit_cost: 1, turnaround_d: 1}   # DESIGN
+  tan:            {channel: tan,              sensor: tan,          unit_cost: 1, turnaround_d: 1}   # DESIGN
+  cod_total:      {channel: cod_total,        sensor: cod_total,    unit_cost: 2, turnaround_d: 2}   # DESIGN
+  vfa_speciation: {channel: vfa_ac,           sensor: vfa_ac,       unit_cost: 2, turnaround_d: 3,   # DESIGN
+                   companions: {vfa_pro: vfa_pro, vfa_bu: vfa_bu, vfa_va: vfa_va}}  # one GC run, four acids
+  digestate_ts:   {channel: ts,               sensor: digestate_ts, unit_cost: 1, turnaround_d: 1}   # DESIGN
+  digestate_vs:   {channel: vs,               sensor: digestate_vs, unit_cost: 1, turnaround_d: 1}   # DESIGN
+  free_ammonia:   {channel: free_ammonia,     sensor: tan,          unit_cost: 1, turnaround_d: 1}   # DESIGN
+                   # computed from TAN and pH at the plant; carries the TAN assay's noise

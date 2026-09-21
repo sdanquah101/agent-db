@@ -1,0 +1,20 @@
+# profile_likelihood and fisher_info (proposal §6.2, review §13: sensitivity is not
+# identifiability). Schema tools/config.py::IdentifiabilityConfig.
+version: 1
+
+profile:
+  n_grid: 21                   # DESIGN  ceiling on profile points per parameter
+  n_starts: 5                  # DESIGN  ceiling on multistarts per profile point
+  max_nfev_per_start: 200      # DESIGN  least_squares budget per start
+  confidence_level: 0.95       # DESIGN  the chi-square threshold on the profile (1 dof)
+  flat_fraction: 0.10          # DESIGN  a profile whose rise over its grid is below this
+                               # fraction of the threshold is FLAT: practically non-identifiable
+  ftol: 1.0e-8                 # DESIGN  least_squares tolerances (scipy defaults)
+  xtol: 1.0e-8
+  gtol: 1.0e-8
+
+fisher:
+  relative_step: 1.0e-4        # DESIGN  central-difference step as a fraction of |theta| (floor abs_step)
+  abs_step: 1.0e-8             # DESIGN
+  rank_tolerance: 1.0e-8       # DESIGN  eigenvalue / max eigenvalue below which a direction is null
+  condition_warning: 1.0e+8    # DESIGN  condition number above which the FIM is reported ill-conditioned

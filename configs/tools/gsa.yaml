@@ -1,0 +1,16 @@
+# gsa_morris and gsa_sobol (proposal §6.2). Schema tools/config.py::GSAConfig.
+# Ceilings: a workflow may ask for FEWER trajectories or samples than these (that is how a
+# budget is spent), never more. Cost is charged per model evaluation:
+#   Morris: n_trajectories x (k + 1);  Sobol: n_samples x (2k + 2) with second order,
+#   n_samples x (k + 2) without (Saltelli 2010 design, Jansen estimators).
+version: 1
+
+morris:
+  n_trajectories: 100          # DESIGN  ceiling; Campolongo et al. 2007 use 10-50 for screening
+  n_levels: 4                  # DESIGN  grid levels p (even); delta = p / (2 (p - 1))
+sobol:
+  n_samples: 4096              # DESIGN  ceiling on the base sample N (a power of two: the
+                               # design uses a scrambled Sobol sequence, scipy.stats.qmc)
+  second_order: true           # DESIGN  §6.2 asks for interaction evidence
+  bootstrap_resamples: 200     # DESIGN  resamples for the indices' confidence intervals
+  confidence_level: 0.95       # DESIGN

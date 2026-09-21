@@ -24,6 +24,9 @@ dependencies = [
     "scipy>=1.11",
     "pydantic>=2.6",
     "pyyaml>=6.0",
+    # the tool registry (decisions log, 2026-09-21): both depend on numpy alone
+    "emcee>=3.1",
+    "cma>=3.3",
 ]
 
 [project.optional-dependencies]
@@ -46,6 +49,9 @@ packages = [
     "sim.plants.truth",
     "state",
     "tools",
+    "tools.client",
+    "tools.impl",
+    "tools.schemas",
     "workflows",
     "workflows.p0_scripted",
     "workflows.p1_single_agent",

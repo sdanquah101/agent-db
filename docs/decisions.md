@@ -4727,3 +4727,265 @@ record — is prefix-stable, which is true from this commit.
 correct the record to "truth-side only". Rejected by the lead: a horizon change would
 still be a different visible realisation of the same seed, which is what ruling 6 exists
 to prevent.
+
+## 2026-09-21 — The tool-registry session is launched on "Lets move to the next task"
+
+**Decision.** The lead's message of 2026-09-21 to the coordinating session, "Lets move to
+the next task", is read as `launch: tool-registry`, the component `docs/milestones.md`
+named as next in every session since 2026-09-12; the coordinator launched this session on
+it. Recorded because CLAUDE.md makes the literal `launch: <component>` the only thing
+that starts a component session, and this one was started on a paraphrase.
+
+**Alternatives.** Wait for the literal phrase (rejected by the coordinator: the milestones
+file left one next task and the lead named it by position).
+
+## 2026-09-21 — The registry's process boundary: a socket server and a sandboxed workflow process (PROPOSED; the decision delegated to the coordinator)
+
+**Who decides.** The lead delegated the transport decision to the coordinator, 2026-09-21
+(relayed ~01:05 UTC): the coordinator accepts the proposal on the lead's behalf provided it
+(i) meets the recorded requirement (decisions 2026-09-12: a workflow process in which `sim`,
+`scenarios/` and `truth_store/` are neither importable nor readable), (ii) carries the
+demonstrating test with a negative control, and (iii) touches nothing under `sim/`,
+`scenarios/` or the frozen configs. Only a deviation from (i)–(iii) goes to the lead. The
+proposal below is built to those three conditions; the record of the coordinator's
+acceptance belongs in the entry that follows it.
+
+**Decision (proposed; `docs/tool_registry_design.md` §4).** The structural defence the
+2026-09-12 rounds deferred to this component is a **process boundary**: the registry
+(`tools.Registry`: `sim`, budgets, logs, the assay channel into the truth store) lives in
+the privileged process and is served on a Unix-domain socket (`tools.server`); the
+workflow runs in a subprocess (`tools.sandbox`) started with `python -I -S`, a
+`sys.path` of the standard library, a staged copy of the client stub as `tools`
+(`tools.client` + `tools.schemas` + `tools.transport`) and the interpreter's package
+directories, an empty working directory, and an environment holding the socket path; a
+bootstrap refuses to run the workflow if `sim`, `scenarios`, `anchor`, `eval` or `state`
+resolves (fail closed). The workflow's `import tools` is the stub; `tools.call` crosses
+the socket; the run's observations are served through `state.run_view.open_run` on the
+privileged side, contents only, with the loader's refusal messages stripped of the paths
+they name. `tests/test_tool_sandbox.py` drives a workflow that attempts every named route
+— `import sim` and its siblings, `open("truth_store/…")`, `open("scenarios/…")`, the
+repository-relative spellings, the run's own truth file, walking upwards from the cwd —
+and asserts each fails, with a negative control that calls a tool, reads the sensors and
+gets a budget refusal as the right exception in the same process.
+
+**Cost.** Serialisation (arrays as base64 in requests, JSON lists in replies; kilobytes
+per call against seconds of ADM1); one extra process and one thread per run; the stub is
+copied at launch and asserted equal to its source. **Limit, stated.** A process boundary
+stops imports and relative reads; it does not stop a workflow that is *told* an absolute
+path from opening it. The layout ruling of 2026-09-04 is what covers that (the truth
+store is a sibling the workflow is never told the path of; the sandbox's cwd is empty and
+the run store's path never enters its environment). A container at release (§7's Docker
+image) is the stronger boundary and is proposed on top, not instead.
+
+**Alternatives.** A `sys.meta_path` blocker in the workflow process (removable by the code
+it guards — the runtime form of the checker whose limit is recorded); a container now
+(stronger; a runtime the benchmark does not yet ship); an in-process registry (gives the
+workflow `sim` by transitive import — the thing forbidden). A virtual environment per run
+was first rejected as "the same guarantee as `-S` with a manual path, more setup"; the
+acceptance finding below shows it is not the same guarantee, and it is now the mechanism.
+
+## 2026-09-21 — Part B ACCEPTED by the coordinator under the lead's delegation, with one required hardening: the child-interpreter route
+
+**Finding** (the coordinator, ~02:05 UTC, reproduced at `c962708` and by this session). A
+workflow run through `tools.sandbox.launch` did `subprocess.run([sys.executable, "-c",
+probe])` with no `-I -S`. The child inherited the sandbox's environment but was a normal
+interpreter: `site` ran, the editable install's `__editable__.ad_agentbench-0.1.0.pth` in
+the host's package directory installed its finder, and the child resolved `sim` at
+`/home/user/agent-db/sim/__init__.py`, from which `sim.__file__` gives the repository root
+and `<root>/truth_store/index.jsonl` — present in any production run. CI installs with
+`pip install -e ".[dev]"`, so the hook is everywhere the tests run. The design's recorded
+limit ("an absolute path the workflow is told") did not cover it: the path was
+*discovered*. Conditions (ii) and (iii) held; condition (i) held for the workflow process
+and not for a process it spawns.
+
+**Decision (built as required).** (1) The sandbox runs on a **dedicated interpreter
+environment** — the coordinator's option (a): a virtual environment of the host
+interpreter holding numpy, scipy and pydantic pinned to the host's versions and nothing
+else (not the project, not emcee or cma), built once per host interpreter and package set
+with the host's pip into the venv's site-packages, cached under
+`AD_AGENTBENCH_SANDBOX_HOME` (default `~/.cache/ad-agentbench`), and re-checked on every
+use to resolve none of `sim`, `scenarios`, `anchor`, `eval`, `state`
+(`tools.sandbox.sandbox_interpreter`; `launch(python=...)` defaults to it). Neither the
+sandbox process nor any child of it has a hook to run, in CI as well. (2) The bootstrap's
+fail-closed check also spawns a **plain child** with the sandbox's environment and no
+flags and refuses to run the workflow if a forbidden module resolves there; the host
+interpreter of the editable install trips it (tested: exit 3, "a plain child interpreter
+resolves ['sim']"). (3) `launch` **refuses a sandbox directory** under the repository
+root, the run store or the run store's parent (tested on all four placements). (4) The
+sandbox test's workflow spawns a plain child that attempts `import sim` and the truth-index
+read through `sim.__file__`; both fail, the negative control is unchanged, and the child
+is shown to be the sandbox environment's interpreter. Recorded in
+`docs/tool_registry_design.md` §4 and the benchmark card §4.1.
+
+**Also decided under the delegation, as recorded interpretations the lead may overrule at
+the gate.** (2) The fitted model's visible contract — the same parameter and output list
+on every run, extension parameters not calibratable — accepted: it is what §6.7 A implies
+and it stops the interface leaking the rung; recorded in the card. (3) `(tool,
+probability)` per `WorkflowFaults` — accepted; the launch note was wrong. (4) Wall clock as
+time since the registry was opened — accepted, with the requirement that the clock start
+is written to the truth-side log: the registry's first record is `registry.open` (the
+budget as arguments, the opening timestamp in the truth-side copy, runtime 0, detail
+"clock start"), so the evaluator can reconstruct the allowance; the visible projection
+carries the same record without the timestamp.
+
+**Cost.** One venv per environment (~8 s from a warm pip cache, longer cold; it needs
+network or a populated cache the first time), ~1 GB of disk for scipy and numpy, and two
+extra interpreter starts per launch (the site query and the child probe).
+
+## 2026-09-21 — Libraries of the registry: emcee and cma in, SALib out (own Morris and Sobol)
+
+**Decision.** `emcee>=3.1` (the affine-invariant ensemble sampler, for `bayes_mcmc`) and
+`cma>=3.3` (Hansen's CMA-ES, for `fit_cmaes`) join `pyproject.toml`; both depend on numpy
+alone. **SALib is not added**: version 1.6 requires pandas, matplotlib and multiprocess
+for two estimators of a few dozen lines, so Morris (Morris 1991 trajectories, Campolongo's
+μ*) and Sobol (the Saltelli 2010 design with Jansen's first- and total-order estimators
+and Saltelli 2002's second order, on a scrambled Sobol sequence from `scipy.stats.qmc`)
+are implemented in `tools/impl/gsa.py` and tested against the closed-form indices of a
+linear-additive function and of Ishigami (a = 7, b = 0.1), and against scipy's own
+`sobol_indices` as an independent estimator. SciPy's `least_squares` and
+`differential_evolution` are the fitters' engines.
+
+**Why emcee's own ESS is not used.** The autocorrelation-time ESS of an ensemble
+(the walker-averaged chain) reports ~n·m for walkers that jitter in place at different
+points — exactly the non-converged payload of the Level-8 row — so `bayes_mcmc` reports
+the multi-chain ESS of Gelman et al. (2013) as Stan implements it (within-chain
+autocovariances against the pooled variance, Geyer's initial monotone sequence), which
+collapses to the order of the number of chains when they have not mixed, together with
+split-R-hat over the walkers.
+
+**Alternatives.** SALib (rejected for its dependency weight in a benchmark runtime); a
+hand-written adaptive Metropolis in place of emcee (rejected: emcee is the standard,
+tested choice and its stretch move needs no tuning on correlated posteriors); scipy's
+`sobol_indices` alone (no second order, which §6.2 asks for).
+
+## 2026-09-21 — The fitted model: BSM2 ADM1 plus the fitted extensions, multipliers of the defaults, the same interface on every run
+
+**Decision.** `adm1_fitted` (`tools/fitted.py`) is `sim.adm1` at the BSM2 parameters plus
+the extensions the plant declares as fitted for the run — `parameters.json:
+fitted_extensions` in the truth store, which the privileged side reads and applies
+**silently**. Its influent is the operator's feed log through the declared catalogue at
+catalogue solids, day by day, with Plant B's declared blend tank; its geometry the
+declared one; its initial state a burn-in on the feed log's reference recipe at the
+parameters being evaluated (the harness's staging on declared quantities), or a caller's
+`initial_state` / `biomass_scale` (the Level-4 unknown). Its calibratable parameters are
+twenty base ADM1 kinetic and stoichiometric parameters by name, as **multipliers** of the
+default inside the bounds of `configs/tools/model.yaml` (a product fraction is rescaled
+with its group); extension parameters are not calibratable; the parameter list, the
+output list and the units are **the same on every run** (tested on a Level-0 and a
+Level-6 cell of Plant C), so a workflow cannot read the rung off the model's interface.
+What differs on a Level-6 row is what the model predicts, which is the diagnostic task.
+**Open point 2 for the lead** (design §6): confirm this is the intended visible contract.
+
+**Alternatives.** Exposing extension parameters (would name the omitted extension on a
+Level-6 cell); absolute parameter values rather than multipliers (harder to bound
+uniformly, and the multiplier of 1 is the honest default); starting every evaluation from
+the published R&J 2006 state without a burn-in (the first weeks of every fit would be a
+start-up transient no fault caused — the reason the harness burns in).
+
+## 2026-09-21 — The evaluation-counting rule, and what the wall clock and the visible outcome mean
+
+**Decision.** One call of a registered model on one parameter vector is **one simulator
+evaluation**, whatever the model; the fitted ADM1's evaluation includes its burn-in.
+Every tool declares an upper bound on the evaluations a call will make (Morris
+`r (k + 1)`, Sobol `N (2k + 2)`, a profile `n_grid · n_starts · max_nfev`, a fit
+`n_starts · max_nfev`, MCMC `n_walkers (n_steps + 1)`, the EnKF `n_ensemble · n_steps`
+transitions), the registry refuses a call whose bound exceeds what remains with outcome
+`budget_exceeded` before anything runs, and a `MeteredModel` charges the evaluations
+actually made — a tool that would overrun is stopped inside the model call, its partial
+result discarded and its spent evaluations charged. Every stochastic tool takes an
+explicit `seed`; the same seed gives bit-equal output (tested on five tools). A workflow
+may ask for fewer trajectories, samples, starts or steps than the config's ceiling, never
+more. **Wall clock** is enforced as time since the registry was opened for the run
+(agent thinking time included, which is what §6.7 C measures), against an injectable
+clock. **Assay units** are charged per request at the catalogue price before the call.
+
+**The visible outcome of an injected failure is `ok`.** The truth-side log records
+`injected_failure` (so §6.7 D can tell it from a real error); the projection under
+`runs/<id>/` records `ok`, because a workflow that could read `injected_failure` off its
+own log would have the answer to the Level-8 row. The registry's seed, which keys the
+Level-8 stream and the assay noise, is `SeedSequence([observation seed, key("registry")])`:
+`sim.run.seeds` is frozen with G1 and gains no sixth stream, so the registry takes a keyed
+child of one of the five.
+
+**The Level-8 directive** is built as `sim.faults.plan.WorkflowFaults` carries it —
+`(tool, probability)`, a per-call Bernoulli from a keyed stream, 1.0 in S8-01 so every
+call fails — rather than the `(tool, onset)` the launch note said (open point 3).
+
+**Alternatives.** Charging a declared cost rather than the evaluations made (over-charges
+an early-stopping fitter); wall clock as summed tool runtime (would not measure what §6.7
+C measures); a visible `injected_failure` (leaks the row).
+
+## 2026-09-21 — Requested assays: priced in `configs/tools/assays.yaml`, drawn from the truth with the lab sensor's noise, keyed by day
+
+**Decision.** `request_assay(assay, day)` is served by `tools.assays.AssayServer` on the
+privileged side from `truth_store/<id>/channels.npz`, with the noise model of the
+corresponding lab sensor in `configs/observation/sensors.yaml` applied exactly as
+`sim.observation.model._sensor_series` applies it (`value (1 + cv z₁) + sd_abs z₂`, two
+independent draws), reported on `day + turnaround`. The draw is keyed
+`SeedSequence([registry seed, key("assay", assay, channel), day])`, so the same day asked
+twice returns the same number and a workflow cannot average noise away by repeating a
+request (each request is still charged). Eight assays are priced at 1–2 units with 1–3 d
+turnarounds, all DESIGN (no open price list exists); `vfa_speciation` returns the four
+acids for one request. The mass-balance N closure is admissible inside an *expected
+organic-N share* band (`n_closure_expected: [0.05, 0.65]`) rather than near zero, because
+only TAN is observed in the effluent.
+
+**Alternatives.** Serving assays from the visible sensor record (would give nothing the
+tier does not already have); an unkeyed draw per request (averaging attack); the
+generator's feed-assay noise model (a digestate assay is the observation layer's, not the
+influent generator's).
+
+## 2026-09-21 — Review at `b9ca487`: DO NOT MERGE on the host-interpreter route (B1); the sandbox becomes a namespace jail
+
+**Finding B1** (the coordinator's fresh-context adversarial review, ~02:50 UTC, reproduced
+by the coordinator and by this session). The dedicated venv closed `sys.executable` only.
+A workflow that ran `subprocess.run(["/usr/local/bin/python3", "-c", …])` or
+`["/usr/bin/python3", …]`, or `shutil.which("python3")` (the host `PATH` was passed
+through), got the host interpreter, whose editable-install `.pth` resolved `sim` at the
+repository root; `dirname(dirname(sim.__file__))` is the root and `<root>/truth_store/
+index.jsonl` the live answer key of any production run. Two more of the same class:
+`os.readlink("/proc/<ppid>/cwd")` gave the privileged process's working directory (the
+repository) and `/proc/<ppid>/environ` its environment. The bootstrap probed only
+`sys.executable`; the test spawned only `sys.executable`; the design, the decisions entry
+and card §4.1 claimed the class closed. **Finding C1**: `_forbidden_resolving` and the
+venv clean-check inherited the environment, so an ambient `PYTHONPATH` made the clean
+venv look dirty.
+
+**Decision (built in the one fix round the delegation allowed).** The sandbox is a
+**user + mount + pid namespace with a private root** (`tools/sandbox.py`): `unshare
+--user --map-root-user --mount --pid --fork --kill-child` runs a shell script that mounts
+a tmpfs root, bind-mounts into it `/usr/lib` (read-only), the interpreter's own library
+directory where it lies elsewhere — with every `site-packages` and `dist-packages` inside
+them hidden under an empty tmpfs — the interpreter **binary alone** as
+`/usr/bin/python-jail` with the symlinks the venv's chain needs, the venv at `/venv`, the
+sandbox directory at `/box`, four device nodes, `ld.so.cache` and a fresh `/proc`, then
+`pivot_root`s and unmounts the old root. Nothing of the host but those exists inside: no
+`/usr/bin/python3`, no `/usr/local/bin/python3`, no `/home`, no repository, no run store,
+and the privileged process is not in the pid namespace (`os.getppid()` is 0, `/proc/0`
+does not exist). `PATH` inside is `/venv/bin`. The bootstrap's fail-closed probe spawns a
+plain child of every interpreter name it can find (its own, `/usr/bin/python3`,
+`/usr/local/bin/python3`, `/usr/bin/python3.11`, `shutil.which("python3")`) and exits
+without running the workflow if any resolves a forbidden module. **Fail closed**: `launch`
+raises `SandboxError` when `unshare` is missing or the jail script exits before the pivot
+(exit 111); there is no unjailed mode (tested with `which` patched out and with a jail
+script forced to fail). Both probes run in a scrubbed environment (C1). The test's
+workflow now attempts the host interpreters by name (each absent), `/proc/<ppid>/cwd` and
+`/proc/<ppid>/environ` (absent), the repository root, the run store, its parent and the
+truth index by their absolute paths (absent), `/home` and the host `/tmp` (absent), the
+plain-child route as before, and the negative control unchanged; a further test shows
+the jail leaves no mount behind.
+
+**CI.** GitHub's Ubuntu 24.04 runner restricts unprivileged user namespaces through
+AppArmor; `.github/workflows/ci.yml` sets
+`kernel.apparmor_restrict_unprivileged_userns=0` with `sudo sysctl` where the key exists
+(22.04 has none) and proves `unshare --user --map-root-user --mount --pid --fork true`
+before pytest, in the test and g1 jobs.
+
+**What the jail is not.** A boundary against a kernel exploit, or a limit on CPU or
+memory. The record now claims exactly what the test demonstrates.
+
+**Alternatives.** A container now (docker is present here; a heavier runtime the tests
+would then require everywhere, and the same guarantee); `chroot` + `setuid(nobody)` when
+root (needs root, which CI's runner user is not without `sudo`); enumerating the host
+interpreter names and `/proc` paths (the deny-list shape the 2026-09-12 rounds already
+showed does not close).
