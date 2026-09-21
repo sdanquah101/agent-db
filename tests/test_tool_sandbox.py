@@ -48,7 +48,14 @@ from sim.run.harness import generate_run
 from state.provenance import read_calls
 from tests.conftest import REPO_ROOT
 from tools import AnalyticModel, Budget, make_registry, open_registry
-from tools.sandbox import FORBIDDEN_MODULES, SandboxError, launch, sandbox_interpreter, stage
+from tools.sandbox import (
+    FORBIDDEN_MODULES,
+    SandboxError,
+    _library_directories,
+    launch,
+    sandbox_interpreter,
+    stage,
+)
 from tools.server import RegistryServer
 from tools.transport import decode_arrays, encode_arrays, read_message, write_message
 
@@ -279,9 +286,13 @@ def test_a_workflow_in_the_sandbox_cannot_reach_sim_scenarios_or_the_truth_store
         assert outcome != "READ", (label, outcome)
     assert "home" not in report["root"] and "root" not in report["root"]
     assert report["tmp_listing"] == []
+    # the root holds the jail's own directories and, where the host interpreter's library
+    # directory lies outside /usr/lib (a runner's /opt/hostedtoolcache), its top component
+    libdir_tops = {Path(d).parts[1] for d in _library_directories(sandbox_interpreter())}
     assert set(report["root"]) <= {
-        "box", "dev", "etc", "lib", "lib64", "oldroot", "proc", "tmp", "usr", "venv"
+        "box", "dev", "etc", "lib", "lib64", "oldroot", "proc", "tmp", "usr", "venv", *libdir_tops
     }  # fmt: skip
+    assert not {"home", "root", "run", "runs", "truth_store", "srv", "mnt"} & set(report["root"])
 
     # ... and the negative control did legitimate work through the stub
     control = report["control"]
