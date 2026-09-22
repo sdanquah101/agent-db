@@ -5365,3 +5365,24 @@ corrected: five of five forbidden kinetic updates, eight of twenty estimates at 
 where one meter exists; rejected); treating unmapped claims as supported (rejected: it
 rewards a workflow for inventing evidence keys); excluding state-less runs from the
 attribution rate (rejected: §6.7 D).
+
+## 2026-09-22 — The lead's ruling on the Level 0–5 sweep: single-seed, now, three in parallel, its own PR
+
+**Ruling** (the lead, relayed by the coordinator ~13:00 UTC after PR #19 merged at
+`b715fc2`: "run your recommendation on the sweep"). (1) The 78-cell **single-seed**
+Level 0–5 sweep runs now; the 5-replicate matrix is for the final pre-registered runs
+(§7), not this baseline. (2) **Three** cells in parallel. (3) The sweep table goes in
+**its own PR** (`claude/p0-sweep`, from `b715fc2`).
+
+**How it runs** (the PR #19 plan, unchanged; no code changes). Three detached driver
+processes, each with a fixed list of 26 cells ordered longest first (Plant A's 365-day
+cells, then the 120-minute rows, then the 90-minute rows), dealt greedily by expected
+minutes; one `tools.runner` invocation per cell so the order is the list's; a cell whose
+`summary.json` already exists is skipped (the eight Level 0–5 pilot cells of this
+container's store count, at the same frozen P0 and budgets); a crashed cell is re-run
+alone by id. Every ~3 hours the three scratch tables are merged into
+`reports/p0_sweep.csv`, every scored run into `reports/p0_sweep_scored*.{csv,json}`, and
+the branch is committed and pushed with a "cells done / 78" line, so the table survives
+a container loss: a fresh session regenerates the matrix (ids are store-specific; the
+table carries scenario, plant, tier and seed) and resumes from the cells not in it.
+Nothing is tuned on the sweep (P0 is frozen); the table is what it is.
