@@ -60,6 +60,7 @@ from tools.server import RegistryServer
 __all__ = [
     "FORBIDDEN_MODULES",
     "JAIL_EXIT",
+    "JAIL_MARKER",
     "SANDBOX_PACKAGES",
     "SandboxError",
     "SandboxResult",
@@ -77,7 +78,16 @@ SANDBOX_PACKAGES: tuple[str, ...] = ("numpy", "scipy", "pydantic")
 the project, not emcee or cma (the tools run on the privileged side)."""
 
 JAIL_EXIT = 111
-"""Exit status of the jail script when the jail could not be built (never the workflow's)."""
+"""Exit status of the jail script when the jail could not be built.
+
+A workflow may exit with the same number, so :func:`launch` does not read the status
+alone: the jail script writes :data:`JAIL_MARKER` into the sandbox directory once it has
+pivoted and is about to start the interpreter, and a ``JAIL_EXIT`` *without* the marker is
+the jail's failure, *with* it the workflow's exit code (jail review, 2026-09-21, nit 2)."""
+
+JAIL_MARKER = "jail.started"
+"""File the jail script creates in the sandbox directory just before it starts the
+workflow interpreter; its absence after a ``JAIL_EXIT`` means the jail never got there."""
 
 _PACKAGE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = _PACKAGE_DIR.parent
@@ -324,6 +334,10 @@ _JAIL_SCRIPT = textwrap.dedent(
     export PATH=/venv/bin
     export HOME=/box/cwd
     unset JAIL_ROOT JAIL_LIBDIRS JAIL_HIDE JAIL_PYBIN JAIL_PYLINKS JAIL_VENV JAIL_BOX
+    # the jail is built: from here an exit status is the workflow's (a shell builtin
+    # redirection, because nothing of the host's /bin exists any more)
+    : > "/box/$JAIL_MARKER" || fail "marker"
+    unset JAIL_MARKER
     exec /venv/bin/python -I -S -c "$AD_AGENTBENCH_BOOTSTRAP"
     """
 )
@@ -449,6 +463,7 @@ def launch(
     sandbox: str | Path,
     run_dir: str | Path | None = None,
     timeout_s: float = 600.0,
+    workflow: str | None = None,
 ) -> SandboxResult:
     """Run a workflow script in the jail against ``registry``.
 
@@ -456,12 +471,21 @@ def launch(
         script: The workflow script (copied into the sandbox before it runs).
         registry: The registry to serve, from the privileged side.
         sandbox: A directory for the stub, the socket and the workflow's cwd. Must not lie
-            under the repository root, the run store or the run store's parent.
+            under the repository root, the run store or the run store's parent. **It is
+            single-use per launch**: the ``/box`` bind is read-write, so the workflow can
+            leave anything in it (its cwd, files beside the stub), and a second launch in
+            the same directory would start from what the first left behind. Give every
+            launch a fresh directory; ``launch`` re-stages the stub, the workflow, the
+            socket and the marker, but does not empty the directory.
         run_dir: ``runs/<id>/`` whose observations the run view serves, if any.
         timeout_s: Kill the workflow after this long.
+        workflow: The workflow's name; with ``run_dir``, lets the workflow write its own
+            outputs into ``runs/<id>/workflows/<workflow>/`` through ``tools.run.write_output``.
 
     Returns:
-        The process outcome and how many requests the server answered.
+        The process outcome and how many requests the server answered. A workflow's own
+        exit status is returned as it is, :data:`JAIL_EXIT` included (the jail's marker
+        tells the two apart).
 
     Raises:
         SandboxError: If the sandbox directory is in a forbidden place, the sandbox
@@ -480,8 +504,8 @@ def launch(
     stage(box)
     work = box / "cwd"
     work.mkdir(exist_ok=True)
-    workflow = box / "workflow.py"
-    shutil.copy2(script, workflow)
+    staged_script = box / "workflow.py"
+    shutil.copy2(script, staged_script)
     socket_path = box / "registry.sock"
     if socket_path.exists():
         socket_path.unlink()
@@ -489,6 +513,9 @@ def launch(
     jail_root.mkdir(exist_ok=True)
     jail_script = box / "jail.sh"
     jail_script.write_text(_JAIL_SCRIPT, encoding="utf-8")
+    marker = box / JAIL_MARKER
+    if marker.exists():
+        marker.unlink()
     # the venv's site-packages as seen from inside the jail (the venv is mounted at /venv)
     site_dirs = [
         "/venv" + d[len(str(venv_root)) :] if d.startswith(str(venv_root)) else d
@@ -504,6 +531,7 @@ def launch(
         "JAIL_PYLINKS": " ".join(links),
         "JAIL_VENV": str(venv_root),
         "JAIL_BOX": str(box),
+        "JAIL_MARKER": JAIL_MARKER,
         "AD_AGENTBENCH_BOOTSTRAP": _BOOTSTRAP,
         "AD_AGENTBENCH_REGISTRY_SOCKET": "/box/registry.sock",
         "AD_AGENTBENCH_STUB_DIR": "/box/site",
@@ -522,7 +550,7 @@ def launch(
         "/bin/sh",
         str(jail_script),
     ]
-    server = RegistryServer(registry, socket_path, run_dir=run_dir)
+    server = RegistryServer(registry, socket_path, run_dir=run_dir, workflow=workflow)
     with server:
         completed = subprocess.run(
             command,
@@ -533,7 +561,8 @@ def launch(
             timeout=timeout_s,
             check=False,
         )
-    if completed.returncode == JAIL_EXIT or "unshare:" in completed.stderr[:200]:
+    jail_failed = completed.returncode == JAIL_EXIT and not marker.exists()
+    if jail_failed or "unshare:" in completed.stderr[:200]:
         raise SandboxError(
             "the jail could not be built, so the workflow was not run: "
             + completed.stderr.strip()[-1000:]

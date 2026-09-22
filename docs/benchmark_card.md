@@ -227,6 +227,58 @@ likely to be lost from an online probe during overload and three times during fo
 gaps coincide with exactly the transients that identify the process, and naive
 interpolation across a gap destroys information rather than merely losing precision.
 
+### 4.2 The P0 baseline (milestone 5, 2026-09-21; rules and budgets APPROVED by the lead on the pilot)
+
+P0 (`workflows/p0_scripted/pipeline.py`, `configs/workflows/p0.yaml`, `docs/p0_design.md`)
+is the scripted baseline of §6.5, the strongest fair one rule 5 asks for: what a competent
+engineer would script today, with no branching beyond declared thresholds. It runs inside
+the jail against the registry of a run and sees exactly the visible column of §4.1: the
+sensor record at its tier, the feed log and assays, the notes, the redacted manifest, the
+tools — and its own configuration, handed in by the runner together with the declared
+instrument noise and drift of every sensor and the declared geometry of every plant, the
+same document for every cell. Its sequence: QC on every sensor and declared exclusion
+rules (a drift beyond the instrument's declared bound or a long flatline flags a sensor;
+a drift inside the bound is the instrument being itself) → COD, N and charge closure over
+30-day windows → Morris on the twenty declared parameters → Sobol with second order on the
+Morris subset → Fisher information (profiles when the plan allows) → the screened fit,
+least squares then differential evolution → MCMC on the approved subset → residual
+structure by feed batch, load, temperature and time → the declared assay spend at the day
+of the largest residual → validation on the frozen last quarter of the record → an
+ordered attribution rule (sensor → influent → state → parameter → structural → none) that
+is a pure function of the collected evidence, at the thresholds the lead approved with the
+2026-09-21 amendments on the pilot (decisions log: the QC-missingness path dropped from
+the state rule, a charge inconsistency counted only with pH as the single offending
+channel, three inadmissible COD windows for the influent rule, a 30-day tolerance for a
+common change point). **The budgets of §7** were re-declared on the same pilot:
+`simulator_evals` = allowance × 60 / 12 s per evaluation (450 / 600 / 750 for the 90 /
+120 / 150-minute cells; Plant A scenarios 225 / 300 / 375), the wall-clock allowances and
+assay units unchanged; and P0's declared plan is the one that allowance holds with MCMC
+in it (Morris 4, Sobol 8, one LSQ start, DE 2, MCMC 8 × 10, ≈ 330 evaluations). A
+recorded benchmark property, not tuned away: after a 2–4-parameter fit every channel keeps
+a 5–19σ residual against the declared instrument noise even on Level-0 cells (χ²/n of
+10–100), because the fitted model on the visible feed log differs from the truth even
+when the structure matches; a `none` verdict where P0 cannot resolve a fault is the
+honest baseline of rule 5. The ten pilot cells are development cells; the held-out
+variants of §7 are the evaluation set. Its outputs are the shared task state
+(`state/task_state.py`: data quality per sensor, the classification with its evidence and
+confidence, the screening trail, the residual summaries, every tool call named as the
+call log names it, tool failures, the budget left, the validation, the abstentions, the
+final estimates with intervals and the method that produced them) and a report, written
+through the registry into `runs/<id>/workflows/p0/` and containing nothing that is not
+derivable from the visible record and the tool outputs (tested: no scenario id, seed,
+truth label, salt, path or timestamp). What P0 never does: move a kinetic parameter
+because a note says so (notes are data: day, author, length); report a posterior that did
+not converge (a Level-8 or a genuine non-convergence is a recorded failure, the Fisher
+intervals stand, no retry); fit through a flagged sensor; read the hold-out before the
+validation step. Its budget fallbacks are declared ladders sized with a declared cost per
+evaluation, so the same cell gives the same plan and the same state on every machine at
+least that fast (tested); the one non-deterministic element, a guard at the measured rate,
+is recorded when it trips. Measured at this head: a 200-day evaluation on a generated cell
+costs 11–12 s (the daily feed log caps the integrator step at one day; 2.5–4.4 s on a
+constant log, one stiff vector 274 s), so the wall-clock allowance, not the evaluation
+count, is what sizes P0; the pilot table (`reports/p0_pilot.csv`, `docs/milestones.md`) has the per-cell
+numbers.
+
 ## 5. Anchoring status — read this before quoting any number
 
 | Plant | Anchoring | What that means |

@@ -24,7 +24,7 @@ correct_conclusion:
   kinetic_update_allowed: false
   abstain_on: []
 budget:
-  simulator_evals: 4000
+  simulator_evals: 450   # the lead's budget ruling of 2026-09-21 on the P0 pilot: allowance x 60 / 12 s per evaluation (was 4000)
   wall_clock_min: 90
   assay_units: 2
 seed: 1023

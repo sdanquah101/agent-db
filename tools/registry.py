@@ -38,7 +38,7 @@ from typing import Any
 import numpy as np
 from pydantic import ValidationError
 
-from state.provenance import CallLog, Outcome
+from state.provenance import CallLog, Outcome, args_hash
 from tools import config as cfg
 from tools.models import (
     BudgetExhausted,
@@ -249,12 +249,33 @@ class ToolSpec:
 
 @dataclass(frozen=True)
 class CallOutcome:
-    """What the registry recorded about the last call (for the transport and tests)."""
+    """What the registry recorded about the last call (for the transport and tests).
+
+    ``seq`` and ``args_hash`` are the visible log line's (``runs/<id>/calls.jsonl``), so a
+    workflow's own action record (§6.6) can name the call the way the log does; ``seq`` is
+    ``None`` for a registry that logs nothing visible. Added for the task state (the P0
+    session, 2026-09-21).
+    """
 
     name: str
     outcome: Outcome
+    """The truth-side outcome (``injected_failure`` included)."""
     detail: str
     n_evaluations: int
+    seq: int | None = None
+    args_hash: str = ""
+    version: str = ""
+    visible_outcome: Outcome = "ok"
+    """The outcome the visible log carries (an injected failure reads ``ok``)."""
+
+    def as_record(self) -> dict[str, Any]:
+        """The JSON-safe reference a call envelope carries: nothing the visible log lacks."""
+        return {
+            "seq": self.seq,
+            "args_hash": self.args_hash,
+            "version": self.version,
+            "outcome": self.visible_outcome,
+        }
 
 
 class Registry:
@@ -457,15 +478,31 @@ class Registry:
 
         ``{"outcome": "ok", "output": {...}}`` on success (an injected failure looks the
         same to the caller), ``{"outcome": "budget_exceeded" | "error", "error": msg}``
-        otherwise.
+        otherwise. Every envelope carries ``"record"``: the visible log line's ``seq`` and
+        ``args_hash`` and the tool's version (:meth:`CallOutcome.as_record`), so a workflow
+        can name the call in its task state exactly as ``calls.jsonl`` does.
         """
+        before = self.last
         try:
             output = self.call(name, **dict(args))
         except BudgetExceededError as exc:
-            return {"outcome": "budget_exceeded", "error": str(exc)}
+            return {"outcome": "budget_exceeded", "error": str(exc), "record": self._record(before)}
         except ToolError as exc:
-            return {"outcome": "error", "error": str(exc), "kind": type(exc).__name__}
-        return {"outcome": "ok", "output": output.model_dump(mode="json")}
+            return {
+                "outcome": "error",
+                "error": str(exc),
+                "kind": type(exc).__name__,
+                "record": self._record(before),
+            }
+        return {
+            "outcome": "ok",
+            "output": output.model_dump(mode="json"),
+            "record": self._record(before),
+        }
+
+    def _record(self, before: CallOutcome | None) -> dict[str, Any] | None:
+        """The record of the call just made, or ``None`` if nothing was logged."""
+        return None if self.last is None or self.last is before else self.last.as_record()
 
     # -- internals ---------------------------------------------------------------
     def _spec(self, name: str) -> ToolSpec:
@@ -526,15 +563,26 @@ class Registry:
     ) -> None:
         runtime = self._clock() - started
         self._n_calls += 1
-        self.last = CallOutcome(
-            name=name, outcome=outcome, detail=detail, n_evaluations=n_evaluations
-        )
+        # the workflow experiences an injected failure as a tool that returned a bad
+        # result, so its projection says `ok`: a visible `injected_failure` would be
+        # the answer to the Level-8 row. The truth-side record below keeps it, which is
+        # what lets §6.7 D tell a real tool error from the injected one.
+        visible_outcome: Outcome = "ok" if outcome == "injected_failure" else outcome
         if self._full is not None:
             self._full.append(name, version, args, runtime, outcome, detail)
+        seq: int | None = None
         if self._visible is not None:
-            # the workflow experiences an injected failure as a tool that returned a bad
-            # result, so its projection says `ok`: a visible `injected_failure` would be
-            # the answer to the Level-8 row. The truth-side record above keeps it, which is
-            # what lets §6.7 D tell a real tool error from the injected one.
-            visible_outcome: Outcome = "ok" if outcome == "injected_failure" else outcome
-            self._visible.append(name, version, args, runtime, visible_outcome, detail)
+            record = self._visible.append(name, version, args, runtime, visible_outcome, detail)
+            seq, hashed = record.seq, record.args_hash
+        else:
+            hashed = args_hash(args)
+        self.last = CallOutcome(
+            name=name,
+            outcome=outcome,
+            detail=detail,
+            n_evaluations=n_evaluations,
+            seq=seq,
+            args_hash=hashed,
+            version=version,
+            visible_outcome=visible_outcome,
+        )

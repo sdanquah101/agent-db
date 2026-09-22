@@ -4989,3 +4989,212 @@ would then require everywhere, and the same guarantee); `chroot` + `setuid(nobod
 root (needs root, which CI's runner user is not without `sudo`); enumerating the host
 interpreter names and `/proc` paths (the deny-list shape the 2026-09-12 rounds already
 showed does not close).
+
+## 2026-09-21 — The P0 session is launched on "Launch now"
+
+**Decision.** The lead's "Launch now" of 2026-09-21 to the coordinating session, after
+PR #17 (the tool registry, milestone 4) merged at `21424f2`, is read as
+`launch: p0-scripted`, the component `docs/milestones.md` named as next; the coordinator
+launched this session on it. Recorded because CLAUDE.md makes the literal
+`launch: <component>` the only thing that starts a component session, and this one was
+started on a paraphrase (as the registry session was). Branch `claude/p0-scripted` from
+`21424f2`; zero open PRs at launch.
+
+## 2026-09-21 — P0's rules are declared in `configs/workflows/p0.yaml` and proposed to the lead (`docs/p0_design.md`)
+
+**Decision (proposed; the lead decides, rule 5).** P0 is the fixed sequence of §6.5 —
+QC on every sensor → declared exclusion rules → mass balance → Morris on the declared
+set → Sobol on the Morris subset with second order → Fisher information (profiles when
+the plan allows) → the screened fit, LSQ multistart then DE, the lower χ² → MCMC on the
+approved subset → residual diagnostics by feed batch, load, temperature and time → the
+declared assay spend → validation on the frozen last quarter of the record → the
+attribution rule → the task state and the report — with every threshold, size and seed a
+key of `configs/workflows/p0.yaml` and nothing numerical in the pipeline. Its attribution
+rule is an ordered list, R1 sensor → R2 influent → R5 state → R4 parameter → R3 structural
+→ R6 none, a pure function of the collected evidence (tested on constructed evidence); a
+compound row reports one primary label and the other rules that fired as secondary labels.
+Its budget fallbacks are declared ladders (halve the size down to a floor, then the
+declared replacement: Fisher screening for Morris, the Morris subset for Sobol, the
+Fisher intervals for MCMC, the point prediction for the ensemble), sized with a declared
+cost per evaluation (`plan.eval_seconds_assumed`, 4 s) and never the measured one, so the
+plan is deterministic on any machine at least that fast; a runtime guard at the measured
+rate is the one non-deterministic element and is recorded when it trips. The Level-8 rule:
+a `bayes_mcmc` that returns `converged=False` — genuine or injected, which P0 cannot tell
+apart — is a recorded tool failure, the posterior is not reported, the Fisher (or profile)
+intervals stand, `posterior_intervals` is abstained on, and the sampler is never retried.
+Operator notes are data: day, author and length are recorded, the text is never
+interpreted. The declared instrument noise (and drift bound) of the visible sensor
+contract weights the residuals and decides whether a QC drift finding is a fault (beyond
+the declared bound) or the instrument being itself.
+
+**Interpretations recorded on the way, each the lead's to overrule.** (1) Sizes are set by
+the wall clock, not the evaluation count: a 200-day evaluation on a generated cell costs
+11–12 s (the daily feed log caps the integrator step at one day; 2.5–4.4 s on a constant
+log), so 4,000 evaluations would take over thirteen hours against a 90-minute allowance;
+`plan.eval_seconds_assumed` was set to 12 s from that measurement before the pilot (a
+first launch at the constant-log 4 s measured only the runtime guard and was stopped
+after five minutes, the three touched cells regenerated). (2) The label
+vocabulary is read from the configuration because the rule-1 checker forbids the bare
+token `state` in workflow code. (3) Fisher intervals come from the fit's own Jacobian
+covariance at the optimum, clipped to the bounds, so no evaluation is spent twice. (4) A
+parameter move is not by itself a fault: R4 needs a common change point in time.
+
+**Alternatives.** Estimating the noise from the data (rejected as the default: the
+contract declares it; flagged for the lead); sizing by the measured evaluation time
+(rejected: non-deterministic across machines); R3 before R4 (rejected: a regime change
+would read as persistent structure).
+
+## 2026-09-21 — Two registry additions for the task state: `run.write_output` and the call record in every envelope
+
+**Decision.** (a) A workflow's task state and report (§6.6) live in
+`runs/<id>/workflows/<workflow>/` — the fourth thing under a run directory after the
+observations, the redacted manifest and the call log of the 2026-09-04 layout ruling —
+written by the jailed workflow through the registry server's `write_output(relative,
+content)` (`tools.server.OutputSink`): plain relative names inside that one directory,
+absolute paths, traversal, symlinks, directories and empty names refused with the
+rule-1 error, nothing else under the run touched (tested directly and over the wire, with
+a negative control). The run view stays read-only and returns contents, never paths; the
+sink is a separate object that holds the one directory it may write. (b) Every call
+envelope carries the visible log line's `seq`, `args_hash` and version
+(`tools.last_call()` in the stub; `CallOutcome.as_record` in the registry), so a
+workflow's action record names each call exactly as `calls.jsonl` does without
+re-implementing the fingerprint — which the checker would have forbidden anyway (the
+canonical form's `__ndarray__` key is a dunder literal). The truth-side outcome is not in
+the record: an injected failure still reads `ok`. Neither addition changes what the
+registry PR tested (budgets, logging, the jail, the fitted model, the tool numerics).
+
+**Alternatives.** The workflow writing its state to its sandbox cwd and the runner copying
+it out (rejected: no checkpoint reaches the run until the process ends, so a wall-clock
+kill loses everything); reconstructing the args hash in the pipeline (rejected: the
+checker, and a second copy of the canonical form that could drift); a `sys.meta_path`
+trick to import `state` in the jail (rejected outright).
+
+## 2026-09-21 — A stiffness pocket inside the fitted model's declared bounds (recorded for the registry)
+
+**Finding.** Timing 27 evaluations of `adm1_fitted` at 200 days on a **constant** feed
+log: 26 took 2.5–4.4 s on Plants B and C (12 Latin-hypercube points each, plus
+single-parameter probes); one vector —
+`k_dis` × 2.0 with `k_m_aa` × 0.5 on Plant B — took 274–290 s twice, the integrator
+successful, the record plausible (pH 7.24). A stiffness pocket, not a failure. P0 cannot
+avoid it (every screening design samples the box) and its wall-clock guard absorbs it; the
+solver settings are frozen under G1 (`configs/adm1/solver.yaml`), so this is recorded for
+the registry's owner and the lead, not patched here.
+
+## 2026-09-21 — The lead approved the P0 rules as proposed (via the coordinator); the budgets are ruled after the pilot
+
+**Decision.** The lead approved the P0 design as proposed at `5099c18`, 2026-09-21, via
+the coordinator: (1) the declared instrument noise as P0's residual weights; (2) the rules
+and thresholds of `docs/p0_design.md` §3 and `configs/workflows/p0.yaml` as declared, and
+the plan and fallback ladder of §4; (3) the two registry additions, `run.write_output`
+restricted to `runs/<id>/workflows/<name>/` and the call envelope carrying the visible
+log line's `seq`, `args_hash` and version. The values are frozen from that commit; any
+later change to a threshold is a decisions entry with the lead's approval. Recorded
+plainly: one value changed between the proposal and the sign-off —
+`plan.eval_seconds_assumed`, 4 → 12 s from the measurement on generated cells (entry
+above, `1496cf4`); it is the declared cost the plan is sized with, not a rule, and the
+coordinator is asked to confirm it falls under the approval. **Not yet ruled:** point 4,
+the budgets per (scenario, tier); the lead rules once the pilot table is in, on the
+measured numbers and the proposed re-declaration, with no scenario's budget block edited
+by this session.
+
+## 2026-09-21 — The P0 pilot at the frozen budgets: the wall clock binds, MCMC is never reached, two rule paths read the background (findings for the lead's budget ruling)
+
+**Finding** (`reports/p0_pilot.csv`; `docs/milestones.md`, milestone 5, has the table and
+the arithmetic). Ten cells (S0-01 B at Tiers A/B/C, S1-01 B/B, S2-01 B/B, S3-01 C/B,
+S4-01 B/B, S5-01 A/A, S6-02 B/B, S8-01 B/B) at their frozen budgets on the matrix
+regenerated at `5099c18`: every cell completed inside its allowance (50–94 min of 90–150)
+using 214–449 evaluations, 4–7 % of the declared 4,000–8,000, because a 200-day
+evaluation costs 11.8 s (a 365-day Plant A one 22–25 s) and P0's declared plan shrank
+by its fallback ladders to fit the wall clock: no cell reached MCMC, so every cell
+reports Fisher intervals, abstains on `posterior_intervals`, and the Level-8 directive
+of S8-01 was never exercised. Two of ten primary labels match the truth; the misses are
+systematic: R1c (charge consistency) fired on 8/10 cells and the QC-missingness path of
+R5 on 9/10, both on the plants' own background (the observation model's conditional
+missingness; the implied strong-ion difference drifting 0.30–0.32 across windows on a
+clean run), and after a 2–4-parameter fit every channel keeps a 5–19σ background bias,
+so the post-fit rules cannot separate a fault from it.
+
+**Proposed, for the lead (nothing changed here: the thresholds are frozen by the
+approval and the budget blocks are frozen under G1).** (1) `simulator_evals` re-declared
+as allowance × 60 / 12 s, rounded down to 50: 450 / 600 / 750 for the 90 / 120 / 150-minute
+cells (Plant A: the allowance doubled or the count halved), so the two envelopes agree;
+or the allowances raised (the full declared plan needs ~3.5 h per 200-day cell). (2) A
+plan the allowance can hold with MCMC in it (Morris 4, Sobol 8, one LSQ start, DE 2,
+MCMC 8 × 10 ≈ 330 evaluations ≈ 66 min), so the Level-8 row is met. (3) Four threshold
+rulings: drop the QC-missingness path from R5 or bound it by the tier's declared stress
+multiplier; fold R1c into R1b or raise `charge_drift`'s band above the background;
+`balance_windows_min` 3; `step_day_tolerance_d` 30. (4) The full Level 0–5 sweep (78
+cells) is ~88 h of runner time serial, ~29 h three in parallel; not run in this PR.
+
+**Alternatives.** Running the sweep now at the frozen budgets (rejected: 29 h to
+measure a plan the pilot already shows never reaches its sampler); changing thresholds
+in this PR (rejected: approved values change only by a decisions entry with the lead's
+approval).
+
+## 2026-09-21 — The lead's budget ruling on the P0 pilot (ruling A) and the four attribution thresholds (ruling B), via the coordinator
+
+**Ruling A — budgets (§7: budgets are chosen from pilot runs so P0 completes comfortably).**
+An approved change to the frozen scenario files: `simulator_evals` in every scenario's
+`budget` block is re-declared as allowance × 60 / 12 s per evaluation, rounded down to
+50 — **450 / 600 / 750** for the 90 / 120 / 150-minute cells of the Plant B and C
+scenarios, and **225 / 300 / 375** for the Plant A scenarios (S5-01 300, S6-01 375, S6-04
+375, S7-02 375; a 365-day evaluation costs ~24 s). Wall-clock allowances and assay units
+unchanged. Recorded limit: the budget block is per scenario, so a Plant B row generated
+on Plant A at Tier A (the Level 2–5 rows) carries the B/C count. With it, **the declared
+plan that reaches MCMC** (`configs/workflows/p0.yaml`): `gsa.morris_trajectories` 4,
+`gsa.sobol_samples` 8, `fit.lsq_starts` 1, `fit.de_generations` 2, `mcmc.walkers` 8 ×
+`mcmc.steps` 10 — ≈ 330 evaluations, ≈ 66 min at 12 s — with the fallback ladders' minima
+at or below these values (they already were: 4 / 8 / 2 / 10) and the validation ensemble
+as the plan allows.
+
+**Ruling B — the attribution thresholds (approved values; applied in the config and the
+pipeline).** (a) The QC informative-missingness path is dropped from R5; the early-window
+bias path stays, and the QC finding still abstains on `missing_transient`. Alternative
+considered: bounding the ratio by the tier's declared stress multiplier. (b) R1c is folded
+into R1b: a charge inconsistency counts as sensor evidence only when the pH residual is
+the single offending channel. Alternative considered: raising `charge_drift`'s band
+above the 0.30–0.32 background. (c) `attribution.balance_windows_min` 3 (was 2).
+(d) `attribution.step_day_tolerance_d` 30 (was 20). Two conditions the coordinator set
+and the lead accepted: (i) the ten pilot cells are development cells; the held-out
+variants of §7 are the evaluation set; (ii) the background misfit — 5–19σ post-fit
+residuals against the declared noise even on Level-0 cells, χ²/n of 10–100: the fitted
+model on the visible feed log differs from the truth even when the structure matches —
+is a recorded benchmark property, not something to tune away, and a `none` verdict where
+P0 cannot resolve a fault is the honest baseline of rule 5. The rules are APPROVED with
+these 2026-09-21 amendments; the pilot is re-run at the new budgets and plan.
+
+**Alternatives.** Raising the allowances instead of the counts (the full declared plan
+needs ~3.5 h per 200-day cell; rejected by the lead in favour of option a); keeping the
+thresholds and reporting the false positives as P0's baseline behaviour (rejected: two
+of the paths read the plant, not the data).
+
+**Implementing ruling A (2026-09-21, later the same day; the coordinator to confirm).**
+The first round-2 cell (S2-01 B/B) skipped MCMC again: with the ruled plan the fit ends
+with ~35 min of a 90-minute allowance left, the ruled sampler (8 walkers × 11 = 88
+evaluations) needs 18 min at 12 s (19 min at the 13 s measured under parallel load), and
+`plan.step_share` 0.35 × (35 − 2 reserve) = 11.6 min refused it. The ruling's intent is
+explicit — the plan that reaches MCMC, its ladders' minima at or below the ruled sizes —
+so `plan.step_share` is 0.75 (from 0.35): every step after MCMC costs at most the
+ensemble's 8 evaluations, so the larger share keeps room for them; on a 120- or
+150-minute cell 0.35 already sufficed. The round was stopped after one cell, the three
+touched cell groups regenerated at the same head, and the round restarted.
+
+## 2026-09-21 — The P0 pilot, round 2, at the lead's rulings A and B: complete, MCMC reached, the Level-8 row exercised, no false fault
+
+**Finding** (`reports/p0_pilot.csv`; `docs/milestones.md`, milestone 5, round 2). The same
+ten cells at the ruled budgets, plan and thresholds: every cell completed in 54–93 min of
+its 90–150-minute allowance using 33–81 % of the ruled evaluation count (243–350 of
+300–750; the 33 % is S8-01, 250 of 750, whose injected MCMC call charges nothing; the
+81 % is S5-01, 243 of 300), one guard trip in ten cells; MCMC reached on 8 of 10 (not on the Plant A cell at
+24 s per evaluation, nor on the one cell whose guard tripped), converged on none, so
+every cell reports Fisher intervals and abstains on `posterior_intervals`; the Level-8
+directive of S8-01 exercised and handled by the rule (one call, the injected payload,
+the failure recorded, no posterior, no retry). Five of ten primary labels match the truth
+(the four clean cells `none`, S5-01 `parameter` through R4), no cell reports a false
+fault, and the five misses are `none` where a fault exists — the two silenced paths were
+the only ones that ever named a sensor on Plant B and C, and the post-fit rules cannot see
+a single-channel fault through a background bias of 5–19σ in every channel. Recovery:
+14 of 20 intervals cover the truth multiplier; 7 estimates at a bound. Recorded, not
+tuned (the coordinator's condition (ii)); the ten cells are development cells (condition
+(i)). Not run: the full Level 0–5 sweep (78 cells, ~29 h three in parallel at ~70 min
+per cell), by the lead's agreement.
