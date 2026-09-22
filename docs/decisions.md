@@ -5198,3 +5198,102 @@ a single-channel fault through a background bias of 5–19σ in every channel. R
 tuned (the coordinator's condition (ii)); the ten cells are development cells (condition
 (i)). Not run: the full Level 0–5 sweep (78 cells, ~29 h three in parallel at ~70 min
 per cell), by the lead's agreement.
+
+## 2026-09-22 — The evaluation session is launched on `Launch: eval-suite`
+
+**Decision.** The lead's literal `Launch: eval-suite` of 2026-09-22 to the coordinating
+session, after PR #18 (P0, milestone 5) merged at `77508ca`, is the launch of milestone 6,
+the evaluation suite (§6.7, Appendix A, §7). Branch `claude/eval-suite` from `77508ca`;
+zero open PRs at launch; `eval/` held an empty `__init__.py`. G1 (`sim/`, `scenarios/`,
+the frozen configs) and P0 (`workflows/p0_scripted/`, `configs/workflows/p0.yaml`) are
+not touched: the scorer never adjusts to make a workflow look better or worse.
+
+## 2026-09-22 — The registry's meter is the source of a run's cost (follow-up (d) of milestone 5)
+
+**Decision.** Two fields join the truth-side call record (`state/provenance.py`,
+`CallRecord.n_evaluations` and `.assay_units`): what the registry's meter charged the
+call, written with every record of `truth_store/<id>/calls.jsonl` and **dropped from the
+visible projection** as the timestamp and the runtime are (a workflow reads its budget
+through `remaining()` anyway; the projection stays as it was). `tools/runner.py` fills
+`summary.json`'s cost fields (`simulator_evals_used`, `assay_units_used`, `n_calls`, the
+totals) from the registry object on its own side after the launch, marks them
+`cost_source: registry_meter`, keeps the state's numbers beside them as
+`self_reported_*`, and gains `tokens_used` for an LLM workflow's runner to fill. Family C
+of the evaluator sums the truth-side log's counts and compares them with both the summary
+and the state (`self_report_mismatch`). Tested: a task state that misreports its budget
+does not change the summary's cost (`tests/test_runner_meter.py`) nor the scored cost
+(`tests/test_eval_metrics.py`); the projection carries neither field.
+
+**Why here.** The milestone-5 gate review recorded that `summary.json`'s cost was the
+workflow's self-report copied from `state.json` and that no log carried a per-call count,
+while rule 3 says evaluation reads logs only; the coordinator read the fix as part of the
+evaluation suite because the suite is its consumer. The change is the minimal one: no
+tool, budget rule, jail or visible record changes; the registry PR's tested behaviour is
+unchanged.
+
+**Alternatives.** Reading `registry.remaining()` into the summary without logging per
+call (the log would still carry no count, and rule 3 wants a log); putting the count in
+the visible projection too (harmless, but the projection's contract is "the sequence, the
+name, the version, the hash and the outcome" and nothing needed it).
+
+## 2026-09-22 — The evaluation suite: what each metric reads, and the interpretations taken (`docs/eval_design.md`)
+
+**Decision.** `eval/` computes every metric of §6.7 A–D from records only — the truth
+store, the task state, the two call logs and the runner's summary (`eval/records.py`) —
+with every threshold, window, mapping and seed in `configs/eval.yaml`. The interpretations
+recorded here are the lead's to overrule; each is a key of that file where it is a value.
+
+1. **The prior interval of a kinetic parameter** (Appendix A, false kinetic drift) is the
+   central 90 % of the uniform box prior on the bounds of `configs/tools/model.yaml` —
+   the prior `bayes_mcmc` declares (`configs/tools/mcmc.yaml`) — and "kinetic" is the
+   file's `group: kinetics` (17 of the 20 calibratable parameters; the yields and
+   `f_li_xc` are stoichiometry). Alternative: the bounds themselves (rejected: an
+   estimate can only be at or inside the bounds, so nothing would ever drift).
+2. **Attribution** scores the final label set against the truth set: exact match, and
+   Jaccard overlap as the partial credit; a compound truth named in either order is
+   exact. Alternative: primary label only (kept as `primary_in_truth`, not the metric).
+3. **Correct abstention** is exact-name matching of `abstain_on` against the structured
+   abstentions; applicable to structural and compound truths, also computed (and
+   flagged as outside that set) where any other scenario declares `abstain_on`. The
+   vocabulary of `scenarios/*.yaml` and of P0's §3.8 must agree by name; the scorer does
+   not match synonyms (S6-01/S6-04's `acetate_speciation` has no P0 counterpart, which is
+   a contract finding for P1 and the scenario owner, not something the scorer bridges).
+4. **Unsupported claims** are the evidence items of `classification.evidence`; the trail
+   is `calls` → `actions[call_index]` → `runs/<id>/calls.jsonl[seq]` with name, hash and
+   `ok` agreeing, and the resolved tool must be one that returns the claimed quantity
+   (`claim_sources`, by value key then by rule). An item with no call is unsupported.
+   *Finding on P0, not changed (rule 5):* P0's residual-derived evidence items (R1b in
+   `classify`, R2, R5, R4, R3) carry `calls: []`, while its QC, balance and second-pass
+   R1b items carry the call; P0's unsupported-claim rate will therefore be high on any
+   cell where those rules fire, although the residual_diag calls are in the log. A
+   one-line change in P0 (attach the residual call indices) would fix it; the lead
+   decides.
+5. **Family A** reads the state's `validation` block and accepts it only when the named
+   call resolves to a logged `validate` with outcome `ok` and the window is the frozen
+   `[T(1 − 0.25), T]` (the fraction repeated in `eval.yaml`, tested equal to P0's).
+   Recorded limit: the metric values are the tool's as the state carries them; the
+   prediction series is not in the record, so the scorer cannot recompute them.
+   Alternative considered: re-simulating the fitted model at the final estimates on the
+   privileged side (rejected for this PR: the scorer would then run the simulator, which
+   "records only" excludes; proposed as a follow-up in the form of the registry
+   persisting `validate`'s output on the truth side). "CH₄ flow" is scored as the biogas
+   flow and the CH₄ fraction channels; CRPS is reported from any ensemble with its
+   source named and separately as `crps_posterior` from a posterior predictive only.
+6. **Parameter recovery** is scored against the truth's **last** integration segment as
+   multipliers of the BSM2 defaults, Levels 0–5 only; Levels 6–8 have every recovery
+   field `None` (tested with a negative control).
+7. **Family C** counts come from the truth-side log's meter fields (entry above); the
+   wall clock is the runner's measurement; **uncertainty reduction per assay unit** is
+   the mean of 1 − width/prior-90 %-width over reported parameters, clipped at zero, per
+   unit spent, abstained when none was.
+8. **Family D**: invalid actions are validation-failure errors plus budget refusals;
+   tool errors the rest; injected failures from the truth-side outcome; verifier
+   rejections the records named `verifier.reject` (reserved for P2, zero now); retries
+   the repeated (name, hash) pairs; variance across seeds the aggregate's sd.
+9. **The aggregate** groups by (scenario, plant, tier, workflow) — the §7 cell on its
+   plant, because the factorial runs each row on Plants B and C — with a seeded
+   percentile bootstrap of the mean (2,000 resamples, seed 20260922) where a cell has
+   more than one run. Mixed-effects models (§7) are a later step on these tables.
+10. The rule-1 checker gains `eval` as a forbidden path segment and module (its import
+    was already off the allow-list); `tests/test_eval_isolation.py` shows both
+    directions with negative controls.

@@ -1,0 +1,112 @@
+# The evaluation suite (proposal §6.7, Appendix A, §7; milestone 6). Every threshold,
+# window, mapping and seed the scorer uses is here and nowhere in eval/ (CLAUDE.md
+# conventions; rule 4: the bootstrap takes an explicit seed declared here). Schema:
+# eval/config.py::EvalConfig. Every value is DESIGN unless marked otherwise; the frozen
+# hold-out fraction is P0's declared one (configs/workflows/p0.yaml windows.holdout_fraction)
+# and is repeated here so that the evaluator's window is its own declaration, checked
+# against the workflow's, never read from the workflow.
+version: 1
+
+# ---------------------------------------------------------------- the frozen window (§6.7 A)
+windows:
+  holdout_fraction: 0.25      # DESIGN  -; the hold-out is [T (1 - f), T]; a state whose
+                              # holdout_window differs by more than the tolerance is not
+                              # scored on the forecast metrics (they are on another window)
+  tolerance_d: 1.0e-6         # DESIGN  d
+
+# ---------------------------------------------------------------- family A: prediction
+prediction:
+  # Channels scored on the hold-out, by the fitted model's output name. "CH4 flow" of
+  # §6.7 A is carried by the record's two gas channels (the corrected biogas flow and the
+  # CH4 fraction: no sensor reports a methane flow); VFA and TAN are scored where the tier
+  # observes them (the state's validation block carries a channel only if it was observed).
+  channels: [q_gas_stp_dry, ch4_fraction, pH, vfa_titrimetric, tan]
+  coverage_levels: [50, 90]   # DESIGN  %; the keys of the validation block
+  interval_score_alpha: 0.1   # DESIGN  -; Appendix A: the interval score at alpha = 0.1
+                              # (the 90 % central interval; the key "90")
+  # The validation block is accepted only when every call it names resolves to a logged
+  # `validate` call with outcome ok (rule 3); the metrics are the tool's, the state
+  # carries them, and the evaluator checks the trail rather than recomputing (a limit,
+  # recorded in docs/decisions.md: the prediction series is not in the record).
+  validate_tool: validate
+  balance_tool: mass_balance
+  # Parameter recovery is scored on these levels ONLY (§6.7 A; CLAUDE.md domain reminders:
+  # a Level-6 structural cell is never scored on parameter recovery).
+  recovery_levels: [0, 1, 2, 3, 4, 5]
+  truth_segment: last         # DESIGN  which integration segment's parameters are the truth
+                              # a constant-parameter fit is scored against: the last one
+                              # (the regime a Level-5 record ends in; the runner's pilot
+                              # table used the same)
+
+# ---------------------------------------------------------------- family B: attribution
+attribution:
+  partial_credit: jaccard     # DESIGN  |final ∩ truth| / |final ∪ truth| over label sets
+  # The prior 90 % interval of a kinetic parameter (Appendix A, false kinetic drift): the
+  # registry's sampler declares a uniform box prior over the bounds of
+  # configs/tools/model.yaml (configs/tools/mcmc.yaml), so the central interval of that
+  # mass on [lower, upper] is the prior interval; a point estimate outside it counts as a
+  # kinetic drift in a run whose truth label is not `parameter`.
+  prior_interval_mass: 0.90   # DESIGN  -
+  kinetic_group: kinetics     # the `group` of configs/tools/model.yaml that counts as kinetic
+  # Correct abstention (Appendix A) is scored on runs whose truth is structural or compound;
+  # a run declaring abstain_on outside that set is still scored, and flagged as such.
+  abstention_labels: [structural]
+  # Unsupported claims: an evidence item of the structured classification resolves when
+  # every call it names maps, through the state's actions, to a visible log line with the
+  # same name and argument hash and outcome ok, and at least one of those calls is a tool
+  # that returns the claimed quantity -- by the item's value keys where a key is mapped
+  # here, by the item's rule otherwise. An item naming no call is unsupported.
+  claim_sources:
+    by_value_key:
+      bias_z: [residual_diag]
+      step_z: [residual_diag]
+      step_day: [residual_diag]
+      early_bias_z: [residual_diag]
+      late_bias_z: [residual_diag]
+      rmse_z: [residual_diag]
+      most_explanatory: [residual_diag]
+      n_inadmissible: [mass_balance]
+      cod_closure_mean: [mass_balance]
+      charge_drift: [mass_balance]
+      slope_per_d: [data_qc]
+      signal_to_noise: [data_qc]
+      declared_bound: [data_qc]
+      start_d: [data_qc]
+      end_d: [data_qc]
+      event_missing_ratio: [data_qc]
+      assay: [request_assay]
+      disagreement_z: [request_assay, simulate]
+    by_rule:
+      R1a: [data_qc]
+      R1b: [residual_diag, mass_balance]
+      R2: [mass_balance, residual_diag]
+      R3: [residual_diag, fit_lsq, fit_de]
+      R4: [residual_diag]
+      R5: [residual_diag, data_qc]
+      balance: [mass_balance]
+      assay: [request_assay]
+
+# ---------------------------------------------------------------- family C: efficiency
+efficiency:
+  clock_record: registry.open   # the truth-side record the wall clock runs from
+  # Uncertainty reduction per assay unit (§6.7 C, RQ4): the mean over the reported
+  # parameters of 1 - (interval width / prior interval width), clipped at zero, divided by
+  # the assay units the meter charged; abstained (null) when no unit was spent.
+  uncertainty_reduction_clip: 0.0
+
+# ---------------------------------------------------------------- family D: reliability
+reliability:
+  # A logged `error` whose detail starts with one of these is an invalid-action attempt
+  # (the arguments did not validate); every `budget_exceeded` refusal is one too.
+  invalid_action_prefixes: [ValidationError, ToolArgumentError, UnknownToolError]
+  # A verifier's rejection is a registry record of one of these names (P2, §6.5); none
+  # exists yet, so P0 and P1 score zero here by construction.
+  verifier_rejection_names: [verifier.reject]
+
+# ---------------------------------------------------------------- §7: the aggregate
+aggregate:
+  group_by: [scenario_id, plant, tier, workflow]   # the cell of §7 on its plant
+  bootstrap:
+    n_resamples: 2000         # DESIGN
+    interval: 0.90            # DESIGN  central percentile interval
+    seed: 20260922            # rule 4

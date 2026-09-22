@@ -157,3 +157,28 @@ The tool registry (`tools/`, `configs/tools/`; milestone 4):
   refuses a sandbox inside the repository, the run store or its parent; the jail leaves
   no mount behind; the staged stub
   equals its source; the transport carries arrays bit for bit.
+- `test_runner_meter.py` — the registry's meter as the source of a run's cost (milestone
+  6): the truth-side log carries what each call was charged (evaluations, assay units) and
+  the projection does not; `summary.json`'s cost fields come from the meter, so a task
+  state that misreports its budget changes nothing scored, and the misreport is kept.
+- `test_eval_metrics.py` — every metric of §6.7 A–D on constructed truth/state pairs
+  (`tests/eval_support.py` writes them as the harness, the registry and the runner would),
+  a positive and a negative case each: attribution exact and partial, false kinetic drift
+  against the declared prior interval (a stoichiometric parameter at its bound is not
+  one; not applicable on a parameter truth), false kinetic update, correct abstention from
+  the structured state only, unsupported claims following the trail to the log (no call,
+  a wrong tool, a dangling index, a tampered hash), forecast metrics only behind a logged
+  `validate` on the frozen window (a point prediction abstains on intervals), the balance
+  behind a logged `mass_balance`, parameter recovery on Levels 0–5 and NOT on 6–8 with
+  the same estimates (the negative control), the cost from the meter against a lying
+  state, uncertainty reduction per assay unit, the family-D counts from the truth-side
+  log, failed runs in the denominator, the seeded bootstrap of the aggregate, and the
+  command line writing four tables and nothing into the stores.
+- `test_eval_isolation.py` — rule 1 for the suite: the checker flags a workflow that
+  imports or opens `eval/` and leaves one that merely evaluates a model alone; no module
+  under `eval/` imports a workflow or anything off its allow-list, and the check catches
+  one that does.
+- `test_eval_end_to_end.py` — the short S0-01 cell of Plant C (the `tiny_result` fixture
+  of `conftest.py`, shared with `test_p0_pipeline.py`) scored from its records: every
+  family against what the records say, the command line on the store, and the scorer
+  writing nothing under `runs/` or `truth_store/`.

@@ -116,12 +116,20 @@ class CallRecord:
     outcome: Outcome
     detail: str = ""
     """Free text: an error message, a solver message, or a note. Never an argument value."""
+    n_evaluations: int | None = None
+    """Simulator evaluations the call was charged by the registry's meter; ``None`` in a
+    projection and in the harness's own records. The evaluation suite's meter of §6.7 C
+    (the evaluation session, 2026-09-22): rule 3 says evaluation reads logs only, and until
+    this field no log carried a per-call count, so the cost of a run was the workflow's
+    self-report copied from its task state."""
+    assay_units: int | None = None
+    """Assay units the call spent at the catalogue price; ``None`` in a projection."""
 
     def to_json(self) -> str:
         """The record as one JSON line (no trailing newline).
 
-        A projection record has no ``t_utc`` and no ``runtime_s`` key at all, rather than a
-        null: the key's absence is the statement.
+        A projection record has no ``t_utc``, no ``runtime_s``, no ``n_evaluations`` and no
+        ``assay_units`` key at all, rather than a null: the key's absence is the statement.
         """
         payload: dict[str, Any] = {"seq": self.seq}
         if self.t_utc is not None:
@@ -130,6 +138,10 @@ class CallRecord:
         if self.runtime_s is not None:
             payload["runtime_s"] = round(self.runtime_s, 6)
         payload.update(outcome=self.outcome, detail=self.detail)
+        if self.n_evaluations is not None:
+            payload["n_evaluations"] = int(self.n_evaluations)
+        if self.assay_units is not None:
+            payload["assay_units"] = int(self.assay_units)
         return json.dumps(payload, separators=(",", ":"))
 
     @classmethod
@@ -151,6 +163,8 @@ class CallRecord:
             runtime_s=None if raw.get("runtime_s") is None else float(raw["runtime_s"]),
             outcome=raw["outcome"],
             detail=str(raw.get("detail", "")),
+            n_evaluations=None if raw.get("n_evaluations") is None else int(raw["n_evaluations"]),
+            assay_units=None if raw.get("assay_units") is None else int(raw["assay_units"]),
         )
 
 
@@ -210,11 +224,15 @@ class CallLog:
         runtime_s: float,
         outcome: Outcome,
         detail: str = "",
+        *,
+        n_evaluations: int | None = None,
+        assay_units: int | None = None,
     ) -> CallRecord:
         """Write one record and return it.
 
         The line is flushed before returning, so a run killed mid-scenario still has
-        every call that completed.
+        every call that completed. The two meter counts are kept only by a full log; a
+        projection drops them as it drops the timestamp and the runtime.
         """
         record = CallRecord(
             seq=self._seq,
@@ -225,6 +243,8 @@ class CallLog:
             runtime_s=None if self.projection else float(runtime_s),
             outcome=outcome,
             detail=detail,
+            n_evaluations=None if self.projection or n_evaluations is None else int(n_evaluations),
+            assay_units=None if self.projection or assay_units is None else int(assay_units),
         )
         return self._write(record)
 
@@ -246,6 +266,8 @@ class CallLog:
             runtime_s=None if self.projection else record.runtime_s,
             outcome=record.outcome,
             detail=record.detail,
+            n_evaluations=None if self.projection else record.n_evaluations,
+            assay_units=None if self.projection else record.assay_units,
         )
         return self._write(copied)
 

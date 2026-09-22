@@ -483,13 +483,26 @@ is applied, and is also what its truth label means (§6.3).
 | `unrecorded_delivery` | influent | - (multiple of the feed's median delivery that arrives unlogged) | An extra delivery of the given size arrives on the onset day and never enters the feed log, so the COD balance closes only if the analyst notices. |
 <!-- END GENERATED: fault semantics -->
 
-## 7. Metrics — **NOT YET BUILT** (Milestone, weeks 17–20)
+## 7. Metrics (milestone 6, 2026-09-22; `docs/eval_design.md`)
 
-Designed in §7: diagnosis accuracy by layer, parameter recovery where it is meaningful,
-calibrated uncertainty, identifiability statements, budget adherence, invalid-action rate.
-Metrics are computed **from logs only** (`runs/<id>/calls.jsonl`), never from workflow
-self-reports. Pre-registration (OSF or equivalent) precedes the final runs; deviations
-from the analysis plan are documented rather than absorbed.
+`python -m eval` scores a run or a batch from **records only** — the truth store, the task
+state, the two call logs and the runner's summary — by code no workflow can reach (the
+rule-1 checker flags a workflow that imports or opens `eval/`; `eval/` imports no
+workflow). Families A–D of §6.7 are computed per run, and per (scenario, plant, tier,
+workflow) with seeded bootstrap intervals; every threshold, window and seed is in
+`configs/eval.yaml`. Attribution is the final label *set* against the truth (exact, and
+Jaccard partial credit); false kinetic drift reads the declared box prior of
+`configs/tools/model.yaml`; correct abstention is exact-name matching of `abstain_on`
+against the structured abstentions; an unsupported claim is an evidence item whose calls
+do not resolve to a logged `ok` line of a tool that returns the claimed quantity. Family
+A's forecast metrics are accepted only when a logged `validate` call on the frozen
+hold-out window backs them (the prediction series is not in the record, so they are
+verified, not recomputed); parameter recovery is scored on Levels 0–5 only. Family C's
+cost counters come from the registry's meter, which every truth-side log line now
+carries, never from the workflow's self-report (a misreport is flagged); family D's
+counts from the truth-side outcomes. Failed runs stay in every denominator.
+Pre-registration (OSF or equivalent) precedes the final runs; deviations from the
+analysis plan are documented rather than absorbed.
 
 ## 8. Known limitations
 

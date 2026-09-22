@@ -391,6 +391,16 @@ class Registry:
             "output_schema": spec.output_model.model_json_schema(),
         }
 
+    @property
+    def evaluations_used(self) -> int:
+        """Simulator evaluations the meter has charged so far (privileged side)."""
+        return int(self._meter.used)
+
+    @property
+    def assay_units_used(self) -> int:
+        """Assay units charged so far (privileged side)."""
+        return int(self._assay_units_used)
+
     def remaining(self) -> RemainingBudget:
         """The budget left, for the task state (§6.6)."""
         return RemainingBudget(
@@ -468,9 +478,11 @@ class Registry:
             self._log(name, version, hashed, started, "error", f"{type(exc).__name__}: {exc}", used)
             raise ToolError(f"{name}: {type(exc).__name__}: {exc}") from exc
 
+        units = 0
         if spec.assay_cost is not None:
-            self._assay_units_used += spec.assay_cost(inp, context)
-        self._log(name, version, hashed, started, "ok", "", context.evaluations_used)
+            units = int(spec.assay_cost(inp, context))
+            self._assay_units_used += units
+        self._log(name, version, hashed, started, "ok", "", context.evaluations_used, units)
         return output
 
     def call_json(self, name: str, args: Mapping[str, Any]) -> dict[str, Any]:
@@ -560,16 +572,29 @@ class Registry:
         outcome: Outcome,
         detail: str,
         n_evaluations: int,
+        assay_units: int = 0,
     ) -> None:
         runtime = self._clock() - started
         self._n_calls += 1
         # the workflow experiences an injected failure as a tool that returned a bad
         # result, so its projection says `ok`: a visible `injected_failure` would be
         # the answer to the Level-8 row. The truth-side record below keeps it, which is
-        # what lets §6.7 D tell a real tool error from the injected one.
+        # what lets §6.7 D tell a real tool error from the injected one. The same record
+        # carries what the meter charged the call (evaluations, assay units): the
+        # evaluator's cost counters of §6.7 C read it, never the workflow's self-report
+        # (the evaluation session, 2026-09-22).
         visible_outcome: Outcome = "ok" if outcome == "injected_failure" else outcome
         if self._full is not None:
-            self._full.append(name, version, args, runtime, outcome, detail)
+            self._full.append(
+                name,
+                version,
+                args,
+                runtime,
+                outcome,
+                detail,
+                n_evaluations=int(n_evaluations),
+                assay_units=int(assay_units),
+            )
         seq: int | None = None
         if self._visible is not None:
             record = self._visible.append(name, version, args, runtime, visible_outcome, detail)
