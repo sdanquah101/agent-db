@@ -109,10 +109,18 @@ def test_attribution_exact_and_partial(scorer, tmp_path):
     row, _ = _score(scorer, root)
     assert row["attribution_exact"] is True and row["final_label_set"] == "influent+sensor"
 
-    root = tmp_path / "nostate"  # a failed run: no verdict, and it stays in the table
+    root = tmp_path / "nostate"  # a launched run with no state: a MISS, in the denominator
     build_run(root, truth_label=("sensor",), level=2, write_state=False)
     row, _ = _score(scorer, root)
-    assert row["attribution_exact"] is None and row["completed"] is False
+    assert row["completed"] is False and row["launched"] is True
+    assert row["attribution_exact"] is False and row["attribution_partial"] == 0.0
+    assert row["primary_in_truth"] is False
+    assert row["false_kinetic_drift"] is None and row["abstention_correct"] is None
+
+    root = tmp_path / "unlaunched"  # never launched: no verdict at all
+    build_run(root, truth_label=("sensor",), level=2, write_state=False, write_summary=False)
+    row, _ = _score(scorer, root)
+    assert row["launched"] is False and row["attribution_exact"] is None
 
 
 def test_false_kinetic_drift_reads_the_declared_prior_interval(scorer, tmp_path):
@@ -237,6 +245,27 @@ def test_unsupported_claims_follow_the_trail_to_the_log(scorer, tmp_path):
     build_run(root2, state=tampered, calls=calls)
     row, _ = _score(scorer, root2)
     assert row["claims_unsupported"] == 4
+
+    # a claim whose rule and value keys are all unregistered in claim_sources cannot be
+    # checked against "returned the claimed quantity": unsupported by the declared policy
+    # (blocker B2 of the PR #19 review), even though it cites a logged ok call
+    root4 = tmp_path / "unmapped"
+    unmapped = evidence("R9", "sensor", {"made_up": 1.0}, [3])
+    state4 = _state_with_calls(
+        root4, "run_000000000001", calls, classification={"evidence": [unmapped, good]}
+    )
+    build_run(root4, state=state4, calls=calls)
+    row, _ = _score(scorer, root4)
+    assert row["claims"] == 2 and row["claims_unsupported"] == 1
+    assert CFG.attribution.unmapped_claim == "unsupported"
+    lenient_attribution = CFG.attribution.model_copy(update={"unmapped_claim": "supported"})
+    lenient = Scorer(
+        config=CFG.model_copy(update={"attribution": lenient_attribution}),
+        model=MODEL,
+        defaults=dict(DEFAULT_TRUTH),
+    )
+    row, _ = _score(lenient, root4)
+    assert row["claims_unsupported"] == 0  # the other policy, declared, not the default
 
     # no evidence at all: the rate abstains rather than reading as perfect
     root3 = tmp_path / "silent"
@@ -423,6 +452,15 @@ def test_cost_is_read_from_the_meter_not_the_self_report(scorer, tmp_path):
     assert row["simulator_evals"] == 85 and row["assay_units"] == 2
     assert row["self_report_mismatch"] is True
 
+    # a summary whose call count disagrees with the log is flagged too
+    root = tmp_path / "calls"
+    state = _state_with_calls(
+        root, "run_000000000001", calls, budget={"simulator_evals_used": 85, "assay_units_used": 2}
+    )
+    build_run(root, state=state, calls=calls, summary={"n_calls": 3})
+    row, _ = _score(scorer, root)
+    assert row["meter_agrees_with_summary"] is False and row["n_calls"] == 4
+
 
 def test_uncertainty_reduction_per_assay_unit(scorer, tmp_path):
     k_lo, k_hi = prior_interval(
@@ -496,7 +534,7 @@ def test_a_failed_run_stays_in_the_denominator(scorer, tmp_path):
     row, _ = _score(scorer, root)
     assert row["launched"] is True and row["completed"] is False and row["state_valid"] is False
     assert "killed" in row["runner_error"] and "state.json missing" in row["problems"]
-    assert row["attribution_exact"] is None and row["recovery_scored"] is False
+    assert row["attribution_exact"] is False and row["recovery_scored"] is False
 
     root = tmp_path / "never"  # never launched: no summary, no state
     build_run(root, write_state=False, write_summary=False)
@@ -515,6 +553,20 @@ def test_a_failed_run_stays_in_the_denominator(scorer, tmp_path):
     agg = aggregate(rows, CFG.aggregate)
     assert len(agg) == 1 and agg[0]["n_runs"] == 3 and agg[0]["n_completed"] == 1
     assert agg[0]["completed_mean"] == pytest.approx(1 / 3)
+    # the two launched runs are attribution misses; the never-launched one is no datum,
+    # and `_n` beside the rate says how many runs the rate is over
+    assert agg[0]["attribution_exact_n"] == 2 and agg[0]["attribution_exact_mean"] == 0.0
+
+    # an unreadable answer key is the one thing the loader refuses, and it says which file
+    from eval.records import load_records
+
+    root = tmp_path / "broken"
+    build_run(root)
+    (root / "truth_store" / "run_000000000001" / "faults.json").write_text("not json")
+    with pytest.raises(FileNotFoundError, match=r"faults\.json is not a JSON object"):
+        load_records(
+            "run_000000000001", "p0", runs_root=root / "runs", truth_store=root / "truth_store"
+        )
 
 
 # ------------------------------------------------------------------ the aggregate

@@ -63,6 +63,40 @@ def test_the_truth_side_log_carries_the_meter_and_the_projection_does_not(tmp_pa
     assert all("n_evaluations" in json.loads(r.to_json()) for r in full)
 
 
+def test_the_logged_count_is_what_the_meter_charged_even_outside_a_metered_model(tmp_path):
+    """Blocker B1 of the PR #19 review.
+
+    The filters charge the meter directly, not through a MeteredModel, and the logged
+    per-call count used to miss every such evaluation.
+    """
+    from tests.test_tools_known_answers import linear_system
+
+    n = 20
+    rng = np.random.default_rng(0)
+    y = 0.9 ** np.arange(n) + 0.3 * rng.standard_normal(n)
+    run_dir = tmp_path / "runs" / "run_filter"
+    truth_dir = tmp_path / "truth_store" / "run_filter"
+    reg = make_registry(
+        budget=Budget(100_000, 60.0, 0),
+        seed=1,
+        run_dir=run_dir,
+        truth_log_dir=truth_dir,
+        models={"linear": linear_model()},
+        state_space_models={"ar": linear_system(n, 0.9)},
+    )
+    reg.call("simulate", model="linear", parameters={"a": 1.5})
+    out = reg.call(
+        "filter_enkf", model="ar", observations=y[:, None], observation_sd=[0.3],
+        process_sd=[0.1], initial_mean=[1.0], initial_sd=[1.0], n_ensemble=50, seed=2,
+    )  # fmt: skip
+    assert out.n_evaluations == 50 * (n - 1)
+    full = read_calls(truth_dir)
+    by_name = {r.name: r for r in full}
+    assert by_name["filter_enkf"].n_evaluations == 50 * (n - 1)
+    assert by_name["simulate"].n_evaluations == 1
+    assert sum(r.n_evaluations or 0 for r in full) == reg.evaluations_used == 50 * (n - 1) + 1
+
+
 def test_summary_cost_fields_come_from_the_meter_not_the_state(tmp_path):
     reg, run_dir, _ = _registry(tmp_path)
     for a in (1.0, 2.0, 3.0):

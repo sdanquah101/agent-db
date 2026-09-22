@@ -32,6 +32,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 __all__ = [
     "LABELS",
+    "OUTPUTS_DIR",
     "ActionRef",
     "Classification",
     "DataQualityStatus",
@@ -46,6 +47,13 @@ __all__ = [
     "ToolFailureRecord",
     "ValidationStatus",
 ]
+
+OUTPUTS_DIR = "workflows"
+"""Subdirectory of ``runs/<id>/`` that holds every workflow's own outputs: the task state
+lives at ``runs/<id>/workflows/<workflow>/state.json``. Declared here, beside the schema
+of what is written there, so that the scorer (``eval/records.py``) reads the name without
+importing the registry server (the coordinator's review of PR #19, nit 6); ``tools.server``
+re-exports it."""
 
 Label = Literal["sensor", "influent", "state", "parameter", "structural", "none"]
 LABELS: tuple[str, ...] = ("sensor", "influent", "state", "parameter", "structural", "none")

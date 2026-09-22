@@ -31,6 +31,7 @@ a = open("eval/config.py")
 b = open("../eval/records.py")
 c = Path(root) / "eval"
 d = open("/repo/EVAL/tables.py")
+e = open("configs/eval.yaml")
 '''
 
 _WORKFLOW_EVALUATING_A_MODEL = '''
@@ -55,7 +56,6 @@ _ALLOWED_EVAL_IMPORTS = {
     "state.provenance",
     "state.task_state",
     "tools.config",
-    "tools.server",
     "sim.run.layout",
     "sim.adm1",
 }
@@ -84,10 +84,12 @@ def test_the_checker_flags_a_workflow_that_reaches_eval(tmp_path: Path):
     path.write_text(_WORKFLOW_REACHING_EVAL)
     found = find_truth_references(path)
     lines = {v.line for v in found}
-    # one finding per route: four imports, four path spellings
-    assert {3, 4, 5, 6, 7, 8, 9, 10} <= lines, [str(v) for v in found]
+    # one finding per route: four imports, five path spellings
+    assert {3, 4, 5, 6, 7, 8, 9, 10, 11} <= lines, [str(v) for v in found]
     assert any(v.kind == "path literal" and "eval/config.py" in v.detail for v in found)
     assert any(v.kind == "path literal" and v.detail == "'eval'" for v in found)
+    # the scorer's own thresholds, by the PATH rule (not only by the dotted-module regex)
+    assert any(v.kind == "path literal" and "configs/eval.yaml" in v.detail for v in found)
 
 
 def test_the_checker_leaves_a_workflow_that_evaluates_a_model_alone(tmp_path: Path):

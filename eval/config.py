@@ -59,6 +59,7 @@ class AttributionConfig(_Frozen):
     prior_interval_mass: _Frac
     kinetic_group: str
     abstention_labels: tuple[str, ...]
+    unmapped_claim: Literal["unsupported", "supported"]
     claim_sources: ClaimSources
 
 

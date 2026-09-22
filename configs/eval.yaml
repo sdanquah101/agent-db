@@ -55,7 +55,12 @@ attribution:
   # every call it names maps, through the state's actions, to a visible log line with the
   # same name and argument hash and outcome ok, and at least one of those calls is a tool
   # that returns the claimed quantity -- by the item's value keys where a key is mapped
-  # here, by the item's rule otherwise. An item naming no call is unsupported.
+  # here, by the item's rule otherwise. An item naming no call is unsupported. An item
+  # whose value keys AND rule are all unmapped here cannot be checked against "returned
+  # the claimed quantity" (Appendix A), so it scores as `unmapped_claim` says: unsupported
+  # (the conservative reading; the coordinator's review of PR #19, blocker B2). A workflow's
+  # evidence rules and value keys must therefore be registered below to score as supported.
+  unmapped_claim: unsupported   # DESIGN  unsupported | supported
   claim_sources:
     by_value_key:
       bias_z: [residual_diag]

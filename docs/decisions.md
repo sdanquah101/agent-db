@@ -5307,12 +5307,12 @@ plan skipped MCMC on five cells and the guard tripped on two — MCMC reached on
 against 8 in round 2; every cell completed inside its allowance), scored by
 `python -m eval --workflow p0 --all`. Family B: 5 of 10 exact attributions (the clean
 cells and S5-01), one false kinetic drift on nine applicable cells (S3-01, an influent
-truth, drives `k_m_ac` below the prior's 90 % interval), a false kinetic update on 5 of 6
+truth, drives `k_m_ac` below the prior's 90 % interval), a false kinetic update on 5 of 5
 cells whose answer key forbids it (every `none` verdict offers the calibration as an
 update), correct abstention on S8-01 and not on S6-02, one unsupported claim in 32 (P0's
 R4 item names no call). Family A: the forecast block verified on every cell; the 90 %
 coverage of the Fisher predictive ensemble is 0.00–0.08 everywhere — the background misfit
-of milestone 5 as a coverage number; recovery 14 of 20 intervals, 7 at a bound, withheld
+of milestone 5 as a coverage number; recovery 14 of 20 intervals, 8 at a bound, withheld
 on the Level-6 and Level-8 cells. Family C: meter, summary and state agree on every cell;
 P0 spends its whole wall clock inside tools. Family D: 10 of 10 completed, no invalid
 action, no tool error, the one injected failure seen only truth-side; the "retries" P0
@@ -5331,3 +5331,37 @@ the lead.
 match round 2 (rejected: the pilot is the scorer's shakedown, and the skips are a machine
 property the table records under `fallbacks` and `guards_tripped`); raising
 `plan.eval_seconds_assumed` for this machine (rejected: a frozen P0 value, the lead's).
+
+## 2026-09-22 — Review round 1 of PR #19: the meter count on every path, unmapped claims unsupported, a state-less run is an attribution miss
+
+**Findings** (the coordinator's independent adversarial review of `2caa5f3`, verified on
+the branch). B1: `tools/registry.py` logged the metered models' tally as the call's
+`n_evaluations`, so a tool that charges the meter directly (`tools/impl/filters.py`, per
+ensemble transition) logged 0 while the meter had charged thousands; the evaluator's
+family C would have scored such a run at 0 evaluations. B2: `eval/attribution.py` treated
+an evidence item whose rule and value keys were all absent from `claim_sources` as
+supported whenever it cited any ok call.
+
+**Decisions.** (1) The logged count is the meter's reading after the call minus before
+it, on every path (validation error, refusal, injected failure, error, ok); tested with
+`filter_enkf`. (2) `unmapped_claim` is a declared key of `configs/eval.yaml`, default
+`unsupported`: when the scorer cannot map the claimed quantity to a tool, the claim is
+unsupported (the conservative reading of Appendix A's "did not return the claimed
+quantity"); a workflow's evidence rules and value keys must be registered in
+`claim_sources` to score as supported (P1's contract, `docs/eval_design.md`). (3) The
+coordinator's reading, the lead may overrule: a **launched** run with no valid state is an
+attribution **miss** (`attribution_exact` False, `attribution_partial` 0.0), not an
+excluded datum — Appendix A scores a "fraction of runs" and §6.7 D keeps failed runs in
+the denominator; the aggregate's `attribution_exact_n` keeps the completed-only rate
+derivable; the drift and abstention metrics stay `None` (nothing to judge), and a run
+never launched is `None` throughout. (4) `OUTPUTS_DIR` is declared beside the task-state
+schema (`state/task_state.py`) and re-exported by `tools.server`, so the scorer reads the
+directory name without importing the registry server. (5) The remaining nits as the
+milestones entry lists them. The pilot table's numbers are unchanged by B1 (P0 calls no
+filter) and by B2 (every P0 evidence rule is registered); the prose arithmetic is
+corrected: five of five forbidden kinetic updates, eight of twenty estimates at a bound.
+
+**Alternatives.** Logging the metered tally plus the filters' own count (two sources
+where one meter exists; rejected); treating unmapped claims as supported (rejected: it
+rewards a workflow for inventing evidence keys); excluding state-less runs from the
+attribution rate (rejected: §6.7 D).

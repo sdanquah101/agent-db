@@ -14,7 +14,12 @@ store's answer key, never from free text:
   applicable only for a structural or compound truth);
 - **unsupported claims**: evidence items of the classification that name no call, or a
   call that does not resolve to a logged ``ok`` line, or resolve to no tool that returns
-  the claimed quantity (``claim_sources`` in ``configs/eval.yaml``).
+  the claimed quantity (``claim_sources`` in ``configs/eval.yaml``); an item whose rule
+  and value keys are all unregistered there scores as ``unmapped_claim`` says
+  (unsupported by default).
+
+A launched run with no valid state is an attribution miss (``attribution_exact`` False,
+``attribution_partial`` 0.0); the drift and abstention fields stay ``None``.
 """
 
 from __future__ import annotations
@@ -73,6 +78,15 @@ def score_attribution(
     }
     state = records.state
     if state is None:
+        # a launched run that left no valid state is an attribution MISS, not an absent
+        # datum: Appendix A scores a "fraction of runs" and §6.7 D keeps failed runs in
+        # the denominator (the coordinator's reading on PR #19, 2026-09-22; decisions).
+        # The drift and abstention metrics stay None: there is no estimate to judge. A
+        # run never launched is None throughout.
+        if records.launched:
+            out["attribution_exact"] = False
+            out["attribution_partial"] = 0.0
+            out["primary_in_truth"] = False
         return out
 
     final = {state.final.label, *state.final.secondary_labels}
@@ -133,8 +147,15 @@ def score_attribution(
             allowed |= set(sources.by_value_key.get(key, ()))
         if not allowed:
             allowed = set(sources.by_rule.get(item.rule, ()))
+        if not allowed:
+            # neither a value key nor the rule is registered in claim_sources: whether the
+            # call "returned the claimed quantity" cannot be checked, and the declared
+            # policy decides (unsupported by default)
+            if cfg.unmapped_claim == "unsupported":
+                unsupported += 1
+            continue
         names = {line.name for line in lines if line is not None}
-        if allowed and not (names & allowed):
+        if not (names & allowed):
             unsupported += 1
     out["claims"] = total
     out["claims_unsupported"] = unsupported

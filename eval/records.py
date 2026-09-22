@@ -33,8 +33,7 @@ from pydantic import ValidationError
 
 from sim.run.layout import INDEX_FILE, RUNS_ROOT, RunPaths, truth_store_for
 from state.provenance import CallRecord, read_calls
-from state.task_state import TaskState
-from tools.server import OUTPUTS_DIR
+from state.task_state import OUTPUTS_DIR, TaskState
 
 __all__ = ["RunRecords", "index_entries", "load_records", "runs_with_output", "selected_runs"]
 
@@ -113,7 +112,12 @@ def load_records(
     manifest = _json(paths.truth_manifest)
     faults = _json(paths.truth_faults)
     if manifest is None or faults is None:
-        raise FileNotFoundError(f"{paths.truth} holds no manifest and answer key for {run_id}")
+        missing = [
+            f"{path.name} is {'missing' if not path.is_file() else 'not a JSON object'}"
+            for path, doc in ((paths.truth_manifest, manifest), (paths.truth_faults, faults))
+            if doc is None
+        ]
+        raise FileNotFoundError(f"{paths.truth}: {'; '.join(missing)} (nothing to score against)")
     parameters = _json(paths.truth_parameters) or {}
     if not parameters:
         problems.append("truth parameters.json missing")

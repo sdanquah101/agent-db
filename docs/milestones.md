@@ -2194,7 +2194,7 @@ cells, S1-01 and S5-01), partial credit identical (no compound cell among the te
 five misses are `none` where a fault exists, as in round 2. **False kinetic drift on 1 of
 9 applicable cells**: S3-01 (an influent truth) drove `k_m_ac` to 0.348, below the prior's
 central 90 % interval [0.46, 2.87] — exactly the behaviour the metric exists to catch.
-**False kinetic update on 5 of 6 cells** whose answer key forbids it: every `none` verdict
+**False kinetic update on 5 of 5 cells** whose answer key forbids it: every `none` verdict
 offers the calibration as a kinetic update (R6 sets `kinetic_update`), so a fault P0
 cannot see becomes an offered parameter change; the metric makes that cost visible.
 Correct abstention: S8-01 yes (`posterior_intervals`), S6-02 no (P0 abstained on
@@ -2213,7 +2213,7 @@ posterior converged). Constraint violations 0. COD closure error 0.01–0.15 wit
 inadmissible windows on the four Plant B clean-ish cells (the background deliveries),
 not evaluable at Tier A; `charge_consistent` false on every Tier B/C cell (the
 background of ruling B(b)). Parameter recovery on the 8 Level 0–5 cells: 14 of 20
-intervals cover the truth, 7 of 20 estimates at a bound — round 2's numbers; withheld on
+intervals cover the truth, 8 of 20 estimates at a bound (round 2 counted 7); withheld on
 S6-02 and S8-01. (3) **Family C.** The meter, the summary and the state agree on every
 cell (P0 is honest; the check is live for P1). Evaluations 33–81 % of the ruled counts,
 wall clock 44–95 % of the allowances (S5-01 at 95 %: 115 of 120 min on this slower
@@ -2255,6 +2255,28 @@ residual-derived evidence items should name the `residual_diag` call (one line i
 S6-01/S6-04/S7-02, S2-02 and S4-02 has no P0 counterpart (limit 3). (d) A machine-speed
 record beside every pilot table: the plan's 12 s assumption decides whether MCMC runs,
 and this container needs ~14 s under three loads.
+
+**Review round 1 (the coordinator's independent review of `2caa5f3`, 2026-09-22 ~11:45
+UTC: MERGE AFTER FIXES; both blockers verified on the branch and fixed in the next push).**
+B1: the per-call meter count in the truth-side log was the metered models' own tally
+(`context.evaluations_used`) and missed every evaluation a tool charges to the meter
+directly — the filters charge per ensemble transition, so `filter_enkf` logged 0 against
+a meter of 15,600. Now `Registry.call` snapshots the meter before the call and logs the
+difference on every path; `tests/test_runner_meter.py` calls `filter_enkf` and asserts the
+log sums to the meter. P0 never calls a filter, so the pilot table is unchanged. B2: an
+evidence item whose rule and value keys were all unregistered in `claim_sources` counted
+as supported if it cited any ok call; `unmapped_claim: unsupported` is now a declared
+`eval.yaml` key (the default) and the case is tested both ways; P1's contract says so.
+The coordinator's reading on a launched run with no valid state — an attribution miss,
+in the denominator, with `attribution_exact_n` beside the rate — is implemented and
+recorded (decisions). Nits in the same push: `meter_agrees_with_summary` compares the
+call count too; the loader's message names the unreadable answer-key file; `OUTPUTS_DIR`
+is declared beside the task-state schema (`state/task_state.py`, re-exported by
+`tools.server`) so the scorer imports no registry module for it; `configs/eval.yaml` is
+caught by the checker's path rule (with a probe); the design note says the forecast
+window is the state's own declaration, that `completed` is half self-report, and what
+follow-up (a) must persist; and the arithmetic above is corrected (false kinetic update
+5 of 5; 8 of 20 at a bound — round 2 counted 7).
 
 **The next session starts on:** the lead's answer on the sweep (run it with
 `python -m tools.runner --workflow p0 --all --level 0-5` in three processes and score with

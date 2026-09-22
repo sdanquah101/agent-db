@@ -77,6 +77,7 @@ def score_efficiency(
         out["meter_agrees_with_summary"] = (
             summary.get("simulator_evals_used") == evaluations
             and summary.get("assay_units_used") == assay_units
+            and summary.get("n_calls") == len(calls)
         )
     state = records.state
     if state is not None:

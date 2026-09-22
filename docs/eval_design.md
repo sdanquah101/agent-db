@@ -57,8 +57,19 @@ way when named explicitly.
   it names no call, when a named `call_index` does not map through `actions` to a visible
   log line with the same name and argument hash and outcome `ok`, or when none of the
   resolved calls is a tool that returns the claimed quantity (`claim_sources` in
-  `eval.yaml`: by the item's value keys, by its rule where no key is mapped). Free text
-  (`annotations`, `report.json`) is never read.
+  `eval.yaml`: by the item's value keys, by its rule where no key is mapped). An item
+  whose value keys **and** rule are all unregistered in `claim_sources` cannot be checked
+  against "returned the claimed quantity" and scores as `unmapped_claim` declares —
+  unsupported by default (the conservative reading of Appendix A; PR #19 review, B2).
+  **P1's contract:** every evidence rule and value key a workflow emits must be registered
+  in `claim_sources`, or its claims score as unsupported. Free text (`annotations`,
+  `report.json`) is never read.
+- A launched run that left no valid state is an attribution **miss** (`attribution_exact`
+  False, `attribution_partial` 0.0), not an absent datum: Appendix A scores a "fraction
+  of runs" and §6.7 D keeps failed runs in the denominator (the coordinator's reading,
+  2026-09-22). The aggregate's `attribution_exact_n` beside the rate keeps the
+  completed-only rate derivable. The drift and abstention fields stay `None` (no estimate
+  to judge); a run never launched is `None` throughout.
 
 ## 3. Family A — calibration and prediction (`eval/prediction.py`)
 
@@ -75,8 +86,10 @@ way when named explicitly.
   no sensor reports a methane flow.
   *Limit, recorded:* the metric values are the `validate` tool's as the state carries
   them; the prediction series is not in the record, so the evaluator verifies the trail
-  and the window rather than recomputing. Persisting the tool's output on the privileged
-  side would close it (follow-up).
+  and the window rather than recomputing — and the window it verifies is the state's own
+  `validation.holdout`, since `validate`'s real window sits inside the opaque argument
+  hash. Persisting `validate`'s input window and its output on the privileged side
+  (truth store) would close both (follow-up (a)).
 - **Mass/charge balance** (`cod_balance_error` = |mean COD closure|, `n_cod_inadmissible`,
   `charge_drift`, `charge_consistent`) from the state's `mass_balance` block when a logged
   `mass_balance` call with outcome `ok` exists among the actions.
@@ -96,14 +109,17 @@ workflow records (everything after the last `registry.open`) of the meter counts
 registry writes per call; `wall_clock_s` is the runner's measurement, `log_span_s` the
 log's own span, `tool_runtime_s` the summed runtimes, `tokens` the runner's field (empty
 for P0). The state's self-report is compared with the meter (`self_report_mismatch`) and
-the summary's meter fields with the log (`meter_agrees_with_summary`).
+the summary's meter fields — evaluations, assay units and the call count — with the log
+(`meter_agrees_with_summary`).
 **Uncertainty reduction per assay unit** (RQ4): the mean over reported parameters of
 1 − (interval width / prior 90 % interval width), clipped at zero, divided by the assay
 units spent; abstained when none were.
 
 ## 5. Family D — reliability (`eval/reliability.py`)
 
-`completed` is the runner's verdict; `invalid_actions` counts logged errors whose detail
+`completed` is the runner's verdict — `state.final.completed` **and** the process exited 0
+— so it is half self-report: a P1 that writes `completed: true` and exits 0 counts as
+completed whatever it did in between; the rest of the row says what it did. `invalid_actions` counts logged errors whose detail
 starts with a validation-failure prefix plus every `budget_exceeded` refusal;
 `tool_errors` the other errors; `injected_failures` the Level-8 outcomes only the
 truth-side log shows; `verifier_rejections` the records named `verifier.reject` (reserved
@@ -125,8 +141,10 @@ step on these tables.
 ## 7. The meter (follow-up (d) of milestone 5)
 
 `CallRecord` gained two truth-side fields, `n_evaluations` and `assay_units`, written by
-the registry with every call and dropped from the visible projection like the timestamp
-and the runtime; `tools/runner.py` fills `summary.json`'s cost fields from the registry's
+the registry with every call — as the meter's count before and after the call on every
+path, so a tool that charges the meter directly (the filters, per ensemble transition)
+is counted like one that goes through a `MeteredModel` (PR #19 review, B1) — and dropped
+from the visible projection like the timestamp and the runtime; `tools/runner.py` fills `summary.json`'s cost fields from the registry's
 meter after the launch and keeps the state's own numbers beside them as
 `self_reported_*`. A task state that misreports its budget does not change the scored
 cost (`tests/test_runner_meter.py`, `tests/test_eval_metrics.py`).

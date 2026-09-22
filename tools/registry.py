@@ -429,21 +429,31 @@ class Registry:
         version = self.version_of(name)
         started = self._clock()
         context = self._context()
+        # what THIS call charges the meter, on every path: the meter's count before and
+        # after, never the metered models' own tally, which misses a tool that charges the
+        # meter directly (the filters charge per ensemble transition; the coordinator's
+        # review of PR #19, blocker B1, 2026-09-22)
+        before = self._meter.used
+
+        def charged() -> int:
+            return int(self._meter.used - before)
 
         try:
             inp = spec.input_model.model_validate(args)
         except ValidationError as exc:
-            self._log(name, version, args, started, "error", f"ValidationError: {exc}", 0)
+            self._log(name, version, args, started, "error", f"ValidationError: {exc}", charged())
             raise ToolArgumentError(f"{name}: {exc}") from exc
         hashed = inp.model_dump()
 
         try:
             refusal = self._refusal(spec, inp, context)
         except ToolError as exc:
-            self._log(name, version, hashed, started, "error", f"{type(exc).__name__}: {exc}", 0)
+            self._log(
+                name, version, hashed, started, "error", f"{type(exc).__name__}: {exc}", charged()
+            )
             raise
         if refusal is not None:
-            self._log(name, version, hashed, started, "budget_exceeded", refusal, 0)
+            self._log(name, version, hashed, started, "budget_exceeded", refusal, charged())
             raise BudgetExceededError(f"{name}: {refusal}")
 
         if self._injected(name):
@@ -457,32 +467,39 @@ class Registry:
                 output = spec.failure(inp, context, rng)
             except Exception as exc:
                 self._log(
-                    name, version, hashed, started, "error", f"{type(exc).__name__}: {exc}", 0
+                    name,
+                    version,
+                    hashed,
+                    started,
+                    "error",
+                    f"{type(exc).__name__}: {exc}",
+                    charged(),
                 )
                 raise ToolError(f"{name}: {exc}") from exc
-            self._log(name, version, hashed, started, "injected_failure", "", 0)
+            self._log(name, version, hashed, started, "injected_failure", "", charged())
             return output
 
         try:
             output = spec.run(inp, context)
         except BudgetExhausted as exc:
-            used = context.evaluations_used
-            self._log(name, version, hashed, started, "budget_exceeded", str(exc), used)
+            self._log(name, version, hashed, started, "budget_exceeded", str(exc), charged())
             raise BudgetExceededError(f"{name}: {exc}") from exc
         except ToolError as exc:
-            used = context.evaluations_used
-            self._log(name, version, hashed, started, "error", f"{type(exc).__name__}: {exc}", used)
+            self._log(
+                name, version, hashed, started, "error", f"{type(exc).__name__}: {exc}", charged()
+            )
             raise
         except Exception as exc:
-            used = context.evaluations_used
-            self._log(name, version, hashed, started, "error", f"{type(exc).__name__}: {exc}", used)
+            self._log(
+                name, version, hashed, started, "error", f"{type(exc).__name__}: {exc}", charged()
+            )
             raise ToolError(f"{name}: {type(exc).__name__}: {exc}") from exc
 
         units = 0
         if spec.assay_cost is not None:
             units = int(spec.assay_cost(inp, context))
             self._assay_units_used += units
-        self._log(name, version, hashed, started, "ok", "", context.evaluations_used, units)
+        self._log(name, version, hashed, started, "ok", "", charged(), units)
         return output
 
     def call_json(self, name: str, args: Mapping[str, Any]) -> dict[str, Any]:
