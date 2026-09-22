@@ -108,7 +108,10 @@ starts with a validation-failure prefix plus every `budget_exceeded` refusal;
 `tool_errors` the other errors; `injected_failures` the Level-8 outcomes only the
 truth-side log shows; `verifier_rejections` the records named `verifier.reject` (reserved
 for P2; zero by construction now); `retries` the calls repeated with the same name and
-argument hash. Variance across seeds is the aggregate's `_sd` per metric.
+argument hash — on P0 these are its identical re-simulations of one parameter vector
+(the point prediction for the residuals and again for validation), not retries after a
+failure; the count is what §6.7 D and the provenance log's docstring define. Variance
+across seeds is the aggregate's `_sd` per metric.
 
 ## 6. The aggregate (`eval/aggregate.py`, §7)
 

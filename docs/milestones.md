@@ -2117,3 +2117,147 @@ counters from the truth-side log (runtimes) and `summary.json`, completion from
 `final.completed`; and, on the lead's ruling, the budgets per (scenario, tier) from the
 pilot table. P1 starts after the lead's budget ruling and, if any, the threshold rulings
 of the pilot's proposal (rule 5: P0 is frozen before any agent code).
+## Milestone 6 — The evaluation suite (weeks 17–20)
+
+Exit criterion: every metric of §6.7 families A–D computed from records only, by code no
+workflow can reach; the first scored P0 baseline table.
+
+### Session 2026-09-22 — the evaluation suite built, tested, and the pilot scored (`claude/eval-suite`, draft PR)
+
+Milestone 5 (P0) merged at `77508ca`, 2026-09-22. Launched by the coordinator on the
+lead's literal `Launch: eval-suite` (decisions, first entry of this session). Zero open
+PRs at launch; branched from `77508ca`; nothing under `sim/`, `scenarios/`,
+`workflows/p0_scripted/` or the frozen configs touched.
+
+**Done.**
+
+- **The meter as the source of cost** (follow-up (d) of milestone 5; decisions): the
+  truth-side call record carries what the registry's meter charged each call
+  (`n_evaluations`, `assay_units`; the projection carries neither); `summary.json`'s cost
+  fields come from the registry object after the launch (`cost_source: registry_meter`),
+  the state's numbers kept beside them as `self_reported_*`, and `tokens_used` added for
+  an LLM workflow's runner. A misreporting state changes nothing scored (tested).
+- **`eval/`** (`docs/eval_design.md`): `records.py` (the eight records and nothing else;
+  a failed run is a result with `problems`, never an exception), `trail.py` (a claim's
+  path back to the log: `calls` → `actions[call_index]` → the visible line by `seq`,
+  name, hash and outcome), `attribution.py` (B), `prediction.py` (A), `efficiency.py`
+  (C), `reliability.py` (D), `score.py` (one row per run, 127 columns), `aggregate.py`
+  (per (scenario, plant, tier, workflow); mean, rate, sd, seeded percentile bootstrap),
+  `tables.py`, `__main__.py` (`python -m eval --workflow p0 --all --out …`). Every
+  threshold, window, mapping and seed in `configs/eval.yaml` (`eval/config.py`).
+- **The rule-1 checker** flags `eval` as a path segment and a module in workflow code;
+  `tests/test_eval_isolation.py` shows a workflow reaching `eval/` caught, a workflow
+  merely evaluating a model left alone, every `eval/` import on its allow-list, and the
+  check catching a module that imports a workflow.
+- **Tests** (30 new: `test_eval_metrics.py`, `test_eval_isolation.py`,
+  `test_eval_end_to_end.py`, `test_runner_meter.py`, plus the extended checker): every
+  metric on a constructed pair with a positive and a negative case; Level-6 recovery
+  never scored, with the same estimates scored on Level 0 as the control; the short
+  S0-01 cell of Plant C run through the jail once per session (fixtures moved to
+  `conftest.py`) and scored from its records; the scorer writes nothing into the stores.
+- **Records**: `docs/eval_design.md`; three decisions entries (the launch reading, the
+  meter, the ten interpretations); card §7; `configs/README.md`; `tests/README.md`; this
+  entry.
+
+**Measured.** `ruff check .` and `ruff format --check .` clean; `python -m pytest -q`: 492 passed, 2 skipped
+(the pre-existing Muscatine SCADA skips), 13 deselected, 19 min 24 s — measured while one
+pilot cell held a core (milestone 5 measured 14 min 49 s on a quiet machine; the suite gained
+30 tests and no second jail launch, so the quiet-machine time is CI's to report).
+
+**The scored pilot** (`reports/p0_pilot_scored.csv`, `.json`, and the aggregate beside
+them): the same ten cells as milestone 5's rounds, regenerated into this container's
+store (run ids are store-specific), run through the runner three cells in parallel,
+04:09–09:14 UTC, 63–115 min per cell (round 2 on the previous machine: 54–93; this
+container is slower and the test suite ran beside the last three cells), then scored:
+
+| cell | truth | final | exact | partial | drift | abstain | claims unsup. | gas nRMSE | pH nRMSE | gas cov90 | recovery cov (n) | evals / budget | wall / allow (min) | assays | MCMC | guards | mismatch |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| S0-01 B/A | none | none | yes | 1.00 | no | - | 0/1 | 0.56 | 1.99 | 0.04 | 0.50 (2) | 271 / 450 | 72 / 90 | 2 / 2 | not converged | 0 | no |
+| S0-01 B/B | none | none | yes | 1.00 | no | - | 0/4 | 0.55 | 1.12 | 0.02 | 1.00 (2) | 235 / 450 | 63 / 90 | 2 / 2 | skipped | 1 | no |
+| S0-01 B/C | none | none | yes | 1.00 | no | - | 0/2 | 0.56 | 1.07 | 0.00 | 0.50 (4) | 307 / 450 | 81 / 90 | 2 / 2 | skipped | 0 | no |
+| S1-01 B/B | none | none | yes | 1.00 | no | - | 0/2 | 0.31 | 0.87 | 0.07 | 1.00 (3) | 280 / 450 | 74 / 90 | 2 / 2 | skipped | 0 | no |
+| S2-01 B/B | sensor | none | no | 0.00 | no | - | 0/5 | 0.84 | 2.53 | 0.02 | 1.00 (3) | 251 / 450 | 66 / 90 | 2 / 2 | skipped | 1 | no |
+| S3-01 C/B | influent | none | no | 0.00 | yes | - | 0/5 | 0.46 | 1.14 | 0.02 | 0.50 (2) | 329 / 600 | 84 / 120 | 3 / 4 | not converged | 0 | no |
+| S4-01 B/B | state | none | no | 0.00 | no | - | 0/4 | 0.47 | 1.57 | 0.00 | 0.50 (2) | 335 / 600 | 88 / 120 | 3 / 4 | not converged | 0 | no |
+| S5-01 A/A | parameter | parameter | yes | 1.00 | - | - | 1/1 | 0.59 | 2.31 | 0.08 | 0.50 (2) | 243 / 300 | 115 / 120 | 3 / 4 | skipped | 0 | no |
+| S6-02 B/B | structural | none | no | 0.00 | no | no* | 0/4 | 0.50 | 0.82 | 0.02 | - (-) | 350 / 750 | 90 / 150 | 3 / 6 | not converged | 0 | no |
+| S8-01 B/B | sensor | none | no | 0.00 | no | yes | 0/4 | 0.54 | 0.72 | 0.00 | - (-) | 250 / 750 | 67 / 150 | 3 / 6 | injected, handled | 0 | no |
+
+`abstain` is scored where the scenario declares `abstain_on` (`*`: a structural or
+compound truth); `claims unsup.` is unsupported / total evidence items; `gas cov90` the
+empirical 90 % coverage of the predictive ensemble on the hold-out; `recovery cov (n)`
+the fraction of the n reported parameters whose interval covers the truth, Levels 0–5
+only; `mismatch` whether the state's self-reported cost differs from the meter.
+
+**What the scored table shows.** (1) **Family B.** Attribution exact on 5 of 10 (the three S0-01
+cells, S1-01 and S5-01), partial credit identical (no compound cell among the ten); the
+five misses are `none` where a fault exists, as in round 2. **False kinetic drift on 1 of
+9 applicable cells**: S3-01 (an influent truth) drove `k_m_ac` to 0.348, below the prior's
+central 90 % interval [0.46, 2.87] — exactly the behaviour the metric exists to catch.
+**False kinetic update on 5 of 6 cells** whose answer key forbids it: every `none` verdict
+offers the calibration as a kinetic update (R6 sets `kinetic_update`), so a fault P0
+cannot see becomes an offered parameter change; the metric makes that cost visible.
+Correct abstention: S8-01 yes (`posterior_intervals`), S6-02 no (P0 abstained on
+`posterior_intervals` and `missing_transient`; R3 did not fire, so `alkalinity_budget`
+and `inorganic_carbon_balance` were never declined). **Unsupported claims: 1 of 32
+evidence items** — S5-01's R4 item, built with `calls=[]` (the P0 finding above); every
+QC, balance and missingness item names its call and resolves through the log. The flagged
+sensor is right on 8 of 10 (the two sensor cells flag nothing). (2) **Family A.** The
+forecast block verified on 10 of 10 (a logged `validate` on the frozen last quarter). Gas
+nRMSE 0.31–0.84; pH nRMSE 0.72–2.53 (worse than the observed spread on 7 cells). **The 90 %
+coverage of the predictive ensemble is 0.00–0.08 on every cell** and the interval scores are
+correspondingly large: the Fisher ensemble around the optimum is far narrower than the
+5–19σ background misfit milestone 5 recorded — the same property, now as a coverage
+number. CRPS is reported from that ensemble; `crps_posterior` is empty everywhere (no
+posterior converged). Constraint violations 0. COD closure error 0.01–0.15 with 2
+inadmissible windows on the four Plant B clean-ish cells (the background deliveries),
+not evaluable at Tier A; `charge_consistent` false on every Tier B/C cell (the
+background of ruling B(b)). Parameter recovery on the 8 Level 0–5 cells: 14 of 20
+intervals cover the truth, 7 of 20 estimates at a bound — round 2's numbers; withheld on
+S6-02 and S8-01. (3) **Family C.** The meter, the summary and the state agree on every
+cell (P0 is honest; the check is live for P1). Evaluations 33–81 % of the ruled counts,
+wall clock 44–95 % of the allowances (S5-01 at 95 %: 115 of 120 min on this slower
+machine); the log's span equals the runner's wall clock within a second and the summed
+tool runtime equals it too — P0 spends its whole allowance inside tools, which is the
+baseline an agent's thinking time is measured against. Uncertainty reduction 0–0.73 (zero
+where the Fisher interval is wider than the prior's 90 % interval), 0–0.37 per assay
+unit; tokens empty. (4) **Family D.** 10 of 10 completed, 0 invalid actions, 0 tool
+errors, 1 injected failure (S8-01: truth-side only, the visible log says `ok`), 0
+verifier rejections. `retries` 0–3 are P0's identical re-simulations of one parameter
+vector (the point prediction is simulated for the residuals and again for validation),
+not retries after a failure — the metric counts repeated (name, hash) pairs as §6.7 D and
+the provenance docstring define it; recorded. **MCMC reached on 4 of 10** (round 2: 8):
+the deterministic plan skipped it on five cells and the guard tripped on two, because
+this machine is slower than the 12 s per evaluation the plan assumes (63–115 min per cell
+against 54–93). The aggregate has one run per cell, so no bootstrap interval is filled.
+
+**Not done / limits, stated plainly.**
+1. Family A's forecast metrics are the `validate` tool's values as the state carries
+   them, verified by the trail (a logged `validate` with outcome `ok` on the frozen window),
+   not recomputed: the prediction series is not in the record. Follow-up: the registry
+   persisting `validate`'s output on the truth side would let the scorer recompute.
+2. P0's residual-derived evidence items carry no call reference (`classify` builds them
+   with `calls=[]`), so its unsupported-claim rate is high wherever R1b/R2/R5/R4/R3 fire —
+   a P0 finding recorded for the lead (rule 5: not changed here), with a one-line fix.
+3. `abstain_on` vocabularies: the scorer matches names exactly; S6-01/S6-04/S7-02's
+   `acetate_speciation`, `methanogenic_pathway_split`, S2-02's `ch4_yield` and S4-02's
+   `transient_response` have no counterpart in P0's §3.8 list, so those cells can never
+   score a correct abstention under P0 (S6-02's two names do match). A contract question
+   for the scenario owner and P1.
+4. The full Level 0–5 sweep is not run (the plan is in the PR body, for the lead).
+5. The aggregate's bootstrap needs more than one run per cell; the matrix carries one
+   replicate, so every interval in the pilot aggregate is empty by construction.
+
+**Follow-ups recorded, not done.** (a) Persist `validate`'s output on the truth side so
+family A can be recomputed rather than verified (registry, privileged). (b) P0's
+residual-derived evidence items should name the `residual_diag` call (one line in
+`classify`'s callers; rule 5: the lead's call). (c) The `abstain_on` vocabulary of
+S6-01/S6-04/S7-02, S2-02 and S4-02 has no P0 counterpart (limit 3). (d) A machine-speed
+record beside every pilot table: the plan's 12 s assumption decides whether MCMC runs,
+and this container needs ~14 s under three loads.
+
+**The next session starts on:** the lead's answer on the sweep (run it with
+`python -m tools.runner --workflow p0 --all --level 0-5` in three processes and score with
+`python -m eval`), and P1 (the single constrained agent, §6.5), which needs the
+evaluator's contract above: the state's `actions` name log lines, evidence items name
+calls, abstentions use the scenario vocabulary, and the runner fills `tokens_used`.

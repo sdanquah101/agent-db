@@ -5297,3 +5297,37 @@ recorded here are the lead's to overrule; each is a key of that file where it is
 10. The rule-1 checker gains `eval` as a forbidden path segment and module (its import
     was already off the allow-list); `tests/test_eval_isolation.py` shows both
     directions with negative controls.
+
+## 2026-09-22 — The first scored P0 baseline table (`reports/p0_pilot_scored.csv`): what the metrics show on the pilot cells
+
+**Finding** (`docs/milestones.md`, milestone 6, has the table). The ten pilot cells,
+regenerated into this container's store and run three in parallel at the ruled budgets
+(63–115 min per cell; this machine is slower than round 2's 54–93, so the deterministic
+plan skipped MCMC on five cells and the guard tripped on two — MCMC reached on 4 of 10
+against 8 in round 2; every cell completed inside its allowance), scored by
+`python -m eval --workflow p0 --all`. Family B: 5 of 10 exact attributions (the clean
+cells and S5-01), one false kinetic drift on nine applicable cells (S3-01, an influent
+truth, drives `k_m_ac` below the prior's 90 % interval), a false kinetic update on 5 of 6
+cells whose answer key forbids it (every `none` verdict offers the calibration as an
+update), correct abstention on S8-01 and not on S6-02, one unsupported claim in 32 (P0's
+R4 item names no call). Family A: the forecast block verified on every cell; the 90 %
+coverage of the Fisher predictive ensemble is 0.00–0.08 everywhere — the background misfit
+of milestone 5 as a coverage number; recovery 14 of 20 intervals, 7 at a bound, withheld
+on the Level-6 and Level-8 cells. Family C: meter, summary and state agree on every cell;
+P0 spends its whole wall clock inside tools. Family D: 10 of 10 completed, no invalid
+action, no tool error, the one injected failure seen only truth-side; the "retries" P0
+scores (0–3) are identical re-simulations of one parameter vector, not retries after a
+failure.
+
+**Decision.** The table is committed as the first scored baseline beside milestone 5's
+runner table (`reports/p0_pilot.csv`, round 2's record; the run ids differ because ids
+are store-specific). Nothing is tuned on it (the coordinator's condition (ii) of
+2026-09-21): the coverage, the false-update rate and the unsupported R4 claim are P0
+properties the table records. The 78-cell Level 0–5 sweep is not started; its plan
+(time, parallelism, resumability, tables, the single-seed question) is in the PR body for
+the lead.
+
+**Alternatives.** Re-running the five MCMC-skipped cells serially on a quiet machine to
+match round 2 (rejected: the pilot is the scorer's shakedown, and the skips are a machine
+property the table records under `fallbacks` and `guards_tripped`); raising
+`plan.eval_seconds_assumed` for this machine (rejected: a frozen P0 value, the lead's).
