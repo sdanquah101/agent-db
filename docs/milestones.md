@@ -1941,9 +1941,11 @@ entry of this session). Zero open PRs at launch; branched from `21424f2`; nothin
   the Level-8 row on a short S8-01 cell (one `bayes_mcmc` call, failure recorded, no
   posterior, truth-side `injected_failure` vs visible `ok`); the attribution rule on
   constructed evidence; the runner's selection and table; the write op's refusals.
-- **Records**: seven decisions entries (the launch reading, the rules, the two registry
-  additions, the stiffness pocket, the 12 s measurement, the lead's approval, the pilot's
-  findings), card §4.2, `configs/README.md`, this entry.
+- **Records**: eight decisions entries (the launch reading, the rules, the two registry
+  additions, the stiffness pocket, the lead's approval, the round-1 pilot findings, the
+  lead's rulings A and B, the round-2 outcome; the 12 s measurement is recorded inside
+  the rules entry and `configs/workflows/p0.yaml`), card §4.2,
+  `configs/README.md`, `scenarios/README.md`, this entry.
 
 **Measured.** `ruff check .` and `ruff format --check .` clean; `python -m pytest -q`
 without `PYTHONPATH`: 462 passed, 2 skipped (the pre-existing Muscatine SCADA skips), 13
@@ -2044,8 +2046,9 @@ parallel, 17:25–21:5x UTC:
 | S8-01 B/B | sensor | none (R6) | - vs gas_flow | yes | 54 / 150.0 | 250 / 750 | 3 / 6 | run, not converged (INJECTED, handled) | 0 | 0 | fisher | - |
 
 What changed, and what did not. **P0 completes comfortably inside every allowance**
-(54–93 min of 90–150; 54–78 % of the ruled evaluation counts; one guard trip in ten
-cells). **MCMC is reached on 8 of 10 cells** (skipped on S0-01 B/C, where the guard tripped
+(54–93 min of 90–150; 33–81 % of the ruled evaluation counts — the 33 % is S8-01, 250 of
+750, whose injected MCMC call charges nothing, the 81 % S5-01, 243 of 300; one guard trip
+in ten cells). **MCMC is reached on 8 of 10 cells** (skipped on S0-01 B/C, where the guard tripped
 at the measured rate, and on the Plant A cell, whose 24 s evaluations do not fit the
 ruled sampler in 120 min); it converged on none (R-hat 1.9–96 at 8 × 10), so every cell
 still reports Fisher intervals and abstains on `posterior_intervals` — the rule the Level-8
@@ -2065,8 +2068,10 @@ property. **Parameter recovery** (Levels 0–5, 20 estimates): the Fisher interv
 the truth in 14; 7 estimates sit at a bound (Y_ac and Y_h2 at 0.5 or 1.5 on five cells);
 the intervals are wide because the residual variance is the background's.
 
-**Not done / limits, stated plainly.** (1) P0's rules are approved and frozen; the four threshold changes the
-pilot suggests are proposals for a decisions entry with the lead's approval, not made here. (2) The full Level 0–5 sweep is not
+**Not done / limits, stated plainly.** (1) P0's rules are approved and frozen at the
+lead's rulings of 2026-09-21: the four threshold changes the round-1 pilot suggested were
+applied at `f4c5b03` by ruling B, and any later change is a decisions entry with the
+lead's approval. (2) The full Level 0–5 sweep is not
 in this PR: 78 cells at Levels 0–5 (Plants B and C: 15 + 15 at 90 min, 18 + 18 at 120 min; Plant A: 3 at
 90, 9 at 120); at the measured 52–60 min per 90-minute B/C cell, ~70 min per 120-minute
 B/C cell and ~85 min per Plant A cell that is ~88 h of runner time serial, ~29 h with
@@ -2075,8 +2080,32 @@ guard trips the measured rate then causes). The batch runner does it in one comm
 (`python -m tools.runner --workflow p0 --all --level 0-5`), resumable by table.. (3) MCMC at the sizes the wall clock allows does not converge on
 ADM1, so P0 reports Fisher intervals by the same rule the Level-8 row exercises. (4) The
 profile likelihood never ran inside the allowances (its registry bound is
-`n_grid · n_starts · 201` evaluations). (5) The checker forbids the bare token `state`
+`n_grid · n_starts · 201` = 1,005 evaluations at the declared grid, above every ruled
+budget, so inside the ruled budgets profiles can never run and every cell's intervals are
+Fisher or nothing). (5) The checker forbids the bare token `state`
 in workflow code, so the label vocabulary is read from the configuration.
+
+**Follow-ups recorded, not done** (from the gate review of `040c6d5`; for the evaluation
+and P1 sessions, none of them a change to P0's frozen rules):
+- (a) **Rule precedence is untested.** Mutants that swap R4 and R3, move R4 before R5,
+  shift `step_day_tolerance_d` by one day, fold the charge evidence on a non-pH offender,
+  or disable the wall-clock guard all survive the current tests. Each needs a constructed
+  evidence case in `tests/test_p0_pipeline.py`.
+- (b) **The second-pass edge case.** After a refit the excluded offender leaves the
+  calibrated set, so `classify` can flag a second sensor, the pH charge fold can never
+  attach after a second pass, and `flag_sensor` is the first flagged sensor in alphabetical
+  order (`workflows/p0_scripted/pipeline.py`, the second pass and the attribution step).
+- (c) QC-missingness and charge-drift evidence are still tagged R5 and "balance" in
+  `classification.evidence` although, after ruling B, neither can fire a rule; they are
+  evidence lines only and the tag should say so.
+- (d) `summary.json`'s cost fields are the workflow's self-report copied from `state.json`,
+  not the registry's meter, and neither log carries a per-call evaluation count. Adequate
+  for P0; to be fixed before P1, when "evaluation reads logs only" (rule 3) has to hold
+  against a workflow that could misreport.
+- (e) No test pins a `configs/workflows/p0.yaml` value, and the determinism test pops
+  `guards_tripped` before asserting it empty, which is flaky under load.
+- (f) Profiles can never run inside the ruled budgets (limit (4) above); the design note
+  §7 says so.
 
 **The next session (milestone 6, the evaluation suite, §6.7) starts on:** `eval/`
 reading `truth_store/<id>/` and `runs/<id>/workflows/<workflow>/state.json` only —

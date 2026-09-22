@@ -4,8 +4,9 @@ P0's every threshold, size and seed lives in that file (CLAUDE.md conventions; r
 The jailed pipeline cannot read YAML (no ``yaml`` in the sandbox) nor the repository, so
 the privileged runner writes the configuration into the sandbox as JSON, together with
 the two declared things the pipeline needs that are not in the run's record: the
-**declared instrument noise** of every sensor (``configs/observation/sensors.yaml``,
-``cv`` and ``sd_abs`` only) and the **declared geometry** of every plant
+**declared instrument noise** of every sensor (``configs/observation/sensors.yaml``:
+``cv``, ``sd_abs``, the drift bound and the drift sd, design §1.1) and the **declared
+geometry** of every plant
 (``configs/plants/``, the liquid volume and the set point). Both are the visible
 contract of §6.1 and the benchmark card §4.1, the same for every cell, and carry nothing
 of a run's truth, scenario or seeds (:func:`sandbox_config` is tested to hand over

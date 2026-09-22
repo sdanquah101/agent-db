@@ -5183,8 +5183,9 @@ touched cell groups regenerated at the same head, and the round restarted.
 
 **Finding** (`reports/p0_pilot.csv`; `docs/milestones.md`, milestone 5, round 2). The same
 ten cells at the ruled budgets, plan and thresholds: every cell completed in 54–93 min of
-its 90–150-minute allowance using 54–78 % of the ruled evaluation count (243–350 of
-300–750), one guard trip in ten cells; MCMC reached on 8 of 10 (not on the Plant A cell at
+its 90–150-minute allowance using 33–81 % of the ruled evaluation count (243–350 of
+300–750; the 33 % is S8-01, 250 of 750, whose injected MCMC call charges nothing; the
+81 % is S5-01, 243 of 300), one guard trip in ten cells; MCMC reached on 8 of 10 (not on the Plant A cell at
 24 s per evaluation, nor on the one cell whose guard tripped), converged on none, so
 every cell reports Fisher intervals and abstains on `posterior_intervals`; the Level-8
 directive of S8-01 exercised and handled by the rule (one call, the injected payload,

@@ -241,7 +241,7 @@ which:
 |---|---|
 | Morris | halve `morris_trajectories` down to `plan.morris_min_trajectories` (4); below that, screen by the Fisher information at the defaults instead |
 | Sobol | halve `sobol_samples` down to `plan.sobol_min_samples` (8); below that, skip Sobol and take the Morris subset |
-| Profiles | run while the projected cost fits `plan.profile_share` (0.15); else Fisher only |
+| Profiles | run while the projected cost fits `plan.profile_share` (0.15) and the registry's bound (`n_grid · n_starts · 201` = 1,005 evaluations) fits the evaluations left; else Fisher only. At the ruled budgets (450–750) the bound never fits, so profiles never run (§7) |
 | LSQ / DE | halve starts / generations down to 1 / `plan.de_min_generations` (2); below that, the single LSQ start |
 | MCMC | halve steps down to `plan.mcmc_min_steps` (10); below that, skip MCMC (`posterior_intervals` abstained, Fisher intervals stand) |
 | Second pass | skipped when its projected cost does not fit |
@@ -294,7 +294,8 @@ completion, the final label) from its privileged side, and one row per cell to
    cells, and four threshold rulings on the paths that read the background — **ruled**
    2026-09-21 (rulings A and B above): the budgets re-declared, the plan shrunk to what
    reaches MCMC, the two paths silenced, the two tolerances widened. Round 2 at the
-   rulings: every cell in 54–93 min using 54–78 % of the ruled counts, MCMC reached on 8
+   rulings: every cell in 54–93 min using 33–81 % of the ruled counts (S8-01's injected
+   MCMC call charges nothing; S5-01's Plant A cell is the fullest), MCMC reached on 8
    of 10, the Level-8 row exercised, 5 of 10 labels right and no false fault.
 
 ## 7. Recorded limits
@@ -302,9 +303,15 @@ completion, the final label) from its privileged side, and one row per cell to
 - At 30 days the Fisher information at the defaults drops every Sobol parameter as
   practically non-identifiable (relative CRLB 4–9) and the declared minimum of two stands;
   whether 200 days identify more is the pilot's to say.
-- MCMC with the sizes the wall clock allows (8 walkers × 30 steps) will rarely converge on
-  ADM1; P0 then reports Fisher intervals by the same rule the Level-8 row exercises. This
-  is stated, not hidden; a larger allowance is the lead's call.
+- MCMC with the sizes the wall clock allows (8 walkers × 10 steps, ruling A) will rarely
+  converge on ADM1 (round 2: R-hat 1.9–96 on every cell that reached it); P0 then reports
+  Fisher intervals by the same rule the Level-8 row exercises. This is stated, not hidden;
+  a larger allowance is the lead's call.
+- Profiles can never run inside the ruled budgets: the registry's bound on
+  `profile_likelihood` is `n_grid · n_starts · 201` = 1,005 evaluations at the declared
+  grid of 5 and one start, above the largest ruled budget of 750, so the §4 ladder's
+  "Fisher only" fallback is the only path a ruled cell can take and every interval P0
+  reports is a Fisher interval or an abstention.
 - One parameter vector (k_dis × 2 with k_m_aa × 0.5 on Plant B, constant log) integrated
   in 274–290 s against 3 s for the rest: a stiffness pocket inside the declared bounds. P0 cannot
   avoid it; the wall-clock guard absorbs it. Recorded for the registry (solver settings are
