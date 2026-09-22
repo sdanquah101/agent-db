@@ -35,13 +35,12 @@ from typing import Any
 import numpy as np
 
 from state.run_view import RunView, TruthAccessError, open_run
+from state.task_state import OUTPUTS_DIR
 from tools.registry import Registry
 from tools.transport import decode_arrays, encode_arrays, read_message, write_message
 
 __all__ = ["OUTPUTS_DIR", "OutputSink", "RegistryServer"]
 
-OUTPUTS_DIR = "workflows"
-"""Subdirectory of ``runs/<id>/`` that holds every workflow's own outputs."""
 
 MAX_OUTPUT_BYTES = 16 << 20
 """Largest single output file a workflow may write, bytes: a guard, not a budget."""

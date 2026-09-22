@@ -28,12 +28,11 @@ from pathlib import Path
 import pytest
 import yaml
 
-from scenarios.schema import load_scenario
 from sim.plants import load_plant_config
 from sim.run.harness import generate_run
 from state.provenance import read_calls
 from state.task_state import LABELS, TaskState
-from tests.conftest import REPO_ROOT
+from tests.conftest import REPO_ROOT, SHORT_DAYS, _short
 from tests.test_truth_isolation import find_truth_references
 from tools.config import load_fitted_model
 from tools.runner import WORKFLOWS, main, run_workflow, select_cells, write_table
@@ -41,47 +40,13 @@ from tools.server import OUTPUTS_DIR
 from tools.workflow_config import load_p0, sandbox_config
 from workflows.p0_scripted import pipeline
 
-SHORT_DAYS = 30.0
 PIPELINE = WORKFLOWS["p0"]
 
 
-def _short(scenario_id: str, *, evals: int, wall_min: float, assays: int):
-    scenario = load_scenario(REPO_ROOT / "scenarios" / f"{scenario_id}.yaml")
-    faults = tuple(
-        f.model_copy(update={"onset_day": min(f.onset_day, SHORT_DAYS / 2)})
-        for f in scenario.faults
-    )
-    budget = scenario.budget.model_copy(
-        update={"simulator_evals": evals, "wall_clock_min": wall_min, "assay_units": assays}
-    )
-    return scenario.model_copy(
-        update={"duration_days": SHORT_DAYS, "faults": faults, "budget": budget}
-    )
-
-
-@pytest.fixture(scope="module")
-def store(tmp_path_factory):
-    return tmp_path_factory.mktemp("store")
-
-
-@pytest.fixture(scope="module")
-def tiny_cell(store):
-    """S0-01 on Plant C at Tier B, 30 d, 40 evaluations: every expensive step falls back."""
-    scenario = _short("S0-01", evals=40, wall_min=20.0, assays=2)
-    run = generate_run(scenario, "B", plant=load_plant_config("C"), runs_root=store / "runs")
-    return run, scenario
-
-
-@pytest.fixture(scope="module")
-def tiny_result(tiny_cell, tmp_path_factory):
-    run, scenario = tiny_cell
-    result = run_workflow(
-        run.run_id,
-        "p0",
-        runs_root=run.paths.root.parent,
-        scenario=scenario,
-    )
-    return run, scenario, result
+# The fixtures ``store``, ``tiny_cell`` and ``tiny_result`` (the 30-day S0-01 cell of
+# Plant C at a 40-evaluation budget, run through the jail once per session) live in
+# ``tests/conftest.py`` since the evaluation suite's end-to-end test scores the same cell
+# (milestone 6, 2026-09-22): one launch serves both modules.
 
 
 def _state(run) -> dict:

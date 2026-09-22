@@ -114,3 +114,10 @@ is versioned, so that a run can be reproduced from a tag (proposal §7, §13).
   one declared seed per stochastic call (rule 4). APPROVED by the lead 2026-09-21 via the
   coordinator (rule 5); values frozen, a later change is a decisions entry. The runner hands the file to the jailed pipeline as JSON together
   with the declared sensor noise and plant geometry, nothing of a run.
+- `eval.yaml` — the evaluation suite (proposal §6.7, Appendix A, §7; `docs/eval_design.md`;
+  schema `eval/config.py::EvalConfig`): the frozen hold-out fraction (repeated from P0's
+  declaration and tested equal), the channels and interval levels of family A, the prior
+  interval mass and the kinetic group of the false-drift metric, the claim-source map of
+  the unsupported-claim metric, the invalid-action prefixes and verifier record names of
+  family D, the aggregate's grouping and its bootstrap (resamples, interval, seed: rule 4).
+  Read only by `eval/`; nothing under `workflows/` may open it (`tests/test_eval_isolation.py`).

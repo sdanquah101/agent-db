@@ -8,7 +8,8 @@ workflow script in the jail (:func:`tools.sandbox.launch`) with the run's direct
 read-only and ``runs/<id>/workflows/<name>/`` as its one writable place, validates the
 task state it wrote against :class:`state.task_state.TaskState`, and records the cell's
 cost beside it in ``summary.json`` (wall-clock, evaluations, assay units, completion, the
-final label) from this side.
+final label) from this side -- the evaluations, assay units and call count from the
+registry's own meter, not from the state (:class:`WorkflowResult`).
 
 **Nothing hidden enters the jail.** The sandbox holds the stub, the script, the
 configuration document and the socket; the run's directory is served through the run
@@ -47,6 +48,7 @@ from scenarios.schema import Scenario, load_scenario
 from sim.run.layout import INDEX_FILE, RUNS_ROOT, RunPaths, truth_store_for
 from state.task_state import TaskState
 from tools.privileged import SCENARIOS_DIR, open_registry
+from tools.registry import Registry
 from tools.sandbox import REPO_ROOT, SandboxError, launch
 from tools.server import OUTPUTS_DIR
 from tools.workflow_config import load_p0, sandbox_config
@@ -61,7 +63,15 @@ REPORTS_DIR = REPO_ROOT / "reports"
 
 @dataclass
 class WorkflowResult:
-    """What one cell cost and what the workflow concluded (``summary.json``)."""
+    """What one cell cost and what the workflow concluded (``summary.json``).
+
+    The cost fields (``simulator_evals_used``, ``assay_units_used``, ``n_calls``, the
+    totals) are read from the **registry's meter** on this, the privileged, side after the
+    launch -- never from the workflow's task state, which is its self-report (the evaluation
+    session, 2026-09-22, on follow-up (d) of milestone 5: rule 3 says evaluation reads logs
+    only). The self-reported counts are kept beside them, so the evaluator can score a
+    misreport; ``tokens_used`` is the field an LLM workflow's runner fills.
+    """
 
     run_id: str
     workflow: str
@@ -75,6 +85,11 @@ class WorkflowResult:
     wall_clock_min_total: float | None
     n_calls: int | None
     label: str | None
+    cost_source: str = "registry_meter"
+    self_reported_simulator_evals_used: int | None = None
+    self_reported_assay_units_used: int | None = None
+    self_reported_n_calls: int | None = None
+    tokens_used: int | None = None
     secondary_labels: list[str] = field(default_factory=list)
     confidence: float | None = None
     flag_sensor: str | None = None
@@ -185,7 +200,7 @@ def run_workflow(
         wall_s = time.perf_counter() - started
         if not keep_sandbox:
             shutil.rmtree(box, ignore_errors=True)
-    summary = _summarise(paths, workflow, wall_s, returncode, error, stderr)
+    summary = _summarise(paths, workflow, wall_s, returncode, error, stderr, registry=registry)
     out_dir = paths.root / OUTPUTS_DIR / workflow
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "summary.json").write_text(
@@ -195,21 +210,34 @@ def run_workflow(
 
 
 def _summarise(
-    paths: RunPaths, workflow: str, wall_s: float, returncode: int | None, error: str, stderr: str
+    paths: RunPaths,
+    workflow: str,
+    wall_s: float,
+    returncode: int | None,
+    error: str,
+    stderr: str,
+    *,
+    registry: Registry,
 ) -> WorkflowResult:
+    """The summary of one launch: the meter's cost, the state's conclusion.
+
+    The cost fields come from ``registry`` (its meter, on this side of the socket) whatever
+    the state says; the state supplies the conclusion and its own counts as a self-report.
+    """
     state_path = paths.root / OUTPUTS_DIR / workflow / "state.json"
+    metered = registry.remaining()
     result = WorkflowResult(
         run_id=paths.root.name,
         workflow=workflow,
         completed=False,
         returncode=returncode,
         wall_s=round(wall_s, 3),
-        simulator_evals_used=None,
-        simulator_evals_total=None,
-        assay_units_used=None,
-        assay_units_total=None,
-        wall_clock_min_total=None,
-        n_calls=None,
+        simulator_evals_used=registry.evaluations_used,
+        simulator_evals_total=int(metered.simulator_evals_total),
+        assay_units_used=registry.assay_units_used,
+        assay_units_total=int(metered.assay_units_total),
+        wall_clock_min_total=float(metered.wall_clock_min_total),
+        n_calls=int(metered.n_calls),
         label=None,
         error=error,
         stderr_tail=stderr[-2000:],
@@ -224,12 +252,9 @@ def _summarise(
         return result
     result.state_valid = True
     result.completed = bool(state.final.completed) and returncode == 0
-    result.simulator_evals_used = state.budget.simulator_evals_used
-    result.simulator_evals_total = state.budget.simulator_evals_total
-    result.assay_units_used = state.budget.assay_units_used
-    result.assay_units_total = state.budget.assay_units_total
-    result.wall_clock_min_total = state.budget.wall_clock_min_total
-    result.n_calls = state.budget.n_calls
+    result.self_reported_simulator_evals_used = state.budget.simulator_evals_used
+    result.self_reported_assay_units_used = state.budget.assay_units_used
+    result.self_reported_n_calls = state.budget.n_calls
     result.label = state.final.label
     result.secondary_labels = list(state.final.secondary_labels)
     result.confidence = state.final.confidence

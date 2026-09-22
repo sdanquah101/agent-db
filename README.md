@@ -60,7 +60,7 @@ scenarios/  YAML scenario definitions + ground-truth labels, and their Pydantic 
 tools/      registry: pure, versioned, schema-typed functions; budgets enforced here
 workflows/  p0_scripted/ p1_single_agent/ p2_multi_agent/
 state/      shared task-state schema (Pydantic) and provenance logger
-eval/       metrics, statistical analysis, report generation (reads logs only)
+eval/       the scorer: §6.7 metrics per run and per cell, from records only (`python -m eval`)
 anchor/     open real-data ingestion and comparison
 configs/    frozen budgets, solver settings, prompts, model versions
 scripts/    disposable harnesses (e.g. the ADM1 candidate probes)

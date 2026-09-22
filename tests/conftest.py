@@ -1,4 +1,7 @@
-"""Shared fixtures: default ADM1 configuration, the R&J 2006 state, and the probe harness."""
+"""Shared fixtures: the ADM1 configuration, the R&J 2006 state, the probe harness.
+
+And the one short P0 cell the pipeline and the evaluation tests both score.
+"""
 
 from __future__ import annotations
 
@@ -56,3 +59,55 @@ def adm1_matrix():
 def rj2006_state(probe_common) -> np.ndarray:
     """The 29-state R&J 2006 steady state used to initialise every probe."""
     return state_vector(probe_common.STEADY_STATE_RJ2006, RJ2006_GAS_STATE)
+
+
+# ------------------------------------------------------------------ the short P0 cell
+# A 30-day S0-01 cell of Plant C at Tier B with a 40-evaluation budget, generated once and
+# run through the jail once per session: ``tests/test_p0_pipeline.py`` checks P0's output
+# contract on it and ``tests/test_eval_end_to_end.py`` scores it (milestone 6).
+
+SHORT_DAYS = 30.0
+
+
+def _short(scenario_id: str, *, evals: int, wall_min: float, assays: int):
+    """A scenario shortened to :data:`SHORT_DAYS` with a small budget (tests only)."""
+    from scenarios.schema import load_scenario
+
+    scenario = load_scenario(REPO_ROOT / "scenarios" / f"{scenario_id}.yaml")
+    faults = tuple(
+        f.model_copy(update={"onset_day": min(f.onset_day, SHORT_DAYS / 2)})
+        for f in scenario.faults
+    )
+    budget = scenario.budget.model_copy(
+        update={"simulator_evals": evals, "wall_clock_min": wall_min, "assay_units": assays}
+    )
+    return scenario.model_copy(
+        update={"duration_days": SHORT_DAYS, "faults": faults, "budget": budget}
+    )
+
+
+@pytest.fixture(scope="session")
+def store(tmp_path_factory):
+    """A run store (with its sibling truth store) shared by the short-cell tests."""
+    return tmp_path_factory.mktemp("store")
+
+
+@pytest.fixture(scope="session")
+def tiny_cell(store):
+    """S0-01 on Plant C at Tier B, 30 d, 40 evaluations: every expensive step falls back."""
+    from sim.plants import load_plant_config
+    from sim.run.harness import generate_run
+
+    scenario = _short("S0-01", evals=40, wall_min=20.0, assays=2)
+    run = generate_run(scenario, "B", plant=load_plant_config("C"), runs_root=store / "runs")
+    return run, scenario
+
+
+@pytest.fixture(scope="session")
+def tiny_result(tiny_cell):
+    """The tiny cell run through the jail by the runner: ``(run, scenario, result)``."""
+    from tools.runner import run_workflow
+
+    run, scenario = tiny_cell
+    result = run_workflow(run.run_id, "p0", runs_root=run.paths.root.parent, scenario=scenario)
+    return run, scenario, result

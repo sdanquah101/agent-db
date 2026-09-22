@@ -50,9 +50,15 @@ WORKFLOWS_DIR = REPO_ROOT / "workflows"
 # "runs/x/truth/", "/truth", "truth_store/params.json", "scenarios/S6-01.yaml", or the bare
 # segment (as in Path(run) / "truth"). ``scenarios`` joined the list on the lead's ruling B5
 # (2026-09-10): the scenario files name the baseline and the answer key of every row.
-_TRUTH_PATH = re.compile(r"(?i)(^|[/\\])(truth(_store)?|scenarios)([/\\]|$)")
+_TRUTH_PATH = re.compile(r"(?i)(^|[/\\])(truth(_store)?|scenarios|eval|eval\.yaml)([/\\]|$)")
 
-_TRUTH_MODULES = frozenset({"truth", "truth_store", "scenarios"})
+# ``eval`` joined both sets with the evaluation suite (milestone 6, 2026-09-22): the scorer
+# is the code no workflow may access (§6.7), so a workflow importing or reading ``eval/``
+# is a finding by path as well as by import (the allow-list below already bars the import;
+# the path rule closes ``open("eval/...")``, the bare segment and ``configs/eval.yaml``, the
+# scorer's own thresholds -- named here so it is caught by the path rule and not, as it
+# happened to be, by the dotted-module regex matching ``eval.yaml``).
+_TRUTH_MODULES = frozenset({"truth", "truth_store", "scenarios", "eval"})
 
 # The layout API hands out the truth tree without spelling "truth" in any path literal:
 # ``RunPaths.for_run(id).truth``, ``truth_store_for(runs_root)`` and ``TRUTH_STORE_DIR`` are
