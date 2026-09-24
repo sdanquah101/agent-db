@@ -45,6 +45,10 @@ statement about what it cannot identify — from a realistic observation window.
 - **Not an LLM leaderboard.** Model versions, prompts and temperatures are frozen config
   (`configs/`), and a change to any of them invalidates a run rather than producing a new
   entry.
+- **Not a verdict on conventional calibration.** P0 is one fixed script of conventional
+  tools under tight budgets (§4.2). What it misses here is what that script misses on this
+  simulator. It says nothing about what a modeller with more time, plant knowledge or a
+  different procedure would conclude.
 - **Not evidence of general agentic capability.** The task is narrow, the tool registry is
   fixed, and the budgets are tight by design.
 - **No claim of anchor-equivalence.** The anchor (§5) shows the *statistics* of the
@@ -278,6 +282,27 @@ costs 11–12 s (the daily feed log caps the integrator step at one day; 2.5–4
 constant log, one stiff vector 274 s), so the wall-clock allowance, not the evaluation
 count, is what sizes P0; the pilot table (`reports/p0_pilot.csv`, `docs/milestones.md`) has the per-cell
 numbers.
+
+**What the Level 0–5 baseline shows, and what it does not** (the lead's ruling of
+2026-09-24, after the 78-cell single-seed sweep of `reports/p0_sweep_scored.csv`). The
+sweep measures one scripted pipeline, at the ruled budgets, on this simulator, with the
+ASSUMED noise and missingness of §5, on one seed. On those terms P0 is right on most clean
+cells and on few faulted ones. Most faulted cells end in a `none` verdict, and the
+screened fit often drives a rate constant to a bound. Three things are not yet shown, and
+no number from the sweep should be quoted without them:
+
+- **That P0 can succeed when the problem is made easy.** A positive-control ladder
+  (more budget, an exact feed record, the shifted parameter in the fitted set) is
+  scheduled. Its runs are diagnostics under declared config variants, never P0 entries. Until it reports, a harness defect explains a miss as well as difficulty
+  does.
+- **That each fault is distinguishable from the visible record.** A distinguishability
+  analysis (evaluator-side) is scheduled. A cell whose true cause fits no better than an
+  alternative measures the scenario, not the workflow.
+- **That the result survives the assumptions.** Seed variance, the ASSUMED missingness and
+  noise values, and a real-plant case judged by practitioners are all still to come.
+
+`none` is P0's scripted verdict when no rule fires; it is not evidence that a fault is
+absent.
 
 ## 5. Anchoring status — read this before quoting any number
 
@@ -520,6 +545,13 @@ analysis plan are documented rather than absorbed.
   grows with load.
 - **Assumed missingness.** See §5. If a reviewer wants the dropout statistics fitted, a
   raw (uncleaned) SCADA export would be needed and does not exist openly.
+- **Distinguishability is not yet established.** Until the evaluator-side analysis
+  reports (§4.2), a cell may carry a truth label that no workflow could separate from an
+  alternative on the visible channels of its tier.
+- **P0's empty objective at Tier A.** When P0's second pass excludes the last remaining
+  channel (S2-01 at Tier A), P0 keeps its first fit, scores no forecast and flags the
+  alphabetically first offender. This is recorded as a limitation of the script and is
+  not fixed, so that P0 is not tuned on its own results (ruling of 2026-09-24).
 - **No human baseline.** There is no measurement of what an experienced AD modeller would
   conclude from the same window. Workflow-to-workflow comparison is the only comparison
   the benchmark supports.
