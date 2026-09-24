@@ -202,4 +202,24 @@ every 3 hours. If the cap is reached, the unrun items are listed, not squeezed.
 
 ## 8. Results
 
-*(empty until the runs finish)*
+### 8.1 The hook-off check (§5.3 b): passed, 2026-09-24 14:10 UTC
+
+The eight pilot cells were regenerated into their own store, and every one was
+byte-identical to the baseline in observations and truth arrays. They were then run at
+PR B's head with the hook off, and compared with the baseline outputs
+(`reports/p0_positive_control_hookoff.json`).
+
+- **Bytes.** `state.json`, `summary.json` and `report.md` differ on all 8, as expected:
+  the run id is store-specific and the wall clock differs.
+- **Normalised state, run id masked: identical on 6 of 8.** S0-01 B/A, S0-01 B/C, S1-01
+  B/B, S3-01 C/B, S4-01 B/B and S5-01 A/A.
+- **S0-01 B/B and S2-01 B/B differ on one time-dependent path (§5.2).**
+  - In the baseline sweep, which ran three cells at a time under load, the plan's MCMC
+    guard refused the sampler ("mcmc: bound 88 at the measured rate").
+  - Here, at a lighter load, the sampler fitted the plan and was called. It did not
+    converge, so P0 recorded the failure and kept the Fisher intervals.
+  - Final result, classification, screening, residuals and abstentions are identical.
+    The validation block differs only by its call index, shifted by the one extra
+    action.
+
+No difference traces to the hook, so the check passes and R3 runs.
