@@ -128,8 +128,8 @@ _FORBIDDEN_MODULE_ROOTS = (
     "state",
 )
 _MODULE_LITERAL = re.compile(
-    r"(?<![\w.])(?:sim|scenarios|anchor|eval|state\.provenance)\.[A-Za-z_][\w.]*"
-    r"|\b(?:import|from)\s+(?:sim|scenarios|anchor|eval|state\.provenance|state)\b"
+    r"(?<![\w.])(?:sim|scenarios|anchor|eval|distinguish|state\.provenance)\.[A-Za-z_][\w.]*"
+    r"|\b(?:import|from)\s+(?:sim|scenarios|anchor|eval|distinguish|state\.provenance|state)\b"
 )
 
 

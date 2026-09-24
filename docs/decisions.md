@@ -5701,3 +5701,39 @@ reported beside the exact one. These are the choices made for it.
   solids and a stagnant zone are not representable. The affected cells are named in
   `truth_class_limited` rather than excluded.
 
+
+
+## 2026-09-24 — Review of PR #25: distinguishability method version 2 (before any result)
+
+The coordinator relayed an adversarial review (~17:40 UTC). Every change below was made
+before the analysis ran on any cell.
+
+- **The look-elsewhere effect.** On white noise, the sensor class (the best of about 9
+  sensors × 36 onsets × 2 kinds, charged k = 2) pushed `none` out in 71 % of trials.
+  - Each class now pays 2 ln N for a best-of-N search: sensor candidates, structural
+    alternatives, and forms of a class.
+  - A white-noise test holds `none` admissible at or above the declared 0.95.
+  - *Alternative:* calibrating a margin per class on the Level-0 cells (rejected: the
+    Level-0 cells are part of what is measured).
+- **The hold-out is excluded.** The data are cut at P0's calibration end,
+  `duration × (1 − holdout_fraction)`, as the ruling asked. This replaces the first
+  draft's whole record.
+- **The score only adds credit.** `attribution_admissible` is judged against *A* ∪
+  truth.
+- **The truth's own form.** A Level-5 shift is fitted as a change point at its known
+  onset (`distinguish/segments.py`), and S3-02's delivery on its known day. Cells whose
+  truth no class represents (windowed fractionation, per-day solids, stagnant zone)
+  score null, not credited.
+- **Fits to convergence,** with the status reported per class. `lsq_max_nfev` and
+  `scalar_max_iter` are in `configs/eval.yaml`.
+- **The margins are in `configs/eval.yaml`** (`distinguishability`), committed before
+  the sweep, together with the look-elsewhere switch and the calibration target.
+- **A multi-label truth** passes when any one of its labels is admissible; no joint
+  class is fitted.
+- **Reporting.** `n_admissible` and the chance rate are reported per cell, and
+  `python -m eval` stratifies the second score by |*A*|.
+- **Deviation recorded: `distinguish/` instead of `eval/`.** The ruling placed the
+  analysis evaluation-side, and the coordinator accepted a separate package, because
+  what the ruling required is isolation from workflows. The package is listed in
+  `pyproject.toml`. The rule-1 checker forbids it by import and by its string form. The
+  evaluator keeps its import allow-list and reads only the precomputed file.

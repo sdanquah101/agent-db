@@ -92,6 +92,18 @@ class AggregateConfig(_Frozen):
     bootstrap: BootstrapConfig
 
 
+class DistinguishabilityConfig(_Frozen):
+    """The admissible-set analysis (docs/distinguishability.md)."""
+
+    margin: Annotated[float, Field(gt=0.0)]
+    sensitivity_margin: Annotated[float, Field(gt=0.0)]
+    look_elsewhere: bool
+    none_admissible_rate_min: _Frac
+    lsq_max_nfev: Annotated[int, Field(ge=1)]
+    scalar_max_iter: Annotated[int, Field(ge=1)]
+    sensor_onset_every_d: Annotated[float, Field(gt=0.0)]
+
+
 class EvalConfig(_Frozen):
     """``configs/eval.yaml``."""
 
@@ -99,6 +111,7 @@ class EvalConfig(_Frozen):
     windows: WindowsConfig
     prediction: PredictionConfig
     attribution: AttributionConfig
+    distinguishability: DistinguishabilityConfig
     efficiency: EfficiencyConfig
     reliability: ReliabilityConfig
     aggregate: AggregateConfig

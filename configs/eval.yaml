@@ -91,6 +91,23 @@ attribution:
       balance: [mass_balance]
       assay: [request_assay]
 
+# ---------------------------------------------------------------- distinguishability
+# The admissible label set per cell (docs/distinguishability.md; the review of PR #25 moved
+# these out of the code, and they are committed before the analysis runs).
+distinguishability:
+  margin: 2.0                 # DESIGN  AIC units; a label within this of the best is admissible
+  sensitivity_margin: 10.0    # DESIGN  reported beside it
+  # A class that picks the best of N candidates (which sensor, which onset, which
+  # extension) pays 2 ln N on top of 2k: the look-elsewhere correction (review item 1).
+  look_elsewhere: true
+  # Declared calibration target: on a record that is pure noise around the defaults,
+  # `none` must stay admissible at least this often (tests/test_distinguish.py checks it
+  # on white noise; the Level-0 cells' rate is reported with the results).
+  none_admissible_rate_min: 0.95
+  lsq_max_nfev: 40            # DESIGN  least-squares function evaluations to convergence
+  scalar_max_iter: 25         # DESIGN  bounded scalar fits
+  sensor_onset_every_d: 10.0  # DESIGN  scale-step onsets tried
+
 # ---------------------------------------------------------------- family C: efficiency
 efficiency:
   clock_record: registry.open   # the truth-side record the wall clock runs from

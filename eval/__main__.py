@@ -68,6 +68,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         f"{len(rows)} runs scored ({done} completed, {exact} exact attributions); "
         f"tables at {out} and {out.with_name(out.stem + '_aggregate' + out.suffix)}"
     )
+    scored = [r for r in rows if r.get("attribution_admissible") is not None]
+    if scored:
+        # the second score, beside the exact one and stratified by |A| so a broad answer
+        # cannot look good (docs/distinguishability.md)
+        hits = sum(1 for r in scored if r["attribution_admissible"])
+        print(f"admissible attribution: {hits} of {len(scored)} scored runs (exact: {exact})")
+        for size in sorted({int(r["n_admissible"]) for r in scored}):
+            group = [r for r in scored if int(r["n_admissible"]) == size]
+            h = sum(1 for r in group if r["attribution_admissible"])
+            chance = f"{1 / size:.2f}" if size else "-"
+            print(f"  |A| = {size}: {h} of {len(group)} (chance per label {chance})")
     return 0
 
 

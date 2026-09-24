@@ -78,15 +78,27 @@ def score_attribution(
         # the second attribution score, reported beside attribution_exact and never in its
         # place (docs/distinguishability.md): None when the analysis has not run on the cell
         "admissible_set": None,
+        "n_admissible": None,
+        "admissible_chance_rate": None,
         "truth_admissible": None,
+        "truth_representable": None,
         "attribution_admissible": None,
         "attribution_admissible_set": None,
     }
     adm = records.admissible
+    # the score only ever ADDS credit (review of PR #25, item 3): it is judged against the
+    # admissible set together with the truth, so answering the truth is never marked wrong;
+    # and it is null where no class can represent the truth (item 4)
+    credit: set[str] | None = None
     if adm is not None:
         allowed = [str(x) for x in adm.get("admissible_set", [])]
         out["admissible_set"] = "+".join(allowed)
+        out["n_admissible"] = len(allowed)
+        out["admissible_chance_rate"] = (1.0 / len(allowed)) if allowed else None
         out["truth_admissible"] = bool(adm.get("truth_admissible"))
+        out["truth_representable"] = bool(adm.get("truth_representable", True))
+        if out["truth_representable"]:
+            credit = set(allowed) | truth
     state = records.state
     if state is None:
         # a launched run that left no valid state is an attribution MISS, not an absent
@@ -98,7 +110,7 @@ def score_attribution(
             out["attribution_exact"] = False
             out["attribution_partial"] = 0.0
             out["primary_in_truth"] = False
-            if adm is not None:
+            if credit is not None:
                 out["attribution_admissible"] = False
                 out["attribution_admissible_set"] = False
         return out
@@ -109,10 +121,9 @@ def score_attribution(
     out["attribution_exact"] = final == truth
     out["attribution_partial"] = _jaccard(final, truth)
     out["primary_in_truth"] = state.final.label in truth
-    if adm is not None:
-        allowed_set = set(str(x) for x in adm.get("admissible_set", []))
-        out["attribution_admissible"] = state.final.label in allowed_set
-        out["attribution_admissible_set"] = final <= allowed_set
+    if credit is not None:
+        out["attribution_admissible"] = state.final.label in credit
+        out["attribution_admissible_set"] = final <= credit
 
     # false kinetic drift: the prior interval of every kinetic parameter, from the
     # declared bounds (configs/tools/model.yaml), read here and nowhere else
