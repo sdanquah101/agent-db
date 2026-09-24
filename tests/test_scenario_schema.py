@@ -137,10 +137,10 @@ def test_compound_structural_plus_parameter_may_allow_kinetic_update():
         {"type": "ammonia_inhibition_shift", "onset_day": 90, "magnitude": 1.5},
     ]
     raw["correct_conclusion"]["kinetic_update_allowed"] = True
-    raw["correct_conclusion"]["abstain_on"] = ["speciation"]
+    raw["correct_conclusion"]["abstain_on"] = ["acetate_speciation"]
     scenario = Scenario.model_validate(raw)
     assert scenario.correct_conclusion.kinetic_update_allowed is True
-    assert scenario.correct_conclusion.abstain_on == ("speciation",)
+    assert scenario.correct_conclusion.abstain_on == ("acetate_speciation",)
 
 
 def test_compound_structural_without_parameter_still_forbids_kinetic_update():

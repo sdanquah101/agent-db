@@ -119,7 +119,7 @@ def _tree_hashes(root: Path) -> dict[str, str]:
     }
 
 
-def test_respelling_an_answer_key_moves_nothing_a_workflow_sees(tmp_path):
+def test_respelling_an_answer_key_moves_nothing_a_workflow_sees(tmp_path, monkeypatch):
     """Regenerating S2-02 under the old and the new key: same run id, same visible tree.
 
     Only ``truth_store/<id>/faults.json`` differs, and only in
@@ -139,6 +139,11 @@ def test_respelling_an_answer_key_moves_nothing_a_workflow_sees(tmp_path):
         }
     )
     runs = tmp_path / "runs"
+    # the manifest records the checkout's commit; pin it so a commit landing between the
+    # two generations cannot pass for a difference the answer key made
+    import sim.run.harness as harness
+
+    monkeypatch.setattr(harness, "git_sha", lambda *a, **k: "pinned-for-this-test")
 
     first = generate_run(old, "B", runs_root=runs)
     visible_before = _tree_hashes(first.paths.root)
