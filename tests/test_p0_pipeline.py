@@ -397,6 +397,116 @@ def test_clean_evidence_is_none_and_every_rule_fires_on_its_own_evidence():
     assert _classify(bound, at_bound=True)["classification"]["label"] == "structural"
 
 
+# The lead's ruling A1 (2026-09-24): every evidence item names the calls it rests on.
+_CALL_OF = {"pH": 3, "q_gas_stp_dry": 4, "ch4_fraction": 5, "tan": 6}
+_BALANCE_CALL, _PREDICTION_CALL = 1, 2
+
+
+def _rule_cases() -> dict[str, tuple[dict, dict]]:
+    """One residual set per rule of design §3.7, with the balance it needs."""
+    clean = {ch: _residual() for ch in CHANNELS.values()}
+    charge = {**CLEAN_BALANCE, "charge_consistent": False, "charge_drift": 0.4}
+    return {
+        "R1b": (dict(clean, q_gas_stp_dry=_residual(bias_z=5.0, step_z=6.0)), CLEAN_BALANCE),
+        "R1b+charge": (dict(clean, pH=_residual(bias_z=5.0)), charge),
+        "R2": (
+            dict(
+                clean,
+                q_gas_stp_dry=_residual(
+                    most_explanatory="feed_fog", covariate_eta2={"feed_fog": 0.3}
+                ),
+            ),
+            CLEAN_BALANCE,
+        ),
+        "R5": (
+            dict(clean, q_gas_stp_dry=_residual(early_bias_z=5.0, late_bias_z=0.5)),
+            CLEAN_BALANCE,
+        ),
+        "R4": (
+            dict(
+                clean,
+                q_gas_stp_dry=_residual(step_z=4.0, step_day=100.0),
+                ch4_fraction=_residual(step_z=3.5, step_day=110.0),
+            ),
+            CLEAN_BALANCE,
+        ),
+        "R3": (
+            dict(
+                clean,
+                pH=_residual(rmse_z=3.0, serially_structured=True, most_explanatory="load"),
+                tan=_residual(rmse_z=2.5, serially_structured=True, most_explanatory="time"),
+            ),
+            CLEAN_BALANCE,
+        ),
+    }
+
+
+def _with_calls(residuals: dict, balance: dict) -> tuple[dict, dict]:
+    return (
+        {ch: {**r, "call_index": _CALL_OF[ch]} for ch, r in residuals.items()},
+        {**balance, "call_index": _BALANCE_CALL},
+    )
+
+
+def test_every_evidence_item_names_the_calls_it_rests_on_and_no_verdict_moves():
+    cfg = _cfg()
+    for name, (residuals, balance) in _rule_cases().items():
+        before = _classify(residuals, balance=balance)
+        cited_residuals, cited_balance = _with_calls(residuals, balance)
+        after = pipeline.classify(
+            cfg, cfg["labels"], residuals=cited_residuals, balance=cited_balance, flagged=[],
+            channel_of=CHANNELS, primary_channel="q_gas_stp_dry", abstentions=[],
+            at_bound=False, prediction_call=_PREDICTION_CALL,
+        )  # fmt: skip
+        # the verdict, the rules, the abstentions and the flag are exactly what they were
+        assert after["classification"] == before["classification"], name
+        assert after["rules"] == before["rules"] and after["abstentions"] == before["abstentions"]
+        assert [e["rule"] for e in after["evidence"]] == [e["rule"] for e in before["evidence"]]
+        assert after["evidence"], name
+        for item in after["evidence"]:
+            assert item["calls"], (name, item)  # no item without a call (was: calls == [])
+            assert _PREDICTION_CALL in item["calls"], (name, item)
+            assert set(item["calls"]) <= {_BALANCE_CALL, _PREDICTION_CALL, *_CALL_OF.values()}
+        if name == "R1b+charge":
+            fold = [e for e in after["evidence"] if "charge_drift" in e["values"]]
+            assert fold and _BALANCE_CALL in fold[0]["calls"]
+
+
+def test_the_evaluator_resolves_every_item_the_rules_build(tmp_path):
+    from eval.config import load_eval_config
+    from eval.records import load_records
+    from eval.score import Scorer
+    from tests.eval_support import actions_for, build_run, minimal_state
+
+    cfg = _cfg()
+    calls = [
+        {"name": "feed_loads", "args": {}},
+        {"name": "mass_balance", "args": {"w": 30.0}},
+        {"name": "simulate", "args": {"theta": 1}, "n_evaluations": 1},
+        *({"name": "residual_diag", "args": {"ch": ch}} for ch in _CALL_OF),
+    ]
+    for name, (residuals, balance) in _rule_cases().items():
+        cited_residuals, cited_balance = _with_calls(residuals, balance)
+        verdict = pipeline.classify(
+            cfg, cfg["labels"], residuals=cited_residuals, balance=cited_balance, flagged=[],
+            channel_of=CHANNELS, primary_channel="q_gas_stp_dry", abstentions=[],
+            at_bound=False, prediction_call=_PREDICTION_CALL,
+        )  # fmt: skip
+        root = tmp_path / name
+        build_run(root, calls=calls, index=False)
+        actions = actions_for(calls, root / "runs" / "run_000000000001")
+        state = minimal_state(
+            "run_000000000001", actions=actions, classification={"evidence": verdict["evidence"]}
+        )
+        build_run(root, calls=calls, state=state)
+        records = load_records(
+            "run_000000000001", "p0", runs_root=root / "runs", truth_store=root / "truth_store"
+        )
+        row = Scorer(config=load_eval_config()).score(records)
+        assert row["claims"] == len(verdict["evidence"]) > 0, name
+        assert row["claims_unsupported"] == 0, (name, verdict["evidence"])
+
+
 def test_a_compound_case_reports_one_primary_label_and_the_rest_as_secondary():
     residuals = {ch: _residual() for ch in CHANNELS.values()}
     residuals["q_gas_stp_dry"] = _residual(
