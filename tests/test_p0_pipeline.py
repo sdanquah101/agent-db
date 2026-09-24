@@ -66,7 +66,11 @@ def test_the_pipeline_passes_the_rule_one_checker():
 def test_what_the_runner_hands_the_jail_carries_nothing_of_a_run():
     config = load_p0()
     payload = sandbox_config(config)
-    assert set(payload) == set(config.model_dump()) | {"sensor_noise", "plant_geometry"}
+    assert set(payload) == set(config.model_dump()) | {
+        "sensor_noise",
+        "plant_geometry",
+        "abstentions",
+    }
     assert set(payload["plant_geometry"]) == {"A", "B", "C"}
     assert payload["plant_geometry"]["B"]["V_liq_m3"] == 1836.0
     assert set(payload["sensor_noise"]["ph"]) == {

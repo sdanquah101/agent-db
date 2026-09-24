@@ -1,0 +1,39 @@
+# The controlled abstention vocabulary (the lead's ruling A3 of 2026-09-24, on the Level
+# 0-5 sweep's finding 4). Every quantity a scenario's answer key may ask a workflow to
+# decline (`correct_conclusion.abstain_on`, scenarios/schema.py) is a term of this file,
+# and a workflow that declines something spells it this way; the evaluator matches names
+# exactly (docs/eval_design.md §2). It sits beside the label vocabulary as the vocabulary
+# of the shared task state, not inside an answer key or the truth store, and the runner
+# hands it to a workflow's sandbox with its configuration (tools/workflow_config.py), so
+# a workflow may read it. Loaded by state/abstentions.py.
+#
+# `terms` are literal; `templates` expand over a declared set of names: `sensors` are the
+# sensors of configs/observation/sensors.yaml, `channels` the output channels of the
+# fitted model (configs/tools/model.yaml `outputs`). Each entry's `meaning` is one line;
+# a new term is a decisions entry.
+version: 1
+
+terms:
+  posterior_intervals: No interval is reported from a posterior sample (the sampler did not converge, failed or was not run).
+  missing_transient: No claim about the process during the windows in which the record is informatively missing.
+  parameter_values: The fitted parameter values are not offered as estimates of the true parameters.
+  kinetic_attribution: The misfit is not attributed to kinetic parameters, and no kinetic update is offered.
+  inorganic_carbon_balance: No claim on the closure of the inorganic-carbon balance.
+  ch4_yield: No claim on the methane yield (methane produced per unit of COD fed).
+  transient_response: No claim on the digester's response to transients (start-up, load steps).
+  peak_load_behaviour: No claim on the digester's behaviour under peak loads.
+  acetate_speciation: No claim on how acetate is partitioned among the populations that consume it.
+  methanogenic_pathway_split: No claim on the split between the acetoclastic and hydrogenotrophic routes to methane.
+  acetoclastic_parameters: No values offered for the acetoclastic kinetic parameters.
+  structural_adequacy: No claim that the model structure is adequate for the data.
+  inhibition_constant_magnitude: No claim on the magnitude of the inhibition constant.
+  effective_volume: No claim on the digester's effective (well-mixed) volume.
+  residence_time_distribution: No claim on the residence-time distribution of the digester.
+
+templates:
+  - pattern: "{name}_claims"
+    over: sensors
+    meaning: No claim rests on this sensor's record (it is flagged or quarantined).
+  - pattern: "{name}_budget"
+    over: channels
+    meaning: No claim on the mass or charge budget of this output channel.
