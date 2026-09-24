@@ -339,25 +339,32 @@ def _lsq(
     make: Callable[[np.ndarray], Sim | None],
     max_nfev: int,
 ) -> tuple[np.ndarray, bool, str]:
-    """Bounded least squares on log multipliers from 0, reporting convergence."""
+    """Bounded least squares on log multipliers from 0 (the start), reporting convergence.
+
+    The solver works on ``v = u + 1``. Its finite-difference step is relative to the
+    variable, so at ``u = 0`` the step is zero, the gradient reads zero and the fit never
+    moves (the bug the Level-0 check exposed, fixed in method version 3). At ``v = 1`` the
+    step is 0.05 in log multiplier.
+    """
     n_res = sum(s.t.size for s in series)
 
-    def resid(u: np.ndarray) -> np.ndarray:
-        sim = make(u)
+    def resid(v: np.ndarray) -> np.ndarray:
+        sim = make(v - 1.0)
         return np.full(n_res, BAD_RESIDUAL) if sim is None else _residuals(sim, series)[0]
 
     try:
         res = least_squares(
             resid,
-            np.zeros(n),
-            bounds=(np.log(lower), np.log(upper)),
+            np.ones(n),
+            bounds=(np.log(lower) + 1.0, np.log(upper) + 1.0),
             diff_step=0.05,
             max_nfev=max_nfev,
         )
     except Exception as exc:
         return np.zeros(n), False, f"failed: {type(exc).__name__}"
     # status 0 is "max_nfev reached": not converged
-    return np.asarray(res.x, dtype=float), bool(res.status > 0), f"{res.message} (nfev {res.nfev})"
+    u = np.asarray(res.x, dtype=float) - 1.0
+    return u, bool(res.status > 0), f"{res.message} (nfev {res.nfev})"
 
 
 @dataclass

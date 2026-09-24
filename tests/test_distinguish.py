@@ -151,6 +151,30 @@ def test_on_noise_with_every_class_competing_none_stays_admissible():
     assert analysis._PENALTY["alpha"] == CFG.lr_alpha
 
 
+def test_the_least_squares_fit_moves_from_its_start():
+    """The Level-0 check found every fit stopped at nfev 1 (a zero relative step at u = 0)."""
+    from distinguish.analysis import _lsq
+
+    t = np.arange(0.0, 50.0)
+    truth = np.array([0.3, -0.2])  # log multipliers
+    sd = np.full(t.size, 0.01)
+    series = [
+        Series("a", "ca", t, np.full(t.size, 5.0 * np.exp(truth[0])), sd),
+        Series("b", "cb", t, np.full(t.size, 2.0 * np.exp(truth[1])), sd),
+    ]
+
+    def make(u: np.ndarray) -> dict:
+        return {
+            "t": t,
+            "ca": np.full(t.size, 5.0 * np.exp(u[0])),
+            "cb": np.full(t.size, 2.0 * np.exp(u[1])),
+        }
+
+    u, ok, status = _lsq(series, 2, np.array([0.5, 0.5]), np.array([2.0, 2.0]), make, 30)
+    assert ok, status
+    np.testing.assert_allclose(u, truth, atol=1e-4)
+
+
 def test_class_limits_are_declared_per_fault_type():
     assert truth_representable([{"type": "hydrolysis_regime_change"}]) == (True, [])
     assert truth_representable([{"type": "moisture_drift"}]) == (

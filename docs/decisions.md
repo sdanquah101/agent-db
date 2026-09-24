@@ -5778,4 +5778,11 @@ result was computed.
   - The fit sizes are `lsq_max_nfev` = 15 and `scalar_max_iter` = 15.
   - One cell's convergence and wall time are reported with the Level-0 check, together
     with a compute plan that stays inside about one sweep.
+- **A bug found by the Level-0 check, fixed before any result.** The first Level-0 run
+  (three S0-01 Plant B cells, discarded) showed every least-squares fit stopping at one
+  evaluation. Cause: the fits start at log multiplier 0, scipy's finite-difference step
+  is relative to the variable, so the gradient read zero. The baseline was therefore
+  never calibrated, and the parameter and influent classes never fitted (this affected
+  versions 1 and 2 as well). The solver now works on u + 1, and a unit test recovers
+  known log multipliers. The Level-0 check was rerun after the fix.
 
