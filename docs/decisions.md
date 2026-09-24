@@ -5417,3 +5417,88 @@ pass at Tier A, the residual-derived evidence items without a call reference, an
 the plan's skip is the recorded machine property, and a mixed-machine table would be
 two baselines); extending the sweep to five seeds now (rejected: the lead reserved the
 5-replicate matrix for the pre-registered runs).
+
+
+## 2026-09-24 — The lead's rulings after the P0 baseline: the three P0 findings, the reviewer's follow-ups, and the P1 prompt rule
+
+**Ruling** (the lead, 2026-09-24 ~02:00 UTC, on the coordinator's recommendation after
+the Level 0–5 sweep: "Merge and implement your recommendations"). PR #20 is merged, and
+every recommendation below is approved as written. The coordinator relays the code work to
+the evaluation session (`session_01Jv2gArdzzUzfeDp3gSbXFs`), which already runs the
+runner and the evaluator. That session opens three separate draft PRs in this order. The
+coordinator reviews each PR at its head, and each merge waits for the lead's word.
+
+**The three P0 findings** (P0 is frozen; this ruling is the approval rule 5 requires).
+
+1. **Evidence items without a call reference: fix.** P0's residual-derived evidence items
+   (R3, R4 and R5, 13 of the baseline's 273 items) name the tool call whose output they
+   cite. The fix changes no rule, threshold or verdict. *Reason:* the items are true, but
+   the contract of `docs/eval_design.md` says an item naming no call is unsupported, and
+   P1 is held to that contract. Leaving P0 in breach would make the unsupported-claims
+   column compare a pipeline that cannot comply with one that can. *Alternative
+   rejected:* scoring P0's residual items as supported by rule (it would exempt one
+   workflow from a rule the other must meet).
+2. **The empty objective at Tier A (S2-01): no change; recorded as a P0 limitation.** When
+   the second pass excludes the last channel, P0 keeps the first fit, scores no forecast
+   and flags the alphabetically first offender. *Reason:* P0 does what its script says, the
+   `sensor` label is still exact, and changing the fallback because of this sweep would
+   tune P0 on its own results. *Alternative rejected:* a fallback that refits on the
+   excluded channel (a new rule chosen after seeing the table).
+3. **The `abstain_on` vocabulary: align on the scenario side.** One controlled abstention
+   vocabulary is published where workflows can read it, next to the label vocabulary and
+   never inside an answer key. Every scenario's `abstain_on` is validated against it.
+   Scenario terms that mean the same thing as a term P0 already emits take one spelling.
+   Terms with no P0 counterpart, such as `transient_response` and
+   `peak_load_behaviour`, stay in the vocabulary, and P0 misses them. That miss is part of
+   the baseline. P0 may rename what it emits to the vocabulary's spelling but gains no new
+   abstention logic. Only the answer-key records in the truth store are regenerated, and a
+   test proves that observations, redacted manifests and run ids are byte-identical.
+   *Alternatives rejected:* an evaluator-side synonym table (P1 would be scored against
+   names it cannot see) and extending P0's abstention rules (tuning on the table).
+
+The re-run covers only the cells whose unsupported-claims or abstention columns move. The
+baseline table is committed again with the moved columns named, and every other column is
+checked against `reports/p0_sweep_scored.csv`.
+
+**The reviewer's follow-ups** (the critique the lead forwarded on 2026-09-23), scheduled
+in this order:
+
+1. **A positive-control ladder** (the evaluation session's second PR,
+   `docs/positive_control.md`). P0 is re-run with one thing made easier at a time: three
+   times the budget, an exact feed record (a new variant cell, so the workflow still reads
+   only its observations), and the shifted parameter guaranteed a place in the fitted set.
+   The expectations are written down before any run. *Reason:* the baseline's misses can be
+   read as the problem being hard only once the same pipeline is shown to succeed when it
+   is made easy. Until then a broken harness is an equally good explanation.
+2. **A distinguishability analysis** (the third PR, evaluator-side only). For each Level
+   0–5 cell, the analysis asks whether the true cause fits the visible channels
+   measurably better than every alternative cause. A cell where it does not gets an
+   admissible label set. Attribution is then also reported against that set, next to the
+   truth-label score and never in place of it. *Reason:* a cell that no workflow could
+   attribute from the visible record measures the scenario, not the workflow.
+3. **Narrative scope** (this PR). The benchmark card now says what the P0 baseline does
+   and does not show. It is one scripted pipeline of conventional tools, run under these
+   budgets, this simulator and these assumed noise and missingness settings, on one seed.
+   It is not a verdict on conventional calibration practice or on what a modeller with
+   more time would conclude.
+4. **Added to the plan before P1 is scored** (`docs/milestones.md`):
+   - an *assumption-sensitivity subset*, re-running a small set of cells with the ASSUMED
+     missingness and noise values halved and doubled, to test whether the P0 versus P1
+     comparison survives them;
+   - a *real-plant case* from the Muscatine record, judged blind by AD practitioners
+     against the workflows' reports. It is scored by expert judgement, never by the
+     simulator's truth.
+5. **The selection step as a named ablation.** A P0 variant that fits a larger,
+   truth-blind parameter set instead of Morris's top four. It is reported as an ablation
+   and never as P0.
+
+**The P1 prompt rule.** P1's prompts are written from the proposal, the benchmark card,
+the tool registry's documentation and the published vocabularies only. A prompt must not
+name a scenario, state or hint at how often each label occurs in the library, or encode
+what P0 got right or wrong on any cell. Prompts are developed only on development cells.
+They are frozen and hashed before the held-out variants of §7 are generated, and any later
+change invalidates the runs (§11). The P0 sweep's aggregate tables may be read by the
+prompt author, but its per-cell rows may not. *Reason:* the P0 table is the comparison P1
+is judged against, so a prompt tuned to its per-cell misses would score the prompt author
+rather than the agent. *Alternative rejected:* a prompt author with no access to any P0
+result (unenforceable once the tables are public, and unnecessary for aggregates).
