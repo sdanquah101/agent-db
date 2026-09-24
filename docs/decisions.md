@@ -5631,3 +5631,43 @@ unchanged by A1.
 *Alternatives:* a Python enum in `state/` (rejected: a new term would then be a code
 change, not a config and decisions change); a vocabulary file in `scenarios/` (rejected:
 a workflow may not read the scenarios).
+
+
+## 2026-09-24 — A4: the re-run and re-score of the P0 baseline after rulings A1 and A3
+
+**What was done.**
+- *Re-runs.* The 15 cells whose evidence items A1 changes were re-run at the A1 code:
+  - the 13 cells with unsupported claims;
+  - S2-01 C/A and B/A, which carry the second-pass R1b.
+
+  Three ran at a time, and their old outputs were kept aside.
+- *Re-score.* All 78 cells were re-scored with the respelled answer keys.
+- *Comparison.* Every column of every cell was compared with the committed baseline:
+  - `reports/p0_sweep_a4_moved.md` lists each move;
+  - `reports/p0_sweep_a4_previous_rows.csv` keeps the pre-A1 rows of the 15 re-run
+    cells.
+
+**What moved.**
+- *A1.* `claims_unsupported` goes from 1 to 0, and `unsupported_claim_rate` to 0, on
+  each of the 13 cells. The table's total is 0 of 273 claims, down from 13. S2-01 B/A
+  and C/A stay supported with the added prediction call.
+- *A3.* S2-02's `abstain_on` is respelled on all 7 cells. `abstention_fraction` goes
+  from 0 to 0.5 on the four S2-02 cells where P0 emits `ch4_fraction_claims`: B/B, B/C,
+  C/B and C/C. No cell's `abstention_correct` moves, so correct abstention stays 0 of 7:
+  P0 never declines `ch4_yield`, and S4-02's two terms stay distinct.
+- *Time-dependent paths, both rows kept.* Clock columns (`wall_clock_s`, `log_span_s`,
+  `tool_runtime_s`, `wall_clock_fraction`) differ on every re-run cell. Three cells took
+  a different timing-gated path:
+  - *S2-01 C/A.* The plan's guard now refuses the second LSQ at the measured rate. It
+    used to call it and fail on the empty objective. So there is one invalid action
+    instead of two, one fallback, one guard trip and one fewer call.
+  - *S2-03 A/A.* An extra LSQ guard trip.
+  - *S3-02 A/A.* The MCMC guard no longer trips.
+
+  No label, flag, attribution, drift, recovery or forecast column moved on any cell.
+  Exact attribution stays 17 of 78.
+- *Nothing else.* No column moved on any cell that was neither re-run nor S2-02.
+
+**Note on timing.** The full test suite (twice) and the positive-control hook tests ran
+on the same four-core container during part of the re-runs. The three time-dependent
+differences above are the kind that load produces. They are reported, not tuned away.
