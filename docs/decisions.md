@@ -5478,3 +5478,38 @@ loosens what counts as supported, and the ruling forbids it).
 *Alternatives:* a Python enum in `state/` (rejected: a new term would then be a code
 change, not a config and decisions change); a vocabulary file in `scenarios/` (rejected:
 a workflow may not read the scenarios).
+
+
+## 2026-09-24 — The positive-control ladder: how the rungs are built (`docs/positive_control.md`)
+
+The rungs themselves are the lead's ruling, as relayed by the coordinator. This entry
+covers only the implementation choices; `docs/positive_control.md` is the
+pre-registration and was committed before this code.
+
+**R3 hook.**
+- `screening.force_include` (default empty) adds the named parameters to P0's approved
+  subset *after* the Fisher step, the last point where the subset can shrink. Adding
+  them earlier would let Morris, Sobol or Fisher drop them again.
+- An empty value is left out of the sandbox's `p0_config.json`, so with the hook off the
+  jail reads the same bytes as before the key existed.
+- The forced names show only in `approved`. `TaskState` gains no field, because a new
+  field would change every baseline `state.json`. The driver logs the variant that named
+  them.
+- *Alternative:* a per-run flag through the registry (rejected: a workflow never learns
+  the truth through a tool).
+
+**Diagnostic stores.** The driver (`scripts/positive_control.py`) regenerates each
+ladder cell into a store of its own, one per variant, so no baseline output is
+overwritten. It then checks that the cell's observations and its truth arrays are
+byte-identical to the baseline's. The npz members are compared, not the zip bytes.
+*Alternative:* copying run directories (rejected: `calls.jsonl` would carry the
+baseline's log into the ladder run).
+
+**R2 route.**
+- `sim/` has no argument for an exact feed log, and adding one is a change under
+  `sim/`. So the driver rewrites `observations/feed_log.csv` of the regenerated cell
+  from `truth_store/<id>/influent.npz` `delivered_kg_wet_per_d`, and keeps the generated
+  log beside it.
+- Composition faults (S3-01, S3-03) cannot be repaired from the record, because the
+  fitted model maps any feed log through the declared catalogue. They serve as R2's
+  negative control.
