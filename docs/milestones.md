@@ -2283,3 +2283,140 @@ follow-up (a) must persist; and the arithmetic above is corrected (false kinetic
 `python -m eval`), and P1 (the single constrained agent, §6.5), which needs the
 evaluator's contract above: the state's `actions` name log lines, evidence items name
 calls, abstentions use the scenario vocabulary, and the runner fills `tokens_used`.
+
+
+### Session 2026-09-22/24 — the Level 0–5 sweep: the scored P0 baseline over 78 cells (`claude/p0-sweep`, draft PR #20)
+
+PR #19 (the evaluation suite) merged at `b715fc2`, 2026-09-22. The lead ruled on the
+sweep the same day (decisions: single-seed, now, three in parallel, its own PR); the run
+plan of PR #19 was followed without a code change. Nothing under `sim/`, `scenarios/`,
+`workflows/` or the frozen configs touched; nothing tuned on the table.
+
+**Done.**
+
+- **The sweep**: the 78 Level 0–5 cells of the matrix in this container's store (the 8
+  Level 0–5 pilot cells taken as done at the same frozen P0 and budgets; 70 run), three
+  detached driver processes with fixed lists ordered longest first, one runner
+  invocation per cell, a cell with an existing `summary.json` skipped; 2026-09-22
+  17:01 → 2026-09-24 00:20 UTC (31 h 20 min wall; 100.4 runner-hours; a fourth process
+  took list b's last cell at 22:16 because the skipped pilot cells had not been
+  discounted when the lists were dealt). **78/78 completed**, no runner error, no cell
+  run twice. Checkpoint commits pushed the partial tables along the way (`6555c43` 11 …
+  `3d755aa` 75, then `2ec0be0` 78; `ac16561`, titled 14, carries 11 rows).
+- **The tables**: `reports/p0_sweep.csv` (the runner's table), `reports/p0_sweep_scored.csv`
+  / `.json` (one row per cell, the 127 columns of `python -m eval`) and
+  `reports/p0_sweep_scored_aggregate.csv` / `.json` (one run per cell: means only, no
+  bootstrap interval, by construction of a single-seed sweep).
+- **Machine speed** (tool runtime of evaluating calls over evaluations charged, three
+  in parallel on this 4-core container): 14.2 s per evaluation on Plant B, 13.8 s on
+  Plant C, 25.4 s on Plant A (365-day cells); 23,688 evaluations in all. Per cell:
+  60–90 min on B (mean 72), 64–87 on C (76), 73–115 on A (94), against allowances of
+  90 / 120 min; 59 % of the ruled evaluation counts and 73 % of the wall clock on average.
+
+**The scored baseline** (from `reports/p0_sweep_scored.json`; `exact` is the final label
+set against `truth_label`, `false drift` a kinetic estimate outside the prior's 90 %
+interval on a non-parameter truth, `false update` a kinetic update offered where the key
+forbids it, `abstention` scored where the truth is structural or compound, `gas cov90`
+the 90 % coverage of the predictive ensemble on the hold-out, `recovery cov` the fraction
+of reported parameters whose interval covers the truth):
+
+78 cells; 78 completed; 17 exact; 10 with guard trips; 52 reached MCMC; 0 converged
+
+| level | cells | completed | exact | primary in truth | false drift | false update | abstention (applicable) | unsupported claims | gas cov90 (mean) | recovery cov (mean) | guard trips | MCMC reached | MCMC converged | wall / allow (mean) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 6 | 6/6 | 5/6 | 5/6 | 1/6 | - | - | 0/20 | 0.03 | 0.71 | 2 | 3 | 0 | 0.79 |
+| 1 | 6 | 6/6 | 5/6 | 5/6 | 2/6 | - | - | 1/27 | 0.04 | 0.69 | 0 | 1 | 0 | 0.80 |
+| 2 | 21 | 21/21 | 5/21 | 6/21 | 7/21 | 14/21 | - | 4/68 | 0.04 | 0.62 | 5 | 12 | 0 | 0.79 |
+| 3 | 21 | 21/21 | 0/21 | 0/21 | 8/21 | 17/21 | - | 3/70 | 0.05 | 0.68 | 1 | 18 | 0 | 0.65 |
+| 4 | 14 | 14/14 | 0/14 | 0/14 | 4/14 | 13/14 | 0/7 | 2/59 | 0.04 | 0.71 | 1 | 12 | 0 | 0.69 |
+| 5 | 10 | 10/10 | 2/10 | 2/10 | - | - | - | 3/29 | 0.05 | 0.70 | 1 | 6 | 0 | 0.73 |
+
+| tier | cells | completed | exact | primary in truth | false drift | false update | abstention (applicable) | unsupported claims | gas cov90 (mean) | recovery cov (mean) | guard trips | MCMC reached | MCMC converged | wall / allow (mean) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| A | 32 | 32/32 | 7/32 | 7/32 | 12/28 | 20/24 | 0/3 | 10/52 | 0.06 | 0.67 | 5 | 21 | 0 | 0.72 |
+| B | 23 | 23/23 | 6/23 | 6/23 | 10/20 | 13/16 | 0/2 | 2/94 | 0.05 | 0.78 | 3 | 17 | 0 | 0.71 |
+| C | 23 | 23/23 | 4/23 | 5/23 | 0/20 | 11/16 | 0/2 | 1/127 | 0.02 | 0.59 | 2 | 14 | 0 | 0.76 |
+
+| plant | cells | completed | exact | primary in truth | false drift | false update | abstention (applicable) | unsupported claims | gas cov90 (mean) | recovery cov (mean) | guard trips | MCMC reached | MCMC converged | wall / allow (mean) |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| A | 12 | 12/12 | 1/12 | 1/12 | 0/8 | 6/8 | 0/1 | 4/15 | 0.04 | 0.61 | 6 | 0 | 0 | 0.84 |
+| B | 33 | 33/33 | 8/33 | 9/33 | 7/30 | 21/24 | 0/3 | 5/95 | 0.04 | 0.70 | 2 | 25 | 0 | 0.69 |
+| C | 33 | 33/33 | 8/33 | 8/33 | 15/30 | 17/24 | 0/3 | 4/163 | 0.04 | 0.68 | 2 | 27 | 0 | 0.72 |
+
+| truth | final label sets (count) |
+|---|---|
+| influent | none (16), sensor (2), state (1), sensor+structural (1), parameter (1) |
+| none | none (10), parameter (1), sensor (1) |
+| parameter | none (5), sensor (2), parameter (2), state (1) |
+| sensor | none (12), sensor (5), parameter (2), sensor+structural (1), structural (1) |
+| state | none (5), parameter (1), sensor (1) |
+| state+sensor | none (6), parameter (1) |
+
+**What it shows, in words.**
+
+1. **Attribution: 17 of 78 exact (22 %).** P0 is right on the clean cells (10 of 12
+   Level 0–1) and on 2 of 10 parameter cells (S5-01 A/A, S5-02 C/A, both through R4);
+   it names the sensor on 5 of 21 sensor cells (three of the four CH₄-analyser
+   flatlines of S2-02 at Tiers B/C — B/C reads `sensor+structural` with the right flag —
+   and S2-01 at Tier A on both plants, where the flag is wrong, see 8); **in this
+   single-seed sweep no influent cell (0 of 21) and no state cell (0 of 14) is
+   attributed**. The confusion is one-directional: 44 of the 66 faulted cells read
+   `none`, P0's scripted verdict at the recorded background misfit. **Two false faults on
+   clean cells**: S1-01 C/A reads `parameter` (R4: a common change point in the
+   background) and S0-01 C/C reads `sensor` (`digestate_ts` flagged by QC at Tier C).
+2. **False kinetic drift: 22 of 68 applicable cells (32 %)**, always `k_dec_X_ac`,
+   `k_m_ac` or `k_m_h2` driven to a bound; **Tier C never drifts (0/20)**; Tiers A and B
+   drift on 12/28 and 10/20. One reading is that with fewer channels P0's screened fit
+   absorbs a fault into kinetics; a single seed cannot separate that from the
+   cell-specific fault. Plant C drifts twice as often as Plant B (15 vs 7 of 30).
+3. **False kinetic update: 44 of 56 cells** whose key forbids it — 39 of them `none`
+   verdicts on faulted cells, the other 5 `parameter` verdicts on non-parameter truths
+   (R6 and R4 both set `kinetic_update`); the 5 `none` verdicts on parameter truths are
+   permitted updates.
+4. **Correct abstention: 0 of 7 applicable** (the S4-02 compound cells): their
+   `abstain_on` names (`transient_response`, `peak_load_behaviour`) have no counterpart
+   in P0's vocabulary, so the metric cannot be met by P0 (the contract finding of PR #19).
+5. **Unsupported claims: 13 of 273 evidence items (4.8 %)** — exactly the residual-derived
+   items P0 builds without a call reference (R4: 8, R3: 3, R5: 2; the PR #19 finding);
+   every QC, balance and missingness item resolves through the log. The flagged sensor
+   is right on 4 of 21 sensor cells.
+6. **Family A.** The forecast block verified on 76 of 78 (see 8); mean gas nRMSE 0.62,
+   pH nRMSE 1.49; **the 90 % coverage of the Fisher predictive ensemble averages 0.04**
+   overall (0.02–0.06 by tier) — the background misfit as a coverage number.
+   Parameter recovery on the 75 cells that report parameters (S2-01, S2-02 and S2-03 at
+   A/A report none): 136 of 204 intervals cover the truth (67 %), 64 of 204 estimates
+   at a bound.
+7. **Family C/D.** The meter, the summary and the state agree on every cell; 197 assay
+   units spent (uncertainty reduction per unit 0.17 over the 73 cells with a value); 4
+   invalid actions (see
+   8), 0 tool errors; MCMC reached on 52 of 78 (never on Plant A: 25 s per evaluation
+   does not fit the ruled sampler) and **converged on none**; 12 guard trips on 10 cells.
+8. **A P0 finding (not changed, rule 5): S2-01 at Tier A on both plants ends with an
+   empty objective.** QC flags the drifting pH probe (correctly) and excludes it; the
+   post-fit single-offender rule then flags gas flow — the only remaining channel — and
+   the second pass excludes it too, so the refit and the validation are refused
+   (`fit_lsq`/`fit_de`: "data: tuple should have at least 1 item"; two invalid actions
+   per cell), the first fit's bound-sitting estimates stand, no forecast is scored, and
+   the reported flag is `gas_flow` (milestone 5's follow-up (b): the first flagged sensor
+   in alphabetical order). The label `sensor` is exact; the flag is wrong.
+
+**Measured.** `ruff check .` and `ruff format --check .` clean on the final head; the
+branch carries no code change over `b715fc2` (reports and docs only), and the full
+`python -m pytest -q` was run on the final head before the last push — its result is in
+the PR body's Checks line.
+
+**Not done / limits.** (1) Single seed: no bootstrap interval and no seed variance in
+the aggregate; the 5-replicate matrix is the pre-registered runs' (§7). (2) The machine
+is slower than the plan's 12 s per evaluation, so the deterministic plan skipped MCMC
+on 26 cells and never ran it on Plant A; a faster machine gives a different P0 (the
+`fallbacks` and `guards_tripped` columns say where). (3) The four-hour launch delay and
+the two harness "container restarted" notices (the host never restarted) are in the PR
+body.
+
+**The next session starts on:** P1 (the single constrained agent, §6.5), against this
+table as the baseline and the evaluator's contract (`docs/eval_design.md`): actions
+name log lines, evidence items name calls and use registered rules and value keys,
+abstentions use the scenario vocabulary, the runner fills `tokens_used`. The two P0
+findings (empty objective at Tier A on S2-01; residual-derived evidence without a
+call) and the `abstain_on` vocabulary gap are the lead's to rule on before P1 is scored
+against P0.

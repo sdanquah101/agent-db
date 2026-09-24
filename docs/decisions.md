@@ -5365,3 +5365,55 @@ corrected: five of five forbidden kinetic updates, eight of twenty estimates at 
 where one meter exists; rejected); treating unmapped claims as supported (rejected: it
 rewards a workflow for inventing evidence keys); excluding state-less runs from the
 attribution rate (rejected: §6.7 D).
+
+## 2026-09-22 — The lead's ruling on the Level 0–5 sweep: single-seed, now, three in parallel, its own PR
+
+**Ruling** (the lead, relayed by the coordinator ~13:00 UTC after PR #19 merged at
+`b715fc2`: "run your recommendation on the sweep"). (1) The 78-cell **single-seed**
+Level 0–5 sweep runs now; the 5-replicate matrix is for the final pre-registered runs
+(§7), not this baseline. (2) **Three** cells in parallel. (3) The sweep table goes in
+**its own PR** (`claude/p0-sweep`, from `b715fc2`).
+
+**How it runs** (the PR #19 plan, unchanged; no code changes). Three detached driver
+processes, each with a fixed list of 26 cells ordered longest first (Plant A's 365-day
+cells, then the 120-minute rows, then the 90-minute rows), dealt greedily by expected
+minutes; one `tools.runner` invocation per cell so the order is the list's; a cell whose
+`summary.json` already exists is skipped (the eight Level 0–5 pilot cells of this
+container's store count, at the same frozen P0 and budgets); a crashed cell is re-run
+alone by id. Every ~3 hours the three scratch tables are merged into
+`reports/p0_sweep.csv`, every scored run into `reports/p0_sweep_scored*.{csv,json}`, and
+the branch is committed and pushed with a "cells done / 78" line, so the table survives
+a container loss: a fresh session regenerates the matrix (ids are store-specific; the
+table carries scenario, plant, tier and seed) and resumes from the cells not in it.
+Nothing is tuned on the sweep (P0 is frozen); the table is what it is.
+
+
+## 2026-09-24 — The Level 0–5 sweep is complete: the scored P0 baseline (`reports/p0_sweep_scored.csv`, 78 cells)
+
+**Finding** (`docs/milestones.md`, milestone 6, second entry, has the per-level, per-tier
+and per-plant tables). 78 of 78 cells completed inside their allowances (31 h 20 min
+three in parallel, 100 runner-hours, 23,688 evaluations; 14 s per evaluation on Plants
+B and C, 25 s on A). Attribution exact on 17 of 78: right on 10 of 12 clean cells and 2
+of 10 parameter cells, names the sensor on 5 of 21 sensor cells, attributes no
+influent (0/21) or state (0/14) cell in this single-seed sweep; 44 of the 66 faulted
+cells read `none`; two false faults on clean cells. False kinetic drift on 22 of 68
+applicable cells (Tiers A and B 12/28 and 10/20, Tier C 0/20; always a rate constant
+driven to a bound); a false kinetic update on 44 of 56 (39 `none` verdicts on faulted
+cells, 5 `parameter` verdicts on non-parameter truths); correct abstention 0 of 7 (a vocabulary
+gap, not a P0 choice); unsupported claims 13 of 273 (the residual-derived items without
+a call). The 90 % coverage of the Fisher predictive ensemble averages 0.04; recovery
+136 of 204 intervals, 64 estimates at a bound; MCMC reached on 52, converged on none,
+never reached on Plant A. One new P0 finding: S2-01 at Tier A on both plants ends with an
+empty objective after the second pass excludes the only remaining channel (two invalid
+actions, no forecast, the wrong flag).
+
+**Decision.** The table is committed as the P0 baseline of the single-seed Level 0–5
+matrix, untuned (P0 is frozen; the coordinator's condition (ii)). Three things are the
+lead's to rule on before P1 is scored against it: the empty-objective path of P0's second
+pass at Tier A, the residual-derived evidence items without a call reference, and the
+`abstain_on` vocabulary of S4-02 (and S2-02, S6-01/S6-04/S7-02) against P0's list.
+
+**Alternatives.** Re-running the 26 MCMC-skipped cells on a faster machine (rejected:
+the plan's skip is the recorded machine property, and a mixed-machine table would be
+two baselines); extending the sweep to five seeds now (rejected: the lead reserved the
+5-replicate matrix for the pre-registered runs).
