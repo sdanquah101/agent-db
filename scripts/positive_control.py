@@ -146,7 +146,7 @@ def generate(variant: str, root: Path) -> None:
         )
         if spec.get("exact_feed"):
             # compare before the rewrite: the first generation's feed log is kept aside
-            kept = runs / new / "feed_log.generated.csv"
+            kept = _kept_log(root, variant, new)
             if kept.is_file():
                 obs_new["feed_log.csv"] = _sha(kept.read_bytes())
         same_obs = obs_base == obs_new
@@ -156,7 +156,7 @@ def generate(variant: str, root: Path) -> None:
                 f"{cell}: the regenerated cell is not the baseline's ({same_obs=}, {same_truth=})"
             )
         if spec.get("exact_feed"):
-            _write_exact_feed(runs / new, truth / new)
+            _write_exact_feed(runs / new, truth / new, _kept_log(root, variant, new))
         checks.append(
             {
                 "cell": list(cell),
@@ -178,17 +178,56 @@ def _has(truth: Path, cell: Any) -> bool:
     return True
 
 
-def _write_exact_feed(run: Path, truth: Path) -> None:
-    """R2: the feed log becomes the true delivered wet mass per day (kg wet/d)."""
+def _kept_log(root: Path, variant: str, run_id: str) -> Path:
+    """Where the generated feed log is kept: beside the store, never under ``runs/<id>/``."""
+    return root / variant / "feed_logs" / f"{run_id}.generated.csv"
+
+
+def _injected_kg(truth: Path, plant: str) -> dict[tuple[str, int], float]:
+    """The scenario's injected unrecorded deliveries, (feed, day) -> kg wet.
+
+    Recomputed as the generator adds them (``sim/influent/generator.py``: the feed's
+    configured nonzero median delivery, in kg, times the fault's multiple), read-only.
+    """
+    from sim.influent.defaults import load_feed_fractionation, load_generator_config
+    from sim.influent.generator import _amount_to_kg
+
+    faults = json.loads((truth / "faults.json").read_text(encoding="utf-8"))
+    gen = load_generator_config().plants[plant]
+    catalogue = load_feed_fractionation()
+    out: dict[tuple[str, int], float] = {}
+    for extra in faults["influent"]["unrecorded"]:
+        fid, day = str(extra["feed_id"]), int(extra["day"])
+        amount = gen.feeds[fid].amount
+        median = _amount_to_kg(amount.nonzero_median, amount.unit, catalogue.feeds[fid])
+        out[(fid, day)] = out.get((fid, day), 0.0) + median * float(extra["multiple_of_median"])
+    return out
+
+
+def _write_exact_feed(run: Path, truth: Path, kept: Path) -> None:
+    """R2 as amended (docs/positive_control.md §9): the feed log without its background noise.
+
+    The log becomes the true delivered wet mass per day MINUS the scenario's injected
+    unrecorded deliveries. The background mis-logs and background unrecorded deliveries
+    are gone; the injected fault stays in the record exactly as the baseline has it.
+    """
     log = run / "observations" / "feed_log.csv"
-    kept = run / "feed_log.generated.csv"
     if kept.is_file():
         return  # already rewritten
+    kept.parent.mkdir(parents=True, exist_ok=True)
     kept.write_bytes(log.read_bytes())
     header = next(csv.reader(log.open(encoding="utf-8")))
     with np.load(truth / "influent.npz") as z:
         ids = [str(f) for f in z["feed_ids"]]
-        delivered = np.asarray(z["delivered_kg_wet_per_d"])
+        delivered = np.array(z["delivered_kg_wet_per_d"], dtype=float)
+    plant = json.loads((truth / "manifest.json").read_text(encoding="utf-8"))["plant"]
+    for (fid, day), kg in _injected_kg(truth, plant).items():
+        i = ids.index(fid)
+        if not 0.0 <= kg <= delivered[i][day] * (1 + 1e-9):
+            raise RuntimeError(
+                f"{run.name}: injected {kg} kg of {fid} on day {day} exceeds the truth"
+            )
+        delivered[i][day] = max(delivered[i][day] - kg, 0.0)
     columns = [h.removesuffix("_kg_wet_per_d") for h in header[1:]]
     assert sorted(columns) == sorted(ids), (columns, ids)
     rows = sum(1 for _ in log.open(encoding="utf-8")) - 1
@@ -343,8 +382,10 @@ def score(root: Path, variants: list[str]) -> None:
             rec = records[row["run_id"]]
             base_id = _find(BASE_TRUTH, tuple(rec["cell"]))["run_id"]
             base = baseline.get(base_id, {})
+            measures = _row_measures(variant, rec, base, row, runs, base_id)
             rows.append(
                 {
+                    **measures,
                     "rung": rec["rung"], "variant": variant, "diagnostic": True,
                     "variant_detail": rec["config"], "variant_sha256": rec["config_sha256"],
                     "budget_x": rec["budget_x"], "exact_feed": rec["exact_feed"],
@@ -367,15 +408,166 @@ def score(root: Path, variants: list[str]) -> None:
     print(f"{len(rows)} ladder rows -> {dest.relative_to(REPO)}")
 
 
+_TIMING_FIELDS = ("guards_tripped", "fallbacks", "steps_skipped")
+
+
+def _row_measures(
+    variant: str,
+    rec: dict[str, Any],
+    base: dict[str, Any],
+    row: dict[str, Any],
+    runs: Path,
+    base_id: str,
+) -> dict[str, Any]:
+    """The pre-registered per-row measures (§5), computed before any verdict is read.
+
+    ``moved_exact``: attribution_exact False at baseline, True here. ``time_dependent_path``:
+    the plan's timing-gated fields (guards, fallbacks, skipped steps) differ from the
+    baseline run's (§5.2). For R3, the forced parameters' mechanical check and recovery
+    against the last-segment truth, parsed from the evaluator's ``recovery_detail``.
+    """
+    out: dict[str, Any] = {
+        "moved_exact": base.get("attribution_exact") == "False"
+        and str(row.get("attribution_exact")) == "True",
+    }
+    mine = runs / row["run_id"] / "workflows" / "p0" / "state.json"
+    theirs = BASE_RUNS / base_id / "workflows" / "p0" / "state.json"
+    if mine.is_file() and theirs.is_file():
+        a = json.loads(theirs.read_text())["plan"]
+        b = json.loads(mine.read_text())["plan"]
+        out["time_dependent_path"] = any(a.get(k) != b.get(k) for k in _TIMING_FIELDS)
+    else:
+        out["time_dependent_path"] = None
+    if VARIANTS[variant].get("force"):
+        forced = FORCED[rec["cell"][0]]
+        state = json.loads(mine.read_text()) if mine.is_file() else {}
+        approved = set((state.get("screening") or {}).get("approved", []))
+        fitted = set((state.get("final") or {}).get("parameters") or {})
+        detail = {}
+        for item in str(row.get("recovery_detail") or "").split():
+            name, _, rest = item.partition(":")
+            parts = rest.split("/")
+            if len(parts) == 3:
+                detail[name] = (float(parts[0]), float(parts[1]), parts[2] == "in")
+        within = [
+            n in detail and abs(detail[n][0] - detail[n][1]) <= 0.25 * abs(detail[n][1])
+            for n in forced
+        ]
+        covers = [n in detail and detail[n][2] for n in forced]
+        out.update(
+            forced="+".join(forced),
+            forced_in_approved=all(n in approved for n in forced),
+            forced_fitted=all(n in fitted for n in forced),
+            forced_within_25pct=all(within),
+            forced_interval_covers=all(covers),
+            moved_recovery=all(w or c for w, c in zip(within, covers, strict=True)),
+        )
+    return out
+
+
+def verdict(
+    rows: list[dict[str, Any]] | None = None, dest: Path | bool | None = None
+) -> dict[str, Any]:
+    """The per-rung verdicts of §5, computed from the ladder table and nothing else.
+
+    A move on a row marked ``time_dependent_path`` is reported but not counted (§5.2, as
+    amended in §9): the pre-registration counts a move only if it does not depend on a
+    time-dependent path, and the driver cannot tell that it does not.
+    """
+    if rows is None:
+        rows = json.loads((REPO / "reports" / "p0_positive_control.json").read_text())
+
+    def cells(variant: str, keys: list[tuple[str, str, str]]) -> list[dict[str, Any]]:
+        by_cell = {
+            (r["scenario_id"], r["plant"], r["tier"]): r for r in rows if r["variant"] == variant
+        }
+        return [by_cell[k] for k in keys if k in by_cell]
+
+    def moves(rs: list[dict[str, Any]], key: str = "moved_exact") -> tuple[int, int]:
+        counted = sum(1 for r in rs if r.get(key) and not r.get("time_dependent_path"))
+        timing = sum(1 for r in rs if r.get(key) and r.get("time_dependent_path"))
+        return counted, timing
+
+    out: dict[str, Any] = {"method": "docs/positive_control.md §5 and §9", "rungs": {}}
+    r1p, r1s = cells("r1x3", PARAMETER_CELLS), cells("r1x3", SENSOR_STATE_CELLS)
+    if r1p or r1s:
+        (mp, tp), (ms, ts) = moves(r1p), moves(r1s)
+        complete = len(r1p) == len(PARAMETER_CELLS) and len(r1s) == len(SENSOR_STATE_CELLS)
+        v = "pass" if mp >= 3 or ms >= 2 else "fail" if mp <= 1 and ms <= 1 else "inconclusive"
+        out["rungs"]["R1x3"] = {
+            "parameter_moves": mp, "sensor_state_moves": ms, "timing_moves_not_counted": tp + ts,
+            "cells_run": [len(r1p), len(r1s)],
+            "verdict": v if complete else f"incomplete ({v} so far)",
+        }  # fmt: skip
+    r10 = cells("r1x10", VARIANTS["r1x10"]["cells"])
+    if r10:
+        m, t = moves(r10)
+        out["rungs"]["R1x10"] = {"moves": m, "timing_moves_not_counted": t, "cells_run": len(r10)}
+    r2, r2c = cells("r2", R2_CELLS), cells("r2", R2_CONTROLS)
+    if r2 or r2c:
+        (m, t), (mc, tc) = moves(r2), moves(r2c)
+        v = (
+            "confounded" if mc >= 2 else "pass" if m >= 2 and mc <= 1 else "fail" if m == 0
+            else "inconclusive"
+        )  # fmt: skip
+        out["rungs"]["R2"] = {
+            "s3_02_moves": m, "control_moves": mc, "timing_moves_not_counted": t + tc,
+            "cells_run": [len(r2), len(r2c)], "verdict": v,
+        }  # fmt: skip
+    r3 = cells("r3", PARAMETER_CELLS)
+    if r3:
+        mechanical = sum(1 for r in r3 if r.get("forced_in_approved") and r.get("forced_fitted"))
+        exact, t_exact = moves(r3)
+        recov, t_recov = moves(r3, "moved_recovery")
+        either = sum(
+            1 for r in r3
+            if (r.get("moved_exact") or r.get("moved_recovery"))
+            and not r.get("time_dependent_path")
+        )  # fmt: skip
+        if mechanical < len(PARAMETER_CELLS):
+            v = f"not run: forced parameters fitted on {mechanical} of {len(PARAMETER_CELLS)}"
+        else:
+            v = "pass" if either >= 3 else "fail" if either <= 1 else "inconclusive"
+        out["rungs"]["R3"] = {
+            "mechanical_check": f"{mechanical} of {len(r3)}", "moves": either,
+            "moves_exact": exact, "moves_recovery": recov,
+            "timing_moves_not_counted": max(t_exact, t_recov), "cells_run": len(r3), "verdict": v,
+        }  # fmt: skip
+    if dest is not False:
+        path = dest or REPO / "reports" / "p0_positive_control_summary.json"
+        path.write_text(json.dumps(out, indent=1) + "\n")
+        print(json.dumps(out, indent=1))
+    return out
+
+
+def publish(root: Path) -> None:
+    """Copy each variant's log (variants.jsonl) and the R3 configs next to the reports."""
+    dest = REPO / "reports" / "positive_control"
+    dest.mkdir(parents=True, exist_ok=True)
+    for variant in VARIANTS:
+        src = root / variant / "variants.jsonl"
+        if src.is_file():
+            (dest / f"{variant}_variants.jsonl").write_bytes(src.read_bytes())
+        for cfg in sorted((root / variant).glob("p0_S*.yaml")):
+            (dest / f"{variant}_{cfg.name}").write_bytes(cfg.read_bytes())
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("action", choices=["generate", "run", "score", "compare-hookoff"])
+    parser.add_argument(
+        "action", choices=["generate", "run", "score", "compare-hookoff", "verdict", "publish"]
+    )
     parser.add_argument("--variant", default=None, choices=sorted(VARIANTS))
     parser.add_argument("--store", type=Path, required=True, help="root of the diagnostic stores")
     parser.add_argument("--part", default="0/1", help="i/k: run every k-th cell from the i-th")
     args = parser.parse_args(argv)
-    if args.action == "score":
+    if args.action == "verdict":
+        verdict()
+    elif args.action == "publish":
+        publish(args.store)
+    elif args.action == "score":
         score(args.store, [args.variant] if args.variant else list(VARIANTS))
+        publish(args.store)
     elif args.action == "compare-hookoff":
         compare_hookoff(args.store)
     elif args.variant is None:

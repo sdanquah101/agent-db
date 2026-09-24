@@ -223,3 +223,77 @@ PR B's head with the hook off, and compared with the baseline outputs
     action.
 
 No difference traces to the hook, so the check passes and R3 runs.
+
+---
+
+## 9. Amendment, 2026-09-24 ~18:30 UTC (review of PR #23)
+
+This amendment follows an adversarial review relayed by the coordinator at ~17:40 UTC.
+It is committed **before R3 is scored and before any R2 run**. §1–§7 are not edited;
+where they are superseded, this section says so.
+
+### 9.1 R2 is redefined: remove only the background noise
+
+§3 defined R2's variant as the true delivered mass. For S3-02 that makes R2 meaningless.
+S3-02's fault *is* an unrecorded delivery, so writing the true mass puts the injected
+delivery into the record and the fault vanishes from what P0 sees. "R2 fails" would then
+be certain in advance, and would be misread as "not feed-limited".
+
+R2's variant is now **the true delivered mass minus the scenario's injected unrecorded
+deliveries**:
+- The background mis-logs and background unrecorded deliveries of
+  `configs/influent/generator.yaml` are removed from the record.
+- The injected fault stays in the record exactly as the baseline has it.
+- The driver recomputes the injected amount as the generator adds it: the feed's
+  configured nonzero median delivery, in kg, times the fault's multiple. It checks that
+  the amount never exceeds the true mass that day. On S3-02 B/C, day 90, the true
+  delivery is 94,905 kg, all of it the injected delivery, and the rewritten log keeps 0
+  there, as the baseline log does.
+
+The question R2 asks becomes: does the background noise of the feed log hide the injected
+delivery from P0?
+
+The other R2 cells were checked for the same problem:
+- S3-01 (mislabel) and S3-03 (moisture) carry no injected mass. Their faults are in the
+  feed's composition, and their rewritten log is the true delivered mass.
+- They stay R2's negative control, as §3 says.
+
+The generated log is now kept beside the diagnostic store (`<store>/r2/feed_logs/`),
+not under `runs/<id>/`, which holds only the observations, the redacted manifest and
+`calls.jsonl`.
+
+### 9.2 The verdicts are computed in code
+
+`python -m scripts.positive_control verdict` computes every §5 verdict from the ladder
+table and writes `reports/p0_positive_control_summary.json`. It is committed here,
+before any R3 result is read. The per-row measures it reads are computed by `score`:
+- `moved_exact`: `attribution_exact` False at baseline, True here.
+- `time_dependent_path`: the plan's timing-gated fields (`guards_tripped`, `fallbacks`,
+  `steps_skipped`) differ from the baseline run's. This is how §5.2 is operationalised.
+- For R3, from the evaluator's `recovery_detail` against the last-segment truth:
+  - `forced_in_approved` and `forced_fitted` (the mechanical check);
+  - `forced_within_25pct` and `forced_interval_covers`, where every forced parameter
+    must pass;
+  - `moved_recovery`, which counts a move when every forced parameter is within 25 % or
+    covered.
+- **§5.2 made strict.** A move on a row marked `time_dependent_path` is reported, but it
+  is not counted toward a pass. The driver cannot show that a move does *not* depend on
+  a timing-gated path, so the conservative reading is taken.
+
+### 9.3 The forcing is auditable
+
+`score` copies each variant's `variants.jsonl` (per run: cell, budget, configuration
+content and sha256) and the R3 configuration files into `reports/positive_control/`, so
+the forced list can be checked from the repository.
+
+### 9.4 Corrections to §2 and §8.1
+
+- **§2 said the driver reads R2's exact feed and R3's shifted parameter from the truth
+  store.** For R3 that is wrong. The forced names are **hard-coded in the driver from
+  the fault types** (`FORCED`: S5-01's `ammonia_inhibition_shift` → `K_I_nh3`; S5-02's
+  `hydrolysis_regime_change` → `k_hyd_ch`, `k_hyd_pr`, `k_hyd_li`), not read at run
+  time. R2's feed does come from the truth store (`influent.npz`, `faults.json`).
+- **§8.1, stated plainly.** The hook-off check passes on 6 of 8 cells by identity. On the
+  other 2 (S0-01 B/B, S2-01 B/B) it passes only through §5.2's time-dependent-path
+  allowance. In the baseline the MCMC step was refused for time; in the re-run it was
+  called, and did not converge.

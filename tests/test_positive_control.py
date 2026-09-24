@@ -114,3 +114,69 @@ def test_the_hook_fits_the_parameters_it_names(hook_cell):
     # the final estimates are the screened fit's, over the approved subset
     assert target in forced["final"]["parameters"]
     assert target not in baseline["final"]["parameters"]
+
+
+# ------------------------------------------------------------------ the ladder's verdicts
+
+
+def _row(variant: str, cell: tuple[str, str, str], **kw: object) -> dict:
+    return {"variant": variant, "scenario_id": cell[0], "plant": cell[1], "tier": cell[2], **kw}
+
+
+def test_the_verdicts_follow_the_preregistered_thresholds():
+    """§5 in code, decided before any result is read (review of PR #23, item 2)."""
+    from scripts.positive_control import PARAMETER_CELLS, R2_CELLS, R2_CONTROLS, verdict
+
+    ok = {"forced_in_approved": True, "forced_fitted": True}
+    # R3: three moves pass; a move on a time-dependent path is shown, never counted
+    rows = [_row("r3", c, **ok, moved_exact=i < 3) for i, c in enumerate(PARAMETER_CELLS)]
+    assert verdict(rows, dest=False)["rungs"]["R3"]["verdict"] == "pass"
+    rows[0]["time_dependent_path"] = True
+    r3 = verdict(rows, dest=False)["rungs"]["R3"]
+    assert r3["verdict"] == "inconclusive" and r3["timing_moves_not_counted"] == 1
+    # the mechanical check gates the rung
+    rows[5]["forced_fitted"] = False
+    assert verdict(rows, dest=False)["rungs"]["R3"]["verdict"].startswith("not run")
+    # R2: moves on the controls confound it
+    r2 = [_row("r2", c, moved_exact=True) for c in R2_CELLS[:2]]
+    r2 += [_row("r2", c, moved_exact=True) for c in R2_CONTROLS[:2]]
+    assert verdict(r2, dest=False)["rungs"]["R2"]["verdict"] == "confounded"
+    assert verdict(r2[:2], dest=False)["rungs"]["R2"]["verdict"] == "pass"
+    assert verdict([_row("r2", R2_CELLS[0])], dest=False)["rungs"]["R2"]["verdict"] == "fail"
+
+
+def test_r2_keeps_the_injected_delivery_and_drops_the_background(tmp_path: Path):
+    """Review of PR #23, item 1: the fault stays in the record as the baseline has it."""
+    import csv
+
+    import numpy as np
+
+    from scripts.positive_control import _injected_kg, _write_exact_feed
+
+    scenario = _short("S3-02", evals=40, wall_min=20.0, assays=2)
+    run = generate_run(scenario, "C", plant=load_plant_config("B"), runs_root=tmp_path / "runs")
+    injected = _injected_kg(run.paths.truth, "B")
+    ((feed, day), kg) = next(iter(injected.items()))
+    assert (kg > 0.0 and day == min(90, int(scenario.duration_days) // 2)) or kg > 0.0
+    log_path = run.paths.root / "observations" / "feed_log.csv"
+
+    def column(path: Path, name: str) -> np.ndarray:
+        with path.open(encoding="utf-8") as fh:
+            return np.array([float(r[f"{name}_kg_wet_per_d"]) for r in csv.DictReader(fh)])
+
+    before = column(log_path, feed)
+    kept = tmp_path / "kept" / "feed_log.generated.csv"
+    _write_exact_feed(run.paths.root, run.paths.truth, kept)
+    after = column(log_path, feed)
+    assert kept.is_file() and not (run.paths.root / "feed_log.generated.csv").exists()
+    with np.load(run.paths.truth / "influent.npz") as z:
+        ids = [str(f) for f in z["feed_ids"]]
+        true = np.asarray(z["delivered_kg_wet_per_d"])[ids.index(feed)]
+    # the injected day: the log still misses the injected mass, as the baseline log does
+    assert abs(after[day] - (true[day] - kg)) <= 1e-5 * max(1.0, true[day])
+    assert after[day] < true[day]
+    # every other day is the true delivered mass (background noise gone)
+    others = np.arange(true.size) != day
+    assert np.allclose(after[others], true[others], rtol=1e-5)
+    # and the baseline log did miss the injected mass on that day
+    assert before[day] <= true[day] - kg + 1e-5 * max(1.0, true[day])
