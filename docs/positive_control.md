@@ -226,9 +226,9 @@ No difference traces to the hook, so the check passes and R3 runs.
 
 ---
 
-## 9. Amendment, 2026-09-24 ~18:30 UTC (review of PR #23)
+## 9. Amendment, 2026-09-24 ~17:30 UTC (review of PR #23)
 
-This amendment follows an adversarial review relayed by the coordinator at ~17:40 UTC.
+This amendment follows an adversarial review the coordinator relayed on 2026-09-24.
 It is committed **before R3 is scored and before any R2 run**. §1–§7 are not edited;
 where they are superseded, this section says so.
 
