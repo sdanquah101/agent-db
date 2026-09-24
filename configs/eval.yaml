@@ -51,11 +51,35 @@ attribution:
   # Correct abstention (Appendix A) is scored on runs whose truth is structural or compound;
   # a run declaring abstain_on outside that set is still scored, and flagged as such.
   abstention_labels: [structural]
+  # abstention_correct is unchanged: every abstain_on term appears among the run's
+  # abstentions. Beside it, per run (the lead's ruling D1 of 2026-09-24, over-abstention):
+  #   abstention_extra      the count of declared abstentions outside abstain_on;
+  #   abstention_precision  declared terms in abstain_on / all declared terms, null when
+  #                         nothing is declared.
+  # A run that declines every vocabulary term scores correct but with precision near 0.
+  #
+  # Earned abstentions (ruling D2): the answer key's term counts as declined only when the
+  # run's own logs show the tool it concerns was called and failed. `posterior_intervals`
+  # is earned by a logged `bayes_mcmc` call whose outcome is an error or an injected
+  # failure, or which the state's tool_failures records against that same call as
+  # not converged, an error or unusable. A plan-level skip (no sampler call) or a budget
+  # refusal earns nothing. The visible log cannot show non-convergence (the call returns
+  # ok with R-hat in its output), so the failure record, anchored to a logged call, is the
+  # evidence for a genuine non-convergence and the truth-side log for an injected one.
+  earned_abstentions:
+    posterior_intervals:
+      tool: bayes_mcmc
+      failed_outcomes: [error, injected_failure]
+      failure_kinds: [not_converged, error, unusable]
   # Unsupported claims: an evidence item of the structured classification resolves when
   # every call it names maps, through the state's actions, to a visible log line with the
   # same name and argument hash and outcome ok, and at least one of those calls is a tool
   # that returns the claimed quantity -- by the item's value keys where a key is mapped
-  # here, by the item's rule otherwise. An item naming no call is unsupported. An item
+  # here, by the item's rule otherwise. "Returns the claimed quantity" means the call the
+  # number RESTS ON: the call whose output the number is computed from, not only a call
+  # that returned the number verbatim (the lead's ruling D3 of 2026-09-24). A z-score a
+  # workflow computes from residual_diag's output rests on residual_diag. P1 and P2 are
+  # held to the same definition. An item naming no call is unsupported. An item
   # whose value keys AND rule are all unmapped here cannot be checked against "returned
   # the claimed quantity" (Appendix A), so it scores as `unmapped_claim` says: unsupported
   # (the conservative reading; the coordinator's review of PR #19, blocker B2). A workflow's

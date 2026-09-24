@@ -52,6 +52,19 @@ class ClaimSources(_Frozen):
     by_rule: dict[str, tuple[str, ...]]
 
 
+class EarnedAbstention(_Frozen):
+    """An abstention that counts only when a logged call of ``tool`` failed (ruling D2).
+
+    The call counts as failed when its logged outcome (visible, or truth-side for an
+    injected failure) is one of ``failed_outcomes``, or when the state's
+    ``tool_failures`` names that same logged call with a kind in ``failure_kinds``.
+    """
+
+    tool: str
+    failed_outcomes: tuple[str, ...]
+    failure_kinds: tuple[str, ...]
+
+
 class AttributionConfig(_Frozen):
     """Family B."""
 
@@ -59,6 +72,7 @@ class AttributionConfig(_Frozen):
     prior_interval_mass: _Frac
     kinetic_group: str
     abstention_labels: tuple[str, ...]
+    earned_abstentions: dict[str, EarnedAbstention] = {}
     unmapped_claim: Literal["unsupported", "supported"]
     claim_sources: ClaimSources
 

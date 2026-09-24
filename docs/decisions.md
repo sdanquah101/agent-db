@@ -5671,3 +5671,60 @@ a workflow may not read the scenarios).
 **Note on timing.** The full test suite (twice) and the positive-control hook tests ran
 on the same four-core container during part of the re-runs. The three time-dependent
 differences above are the kind that load produces. They are reported, not tuned away.
+
+
+## 2026-09-24 — The lead's evaluator rulings D1–D3 (PR D, branch `claude/eval-rulings`)
+
+**The ruling.** The lead, on the three items PR #22 flagged: *"Implement your
+recommendations."* The coordinator relayed it (~11:55 UTC) as follows:
+- **D1:** "Over-abstention: YES, measure it. Keep abstention_correct exactly as defined."
+- **D2:** "S8-01: YES, it must not score correct abstention for free ... the credit has to
+  be earned."
+- **D3:** "claim_sources: YES, keep the current meaning ... a documentation change only,
+  and P1 is held to the same definition."
+
+**What was done.**
+- **D1.** Two new per-run columns, on every run with a state; `abstention_correct` is
+  unchanged. Both are declared in `configs/eval.yaml` and `docs/eval_design.md`, and the
+  aggregate carries them as means per cell.
+  - `abstention_extra`: the count of declared abstentions outside `abstain_on`.
+  - `abstention_precision`: the credited declared terms that are in `abstain_on`, over
+    all declared terms; null when nothing is declared.
+- **D2.** Implemented evaluator-side as a conditional credit (`earned_abstentions` in
+  `eval.yaml`), not by renaming S8-01's target. Declining the posterior after the sampler
+  failed *is* the correct conclusion. `posterior_intervals` counts only if both hold:
+  - the run logged a `bayes_mcmc` call, meaning an action that resolves to its visible
+    line;
+  - that call failed: its outcome on either log side is `error` or `injected_failure`,
+    or the state's `tool_failures` records that same call as `not_converged`, `error` or
+    `unusable`.
+
+  A plan-level skip earns nothing; neither does a budget refusal or a converged call.
+  S8-01's answer key is unchanged, so no visible or truth file moves.
+- **D3.** `claim_sources` means *the call the number rests on*, the call whose output
+  the number is computed from. This is written into `docs/eval_design.md` and the
+  `claim_sources` comment of `eval.yaml`. No mapping changed.
+
+**Why a failure record counts for D2.** The ruling's own words were "a bayes_mcmc call
+whose outcome was non-converged or failed". But a genuine non-convergence is not visible
+as a log *outcome*: the tool returns `ok`, with R-hat in its output, and the logs do not
+carry the output. The state's failure record, tied by `call_index` to a logged call, is
+therefore the evidence for that case. The truth-side log is the objective evidence for
+an injected failure, which is what S8-01 plants.
+
+*Alternative considered:* a second scenario term tied to the recorded failure (for
+example `failed_sampler_posterior`). It was rejected: a workflow that simply emitted the
+new term would earn it just as freely, unless the evaluator checked the log anyway, and
+then the check is the rule and the new term adds nothing.
+
+**P0's baseline values** (re-scored from the existing stores; no re-run):
+- **Sweep, 78 cells.** `abstention_extra` averages 2.13 (range 1–6), and
+  `abstention_precision` averages 0.011 (above 0 on 4 cells, the S2-02 cells where
+  `ch4_fraction_claims` is credited). No existing column moved.
+- **Pilot, 10 cells.** `abstention_extra` averages 1.80, and `abstention_precision`
+  averages 0.050. S8-01 keeps its credit: P0 reached MCMC there and the injected failure
+  is logged, so it earns the credit, with precision 0.5 and extra 1. Two columns also
+  moved that come from PR #22, not from this PR; the pilot table had not been re-scored
+  since:
+  - S5-01 A/A's claim and clock columns (the cell was re-run in A4);
+  - S6-02 B/B's `abstain_on` (respelled in A3).

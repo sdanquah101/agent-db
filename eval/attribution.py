@@ -11,10 +11,14 @@ store's answer key, never from free text:
   prior; the group of each parameter is declared there too);
 - **correct abstention**: every quantity of the answer key's ``abstain_on`` appears in
   ``final.abstentions`` (binary; scored where ``abstain_on`` is non-empty and flagged as
-  applicable only for a structural or compound truth);
+  applicable only for a structural or compound truth). A term under
+  ``earned_abstentions`` counts only when the run's logs show the failed call it rests
+  on (ruling D2). Beside it, ``abstention_extra`` and ``abstention_precision`` measure
+  over-abstention on every run (ruling D1);
 - **unsupported claims**: evidence items of the classification that name no call, or a
   call that does not resolve to a logged ``ok`` line, or resolve to no tool that returns
-  the claimed quantity (``claim_sources`` in ``configs/eval.yaml``); an item whose rule
+  the claimed quantity (``claim_sources`` in ``configs/eval.yaml``; the call the number
+  rests on, ruling D3); an item whose rule
   and value keys are all unregistered there scores as ``unmapped_claim`` says
   (unsupported by default).
 
@@ -26,9 +30,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from eval.config import AttributionConfig
+from eval.config import AttributionConfig, EarnedAbstention
 from eval.records import RunRecords
-from eval.trail import resolve_call_index
+from eval.trail import resolve_action, resolve_call_index
+from state.task_state import TaskState
 from tools.config import FittedModelConfig
 
 __all__ = ["prior_interval", "score_attribution"]
@@ -44,6 +49,29 @@ def prior_interval(lower: float, upper: float, mass: float) -> tuple[float, floa
 def _jaccard(a: set[str], b: set[str]) -> float:
     union = a | b
     return float(len(a & b) / len(union)) if union else 1.0
+
+
+def _earned(rule: EarnedAbstention, state: TaskState, records: RunRecords) -> bool:
+    """Whether the run's logs show a call of ``rule.tool`` that failed (ruling D2)."""
+    truth_by_seq = {c.seq: c for c in records.truth_calls}
+    for index, action in enumerate(state.actions):
+        if action.name != rule.tool:
+            continue
+        line = resolve_action(action, records.visible_calls)
+        if line is None:
+            continue
+        truth_line = truth_by_seq.get(line.seq)
+        outcomes = {line.outcome}
+        if truth_line is not None and truth_line.name == rule.tool:
+            outcomes.add(truth_line.outcome)
+        if outcomes & set(rule.failed_outcomes):
+            return True
+        if any(
+            f.name == rule.tool and f.kind in rule.failure_kinds and f.call_index == index
+            for f in state.tool_failures
+        ):
+            return True
+    return False
 
 
 def score_attribution(
@@ -69,6 +97,8 @@ def score_attribution(
         "abstention_applicable": bool(truth & set(cfg.abstention_labels)) or len(truth) > 1,
         "abstention_correct": None,
         "abstention_fraction": None,
+        "abstention_extra": None,
+        "abstention_precision": None,
         "flag_sensor": None,
         "correct_flag_sensor": conclusion.get("flag_sensor"),
         "flag_sensor_correct": None,
@@ -116,13 +146,22 @@ def score_attribution(
     if not bool(conclusion.get("kinetic_update_allowed", False)):
         out["false_kinetic_update"] = bool(state.classification.kinetic_update)
 
-    # correct abstention, on the structured abstentions
+    # correct abstention, on the structured abstentions; a term with an earned-abstention
+    # rule (ruling D2) counts only when the run's logs back it
     wanted = [str(x) for x in conclusion.get("abstain_on", ())]
+    declared = set(state.final.abstentions) | set(state.abstentions)
+    credited = {
+        q
+        for q in declared
+        if q not in cfg.earned_abstentions or _earned(cfg.earned_abstentions[q], state, records)
+    }
     if wanted:
-        declined = set(state.final.abstentions) | set(state.abstentions)
-        hits = sum(1 for q in wanted if q in declined)
+        hits = sum(1 for q in wanted if q in credited)
         out["abstention_correct"] = hits == len(wanted)
         out["abstention_fraction"] = hits / len(wanted)
+    # over-abstention (ruling D1): on every run with a state, whatever the answer key asks
+    out["abstention_extra"] = len(declared - set(wanted))
+    out["abstention_precision"] = len(credited & set(wanted)) / len(declared) if declared else None
 
     out["flag_sensor"] = state.classification.flag_sensor
     out["flag_sensor_correct"] = (state.classification.flag_sensor or None) == (
