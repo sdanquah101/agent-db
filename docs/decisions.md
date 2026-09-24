@@ -5671,3 +5671,33 @@ a workflow may not read the scenarios).
 **Note on timing.** The full test suite (twice) and the positive-control hook tests ran
 on the same four-core container during part of the re-runs. The three time-dependent
 differences above are the kind that load produces. They are reported, not tuned away.
+
+
+## 2026-09-24 — The distinguishability analysis: method choices (`docs/distinguishability.md`)
+
+The ruling asks for an admissible label set per cell and a second attribution score
+reported beside the exact one. These are the choices made for it.
+
+- **One hypothesis class per label,** fitted from the defaults on the visible record.
+  - *Alternative:* a single Jacobian over every class's knobs, comparing subspace angles
+    (rejected: it measures local confusability at the defaults, not whether a class can
+    explain the record).
+- **AIC, with a margin of 2** (Burnham and Anderson's "substantial support"). A margin of
+  10 is reported alongside for sensitivity.
+  - *Alternatives:* raw Δχ² (rejected: more knobs would always win); a likelihood-ratio
+    test against the truth class (rejected: the truth class often cannot be represented,
+    §2.2).
+- **Parameter subset:** the two Level-5 targets plus P0's four most approved, fixed for
+  every cell.
+  - *Alternative:* all 20 multipliers (rejected: about 3× the compute, and the fit would
+    not converge in the budget).
+- **Sensor class:** one sensor at a time, by transforming the default prediction, so it
+  needs no simulation. Flatlined samples are dropped for every class, because the record
+  flags them.
+- **Where things live.** Truth-side output goes in `truth_store/<id>/admissible.json`;
+  `eval/` reads the file and imports nothing new. The package is `distinguish/`, which
+  the rule-1 checker forbids to workflows.
+- **Declared limits:** a mid-record parameter change, windowed fractionation, per-day
+  solids and a stagnant zone are not representable. The affected cells are named in
+  `truth_class_limited` rather than excluded.
+

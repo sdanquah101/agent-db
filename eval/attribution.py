@@ -75,7 +75,18 @@ def score_attribution(
         "claims": None,
         "claims_unsupported": None,
         "unsupported_claim_rate": None,
+        # the second attribution score, reported beside attribution_exact and never in its
+        # place (docs/distinguishability.md): None when the analysis has not run on the cell
+        "admissible_set": None,
+        "truth_admissible": None,
+        "attribution_admissible": None,
+        "attribution_admissible_set": None,
     }
+    adm = records.admissible
+    if adm is not None:
+        allowed = [str(x) for x in adm.get("admissible_set", [])]
+        out["admissible_set"] = "+".join(allowed)
+        out["truth_admissible"] = bool(adm.get("truth_admissible"))
     state = records.state
     if state is None:
         # a launched run that left no valid state is an attribution MISS, not an absent
@@ -87,6 +98,9 @@ def score_attribution(
             out["attribution_exact"] = False
             out["attribution_partial"] = 0.0
             out["primary_in_truth"] = False
+            if adm is not None:
+                out["attribution_admissible"] = False
+                out["attribution_admissible_set"] = False
         return out
 
     final = {state.final.label, *state.final.secondary_labels}
@@ -95,6 +109,10 @@ def score_attribution(
     out["attribution_exact"] = final == truth
     out["attribution_partial"] = _jaccard(final, truth)
     out["primary_in_truth"] = state.final.label in truth
+    if adm is not None:
+        allowed_set = set(str(x) for x in adm.get("admissible_set", []))
+        out["attribution_admissible"] = state.final.label in allowed_set
+        out["attribution_admissible_set"] = final <= allowed_set
 
     # false kinetic drift: the prior interval of every kinetic parameter, from the
     # declared bounds (configs/tools/model.yaml), read here and nowhere else
