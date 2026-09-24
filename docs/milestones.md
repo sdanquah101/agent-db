@@ -2301,7 +2301,8 @@ plan of PR #19 was followed without a code change. Nothing under `sim/`, `scenar
   17:01 → 2026-09-24 00:20 UTC (31 h 20 min wall; 100.4 runner-hours; a fourth process
   took list b's last cell at 22:16 because the skipped pilot cells had not been
   discounted when the lists were dealt). **78/78 completed**, no runner error, no cell
-  run twice. Ten checkpoints pushed the partial tables (`ac16561` … `2ec0be0`).
+  run twice. Checkpoint commits pushed the partial tables along the way (`6555c43` 11 …
+  `3d755aa` 75, then `2ec0be0` 78; `ac16561`, titled 14, carries 11 rows).
 - **The tables**: `reports/p0_sweep.csv` (the runner's table), `reports/p0_sweep_scored.csv`
   / `.json` (one row per cell, the 127 columns of `python -m eval`) and
   `reports/p0_sweep_scored_aggregate.csv` / `.json` (one run per cell: means only, no
@@ -2310,7 +2311,7 @@ plan of PR #19 was followed without a code change. Nothing under `sim/`, `scenar
   in parallel on this 4-core container): 14.2 s per evaluation on Plant B, 13.8 s on
   Plant C, 25.4 s on Plant A (365-day cells); 23,688 evaluations in all. Per cell:
   60–90 min on B (mean 72), 64–87 on C (76), 73–115 on A (94), against allowances of
-  90 / 120 min; 59 % of the ruled evaluation counts and 72 % of the wall clock on average.
+  90 / 120 min; 59 % of the ruled evaluation counts and 73 % of the wall clock on average.
 
 **The scored baseline** (from `reports/p0_sweep_scored.json`; `exact` is the final label
 set against `truth_label`, `false drift` a kinetic estimate outside the prior's 90 %
@@ -2355,19 +2356,23 @@ of reported parameters whose interval covers the truth):
 
 1. **Attribution: 17 of 78 exact (22 %).** P0 is right on the clean cells (10 of 12
    Level 0–1) and on 2 of 10 parameter cells (S5-01 A/A, S5-02 C/A, both through R4);
-   it names the sensor on 5 of 21 sensor cells (the four CH₄-analyser flatlines of
-   S2-02 at Tiers B/C, and S2-01 at Tier A on both plants — where the flag is wrong, see
-   4); **no influent cell (0 of 21) and no state cell (0 of 14) is ever attributed**.
-   The confusion is one-directional: 54 of the 66 faulted cells read `none`, the honest
-   scripted baseline of rule 5 at the recorded background misfit. **Two false faults on
+   it names the sensor on 5 of 21 sensor cells (three of the four CH₄-analyser
+   flatlines of S2-02 at Tiers B/C — B/C reads `sensor+structural` with the right flag —
+   and S2-01 at Tier A on both plants, where the flag is wrong, see 8); **in this
+   single-seed sweep no influent cell (0 of 21) and no state cell (0 of 14) is
+   attributed**. The confusion is one-directional: 44 of the 66 faulted cells read
+   `none`, P0's scripted verdict at the recorded background misfit. **Two false faults on
    clean cells**: S1-01 C/A reads `parameter` (R4: a common change point in the
    background) and S0-01 C/C reads `sensor` (`digestate_ts` flagged by QC at Tier C).
-2. **False kinetic drift: 22 of 70 applicable cells (31 %)**, always `k_dec_X_ac`,
-   `k_m_ac` or `k_m_h2` driven to a bound; **Tier C never drifts (0/20)** while Tier A
-   drifts on 12 of 28 — with fewer channels the screened fit compensates a fault with
-   kinetics; Plant C drifts twice as often as Plant B (15 vs 7 of 30).
-3. **False kinetic update: 47 of 56 cells** whose key forbids it — every `none` verdict on
-   a faulted cell offers the calibration as an update (R6 sets `kinetic_update`).
+2. **False kinetic drift: 22 of 68 applicable cells (32 %)**, always `k_dec_X_ac`,
+   `k_m_ac` or `k_m_h2` driven to a bound; **Tier C never drifts (0/20)**; Tiers A and B
+   drift on 12/28 and 10/20. One reading is that with fewer channels P0's screened fit
+   absorbs a fault into kinetics; a single seed cannot separate that from the
+   cell-specific fault. Plant C drifts twice as often as Plant B (15 vs 7 of 30).
+3. **False kinetic update: 44 of 56 cells** whose key forbids it — 39 of them `none`
+   verdicts on faulted cells, the other 5 `parameter` verdicts on non-parameter truths
+   (R6 and R4 both set `kinetic_update`); the 5 `none` verdicts on parameter truths are
+   permitted updates.
 4. **Correct abstention: 0 of 7 applicable** (the S4-02 compound cells): their
    `abstain_on` names (`transient_response`, `peak_load_behaviour`) have no counterpart
    in P0's vocabulary, so the metric cannot be met by P0 (the contract finding of PR #19).
@@ -2377,13 +2382,15 @@ of reported parameters whose interval covers the truth):
    is right on 4 of 21 sensor cells.
 6. **Family A.** The forecast block verified on 76 of 78 (see 8); mean gas nRMSE 0.62,
    pH nRMSE 1.49; **the 90 % coverage of the Fisher predictive ensemble averages 0.04**
-   — the background misfit as a coverage number on every level, tier and plant.
-   Parameter recovery on all 78 (Levels 0–5): 136 of 204 intervals cover the truth
-   (67 %), 64 of 204 estimates at a bound.
+   overall (0.02–0.06 by tier) — the background misfit as a coverage number.
+   Parameter recovery on the 75 cells that report parameters (S2-01, S2-02 and S2-03 at
+   A/A report none): 136 of 204 intervals cover the truth (67 %), 64 of 204 estimates
+   at a bound.
 7. **Family C/D.** The meter, the summary and the state agree on every cell; 197 assay
-   units spent (uncertainty reduction per unit 0.16 on average); 4 invalid actions (see
+   units spent (uncertainty reduction per unit 0.17 over the 73 cells with a value); 4
+   invalid actions (see
    8), 0 tool errors; MCMC reached on 52 of 78 (never on Plant A: 25 s per evaluation
-   does not fit the ruled sampler) and **converged on none**; 10 guard trips.
+   does not fit the ruled sampler) and **converged on none**; 12 guard trips on 10 cells.
 8. **A P0 finding (not changed, rule 5): S2-01 at Tier A on both plants ends with an
    empty objective.** QC flags the drifting pH probe (correctly) and excludes it; the
    post-fit single-offender rule then flags gas flow — the only remaining channel — and

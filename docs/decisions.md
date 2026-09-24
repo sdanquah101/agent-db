@@ -5394,11 +5394,12 @@ Nothing is tuned on the sweep (P0 is frozen); the table is what it is.
 and per-plant tables). 78 of 78 cells completed inside their allowances (31 h 20 min
 three in parallel, 100 runner-hours, 23,688 evaluations; 14 s per evaluation on Plants
 B and C, 25 s on A). Attribution exact on 17 of 78: right on 10 of 12 clean cells and 2
-of 10 parameter cells, names the sensor on 5 of 21 sensor cells, never attributes an
-influent (0/21) or state (0/14) cell; 54 of the 66 faulted cells read `none`; two false
-faults on clean cells. False kinetic drift on 22 of 70 applicable cells (Tier A 12/28,
-Tier C 0/20; always a rate constant driven to a bound); a false kinetic update on 47 of
-56 (every `none` verdict on a faulted cell); correct abstention 0 of 7 (a vocabulary
+of 10 parameter cells, names the sensor on 5 of 21 sensor cells, attributes no
+influent (0/21) or state (0/14) cell in this single-seed sweep; 44 of the 66 faulted
+cells read `none`; two false faults on clean cells. False kinetic drift on 22 of 68
+applicable cells (Tiers A and B 12/28 and 10/20, Tier C 0/20; always a rate constant
+driven to a bound); a false kinetic update on 44 of 56 (39 `none` verdicts on faulted
+cells, 5 `parameter` verdicts on non-parameter truths); correct abstention 0 of 7 (a vocabulary
 gap, not a P0 choice); unsupported claims 13 of 273 (the residual-derived items without
 a call). The 90 % coverage of the Fisher predictive ensemble averages 0.04; recovery
 136 of 204 intervals, 64 estimates at a bound; MCMC reached on 52, converged on none,
