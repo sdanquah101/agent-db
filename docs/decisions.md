@@ -5728,3 +5728,37 @@ then the check is the rule and the new term adds nothing.
   since:
   - S5-01 A/A's claim and clock columns (the cell was re-run in A4);
   - S6-02 B/B's `abstain_on` (respelled in A3).
+
+
+## 2026-09-24 — Review of PR #24: the D2 credit comes from the logs only, and from the last call
+
+The coordinator relayed an adversarial review (~17:40 UTC) with four points.
+
+- **The self-report route is closed.** The ruling's words are "what the run's own visible
+  log shows". The first implementation also accepted the workflow's own `tool_failures`
+  record of kind `not_converged`, and a converged `ok` call plus a self-declared record
+  earned the credit. It also compared the record's `call_index` with the wrong index,
+  which gave one missed and one false credit.
+  - Now only log lines are evidence, visible or truth-side. The registry writes
+    `not_converged` into the `detail` of an `ok` line whose result reports
+    `converged=False` (`tools/registry.py`, `NOT_CONVERGED`). The outcome stays `ok`,
+    because the tool ran and returned, so a workflow's action still matches its line.
+  - The same note goes on the visible line of an injected failure. Otherwise a missing
+    note would tell a workflow that a non-convergence was injected, which is the tell the
+    visible projection exists to hide. The truth side keeps `injected_failure` as its
+    outcome.
+  - The call-index comparison is gone with the route.
+- **The last call decides.** An error followed by a converged call leaves a posterior that
+  exists, so it earns nothing. A budget refusal runs nothing and does not count as the
+  last call.
+- **Precision's numerator counts credited terms, not declared ones.** This is a
+  deliberate refinement of D1's wording: an unearned `posterior_intervals` gives
+  precision 0 with extra 0. It is the key's own term, so it is not extra; being
+  unearned, it is not a hit either.
+- **P0's S8-01 credit still holds.** In the pilot, P0 reached the sampler and the
+  truth-side line reads `injected_failure`.
+
+*Alternative considered:* a new visible outcome `not_converged` (rejected: the action a
+workflow records would no longer match its log line's outcome, which the evaluator's
+trail requires, and it would change `state.provenance.Outcome` for every consumer).
+

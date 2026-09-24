@@ -37,6 +37,7 @@ from tools import (
     UnknownToolError,
     make_registry,
 )
+from tools.registry import NOT_CONVERGED
 from tools.schemas import ObservedSeries
 
 T = np.linspace(0.0, 10.0, 11)
@@ -263,6 +264,9 @@ def test_the_tool_failure_directive_returns_non_converged_chains_and_is_logged_t
     assert read_calls(run_dir)[-1].outcome == "ok"
     blob = run_dir.joinpath("calls.jsonl").read_text()
     assert "injected" not in blob
+    # the visible line carries the registry's not-converged note, exactly as a genuine
+    # non-convergence would (ruling D2): the note cannot tell the two apart
+    assert read_calls(run_dir)[-1].detail == NOT_CONVERGED
     # every call fails at probability 1.0
     again = reg.call("bayes_mcmc", **mcmc_args(seed=4))
     assert not again.converged
@@ -356,3 +360,21 @@ def test_call_json_is_the_transport_envelope(tmp_path):
     assert refused["outcome"] == "budget_exceeded"
     bad = reg.call_json("simulate", {"model": "linear", "nope": 1})
     assert bad["outcome"] == "error" and bad["kind"] == "ToolArgumentError"
+
+
+def test_a_genuinely_non_converged_sampler_is_noted_on_its_log_line(tmp_path):
+    """Ruling D2 (review of PR #24): the log, not the workflow, records the failure."""
+    reg, run_dir, truth_dir = registry(tmp_path, budget=Budget(50000, 60.0, 0))
+    short = reg.call("bayes_mcmc", **mcmc_args(n_steps=4, n_walkers=4))
+    assert not short.converged  # too few steps to converge
+    for log_dir in (run_dir, truth_dir):
+        line = read_calls(log_dir)[-1]
+        assert line.outcome == "ok" and line.detail == NOT_CONVERGED
+    done = reg.call("bayes_mcmc", **mcmc_args(n_steps=400, seed=5))
+    if done.converged:  # a converged result carries no note
+        assert read_calls(run_dir)[-1].detail == ""
+    # a tool whose output has no `converged` field is never noted
+    reg.call(
+        "fit_lsq", model="linear", data=(linear_data(),), parameters=("a", "b"), seed=1, n_starts=1
+    )
+    assert read_calls(run_dir)[-1].detail == ""

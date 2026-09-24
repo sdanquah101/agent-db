@@ -53,16 +53,18 @@ class ClaimSources(_Frozen):
 
 
 class EarnedAbstention(_Frozen):
-    """An abstention that counts only when a logged call of ``tool`` failed (ruling D2).
+    """An abstention that counts only when the logs show ``tool`` failed (ruling D2).
 
-    The call counts as failed when its logged outcome (visible, or truth-side for an
-    injected failure) is one of ``failed_outcomes``, or when the state's
-    ``tool_failures`` names that same logged call with a kind in ``failure_kinds``.
+    The evidence is the LAST logged call of ``tool`` that ran (a budget refusal runs
+    nothing). It failed when its outcome, on the visible or the truth-side line, is one
+    of ``failed_outcomes``, or its line's ``detail`` is one of ``failed_details`` (the
+    registry notes a result that reports ``converged=False``). The workflow's own
+    ``tool_failures`` are never evidence.
     """
 
     tool: str
     failed_outcomes: tuple[str, ...]
-    failure_kinds: tuple[str, ...]
+    failed_details: tuple[str, ...]
 
 
 class AttributionConfig(_Frozen):

@@ -52,26 +52,30 @@ way when named explicitly.
   a run with `abstain_on` outside that set (S8-01's `posterior_intervals`) is scored and
   flagged. Names must match exactly: the answer key's vocabulary and the workflow's are a
   shared contract (`configs/abstentions.yaml`, ruling A3).
-- **Earned abstentions** (the lead's ruling D2, 2026-09-24). A term listed under
-  `earned_abstentions` in `eval.yaml` counts as declined only when the run's own logs
-  back it. Today the only such term is `posterior_intervals`. It counts only if both hold:
-  - a logged `bayes_mcmc` call exists, meaning an action that resolves to its visible log
-    line;
-  - that call failed: its outcome on either log side is `error` or `injected_failure`,
-    or the state's `tool_failures` records that same call (by `call_index`) as
-    `not_converged`, `error` or `unusable`.
+- **Earned abstentions** (the lead's ruling D2, 2026-09-24; tightened after the review of
+  PR #24). A term listed under `earned_abstentions` in `eval.yaml` counts as declined only
+  when the run's **logs** show the failure it rests on. Today the only such term is
+  `posterior_intervals`, and it works as follows:
+  - The evidence is the last logged `bayes_mcmc` call that ran. A budget refusal runs
+    nothing, so it is not that call.
+  - That call failed if its outcome, on the visible or the truth-side line, is `error`
+    or `injected_failure`, or if its line's `detail` is `not_converged`.
+  - The registry writes `not_converged` into the detail of an `ok` line whose result
+    reports `converged=False`. It writes the same note on the visible line of an injected
+    failure, so that line cannot be told from a genuine one.
+  - The workflow's own `tool_failures` are never evidence.
+  - These earn nothing: a plan-level skip (no sampler call); a converged last call; an
+    error followed by a converged call, since a posterior then exists.
 
-  A plan-level skip, where no sampler call was made, earns nothing. Neither does a
-  budget refusal. The visible log alone cannot show a genuine non-convergence (the call
-  returns `ok` with R-hat in its output), so the failure record anchored to the logged
-  call is the evidence for it. The truth-side log is the evidence for an injected failure.
   S8-01's answer key is unchanged: declining the posterior after the sampler failed *is*
   the correct conclusion, and the ruling makes the credit earned.
 - **Over-abstention** (the lead's ruling D1, 2026-09-24). `abstention_correct` is
   unchanged. Beside it, on every run with a state:
   - `abstention_extra`, the count of declared abstentions outside `abstain_on`;
-  - `abstention_precision`, the declared terms that are in `abstain_on` and credited,
-    divided by all declared terms, or null when nothing is declared.
+  - `abstention_precision`, the declared terms that are in `abstain_on` **and credited**,
+    divided by all declared terms, or null when nothing is declared. The numerator counts
+    credited terms, not merely declared ones, so an unearned `posterior_intervals` gives
+    precision 0 with extra 0.
 
   A run that declines every vocabulary term scores `abstention_correct` True with
   precision near 0 and a large extra count. The aggregate reports both columns as means

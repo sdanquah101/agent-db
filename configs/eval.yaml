@@ -59,18 +59,18 @@ attribution:
   # A run that declines every vocabulary term scores correct but with precision near 0.
   #
   # Earned abstentions (ruling D2): the answer key's term counts as declined only when the
-  # run's own logs show the tool it concerns was called and failed. `posterior_intervals`
-  # is earned by a logged `bayes_mcmc` call whose outcome is an error or an injected
-  # failure, or which the state's tool_failures records against that same call as
-  # not converged, an error or unusable. A plan-level skip (no sampler call) or a budget
-  # refusal earns nothing. The visible log cannot show non-convergence (the call returns
-  # ok with R-hat in its output), so the failure record, anchored to a logged call, is the
-  # evidence for a genuine non-convergence and the truth-side log for an injected one.
+  # run's LOGS show the tool it concerns failed. The evidence is the last logged call of
+  # the tool that ran (a budget refusal runs nothing): it failed when its outcome, on the
+  # visible or the truth-side line, is in failed_outcomes, or its detail is in
+  # failed_details. The registry writes `not_converged` into the detail of an `ok` line
+  # whose result reports converged=False (tools/registry.py, the review of PR #24). The
+  # workflow's own tool_failures are never evidence. A plan-level skip (no sampler call),
+  # a converged last call, or an error followed by a converged call earns nothing.
   earned_abstentions:
     posterior_intervals:
       tool: bayes_mcmc
       failed_outcomes: [error, injected_failure]
-      failure_kinds: [not_converged, error, unusable]
+      failed_details: [not_converged]
   # Unsupported claims: an evidence item of the structured classification resolves when
   # every call it names maps, through the state's actions, to a visible log line with the
   # same name and argument hash and outcome ok, and at least one of those calls is a tool

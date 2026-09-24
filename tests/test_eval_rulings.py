@@ -3,9 +3,9 @@
 - D1 over-abstention: ``abstention_extra`` and ``abstention_precision`` sit beside an
   unchanged ``abstention_correct``. The negative control is a run that declines every
   vocabulary term: correct, but with precision near 0.
-- D2 earned abstention: S8-01's ``posterior_intervals`` counts only when a logged
-  ``bayes_mcmc`` call failed. P0's plan-level skip (no call) earns nothing. A recorded
-  non-converged call, an injected failure and a logged error each earn it.
+- D2 earned abstention: S8-01's ``posterior_intervals`` counts only when the logs show
+  the last ``bayes_mcmc`` call that ran failed (not converged, injected failure, error).
+  P0's plan-level skip earns nothing; the workflow's own failure record is never evidence.
 - D3 is documentation (``claim_sources`` means the call the number rests on). The test
   checks the definition is written where the ruling put it.
 """
@@ -143,13 +143,13 @@ def test_a_plan_level_skip_earns_no_credit(tmp_path: Path):
     assert row["abstention_extra"] == 0  # it is the key's own term, just unearned
 
 
-def test_a_recorded_non_converged_call_earns_it(tmp_path: Path):
+def test_a_logged_non_converged_call_earns_it(tmp_path: Path):
+    """The registry notes `not_converged` on the ok line of a sampler that did not converge."""
     row = _run(
         tmp_path,
         abstain_on=("posterior_intervals",),
         declared=["posterior_intervals"],
-        calls=[MCMC],
-        failures=[_failure("not_converged")],
+        calls=[{**MCMC, "detail": "not_converged"}],
     )
     assert row["abstention_correct"] is True and row["abstention_precision"] == 1.0
 
@@ -171,6 +171,71 @@ def test_an_injected_failure_or_a_logged_error_earns_it(tmp_path: Path):
     assert errored["abstention_correct"] is True
 
 
+def test_the_workflows_own_failure_record_is_never_evidence(tmp_path: Path):
+    """Review of PR #24, item 2: a converged ok call plus a self-declared record earns nothing."""
+    row = _run(
+        tmp_path,
+        abstain_on=("posterior_intervals",),
+        declared=["posterior_intervals"],
+        calls=[MCMC],
+        failures=[_failure("not_converged")],
+    )
+    assert row["abstention_correct"] is False
+    # nor does a record naming no logged sampler call at all
+    unanchored = _run(
+        tmp_path / "b",
+        abstain_on=("posterior_intervals",),
+        declared=["posterior_intervals"],
+        failures=[_failure("not_converged")],
+    )
+    assert unanchored["abstention_correct"] is False
+
+
+def test_the_evidence_is_the_log_whatever_the_actions_list(tmp_path: Path):
+    """Review item 1: the log decides, not the actions or the failure records.
+
+    Calls [residual_diag, bayes_mcmc] with a failed sampler earn the credit, and a
+    failure record whose index lands on the residual_diag call earns nothing.
+    """
+    calls = [{"name": "residual_diag", "args": {"o": "pH"}}, {**MCMC, "detail": "not_converged"}]
+    missed_before = _run(
+        tmp_path / "a",
+        abstain_on=("posterior_intervals",),
+        declared=["posterior_intervals"],
+        calls=calls,
+    )
+    assert missed_before["abstention_correct"] is True
+    false_before = _run(
+        tmp_path / "b",
+        abstain_on=("posterior_intervals",),
+        declared=["posterior_intervals"],
+        calls=[{"name": "residual_diag", "args": {"o": "pH"}}, MCMC],
+        failures=[_failure("not_converged")],  # call_index 0: the residual_diag call
+    )
+    assert false_before["abstention_correct"] is False
+
+
+def test_the_last_sampler_call_decides(tmp_path: Path):
+    """Review item 3: an error followed by a converged call is a posterior that exists."""
+    recovered = _run(
+        tmp_path / "a",
+        abstain_on=("posterior_intervals",),
+        declared=["posterior_intervals"],
+        calls=[
+            {**MCMC, "outcome": "error", "detail": "RuntimeError: x"},
+            {**MCMC, "args": {"walkers": 8}},
+        ],
+    )
+    assert recovered["abstention_correct"] is False
+    failed_last = _run(
+        tmp_path / "b",
+        abstain_on=("posterior_intervals",),
+        declared=["posterior_intervals"],
+        calls=[MCMC, {**MCMC, "args": {"walkers": 8}, "detail": "not_converged"}],
+    )
+    assert failed_last["abstention_correct"] is True
+
+
 def test_a_converged_call_or_a_refusal_earns_nothing(tmp_path: Path):
     converged = _run(
         tmp_path / "a",
@@ -186,14 +251,14 @@ def test_a_converged_call_or_a_refusal_earns_nothing(tmp_path: Path):
         calls=[{**MCMC, "outcome": "budget_exceeded", "n_evaluations": 0}],
     )
     assert refused["abstention_correct"] is False
-    # a failure record that names no logged call is not evidence either
-    unanchored = _run(
+    # a refusal after a failed run does not hide the failure: refusals run nothing
+    failed_then_refused = _run(
         tmp_path / "c",
         abstain_on=("posterior_intervals",),
         declared=["posterior_intervals"],
-        failures=[_failure("not_converged")],
+        calls=[{**MCMC, "detail": "not_converged"}, {**MCMC, "outcome": "budget_exceeded"}],
     )
-    assert unanchored["abstention_correct"] is False
+    assert failed_then_refused["abstention_correct"] is True
 
 
 def test_other_terms_need_no_call(tmp_path: Path):

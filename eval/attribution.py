@@ -32,8 +32,7 @@ from typing import Any
 
 from eval.config import AttributionConfig, EarnedAbstention
 from eval.records import RunRecords
-from eval.trail import resolve_action, resolve_call_index
-from state.task_state import TaskState
+from eval.trail import resolve_call_index
 from tools.config import FittedModelConfig
 
 __all__ = ["prior_interval", "score_attribution"]
@@ -51,27 +50,25 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return float(len(a & b) / len(union)) if union else 1.0
 
 
-def _earned(rule: EarnedAbstention, state: TaskState, records: RunRecords) -> bool:
-    """Whether the run's logs show a call of ``rule.tool`` that failed (ruling D2)."""
-    truth_by_seq = {c.seq: c for c in records.truth_calls}
-    for index, action in enumerate(state.actions):
-        if action.name != rule.tool:
-            continue
-        line = resolve_action(action, records.visible_calls)
-        if line is None:
-            continue
-        truth_line = truth_by_seq.get(line.seq)
-        outcomes = {line.outcome}
-        if truth_line is not None and truth_line.name == rule.tool:
-            outcomes.add(truth_line.outcome)
-        if outcomes & set(rule.failed_outcomes):
-            return True
-        if any(
-            f.name == rule.tool and f.kind in rule.failure_kinds and f.call_index == index
-            for f in state.tool_failures
-        ):
-            return True
-    return False
+def _earned(rule: EarnedAbstention, records: RunRecords) -> bool:
+    """Whether the logs show the last call of ``rule.tool`` that ran failed (ruling D2)."""
+    ran = [
+        line
+        for line in records.visible_calls
+        if line.name == rule.tool and line.outcome != "budget_exceeded"
+    ]
+    if not ran:
+        return False
+    last = ran[-1]
+    lines = [last]
+    truth = next(
+        (c for c in records.truth_calls if c.seq == last.seq and c.name == rule.tool), None
+    )
+    if truth is not None:
+        lines.append(truth)
+    return any(
+        line.outcome in rule.failed_outcomes or line.detail in rule.failed_details for line in lines
+    )
 
 
 def score_attribution(
@@ -153,7 +150,7 @@ def score_attribution(
     credited = {
         q
         for q in declared
-        if q not in cfg.earned_abstentions or _earned(cfg.earned_abstentions[q], state, records)
+        if q not in cfg.earned_abstentions or _earned(cfg.earned_abstentions[q], records)
     }
     if wanted:
         hits = sum(1 for q in wanted if q in credited)
