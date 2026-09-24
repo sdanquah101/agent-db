@@ -408,7 +408,43 @@ def score(root: Path, variants: list[str]) -> None:
     print(f"{len(rows)} ladder rows -> {dest.relative_to(REPO)}")
 
 
-_TIMING_FIELDS = ("guards_tripped", "fallbacks", "steps_skipped")
+_WALL_CLOCK_MARKERS = ("at the measured rate", "refused for time")
+
+
+def _wall_clock_steps(plan: dict[str, Any]) -> set[str]:
+    """The steps a wall-clock guard refused: ``"<step>: bound N at the measured rate"``.
+
+    Only these are time-dependent in the §5.2 sense (amendment §10). A fallback such as
+    "N evaluations do not fit" can be the budget's doing, which is the lever R1 pulls, so
+    it is not counted here.
+    """
+    entries = list(plan.get("guards_tripped") or []) + list(plan.get("fallbacks") or [])
+    return {
+        str(e).split(":", 1)[0].strip()
+        for e in entries
+        if any(marker in str(e) for marker in _WALL_CLOCK_MARKERS)
+    }
+
+
+def time_dependent_path(
+    baseline_plan: dict[str, Any] | None, plan: dict[str, Any] | None, budget_x: float
+) -> tuple[bool, str]:
+    """§5.2 as amended in §10: (flag, reason).
+
+    - a missing state is flagged (the conservative reading §9.2 promises);
+    - a rung that changes the budget (R1) changes the wall-clock allowance by design, so
+      its guard differences are the rung's effect, not timing noise, and are not flagged;
+    - otherwise, the flag is set when the set of steps a wall-clock guard refused differs
+      from the baseline run's.
+    """
+    if baseline_plan is None or plan is None:
+        return True, "a state is missing: flagged"
+    if float(budget_x) != 1.0:
+        return False, "the rung changes the wall-clock allowance itself (R1)"
+    a, b = _wall_clock_steps(baseline_plan), _wall_clock_steps(plan)
+    if a == b:
+        return False, ""
+    return True, f"wall-clock guards differ: baseline {sorted(a)}, here {sorted(b)}"
 
 
 def _row_measures(
@@ -421,10 +457,12 @@ def _row_measures(
 ) -> dict[str, Any]:
     """The pre-registered per-row measures (§5), computed before any verdict is read.
 
-    ``moved_exact``: attribution_exact False at baseline, True here. ``time_dependent_path``:
-    the plan's timing-gated fields (guards, fallbacks, skipped steps) differ from the
-    baseline run's (§5.2). For R3, the forced parameters' mechanical check and recovery
-    against the last-segment truth, parsed from the evaluator's ``recovery_detail``.
+    ``moved_exact``: attribution_exact False at baseline, True here.
+    ``time_dependent_path``: :func:`time_dependent_path` (§5.2 as amended in §10). For R3,
+    the forced parameters' mechanical check and recovery against the last-segment truth,
+    parsed from the evaluator's ``recovery_detail``: ``moved_recovery`` requires every
+    forced parameter to be within 25 % of its truth OR inside a reported interval that
+    covers it, the operational form of §5.1 (declared in §10).
     """
     out: dict[str, Any] = {
         "moved_exact": base.get("attribution_exact") == "False"
@@ -432,12 +470,13 @@ def _row_measures(
     }
     mine = runs / row["run_id"] / "workflows" / "p0" / "state.json"
     theirs = BASE_RUNS / base_id / "workflows" / "p0" / "state.json"
-    if mine.is_file() and theirs.is_file():
-        a = json.loads(theirs.read_text())["plan"]
-        b = json.loads(mine.read_text())["plan"]
-        out["time_dependent_path"] = any(a.get(k) != b.get(k) for k in _TIMING_FIELDS)
-    else:
-        out["time_dependent_path"] = None
+    flag, reason = time_dependent_path(
+        json.loads(theirs.read_text())["plan"] if theirs.is_file() else None,
+        json.loads(mine.read_text())["plan"] if mine.is_file() else None,
+        rec["budget_x"],
+    )
+    out["time_dependent_path"] = flag
+    out["time_dependent_reason"] = reason
     if VARIANTS[variant].get("force"):
         forced = FORCED[rec["cell"][0]]
         state = json.loads(mine.read_text()) if mine.is_file() else {}
@@ -470,9 +509,9 @@ def verdict(
 ) -> dict[str, Any]:
     """The per-rung verdicts of §5, computed from the ladder table and nothing else.
 
-    A move on a row marked ``time_dependent_path`` is reported but not counted (§5.2, as
-    amended in §9): the pre-registration counts a move only if it does not depend on a
-    time-dependent path, and the driver cannot tell that it does not.
+    A move on a row whose ``time_dependent_path`` is True, or missing, is reported but not
+    counted (§5.2 as amended in §9 and §10). A rung with cells still to run reads
+    "incomplete".
     """
     if rows is None:
         rows = json.loads((REPO / "reports" / "p0_positive_control.json").read_text())
@@ -484,8 +523,9 @@ def verdict(
         return [by_cell[k] for k in keys if k in by_cell]
 
     def moves(rs: list[dict[str, Any]], key: str = "moved_exact") -> tuple[int, int]:
-        counted = sum(1 for r in rs if r.get(key) and not r.get("time_dependent_path"))
-        timing = sum(1 for r in rs if r.get(key) and r.get("time_dependent_path"))
+        # a missing flag (None) counts as flagged: the conservative reading of §9.2
+        counted = sum(1 for r in rs if r.get(key) and r.get("time_dependent_path") is False)
+        timing = sum(1 for r in rs if r.get(key) and r.get("time_dependent_path") is not False)
         return counted, timing
 
     out: dict[str, Any] = {"method": "docs/positive_control.md §5 and §9", "rungs": {}}
@@ -502,17 +542,23 @@ def verdict(
     r10 = cells("r1x10", VARIANTS["r1x10"]["cells"])
     if r10:
         m, t = moves(r10)
-        out["rungs"]["R1x10"] = {"moves": m, "timing_moves_not_counted": t, "cells_run": len(r10)}
+        out["rungs"]["R1x10"] = {
+            "moves": m, "timing_moves_not_counted": t, "cells_run": len(r10),
+            "complete": len(r10) == len(VARIANTS["r1x10"]["cells"]),
+        }  # fmt: skip
     r2, r2c = cells("r2", R2_CELLS), cells("r2", R2_CONTROLS)
     if r2 or r2c:
         (m, t), (mc, tc) = moves(r2), moves(r2c)
+        # "fail" first: §5.1's "confounded" is control moves "as well" as S3-02 moves
         v = (
-            "confounded" if mc >= 2 else "pass" if m >= 2 and mc <= 1 else "fail" if m == 0
+            "fail" if m == 0 else "confounded" if mc >= 2 else "pass" if m >= 2
             else "inconclusive"
         )  # fmt: skip
+        complete = len(r2) == len(R2_CELLS) and len(r2c) == len(R2_CONTROLS)
         out["rungs"]["R2"] = {
             "s3_02_moves": m, "control_moves": mc, "timing_moves_not_counted": t + tc,
-            "cells_run": [len(r2), len(r2c)], "verdict": v,
+            "cells_run": [len(r2), len(r2c)],
+            "verdict": v if complete else f"incomplete ({v} so far)",
         }  # fmt: skip
     r3 = cells("r3", PARAMETER_CELLS)
     if r3:
@@ -522,9 +568,11 @@ def verdict(
         either = sum(
             1 for r in r3
             if (r.get("moved_exact") or r.get("moved_recovery"))
-            and not r.get("time_dependent_path")
+            and r.get("time_dependent_path") is False
         )  # fmt: skip
-        if mechanical < len(PARAMETER_CELLS):
+        if len(r3) < len(PARAMETER_CELLS):
+            v = f"incomplete ({len(r3)} of {len(PARAMETER_CELLS)} cells run)"
+        elif mechanical < len(PARAMETER_CELLS):
             v = f"not run: forced parameters fitted on {mechanical} of {len(PARAMETER_CELLS)}"
         else:
             v = "pass" if either >= 3 else "fail" if either <= 1 else "inconclusive"

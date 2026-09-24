@@ -297,3 +297,43 @@ the forced list can be checked from the repository.
   other 2 (S0-01 B/B, S2-01 B/B) it passes only through §5.2's time-dependent-path
   allowance. In the baseline the MCMC step was refused for time; in the re-run it was
   called, and did not converge.
+
+---
+
+## 10. Amendment, 2026-09-24 ~20:40 UTC (re-review of PR #23)
+
+This follows the coordinator's re-review of a42cce7. It is committed **before any R1, R2
+or R3 row is scored**. §1–§9 are not edited.
+
+### 10.1 The time-dependent flag is wall-clock only
+
+§9.2 set `time_dependent_path` whenever the plan's guards, fallbacks or skipped steps
+differed from the baseline run's. But the plan's fit check covers the evaluation budget
+too, so budget refusals ("N evaluations do not fit") land in `fallbacks`. R1 changes the
+budget by design (§5.1's own prediction says a larger allowance removes fallbacks), and
+R3 enlarges the Fisher and MCMC designs. With §9.2's strict counting, R1 and R3 could
+then almost never pass, for a reason the pre-registration never intended. §5.2 exempts
+**wall-clock** paths only.
+
+The flag is now:
+- **True** when the set of steps a *wall-clock* guard refused (`"<step>: bound N at the
+  measured rate"`, or "refused for time") differs from the baseline run's, on a row run at
+  the baseline budget.
+- **False** on a rung that changes the budget (R1). There the wall-clock allowance is the
+  rung's own lever, so its guard differences are the rung's effect, not timing noise.
+- **True** (flagged) when either state is missing. This is the conservative reading §9.2
+  promises; such a move is shown and not counted.
+
+A budget-driven fallback alone never sets the flag. `tests/test_positive_control.py`
+checks every case above.
+
+### 10.2 The verdict code
+
+- **R2** is judged "fail" when no S3-02 cell moves, before "confounded" is considered.
+  §5.1's "confounded" is control moves *as well as* S3-02 moves.
+- A rung with cells still to run reads **"incomplete"**, with the verdict so far, rather
+  than "not run".
+- **R3's recovery move** (`moved_recovery`) requires every forced parameter to be within
+  25 % of its last-segment truth **or** inside a reported interval that covers it. This
+  is the operational form of §5.1's wording ("estimated within 25 % of its last-segment
+  truth, or inside a reported interval that covers it"), declared here as that form.

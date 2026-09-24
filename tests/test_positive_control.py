@@ -124,25 +124,61 @@ def _row(variant: str, cell: tuple[str, str, str], **kw: object) -> dict:
 
 
 def test_the_verdicts_follow_the_preregistered_thresholds():
-    """§5 in code, decided before any result is read (review of PR #23, item 2)."""
+    """§5 in code, decided before any result is read (reviews of PR #23)."""
     from scripts.positive_control import PARAMETER_CELLS, R2_CELLS, R2_CONTROLS, verdict
 
-    ok = {"forced_in_approved": True, "forced_fitted": True}
+    ok = {"forced_in_approved": True, "forced_fitted": True, "time_dependent_path": False}
     # R3: three moves pass; a move on a time-dependent path is shown, never counted
     rows = [_row("r3", c, **ok, moved_exact=i < 3) for i, c in enumerate(PARAMETER_CELLS)]
     assert verdict(rows, dest=False)["rungs"]["R3"]["verdict"] == "pass"
     rows[0]["time_dependent_path"] = True
     r3 = verdict(rows, dest=False)["rungs"]["R3"]
     assert r3["verdict"] == "inconclusive" and r3["timing_moves_not_counted"] == 1
+    # a missing flag counts as flagged (re-review, MEDIUM)
+    rows[0]["time_dependent_path"] = None
+    assert verdict(rows, dest=False)["rungs"]["R3"]["timing_moves_not_counted"] == 1
     # the mechanical check gates the rung
     rows[5]["forced_fitted"] = False
     assert verdict(rows, dest=False)["rungs"]["R3"]["verdict"].startswith("not run")
-    # R2: moves on the controls confound it
-    r2 = [_row("r2", c, moved_exact=True) for c in R2_CELLS[:2]]
-    r2 += [_row("r2", c, moved_exact=True) for c in R2_CONTROLS[:2]]
-    assert verdict(r2, dest=False)["rungs"]["R2"]["verdict"] == "confounded"
-    assert verdict(r2[:2], dest=False)["rungs"]["R2"]["verdict"] == "pass"
-    assert verdict([_row("r2", R2_CELLS[0])], dest=False)["rungs"]["R2"]["verdict"] == "fail"
+    # a partly run rung is incomplete, not "not run"
+    partial = verdict(rows[:4], dest=False)["rungs"]["R3"]["verdict"]
+    assert partial.startswith("incomplete")
+    # R2: control moves "as well" confound it; no S3-02 move is a fail first (re-review, LOW)
+    flag = {"time_dependent_path": False}
+    s302 = [_row("r2", c, moved_exact=True, **flag) for c in R2_CELLS[:2]]
+    s302 += [_row("r2", c, moved_exact=False, **flag) for c in R2_CELLS[2:]]
+    ctrl_moved = [_row("r2", c, moved_exact=True, **flag) for c in R2_CONTROLS[:2]]
+    ctrl_moved += [_row("r2", c, moved_exact=False, **flag) for c in R2_CONTROLS[2:]]
+    ctrl_still = [_row("r2", c, moved_exact=False, **flag) for c in R2_CONTROLS]
+    assert verdict(s302 + ctrl_moved, dest=False)["rungs"]["R2"]["verdict"] == "confounded"
+    assert verdict(s302 + ctrl_still, dest=False)["rungs"]["R2"]["verdict"] == "pass"
+    none_moved = [dict(r, moved_exact=False) for r in s302]
+    assert verdict(none_moved + ctrl_moved, dest=False)["rungs"]["R2"]["verdict"] == "fail"
+    assert verdict(s302[:1], dest=False)["rungs"]["R2"]["verdict"].startswith("incomplete")
+
+
+def test_the_timing_flag_is_wall_clock_only():
+    """Re-review of PR #23, HIGH: a budget change alone never sets the flag."""
+    from scripts.positive_control import time_dependent_path
+
+    base = {
+        "guards_tripped": ["mcmc: bound 88 at the measured rate"],
+        "fallbacks": ["mcmc: 10 steps do not fit"],
+        "steps_skipped": {"mcmc": "skipped"},
+    }
+    # R1 at 3x: the allowance changed, fallbacks vanish -- the rung's effect, not timing
+    r1 = {"guards_tripped": [], "fallbacks": [], "steps_skipped": {}}
+    assert time_dependent_path(base, r1, 3)[0] is False
+    # at the baseline budget, a budget-driven fallback difference alone is not flagged
+    budget_only = {**base, "fallbacks": ["lsq: 2 starts do not fit"]}
+    assert time_dependent_path(base, budget_only, 1)[0] is False
+    # a wall-clock guard difference is
+    timed = {**base, "guards_tripped": []}
+    flag, reason = time_dependent_path(base, timed, 1)
+    assert flag is True and "mcmc" in reason
+    # a missing state is flagged
+    assert time_dependent_path(None, base, 1)[0] is True
+    assert time_dependent_path(base, None, 3)[0] is True
 
 
 def test_r2_keeps_the_injected_delivery_and_drops_the_background(tmp_path: Path):
@@ -157,7 +193,9 @@ def test_r2_keeps_the_injected_delivery_and_drops_the_background(tmp_path: Path)
     run = generate_run(scenario, "C", plant=load_plant_config("B"), runs_root=tmp_path / "runs")
     injected = _injected_kg(run.paths.truth, "B")
     ((feed, day), kg) = next(iter(injected.items()))
-    assert (kg > 0.0 and day == min(90, int(scenario.duration_days) // 2)) or kg > 0.0
+    # _short moves the day-90 delivery to half the shortened record (day 15)
+    assert len(injected) == 1 and kg > 0.0
+    assert day == min(90, int(scenario.duration_days // 2))
     log_path = run.paths.root / "observations" / "feed_log.csv"
 
     def column(path: Path, name: str) -> np.ndarray:
