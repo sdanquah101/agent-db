@@ -28,6 +28,7 @@ import argparse
 import csv
 import hashlib
 import json
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -261,14 +262,125 @@ def run(variant: str, root: Path, part: str) -> None:
         )
 
 
+def _normalise(state: dict[str, Any]) -> dict[str, Any]:
+    """The same-cell-twice normalisation: no wall clock, no log positions, no call lists."""
+    state = json.loads(json.dumps(state))
+    state["budget"].pop("wall_clock_min", None)
+    state["plan"].pop("guards_tripped", None)
+    for action in state["actions"]:
+        action.pop("seq", None)
+        action.pop("call_index", None)
+    state["budget"].pop("n_calls", None)
+    for item in state["classification"]["evidence"]:
+        item.pop("calls", None)
+    if state.get("validation"):
+        state["validation"].pop("calls", None)
+    return state
+
+
+def compare_hookoff(root: Path) -> dict[str, Any]:
+    """§5.3 (b): each pilot cell's hook-off outputs against the baseline's, bytes first."""
+    runs, truth = _store(root, "hookoff")
+    rows = []
+    for cell in PILOT_CELLS:
+        base = _find(BASE_TRUTH, cell)["run_id"]
+        new = _find(truth, cell)["run_id"]
+        a, b = BASE_RUNS / base / "workflows" / "p0", runs / new / "workflows" / "p0"
+        row: dict[str, Any] = {"cell": list(cell), "baseline_run_id": base, "run_id": new}
+        for name in ("state.json", "summary.json", "report.md"):
+            pa, pb = a / name, b / name
+            row[f"{name}_bytes_equal"] = (
+                pa.is_file() and pb.is_file() and pa.read_bytes() == pb.read_bytes()
+            )
+        sa = json.loads((a / "state.json").read_text())
+        sb = json.loads((b / "state.json").read_text())
+        na, nb = _normalise(sa), _normalise(sb)
+        # the run id is store-specific: compare with it masked
+        text_a = json.dumps(na, sort_keys=True).replace(base, "<run>")
+        text_b = json.dumps(nb, sort_keys=True).replace(new, "<run>")
+        row["normalised_state_equal"] = text_a == text_b
+        if text_a != text_b:
+            da, db = json.loads(text_a), json.loads(text_b)
+            row["differing_keys"] = sorted(k for k in set(da) | set(db) if da.get(k) != db.get(k))
+            row["plan_a"] = {
+                k: sa["plan"].get(k) for k in ("guards_tripped", "fallbacks", "steps_skipped")
+            }
+            row["plan_b"] = {
+                k: sb["plan"].get(k) for k in ("guards_tripped", "fallbacks", "steps_skipped")
+            }
+        rows.append(row)
+    out = {"cells": rows, "all_normalised_equal": all(r["normalised_state_equal"] for r in rows)}
+    (root / "hookoff" / "comparison.json").write_text(json.dumps(out, indent=1) + "\n")
+    print(json.dumps(out, indent=1))
+    return out
+
+
+def score(root: Path, variants: list[str]) -> None:
+    """Score every finished ladder run with the unchanged evaluator; write the ladder tables."""
+    baseline = {
+        r["run_id"]: r for r in csv.DictReader((REPO / "reports" / "p0_sweep_scored.csv").open())
+    }
+    rows: list[dict[str, Any]] = []
+    for variant in variants:
+        runs, truth = _store(root, variant)
+        records = {}
+        path = root / variant / "variants.jsonl"
+        if not path.is_file():
+            continue
+        for line in path.read_text().splitlines():
+            rec = json.loads(line)
+            records[rec["run_id"]] = rec  # the last launch of a run id is the one on disk
+        done = [r for r in records if (runs / r / "workflows" / "p0" / "summary.json").is_file()]
+        if not done:
+            continue
+        out = root / variant / "scored.csv"
+        cmd = [sys.executable, "-m", "eval", "--workflow", "p0", "--runs-root", str(runs)]
+        cmd += ["--truth-store", str(truth), "--out", str(out)]
+        for r in done:
+            cmd += ["--run", r]
+        subprocess.run(cmd, cwd=REPO, check=True, stdout=subprocess.DEVNULL)
+        for row in csv.DictReader(out.open()):
+            rec = records[row["run_id"]]
+            base_id = _find(BASE_TRUTH, tuple(rec["cell"]))["run_id"]
+            base = baseline.get(base_id, {})
+            rows.append(
+                {
+                    "rung": rec["rung"], "variant": variant, "diagnostic": True,
+                    "variant_detail": rec["config"], "variant_sha256": rec["config_sha256"],
+                    "budget_x": rec["budget_x"], "exact_feed": rec["exact_feed"],
+                    "baseline_run_id": base_id,
+                    "baseline_attribution_exact": base.get("attribution_exact"),
+                    "baseline_final_label_set": base.get("final_label_set"),
+                    **row,
+                }
+            )  # fmt: skip
+    if not rows:
+        print("nothing scored yet")
+        return
+    fields = list(dict.fromkeys(k for r in rows for k in r))
+    dest = REPO / "reports" / "p0_positive_control.csv"
+    with dest.open("w", encoding="utf-8", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fields)
+        writer.writeheader()
+        writer.writerows(rows)
+    dest.with_suffix(".json").write_text(json.dumps(rows, indent=1) + "\n")
+    print(f"{len(rows)} ladder rows -> {dest.relative_to(REPO)}")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("action", choices=["generate", "run"])
-    parser.add_argument("--variant", required=True, choices=sorted(VARIANTS))
+    parser.add_argument("action", choices=["generate", "run", "score", "compare-hookoff"])
+    parser.add_argument("--variant", default=None, choices=sorted(VARIANTS))
     parser.add_argument("--store", type=Path, required=True, help="root of the diagnostic stores")
     parser.add_argument("--part", default="0/1", help="i/k: run every k-th cell from the i-th")
     args = parser.parse_args(argv)
-    if args.action == "generate":
+    if args.action == "score":
+        score(args.store, [args.variant] if args.variant else list(VARIANTS))
+    elif args.action == "compare-hookoff":
+        compare_hookoff(args.store)
+    elif args.variant is None:
+        parser.error(f"{args.action} needs --variant")
+    elif args.action == "generate":
         generate(args.variant, args.store)
     else:
         run(args.variant, args.store, args.part)
