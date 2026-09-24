@@ -73,7 +73,7 @@ def test_every_spelling_p0_emits_is_a_vocabulary_term():
         if not (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "append"
+            and node.func.attr in ("append", "extend", "insert")
             and "abstentions" in ast.unparse(node.func.value)
         ) and not (isinstance(node, ast.AugAssign) and "abstentions" in ast.unparse(node.target)):
             continue
@@ -88,9 +88,19 @@ def test_every_spelling_p0_emits_is_a_vocabulary_term():
     assert literals, "found no literal abstentions in the pipeline"
     assert literals <= set(vocabulary), literals - set(vocabulary)
     assert templates == {"{}_claims", "{}_budget"}
-    for template in templates:
-        suffix = template.replace("{}", "")
-        assert any(term.endswith(suffix) for term in vocabulary), template
+    # P0 fills {}_claims with a declared sensor and {}_budget with a fitted output
+    # channel: every one of them must be a term, whichever the run flags
+    from sim.observation import load_observation_config
+    from tools.config import load_fitted_model
+
+    sensors = set(load_observation_config().sensors)
+    channels = set(load_fitted_model().outputs)
+    assert sensors and channels
+    assert {f"{s}_claims" for s in sensors} <= set(vocabulary)
+    assert {f"{c}_budget" for c in channels} <= set(vocabulary)
+    # and the templates range over nothing else
+    assert {t[: -len("_claims")] for t in vocabulary if t.endswith("_claims")} <= sensors
+    assert {t[: -len("_budget")] for t in vocabulary if t.endswith("_budget")} <= channels
 
 
 def test_the_sandbox_carries_the_vocabulary():
@@ -119,11 +129,48 @@ def _tree_hashes(root: Path) -> dict[str, str]:
     }
 
 
-def test_respelling_an_answer_key_moves_nothing_a_workflow_sees(tmp_path, monkeypatch):
-    """Regenerating S2-02 under the old and the new key: same run id, same visible tree.
+def _truth_contents(root: Path) -> dict[str, object]:
+    """Every truth file by content, keyed by its name.
 
+    npz members as arrays (the zip container stamps the time), JSON parsed with the
+    manifest's creation time dropped, the generation log without its clock fields
+    (``t_utc``, ``runtime_s``), anything else as bytes.
+    """
+    import numpy as np
+
+    out: dict[str, object] = {}
+    for p in sorted(root.rglob("*")):
+        if not p.is_file():
+            continue
+        name = str(p.relative_to(root))
+        if p.suffix == ".npz":
+            with np.load(p) as z:
+                for key in sorted(z.files):
+                    arr = np.ascontiguousarray(z[key])
+                    out[f"{name}:{key}"] = (arr.dtype.str, arr.shape, arr.tobytes())
+        elif p.suffix == ".json":
+            doc = json.loads(p.read_text(encoding="utf-8"))
+            if name == "manifest.json":
+                doc.pop("created_utc")
+            out[name] = doc
+        elif p.suffix == ".jsonl":
+            # the truth-side generation log stamps each call's time and runtime
+            lines = [json.loads(line) for line in p.read_text(encoding="utf-8").splitlines()]
+            out[name] = [
+                {k: v for k, v in line.items() if k not in ("t_utc", "runtime_s")} for line in lines
+            ]
+        else:
+            out[name] = p.read_bytes()
+    return out
+
+
+def test_respelling_an_answer_key_moves_nothing_a_workflow_sees(tmp_path, monkeypatch):
+    """Regenerating S2-02 under the old and then the new key, at a fixed commit.
+
+    The run id, the visible tree and the truth are the same.
     Only ``truth_store/<id>/faults.json`` differs, and only in
-    ``correct_conclusion.abstain_on``.
+    ``correct_conclusion.abstain_on``. ``manifest.json`` may differ only in
+    ``created_utc``, and the truth-side ``calls.jsonl`` only in its clock fields.
     """
     from sim.run.harness import generate_run
     from tests.conftest import _short
@@ -147,10 +194,12 @@ def test_respelling_an_answer_key_moves_nothing_a_workflow_sees(tmp_path, monkey
 
     first = generate_run(old, "B", runs_root=runs)
     visible_before = _tree_hashes(first.paths.root)
+    truth_before = _truth_contents(first.paths.truth)
     faults_before = json.loads(first.paths.truth_faults.read_text(encoding="utf-8"))
 
     second = generate_run(new, "B", runs_root=runs)
     visible_after = _tree_hashes(second.paths.root)
+    truth_after = _truth_contents(second.paths.truth)
     faults_after = json.loads(second.paths.truth_faults.read_text(encoding="utf-8"))
 
     assert second.run_id == first.run_id
@@ -162,3 +211,9 @@ def test_respelling_an_answer_key_moves_nothing_a_workflow_sees(tmp_path, monkey
         "abstain_on"
     ]
     assert faults_after == faults_before
+    # every other truth file is the same, content for content
+    assert set(truth_after) == set(truth_before)
+    assert "manifest.json" in truth_before and any(k.endswith(".npz:y") for k in truth_before)
+    for name in truth_before:
+        if name != "faults.json":
+            assert truth_after[name] == truth_before[name], name

@@ -5535,6 +5535,32 @@ unchanged because both tools are already mapped.
 *Alternative:* register a new claim source for P0-derived statistics (rejected: that
 loosens what counts as supported, and the ruling forbids it).
 
+*Which items changed, and which cells A4 re-runs.* A1 changed the calls of seven kinds
+of item:
+1. the second-pass R1b in `step_attribute`, which cited the `residual_diag` call and
+   now cites the prediction as well;
+2. R1b in `classify`;
+3. the charge fold;
+4. R2;
+5. R5 after the fit;
+6. R4;
+7. R3.
+
+Kinds 2–7 used to cite nothing. P0's first-pass R5 items (QC informative missingness,
+citing `data_qc`) and its `R1a` and balance items are unchanged.
+
+The evaluator counts an item unsupported if any call it cites fails to resolve to an ok
+log line. So *adding* a call can move a cell as well as removing one, and A4 re-runs
+every cell that carries any changed item, not only the cells with unsupported claims.
+In the 78 baseline states (read before the re-runs, from their backups):
+- 13 items had no calls, R4 ×8, R3 ×3 and R5 ×2, on exactly the 13 cells with
+  unsupported claims;
+- 2 cells carried the second-pass R1b with a call: S2-01 C/A and S2-01 B/A;
+- no cell fired `classify`'s R1b, the charge fold or R2.
+
+A4 therefore re-runs 15 cells. On every other cell the evidence and every column are
+unchanged by A1.
+
 **A3: where the vocabulary lives and how it is spelled.**
 - *Location.* `configs/abstentions.yaml`, loaded by `state/abstentions.py` (the shared
   task-state package, beside the label vocabulary). The runner writes it into every
@@ -5567,15 +5593,41 @@ loosens what counts as supported, and the ruling forbids it).
   | `structural_adequacy` (S6-04) | `kinetic_attribution` | **distinct** | Declining a kinetic attribution does not decline a claim that the structure is adequate. |
   | `acetate_speciation`, `methanogenic_pathway_split` (S6-01/S6-04/S7-02); `effective_volume`, `residence_time_distribution` (S6-03) | none | no counterpart | P0 has no structural or mixing abstention. |
 
-  *Flagged for the lead, not changed.* `posterior_intervals` is S8-01's whole
-  `abstain_on`, and P0 emits it on 75 of 78 sweep cells, because MCMC never converges
-  on this machine. S8-01 would therefore score correct abstention for a fallback that
-  fires almost everywhere. The spelling was already shared before this ruling, so A3
-  leaves it alone.
-- *Answer keys.* The answer key of the 13 affected runs was rewritten in place, and only
-  the `abstain_on` field changed. Regenerating the cells would give the same bytes, and
-  `tests/test_abstentions.py` proves that on a short S2-02 cell.
-  `reports/p0_abstention_respelling.json` is the hash listing for this store.
+- *Answer keys: what is proven.*
+  - The answer key of the 13 affected runs (S2-02 ×7, S6-02 ×6) was rewritten in place.
+    Only `correct_conclusion.abstain_on` changed, in the harness's own JSON format.
+  - No visible file changed: `reports/p0_abstention_respelling.json` lists the sha256 of
+    the observations, the redacted manifests and every other truth file before and
+    after.
+  - `tests/test_abstentions.py` regenerates a short S2-02 cell under the old key and
+    then the new one, *at a fixed commit*. The test pins `git_sha`, because the visible
+    manifest records the checkout's commit. It shows the same run id and a byte-identical
+    visible tree. Every truth file is identical except `faults.json`
+    (`correct_conclusion.abstain_on`), `manifest.json` (`created_utc`) and the
+    truth-side generation log `calls.jsonl` (the clock fields `t_utc` and
+    `runtime_s`).
+  - A regeneration at a different commit would differ in the recorded `git_sha`, and
+    for that reason the store's cells were not regenerated.
+
+**Flagged for the lead: proposals, none implemented.**
+- (a) *Over-abstention.* The vocabulary is now readable by a workflow. The evaluator
+  scores correct abstention as "every `abstain_on` term appears" and does not penalise
+  extra terms. A workflow that declines all 47 terms would therefore score correct
+  everywhere. The terms that only answer keys use (`effective_volume`,
+  `residence_time_distribution`, `acetate_speciation`, ...) also read like a menu of
+  the scenarios.
+  - Proposal, before P1 is scored: report *abstention precision*, the share of a
+    run's abstentions that are in `abstain_on` (on cells where it is non-empty), and
+    the count of abstentions outside `abstain_on` on every cell.
+  - Optionally, score a run as correct only when that count is below a declared cap.
+- (b) *Subsumption.* `acetoclastic_parameters` (S6-01) and
+  `inhibition_constant_magnitude` (S7-02) are narrower than `parameter_values`, which
+  P0 emits. Should declining all parameter values count as declining those? That would
+  be an evaluator rule, not a spelling, and A3 leaves them distinct.
+- (c) *S8-01.* `posterior_intervals` is S8-01's whole `abstain_on`, and P0 emits it on
+  75 of 78 sweep cells, because MCMC never converges on this machine. S8-01 would score
+  correct abstention for a fallback that fires almost everywhere. The spelling was
+  already shared before this ruling, so A3 leaves it alone.
 *Alternatives:* a Python enum in `state/` (rejected: a new term would then be a code
 change, not a config and decisions change); a vocabulary file in `scenarios/` (rejected:
 a workflow may not read the scenarios).
