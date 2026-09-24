@@ -5419,6 +5419,107 @@ two baselines); extending the sweep to five seeds now (rejected: the lead reserv
 5-replicate matrix for the pre-registered runs).
 
 
+## 2026-09-24 — The lead's rulings after the P0 baseline: the three P0 findings, the reviewer's follow-ups, and the P1 prompt rule
+
+**Ruling** (the lead, 2026-09-24 ~02:00 UTC, on the coordinator's recommendation after
+the Level 0–5 sweep: "Merge and implement your recommendations"). PR #20 is merged, and
+every recommendation below is approved as written. The coordinator relays the code work to
+the evaluation session (`session_01Jv2gArdzzUzfeDp3gSbXFs`), which already runs the
+runner and the evaluator. That session opens three separate draft PRs in this order. The
+coordinator reviews each PR at its head, and each merge waits for the lead's word.
+
+**The three P0 findings** (P0 is frozen; this ruling is the approval rule 5 requires).
+
+1. **Evidence items without a call reference: fix.** P0's residual-derived evidence items
+   (R3, R4 and R5, 13 of the baseline's 273 items) will name the tool call whose output
+   they cite. The fix changes no rule, threshold or verdict. *Reason:* the items are true, but
+   the contract of `docs/eval_design.md` says an item naming no call is unsupported, and
+   P1 is held to that contract. Leaving P0 in breach would make the unsupported-claims
+   column compare a pipeline that cannot comply with one that can. *Alternative
+   rejected:* scoring P0's residual items as supported by rule (it would exempt one
+   workflow from a rule the other must meet).
+2. **The empty objective at Tier A (S2-01): no change; recorded as a P0 limitation.** When
+   the second pass excludes the last channel, P0 keeps the first fit, scores no forecast
+   and flags the alphabetically first offender. *Reason:* P0 does what its script says, the
+   `sensor` label is still exact, and changing the fallback because of this sweep would
+   tune P0 on its own results. *Alternative rejected:* a fallback that refits on the
+   excluded channel (a new rule chosen after seeing the table).
+3. **The `abstain_on` vocabulary: align on the scenario side.** One controlled abstention
+   vocabulary is published where workflows can read it, next to the label vocabulary and
+   never inside an answer key. Every scenario's `abstain_on` is validated against it.
+   Scenario terms that mean the same thing as a term P0 already emits take one spelling.
+   Whether two terms mean the same thing is decided in the vocabulary PR, and the reasoning
+   for each pair is written down before any re-scoring. A term P0 emits on most cells
+   whatever the fault is not accepted as a synonym for a scenario-specific term unless its
+   meaning matches. A scenario term with no P0 counterpart stays in the vocabulary and P0
+   misses it. That miss is part of the baseline. P0 may rename what it emits to the vocabulary's spelling but gains no new
+   abstention logic. Only the answer-key records in the truth store are regenerated, and a
+   test proves that observations, redacted manifests and run ids are byte-identical.
+   *Alternatives rejected:* an evaluator-side synonym table (P1 would be scored against
+   names it cannot see) and extending P0's abstention rules (tuning on the table).
+
+The re-run covers only the cells whose unsupported-claims or abstention columns move. The
+baseline table is committed again with the moved columns named, and every other column is
+checked against `reports/p0_sweep_scored.csv`.
+
+**The reviewer's follow-ups** (the critique the lead forwarded on 2026-09-23), scheduled
+in this order:
+
+1. **A positive-control ladder** (the evaluation session's second PR,
+   `docs/positive_control.md`). P0 is re-run with one thing made easier at a time: three
+   times the budget, an exact feed record (a new variant cell, so the workflow still reads
+   only its observations), and the shifted parameter guaranteed a place in the fitted set.
+   The shifted parameter is truth information, so the experimenter supplies it as a
+   declared, logged configuration variant that is off by default. P0 never reads it from
+   the truth store, and rule 1 holds. Ladder runs are diagnostics: they are never P0
+   entries and never rows of the baseline table. The expectations are written down before
+   any run, and compute is capped at about one sweep. *Reason:* the baseline's misses can be
+   read as the problem being hard only once the same pipeline is shown to succeed when it
+   is made easy. Until then a broken harness is an equally good explanation.
+2. **A distinguishability analysis** (the third PR, evaluator-side only). For each Level
+   0–5 cell, the analysis asks whether the true cause fits the visible channels
+   measurably better than every alternative cause. A cell where it does not gets an
+   admissible label set. Attribution is then also reported against that set, next to the
+   truth-label score and never in place of it. Compute is capped at about one sweep.
+   *Reason:* a cell that no workflow could
+   attribute from the visible record measures the scenario, not the workflow.
+3. **Narrative scope** (this PR). The benchmark card now says what the P0 baseline does
+   and does not show. It is one scripted pipeline of conventional tools, run under these
+   budgets, this simulator and these assumed noise and missingness settings, on one seed.
+   It is not a verdict on conventional calibration practice or on what a modeller with
+   more time would conclude.
+4. **Added to the plan before P1 is scored** (`docs/milestones.md`):
+   - an *assumption-sensitivity subset*, re-running a small set of cells with the ASSUMED
+     missingness and noise values halved and doubled, to test whether the P0 versus P1
+     comparison survives them;
+   - a *real-plant case* from the Muscatine record, judged blind by AD practitioners
+     against the workflows' reports. It is scored by expert judgement, never by the
+     simulator's truth.
+5. **The selection step as a named ablation.** A P0 variant that fits a larger,
+   truth-blind parameter set instead of Morris's top four. It is reported as an ablation
+   and never as P0.
+
+**The P1 prompt rule.** P1's prompts are written from the proposal, the benchmark card,
+the tool registry's documentation and the published vocabularies. A committed prompt must
+not name a scenario, name a P0 rule, state or hint at how often each label occurs in the
+library, or encode what P0 got right or wrong on any cell. Per-cell P0 results are public
+already: the scored tables are per-cell, including `reports/p0_sweep_scored_aggregate.*`
+at one seed, and the milestones and the card name cells. The rule therefore restricts what
+a prompt contains, not what its author reads. It is enforced in three ways:
+
+- a test fails if a committed prompt contains a scenario id (`S<level>-<nn>`) or a P0 rule
+  id (`R1`–`R6`);
+- the prompt author lists in the PR body what they read, and the reviewer checks the
+  prompt for label frequencies and per-cell P0 outcomes;
+- the prompt hash is committed before the held-out variants of §7 are generated.
+
+Prompts are developed only on development cells, and any later change invalidates the
+runs (§6.5, §9.3). *Reason:* the P0 table is the comparison P1 is judged against, so a
+prompt tuned to P0's per-cell misses would score the prompt author rather than the agent.
+*Alternative rejected:* forbidding the author to read any P0 result (unenforceable once
+the tables are public).
+
+
 ## 2026-09-24 — Rulings A1 and A3: how the P0 session implemented them (branch `claude/p0-rulings`)
 
 The coordinator's docs PR records the rulings themselves. This entry covers only the
@@ -5433,6 +5534,32 @@ the numbers rest on. Rules, thresholds and verdicts are unchanged. `claim_source
 unchanged because both tools are already mapped.
 *Alternative:* register a new claim source for P0-derived statistics (rejected: that
 loosens what counts as supported, and the ruling forbids it).
+
+*Which items changed, and which cells A4 re-runs.* A1 changed the calls of seven kinds
+of item:
+1. the second-pass R1b in `step_attribute`, which cited the `residual_diag` call and
+   now cites the prediction as well;
+2. R1b in `classify`;
+3. the charge fold;
+4. R2;
+5. R5 after the fit;
+6. R4;
+7. R3.
+
+Kinds 2–7 used to cite nothing. P0's first-pass R5 items (QC informative missingness,
+citing `data_qc`) and its `R1a` and balance items are unchanged.
+
+The evaluator counts an item unsupported if any call it cites fails to resolve to an ok
+log line. So *adding* a call can move a cell as well as removing one, and A4 re-runs
+every cell that carries any changed item, not only the cells with unsupported claims.
+In the 78 baseline states (read before the re-runs, from their backups):
+- 13 items had no calls, R4 ×8, R3 ×3 and R5 ×2, on exactly the 13 cells with
+  unsupported claims;
+- 2 cells carried the second-pass R1b with a call: S2-01 C/A and S2-01 B/A;
+- no cell fired `classify`'s R1b, the charge fold or R2.
+
+A4 therefore re-runs 15 cells. On every other cell the evidence and every column are
+unchanged by A1.
 
 **A3: where the vocabulary lives and how it is spelled.**
 - *Location.* `configs/abstentions.yaml`, loaded by `state/abstentions.py` (the shared
@@ -5466,18 +5593,84 @@ loosens what counts as supported, and the ruling forbids it).
   | `structural_adequacy` (S6-04) | `kinetic_attribution` | **distinct** | Declining a kinetic attribution does not decline a claim that the structure is adequate. |
   | `acetate_speciation`, `methanogenic_pathway_split` (S6-01/S6-04/S7-02); `effective_volume`, `residence_time_distribution` (S6-03) | none | no counterpart | P0 has no structural or mixing abstention. |
 
-  *Flagged for the lead, not changed.* `posterior_intervals` is S8-01's whole
-  `abstain_on`, and P0 emits it on 75 of 78 sweep cells, because MCMC never converges
-  on this machine. S8-01 would therefore score correct abstention for a fallback that
-  fires almost everywhere. The spelling was already shared before this ruling, so A3
-  leaves it alone.
-- *Answer keys.* The answer key of the 13 affected runs was rewritten in place, and only
-  the `abstain_on` field changed. Regenerating the cells would give the same bytes, and
-  `tests/test_abstentions.py` proves that on a short S2-02 cell.
-  `reports/p0_abstention_respelling.json` is the hash listing for this store.
+- *Answer keys: what is proven.*
+  - The answer key of the 13 affected runs (S2-02 ×7, S6-02 ×6) was rewritten in place.
+    Only `correct_conclusion.abstain_on` changed, in the harness's own JSON format.
+  - No visible file changed: `reports/p0_abstention_respelling.json` lists the sha256 of
+    the observations, the redacted manifests and every other truth file before and
+    after.
+  - `tests/test_abstentions.py` regenerates a short S2-02 cell under the old key and
+    then the new one, *at a fixed commit*. The test pins `git_sha`, because the visible
+    manifest records the checkout's commit. It shows the same run id and a byte-identical
+    visible tree. Every truth file is identical except `faults.json`
+    (`correct_conclusion.abstain_on`), `manifest.json` (`created_utc`) and the
+    truth-side generation log `calls.jsonl` (the clock fields `t_utc` and
+    `runtime_s`).
+  - A regeneration at a different commit would differ in the recorded `git_sha`, and
+    for that reason the store's cells were not regenerated.
+
+**Flagged for the lead: proposals, none implemented.**
+- (a) *Over-abstention.* The vocabulary is now readable by a workflow. The evaluator
+  scores correct abstention as "every `abstain_on` term appears" and does not penalise
+  extra terms. A workflow that declines all 47 terms would therefore score correct
+  everywhere. The terms that only answer keys use (`effective_volume`,
+  `residence_time_distribution`, `acetate_speciation`, ...) also read like a menu of
+  the scenarios.
+  - Proposal, before P1 is scored: report *abstention precision*, the share of a
+    run's abstentions that are in `abstain_on` (on cells where it is non-empty), and
+    the count of abstentions outside `abstain_on` on every cell.
+  - Optionally, score a run as correct only when that count is below a declared cap.
+- (b) *Subsumption.* `acetoclastic_parameters` (S6-01) and
+  `inhibition_constant_magnitude` (S7-02) are narrower than `parameter_values`, which
+  P0 emits. Should declining all parameter values count as declining those? That would
+  be an evaluator rule, not a spelling, and A3 leaves them distinct.
+- (c) *S8-01.* `posterior_intervals` is S8-01's whole `abstain_on`, and P0 emits it on
+  75 of 78 sweep cells, because MCMC never converges on this machine. S8-01 would score
+  correct abstention for a fallback that fires almost everywhere. The spelling was
+  already shared before this ruling, so A3 leaves it alone.
 *Alternatives:* a Python enum in `state/` (rejected: a new term would then be a code
 change, not a config and decisions change); a vocabulary file in `scenarios/` (rejected:
 a workflow may not read the scenarios).
+
+
+## 2026-09-24 — A4: the re-run and re-score of the P0 baseline after rulings A1 and A3
+
+**What was done.**
+- *Re-runs.* The 15 cells whose evidence items A1 changes were re-run at the A1 code:
+  - the 13 cells with unsupported claims;
+  - S2-01 C/A and B/A, which carry the second-pass R1b.
+
+  Three ran at a time, and their old outputs were kept aside.
+- *Re-score.* All 78 cells were re-scored with the respelled answer keys.
+- *Comparison.* Every column of every cell was compared with the committed baseline:
+  - `reports/p0_sweep_a4_moved.md` lists each move;
+  - `reports/p0_sweep_a4_previous_rows.csv` keeps the pre-A1 rows of the 15 re-run
+    cells.
+
+**What moved.**
+- *A1.* `claims_unsupported` goes from 1 to 0, and `unsupported_claim_rate` to 0, on
+  each of the 13 cells. The table's total is 0 of 273 claims, down from 13. S2-01 B/A
+  and C/A stay supported with the added prediction call.
+- *A3.* S2-02's `abstain_on` is respelled on all 7 cells. `abstention_fraction` goes
+  from 0 to 0.5 on the four S2-02 cells where P0 emits `ch4_fraction_claims`: B/B, B/C,
+  C/B and C/C. No cell's `abstention_correct` moves, so correct abstention stays 0 of 7:
+  P0 never declines `ch4_yield`, and S4-02's two terms stay distinct.
+- *Time-dependent paths, both rows kept.* Clock columns (`wall_clock_s`, `log_span_s`,
+  `tool_runtime_s`, `wall_clock_fraction`) differ on every re-run cell. Three cells took
+  a different timing-gated path:
+  - *S2-01 C/A.* The plan's guard now refuses the second LSQ at the measured rate. It
+    used to call it and fail on the empty objective. So there is one invalid action
+    instead of two, one fallback, one guard trip and one fewer call.
+  - *S2-03 A/A.* An extra LSQ guard trip.
+  - *S3-02 A/A.* The MCMC guard no longer trips.
+
+  No label, flag, attribution, drift, recovery or forecast column moved on any cell.
+  Exact attribution stays 17 of 78.
+- *Nothing else.* No column moved on any cell that was neither re-run nor S2-02.
+
+**Note on timing.** The full test suite (twice) and the positive-control hook tests ran
+on the same four-core container during part of the re-runs. The three time-dependent
+differences above are the kind that load produces. They are reported, not tuned away.
 
 
 ## 2026-09-24 — The positive-control ladder: how the rungs are built (`docs/positive_control.md`)

@@ -36,4 +36,4 @@ templates:
     meaning: No claim rests on this sensor's record (it is flagged or quarantined).
   - pattern: "{name}_budget"
     over: channels
-    meaning: No claim on the mass or charge budget of this output channel.
+    meaning: No claim that the fitted model accounts for this output channel (its residual stays structured after the fit), nor on any budget built on it.

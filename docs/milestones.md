@@ -2420,3 +2420,66 @@ abstentions use the scenario vocabulary, the runner fills `tokens_used`. The two
 findings (empty objective at Tier A on S2-01; residual-derived evidence without a
 call) and the `abstain_on` vocabulary gap are the lead's to rule on before P1 is scored
 against P0.
+
+## 2026-09-24 — The plan after the P0 baseline (the coordinator, on the lead's ruling)
+
+The lead merged PR #20 and approved the coordinator's recommendations ("Merge and
+implement your recommendations"). `docs/decisions.md` has the ruling of 2026-09-24. The
+order of work is below, and each step is its own PR. The coordinator reviews every PR at
+its head, and every merge waits for the lead's word.
+
+1. **P0 rulings** (the evaluation session). Residual-derived evidence items name their
+   call. The empty objective at Tier A is recorded as a limitation and not changed. A
+   controlled abstention vocabulary is published, scenario keys are aligned to it, and
+   only the answer-key records are regenerated. The cells whose columns move are re-run.
+2. **Positive-control ladder** (the evaluation session, `docs/positive_control.md`). P0
+   is run at three times the budget, with an exact feed record, and with the shifted
+   parameter in its fitted set (a declared config variant, off by default). Expectations
+   are pre-registered and compute is capped at about one sweep. These runs are
+   diagnostics, never P0 entries.
+3. **Distinguishability analysis** (the evaluation session, evaluator-side). Each cell
+   gets an admissible label set, and attribution is also reported against it. Compute is
+   capped at about one sweep.
+4. **Narrative scope** (the coordinator, this entry's PR). The benchmark card §3, §4.2 and
+   §8 say what the baseline does and does not show.
+5. **Before P1 is scored:** an assumption-sensitivity subset, with the ASSUMED
+   missingness and noise halved and doubled on a small set of cells, and a Muscatine
+   real-plant case judged blind by practitioners. Both are added to the plan here and are
+   not started. Each needs the lead's word.
+6. **The selection step as a named ablation.** P0 fits a larger, truth-blind parameter
+   set, and the result is reported only as an ablation.
+7. **P1** (`launch: p1-single-agent`, the lead's word). Its prompts follow the prompt
+   rule of 2026-09-24. They name no scenario, P0 rule or label frequency and encode no
+   per-cell P0 result, which a test and the reviewer check. They are developed only on
+   development cells, and they are frozen and hashed before the held-out variants are
+   generated.
+
+**Blocked:** nothing. **The next session starts on:** the evaluation session's PR for the
+P0 rulings (step 1).
+
+### Session 2026-09-24 — the lead's rulings A1–A4 on the P0 baseline (`claude/p0-rulings`, draft PR #22)
+
+**Done.**
+- **A1.** Every evidence item P0's rules build cites the prediction simulate and the
+  `residual_diag` call of each channel it names. No rule, threshold or verdict moved.
+- **A2.** The empty Tier-A objective is recorded in `docs/p0_design.md` §7.
+- **A3.** One controlled abstention vocabulary (`configs/abstentions.yaml`, 47 terms):
+  - validated on every scenario;
+  - handed to every sandbox;
+  - two answer-key terms respelled to P0's spelling;
+  - the answer key of 13 runs rewritten in place, with a hash listing and a
+    regeneration test.
+- **A4.** The 15 affected cells were re-run and all 78 re-scored:
+  - unsupported claims 0 of 273, down from 13;
+  - exact attribution still 17 of 78;
+  - correct abstention still 0 of 7;
+  - three time-dependent paths, with both rows kept (`reports/p0_sweep_a4_*`).
+
+**Flagged for the lead** (decisions, 2026-09-24):
+- over-abstention scoring;
+- subsumption under `parameter_values`;
+- S8-01's `posterior_intervals`.
+
+**Next.** PR B (positive-control ladder, pre-registered in
+`docs/positive_control.md`) and PR C (distinguishability).
+
