@@ -1,0 +1,626 @@
+[
+ {
+  "abstain_on_after": [
+   "alkalinity_total_budget",
+   "inorganic_carbon_balance"
+  ],
+  "abstain_on_before": [
+   "alkalinity_budget",
+   "inorganic_carbon_balance"
+  ],
+  "plant": "B",
+  "run_id": "run_b60f7ccb95a8",
+  "scenario_id": "S6-02",
+  "tier": "A",
+  "truth_sha256_after": {
+   "channels.npz": "5f2d169539fa4dde28f5fd9e767b05e2984fbe6f1df5c5f62efe65c552ca90bc",
+   "faults.json": "77f3920739b231d0a772f85dfe62d9e7ea70b20a9765ffb5bb617db727c36641",
+   "fractionation.json": "c92299e995ecad49e04802df35a6c8eb98a1f5d58d542e1c7bff2bbbb749e937",
+   "geometry.json": "0f92c0c4f7af92fbe1c6408716978c2de8a9a0f49a16dc32bb4bf3d3243e71a1",
+   "influent.npz": "9322dd7259ed5a6ee47da18c61d9b362e67cd57b521b06e55bd50ea2cfca6971",
+   "manifest.json": "ba35466a4aa1b6d2230d8a8a5151c26e550e4f1ad347d1cfcb1e268681936228",
+   "parameters.json": "696b0e0baee0b5df1bb15ec4e4c50bf36a986e769dad30b507ddd78a6a3ed5f8",
+   "states.npz": "ba81f3d80f0b10e3aab49e2a09111679df1f0adeb042f50c70423d97418c4535"
+  },
+  "truth_sha256_before": {
+   "channels.npz": "5f2d169539fa4dde28f5fd9e767b05e2984fbe6f1df5c5f62efe65c552ca90bc",
+   "faults.json": "6137a2e8b5bca47a30a82a53a3af376d2fc16f58e2b993a94bd088f2085ffb66",
+   "fractionation.json": "c92299e995ecad49e04802df35a6c8eb98a1f5d58d542e1c7bff2bbbb749e937",
+   "geometry.json": "0f92c0c4f7af92fbe1c6408716978c2de8a9a0f49a16dc32bb4bf3d3243e71a1",
+   "influent.npz": "9322dd7259ed5a6ee47da18c61d9b362e67cd57b521b06e55bd50ea2cfca6971",
+   "manifest.json": "ba35466a4aa1b6d2230d8a8a5151c26e550e4f1ad347d1cfcb1e268681936228",
+   "parameters.json": "696b0e0baee0b5df1bb15ec4e4c50bf36a986e769dad30b507ddd78a6a3ed5f8",
+   "states.npz": "ba81f3d80f0b10e3aab49e2a09111679df1f0adeb042f50c70423d97418c4535"
+  },
+  "visible_sha256_after": {
+   "manifest.json": "5ae71c73a5c832e448c17a3bd9802c2eca735fd7a2769aad7a622bf0eb5438c4",
+   "observations/feed_assays.csv": "6b454714496c281958cbed47b21f6a93ad0797f5a2346a278f1070bc8e35fbed",
+   "observations/feed_log.csv": "f3fac7ac96eb6fd053b133254523a71bc14843f6599a30b14342f60e76311455",
+   "observations/operator_notes.json": "c799d4081ee5ec813d52d38f26ad356439978460376e9c62eb2ce00256b031ac",
+   "observations/sensors.json": "9852a1ab0dc361d407df44921004b9c22ae6c1754bc0867b941adbd86d796016"
+  },
+  "visible_sha256_before": {
+   "manifest.json": "5ae71c73a5c832e448c17a3bd9802c2eca735fd7a2769aad7a622bf0eb5438c4",
+   "observations/feed_assays.csv": "6b454714496c281958cbed47b21f6a93ad0797f5a2346a278f1070bc8e35fbed",
+   "observations/feed_log.csv": "f3fac7ac96eb6fd053b133254523a71bc14843f6599a30b14342f60e76311455",
+   "observations/operator_notes.json": "c799d4081ee5ec813d52d38f26ad356439978460376e9c62eb2ce00256b031ac",
+   "observations/sensors.json": "9852a1ab0dc361d407df44921004b9c22ae6c1754bc0867b941adbd86d796016"
+  }
+ },
+ {
+  "abstain_on_after": [
+   "alkalinity_total_budget",
+   "inorganic_carbon_balance"
+  ],
+  "abstain_on_before": [
+   "alkalinity_budget",
+   "inorganic_carbon_balance"
+  ],
+  "plant": "B",
+  "run_id": "run_c4c5a3f6adf1",
+  "scenario_id": "S6-02",
+  "tier": "B",
+  "truth_sha256_after": {
+   "channels.npz": "5f2d169539fa4dde28f5fd9e767b05e2984fbe6f1df5c5f62efe65c552ca90bc",
+   "faults.json": "77f3920739b231d0a772f85dfe62d9e7ea70b20a9765ffb5bb617db727c36641",
+   "fractionation.json": "c92299e995ecad49e04802df35a6c8eb98a1f5d58d542e1c7bff2bbbb749e937",
+   "geometry.json": "0f92c0c4f7af92fbe1c6408716978c2de8a9a0f49a16dc32bb4bf3d3243e71a1",
+   "influent.npz": "9322dd7259ed5a6ee47da18c61d9b362e67cd57b521b06e55bd50ea2cfca6971",
+   "manifest.json": "66185226b0e106b7d27cc1631a7a320f5598f5aa1c9483ce44a6591d76e9f295",
+   "parameters.json": "696b0e0baee0b5df1bb15ec4e4c50bf36a986e769dad30b507ddd78a6a3ed5f8",
+   "states.npz": "ba81f3d80f0b10e3aab49e2a09111679df1f0adeb042f50c70423d97418c4535"
+  },
+  "truth_sha256_before": {
+   "channels.npz": "5f2d169539fa4dde28f5fd9e767b05e2984fbe6f1df5c5f62efe65c552ca90bc",
+   "faults.json": "6137a2e8b5bca47a30a82a53a3af376d2fc16f58e2b993a94bd088f2085ffb66",
+   "fractionation.json": "c92299e995ecad49e04802df35a6c8eb98a1f5d58d542e1c7bff2bbbb749e937",
+   "geometry.json": "0f92c0c4f7af92fbe1c6408716978c2de8a9a0f49a16dc32bb4bf3d3243e71a1",
+   "influent.npz": "9322dd7259ed5a6ee47da18c61d9b362e67cd57b521b06e55bd50ea2cfca6971",
+   "manifest.json": "66185226b0e106b7d27cc1631a7a320f5598f5aa1c9483ce44a6591d76e9f295",
+   "parameters.json": "696b0e0baee0b5df1bb15ec4e4c50bf36a986e769dad30b507ddd78a6a3ed5f8",
+   "states.npz": "ba81f3d80f0b10e3aab49e2a09111679df1f0adeb042f50c70423d97418c4535"
+  },
+  "visible_sha256_after": {
+   "manifest.json": "ea54cee0ff5fea1d33e48c6bd83f870a0a637a79a0d7d11dde3e177def3b8928",
+   "observations/feed_assays.csv": "5b6a9612a42b25ed6fa1b22b7bfdd46c6431022daa6d954e60609a4fecbfdf68",
+   "observations/feed_log.csv": "f3fac7ac96eb6fd053b133254523a71bc14843f6599a30b14342f60e76311455",
+   "observations/operator_notes.json": "c799d4081ee5ec813d52d38f26ad356439978460376e9c62eb2ce00256b031ac",
+   "observations/sensors.json": "aa12d0b22b3e9d32d00577fce4a785e4919e3cb1e145d1ee9f434bbb89e978dd"
+  },
+  "visible_sha256_before": {
+   "manifest.json": "ea54cee0ff5fea1d33e48c6bd83f870a0a637a79a0d7d11dde3e177def3b8928",
+   "observations/feed_assays.csv": "5b6a9612a42b25ed6fa1b22b7bfdd46c6431022daa6d954e60609a4fecbfdf68",
+   "observations/feed_log.csv": "f3fac7ac96eb6fd053b133254523a71bc14843f6599a30b14342f60e76311455",
+   "observations/operator_notes.json": "c799d4081ee5ec813d52d38f26ad356439978460376e9c62eb2ce00256b031ac",
+   "observations/sensors.json": "aa12d0b22b3e9d32d00577fce4a785e4919e3cb1e145d1ee9f434bbb89e978dd"
+  }
+ },
+ {
+  "abstain_on_after": [
+   "alkalinity_total_budget",
+   "inorganic_carbon_balance"
+  ],
+  "abstain_on_before": [
+   "alkalinity_budget",
+   "inorganic_carbon_balance"
+  ],
+  "plant": "B",
+  "run_id": "run_80155bccc219",
+  "scenario_id": "S6-02",
+  "tier": "C",
+  "truth_sha256_after": {
+   "channels.npz": "5f2d169539fa4dde28f5fd9e767b05e2984fbe6f1df5c5f62efe65c552ca90bc",
+   "faults.json": "77f3920739b231d0a772f85dfe62d9e7ea70b20a9765ffb5bb617db727c36641",
+   "fractionation.json": "c92299e995ecad49e04802df35a6c8eb98a1f5d58d542e1c7bff2bbbb749e937",
+   "geometry.json": "0f92c0c4f7af92fbe1c6408716978c2de8a9a0f49a16dc32bb4bf3d3243e71a1",
+   "influent.npz": "9322dd7259ed5a6ee47da18c61d9b362e67cd57b521b06e55bd50ea2cfca6971",
+   "manifest.json": "930a9b9ca1be1e8a9168534fcb3dc44f45d0dfa226ea33690349a846e1d8de39",
+   "parameters.json": "696b0e0baee0b5df1bb15ec4e4c50bf36a986e769dad30b507ddd78a6a3ed5f8",
+   "states.npz": "ba81f3d80f0b10e3aab49e2a09111679df1f0adeb042f50c70423d97418c4535"
+  },
+  "truth_sha256_before": {
+   "channels.npz": "5f2d169539fa4dde28f5fd9e767b05e2984fbe6f1df5c5f62efe65c552ca90bc",
+   "faults.json": "6137a2e8b5bca47a30a82a53a3af376d2fc16f58e2b993a94bd088f2085ffb66",
+   "fractionation.json": "c92299e995ecad49e04802df35a6c8eb98a1f5d58d542e1c7bff2bbbb749e937",
+   "geometry.json": "0f92c0c4f7af92fbe1c6408716978c2de8a9a0f49a16dc32bb4bf3d3243e71a1",
+   "influent.npz": "9322dd7259ed5a6ee47da18c61d9b362e67cd57b521b06e55bd50ea2cfca6971",
+   "manifest.json": "930a9b9ca1be1e8a9168534fcb3dc44f45d0dfa226ea33690349a846e1d8de39",
+   "parameters.json": "696b0e0baee0b5df1bb15ec4e4c50bf36a986e769dad30b507ddd78a6a3ed5f8",
+   "states.npz": "ba81f3d80f0b10e3aab49e2a09111679df1f0adeb042f50c70423d97418c4535"
+  },
+  "visible_sha256_after": {
+   "manifest.json": "01c6c4f3503400b05d5b2127cf85b3e5bddb58048bdd93d8393d391a333ee11c",
+   "observations/feed_assays.csv": "44662537288fcecf5b7beecb4e751838608baca67690e36d10ce68986a97655d",
+   "observations/feed_log.csv": "f3fac7ac96eb6fd053b133254523a71bc14843f6599a30b14342f60e76311455",
+   "observations/operator_notes.json": "c799d4081ee5ec813d52d38f26ad356439978460376e9c62eb2ce00256b031ac",
+   "observations/sensors.json": "7599bb27e91a2b66e7a5bbeaa634a5b5c6da04cf31ec15158427d6670db4b2e6"
+  },
+  "visible_sha256_before": {
+   "manifest.json": "01c6c4f3503400b05d5b2127cf85b3e5bddb58048bdd93d8393d391a333ee11c",
+   "observations/feed_assays.csv": "44662537288fcecf5b7beecb4e751838608baca67690e36d10ce68986a97655d",
+   "observations/feed_log.csv": "f3fac7ac96eb6fd053b133254523a71bc14843f6599a30b14342f60e76311455",
+   "observations/operator_notes.json": "c799d4081ee5ec813d52d38f26ad356439978460376e9c62eb2ce00256b031ac",
+   "observations/sensors.json": "7599bb27e91a2b66e7a5bbeaa634a5b5c6da04cf31ec15158427d6670db4b2e6"
+  }
+ },
+ {
+  "abstain_on_after": [
+   "alkalinity_total_budget",
+   "inorganic_carbon_balance"
+  ],
+  "abstain_on_before": [
+   "alkalinity_budget",
+   "inorganic_carbon_balance"
+  ],
+  "plant": "C",
+  "run_id": "run_2653a0758913",
+  "scenario_id": "S6-02",
+  "tier": "A",
+  "truth_sha256_after": {
+   "channels.npz": "c7775d4e1d2ad3d8613d397ac00e5b42dee9e4d163e504efdcc191b56c7a01a5",
+   "faults.json": "7fafe6b9db2b3ad01d3d165c3d55ee04c4f800457149504692935d1d42f6e5c6",
+   "fractionation.json": "757a8e3ad2319db879ec115401b209d21b745bfa9929b50f78f7495c58fd6941",
+   "geometry.json": "c5ad15eae3a9fd80cd297220b93897c4f6db320c5d9fe0a66a01a129cc51226d",
+   "influent.npz": "19f4256ed189ac1d399089941830d8d8c894c06ec27cb8ffb5260633c8b97894",
+   "manifest.json": "a9e0d31269688c3bce5a15c160f22265abbcdfd4f606738020af827949aa1fd0",
+   "parameters.json": "c18bb3f54d15de8ac11526e48064eb1427004bb99a70a540a85dae0b9c7dbe01",
+   "states.npz": "fe9817122f612778274f379d7bc4a29fa4c937c7a54fe180e675a5b200959973"
+  },
+  "truth_sha256_before": {
+   "channels.npz": "c7775d4e1d2ad3d8613d397ac00e5b42dee9e4d163e504efdcc191b56c7a01a5",
+   "faults.json": "2945c897ae7f302dc8e941de3f0b2fa177f602a86d8d59c80151a684417becdf",
+   "fractionation.json": "757a8e3ad2319db879ec115401b209d21b745bfa9929b50f78f7495c58fd6941",
+   "geometry.json": "c5ad15eae3a9fd80cd297220b93897c4f6db320c5d9fe0a66a01a129cc51226d",
+   "influent.npz": "19f4256ed189ac1d399089941830d8d8c894c06ec27cb8ffb5260633c8b97894",
+   "manifest.json": "a9e0d31269688c3bce5a15c160f22265abbcdfd4f606738020af827949aa1fd0",
+   "parameters.json": "c18bb3f54d15de8ac11526e48064eb1427004bb99a70a540a85dae0b9c7dbe01",
+   "states.npz": "fe9817122f612778274f379d7bc4a29fa4c937c7a54fe180e675a5b200959973"
+  },
+  "visible_sha256_after": {
+   "manifest.json": "b4ee89cef1b00e5eed02ddaa2d4198ce4cf5dae0ab1fd7eb55cdca9fc6b10707",
+   "observations/feed_assays.csv": "9b3a393d7b4f1afab4400b97b0e00ab61e50de8f449ba5f69d4684f44c1288fc",
+   "observations/feed_log.csv": "358cdc98887065ba6e5a43d4d984ec15dc561986f73d3bf38b1468b3a39eabdd",
+   "observations/operator_notes.json": "88f7357b106f943417751b7880a7c631fd0566a5a1c107d71cba984c54393645",
+   "observations/sensors.json": "18ad462603ccd320ac73ee3c860474fc147966fe6d154123f17b2500eca613c0"
+  },
+  "visible_sha256_before": {
+   "manifest.json": "b4ee89cef1b00e5eed02ddaa2d4198ce4cf5dae0ab1fd7eb55cdca9fc6b10707",
+   "observations/feed_assays.csv": "9b3a393d7b4f1afab4400b97b0e00ab61e50de8f449ba5f69d4684f44c1288fc",
+   "observations/feed_log.csv": "358cdc98887065ba6e5a43d4d984ec15dc561986f73d3bf38b1468b3a39eabdd",
+   "observations/operator_notes.json": "88f7357b106f943417751b7880a7c631fd0566a5a1c107d71cba984c54393645",
+   "observations/sensors.json": "18ad462603ccd320ac73ee3c860474fc147966fe6d154123f17b2500eca613c0"
+  }
+ },
+ {
+  "abstain_on_after": [
+   "alkalinity_total_budget",
+   "inorganic_carbon_balance"
+  ],
+  "abstain_on_before": [
+   "alkalinity_budget",
+   "inorganic_carbon_balance"
+  ],
+  "plant": "C",
+  "run_id": "run_3efefe1426b5",
+  "scenario_id": "S6-02",
+  "tier": "B",
+  "truth_sha256_after": {
+   "channels.npz": "c7775d4e1d2ad3d8613d397ac00e5b42dee9e4d163e504efdcc191b56c7a01a5",
+   "faults.json": "7fafe6b9db2b3ad01d3d165c3d55ee04c4f800457149504692935d1d42f6e5c6",
+   "fractionation.json": "757a8e3ad2319db879ec115401b209d21b745bfa9929b50f78f7495c58fd6941",
+   "geometry.json": "c5ad15eae3a9fd80cd297220b93897c4f6db320c5d9fe0a66a01a129cc51226d",
+   "influent.npz": "19f4256ed189ac1d399089941830d8d8c894c06ec27cb8ffb5260633c8b97894",
+   "manifest.json": "8a513226e96660ae38b144df92a63effb597ccf088feab8fd833d9096c639f2f",
+   "parameters.json": "c18bb3f54d15de8ac11526e48064eb1427004bb99a70a540a85dae0b9c7dbe01",
+   "states.npz": "fe9817122f612778274f379d7bc4a29fa4c937c7a54fe180e675a5b200959973"
+  },
+  "truth_sha256_before": {
+   "channels.npz": "c7775d4e1d2ad3d8613d397ac00e5b42dee9e4d163e504efdcc191b56c7a01a5",
+   "faults.json": "2945c897ae7f302dc8e941de3f0b2fa177f602a86d8d59c80151a684417becdf",
+   "fractionation.json": "757a8e3ad2319db879ec115401b209d21b745bfa9929b50f78f7495c58fd6941",
+   "geometry.json": "c5ad15eae3a9fd80cd297220b93897c4f6db320c5d9fe0a66a01a129cc51226d",
+   "influent.npz": "19f4256ed189ac1d399089941830d8d8c894c06ec27cb8ffb5260633c8b97894",
+   "manifest.json": "8a513226e96660ae38b144df92a63effb597ccf088feab8fd833d9096c639f2f",
+   "parameters.json": "c18bb3f54d15de8ac11526e48064eb1427004bb99a70a540a85dae0b9c7dbe01",
+   "states.npz": "fe9817122f612778274f379d7bc4a29fa4c937c7a54fe180e675a5b200959973"
+  },
+  "visible_sha256_after": {
+   "manifest.json": "f6cae6cbbd85b6cd2e54b0990ae0ff32db6cc1ca83cff4ee8ad592798c03abcd",
+   "observations/feed_assays.csv": "18d4fc7ee7e7b0b4463eb27da0866163177c24e5a5b56364c61f4bda838938ed",
+   "observations/feed_log.csv": "358cdc98887065ba6e5a43d4d984ec15dc561986f73d3bf38b1468b3a39eabdd",
+   "observations/operator_notes.json": "88f7357b106f943417751b7880a7c631fd0566a5a1c107d71cba984c54393645",
+   "observations/sensors.json": "2d3bd96da18890922b22c98fee0e7ca02c40d88e719b290a96ec24889a9740c2"
+  },
+  "visible_sha256_before": {
+   "manifest.json": "f6cae6cbbd85b6cd2e54b0990ae0ff32db6cc1ca83cff4ee8ad592798c03abcd",
+   "observations/feed_assays.csv": "18d4fc7ee7e7b0b4463eb27da0866163177c24e5a5b56364c61f4bda838938ed",
+   "observations/feed_log.csv": "358cdc98887065ba6e5a43d4d984ec15dc561986f73d3bf38b1468b3a39eabdd",
+   "observations/operator_notes.json": "88f7357b106f943417751b7880a7c631fd0566a5a1c107d71cba984c54393645",
+   "observations/sensors.json": "2d3bd96da18890922b22c98fee0e7ca02c40d88e719b290a96ec24889a9740c2"
+  }
+ },
+ {
+  "abstain_on_after": [
+   "alkalinity_total_budget",
+   "inorganic_carbon_balance"
+  ],
+  "abstain_on_before": [
+   "alkalinity_budget",
+   "inorganic_carbon_balance"
+  ],
+  "plant": "C",
+  "run_id": "run_9392defca472",
+  "scenario_id": "S6-02",
+  "tier": "C",
+  "truth_sha256_after": {
+   "channels.npz": "c7775d4e1d2ad3d8613d397ac00e5b42dee9e4d163e504efdcc191b56c7a01a5",
+   "faults.json": "7fafe6b9db2b3ad01d3d165c3d55ee04c4f800457149504692935d1d42f6e5c6",
+   "fractionation.json": "757a8e3ad2319db879ec115401b209d21b745bfa9929b50f78f7495c58fd6941",
+   "geometry.json": "c5ad15eae3a9fd80cd297220b93897c4f6db320c5d9fe0a66a01a129cc51226d",
+   "influent.npz": "19f4256ed189ac1d399089941830d8d8c894c06ec27cb8ffb5260633c8b97894",
+   "manifest.json": "82c2cb251504e5a7272ba05bdc58cc5ea9f74db3f89c81669b1b415b27c12244",
+   "parameters.json": "c18bb3f54d15de8ac11526e48064eb1427004bb99a70a540a85dae0b9c7dbe01",
+   "states.npz": "fe9817122f612778274f379d7bc4a29fa4c937c7a54fe180e675a5b200959973"
+  },
+  "truth_sha256_before": {
+   "channels.npz": "c7775d4e1d2ad3d8613d397ac00e5b42dee9e4d163e504efdcc191b56c7a01a5",
+   "faults.json": "2945c897ae7f302dc8e941de3f0b2fa177f602a86d8d59c80151a684417becdf",
+   "fractionation.json": "757a8e3ad2319db879ec115401b209d21b745bfa9929b50f78f7495c58fd6941",
+   "geometry.json": "c5ad15eae3a9fd80cd297220b93897c4f6db320c5d9fe0a66a01a129cc51226d",
+   "influent.npz": "19f4256ed189ac1d399089941830d8d8c894c06ec27cb8ffb5260633c8b97894",
+   "manifest.json": "82c2cb251504e5a7272ba05bdc58cc5ea9f74db3f89c81669b1b415b27c12244",
+   "parameters.json": "c18bb3f54d15de8ac11526e48064eb1427004bb99a70a540a85dae0b9c7dbe01",
+   "states.npz": "fe9817122f612778274f379d7bc4a29fa4c937c7a54fe180e675a5b200959973"
+  },
+  "visible_sha256_after": {
+   "manifest.json": "267e3fb9092a147bed200f8e5246bd599782e2a31029b4fd7855327c2de113c8",
+   "observations/feed_assays.csv": "86c9469346143630e9ee43b6d20960302753c7f1fda26070d9c1f84b4e0e8c5e",
+   "observations/feed_log.csv": "358cdc98887065ba6e5a43d4d984ec15dc561986f73d3bf38b1468b3a39eabdd",
+   "observations/operator_notes.json": "88f7357b106f943417751b7880a7c631fd0566a5a1c107d71cba984c54393645",
+   "observations/sensors.json": "d90a2ed40f1d598a34948afec6c9bf840802a7eab71a0cfbe97d47e348ee20e5"
+  },
+  "visible_sha256_before": {
+   "manifest.json": "267e3fb9092a147bed200f8e5246bd599782e2a31029b4fd7855327c2de113c8",
+   "observations/feed_assays.csv": "86c9469346143630e9ee43b6d20960302753c7f1fda26070d9c1f84b4e0e8c5e",
+   "observations/feed_log.csv": "358cdc98887065ba6e5a43d4d984ec15dc561986f73d3bf38b1468b3a39eabdd",
+   "observations/operator_notes.json": "88f7357b106f943417751b7880a7c631fd0566a5a1c107d71cba984c54393645",
+   "observations/sensors.json": "d90a2ed40f1d598a34948afec6c9bf840802a7eab71a0cfbe97d47e348ee20e5"
+  }
+ },
+ {
+  "abstain_on_after": [
+   "ch4_fraction_claims",
+   "ch4_yield"
+  ],
+  "abstain_on_before": [
+   "ch4_fraction",
+   "ch4_yield"
+  ],
+  "plant": "C",
+  "run_id": "run_9ff9c9911042",
+  "scenario_id": "S2-02",
+  "tier": "A",
+  "truth_sha256_after": {
+   "channels.npz": "1729f24efba8460fb7eb46786b83f56a3d467785a76df2f53c72439df585a145",
+   "faults.json": "de3512bc9b4d287144981b882667c351e0401216cab4b7e0af6b8e98ced2010f",
+   "fractionation.json": "8880089029c1aafdca4db95b1dc0f31858c33f29d512fc2fa099e231c676f471",
+   "geometry.json": "5cd8f24b7bf9c9b2fff51863974c7f4c7ccd7574cda7d8553ce90054b4cd6221",
+   "influent.npz": "f74a15d8fc1ea6ff072d47c8b88c2547ff9a6b114952d66ff14753973eee235e",
+   "manifest.json": "1344c866dc2f7db5f423b1db0ff4d9c805810a77746ecc3188d2f2d2a0793deb",
+   "parameters.json": "18acf54267f32406e35c1d2039d8ea105b35b790a08a8a91a39b375a1d96e965",
+   "states.npz": "6db8da6b14c3e37a7f35d174821e9b008eef9bd0d9ec02f813264f1ff28586ca"
+  },
+  "truth_sha256_before": {
+   "channels.npz": "1729f24efba8460fb7eb46786b83f56a3d467785a76df2f53c72439df585a145",
+   "faults.json": "e9440ced79f9bfaa9ac2d16fc2aadfc9bf91c239c1abf90ea58bb04e93376c88",
+   "fractionation.json": "8880089029c1aafdca4db95b1dc0f31858c33f29d512fc2fa099e231c676f471",
+   "geometry.json": "5cd8f24b7bf9c9b2fff51863974c7f4c7ccd7574cda7d8553ce90054b4cd6221",
+   "influent.npz": "f74a15d8fc1ea6ff072d47c8b88c2547ff9a6b114952d66ff14753973eee235e",
+   "manifest.json": "1344c866dc2f7db5f423b1db0ff4d9c805810a77746ecc3188d2f2d2a0793deb",
+   "parameters.json": "18acf54267f32406e35c1d2039d8ea105b35b790a08a8a91a39b375a1d96e965",
+   "states.npz": "6db8da6b14c3e37a7f35d174821e9b008eef9bd0d9ec02f813264f1ff28586ca"
+  },
+  "visible_sha256_after": {
+   "manifest.json": "6ba008a84c3bfac9f661cc8e795448a8f2383aecd7af593c25677505e2192337",
+   "observations/feed_assays.csv": "2bca2904766d19eb415fab45a970378d5b7bd66c8948b23b964fe02eb39aa6ad",
+   "observations/feed_log.csv": "2c6a6ad28325a570dda8ecf6c89c34d5c60f75697bcd63352a03fdea05e56d97",
+   "observations/operator_notes.json": "07f02d3a1fc21590f25690e24d3d5017ef55da0cb8a92799407c459d87637535",
+   "observations/sensors.json": "031ba84ac6bef1b539393267b1636fde4ca140e29a063192d346dfe260506e43"
+  },
+  "visible_sha256_before": {
+   "manifest.json": "6ba008a84c3bfac9f661cc8e795448a8f2383aecd7af593c25677505e2192337",
+   "observations/feed_assays.csv": "2bca2904766d19eb415fab45a970378d5b7bd66c8948b23b964fe02eb39aa6ad",
+   "observations/feed_log.csv": "2c6a6ad28325a570dda8ecf6c89c34d5c60f75697bcd63352a03fdea05e56d97",
+   "observations/operator_notes.json": "07f02d3a1fc21590f25690e24d3d5017ef55da0cb8a92799407c459d87637535",
+   "observations/sensors.json": "031ba84ac6bef1b539393267b1636fde4ca140e29a063192d346dfe260506e43"
+  }
+ },
+ {
+  "abstain_on_after": [
+   "ch4_fraction_claims",
+   "ch4_yield"
+  ],
+  "abstain_on_before": [
+   "ch4_fraction",
+   "ch4_yield"
+  ],
+  "plant": "C",
+  "run_id": "run_08251241ddb6",
+  "scenario_id": "S2-02",
+  "tier": "B",
+  "truth_sha256_after": {
+   "channels.npz": "1729f24efba8460fb7eb46786b83f56a3d467785a76df2f53c72439df585a145",
+   "faults.json": "de3512bc9b4d287144981b882667c351e0401216cab4b7e0af6b8e98ced2010f",
+   "fractionation.json": "8880089029c1aafdca4db95b1dc0f31858c33f29d512fc2fa099e231c676f471",
+   "geometry.json": "5cd8f24b7bf9c9b2fff51863974c7f4c7ccd7574cda7d8553ce90054b4cd6221",
+   "influent.npz": "f74a15d8fc1ea6ff072d47c8b88c2547ff9a6b114952d66ff14753973eee235e",
+   "manifest.json": "b41fc716ad087d4d3130101bdd867f20eeb982c3d3d6aa64fbf111ade8f81523",
+   "parameters.json": "18acf54267f32406e35c1d2039d8ea105b35b790a08a8a91a39b375a1d96e965",
+   "states.npz": "6db8da6b14c3e37a7f35d174821e9b008eef9bd0d9ec02f813264f1ff28586ca"
+  },
+  "truth_sha256_before": {
+   "channels.npz": "1729f24efba8460fb7eb46786b83f56a3d467785a76df2f53c72439df585a145",
+   "faults.json": "e9440ced79f9bfaa9ac2d16fc2aadfc9bf91c239c1abf90ea58bb04e93376c88",
+   "fractionation.json": "8880089029c1aafdca4db95b1dc0f31858c33f29d512fc2fa099e231c676f471",
+   "geometry.json": "5cd8f24b7bf9c9b2fff51863974c7f4c7ccd7574cda7d8553ce90054b4cd6221",
+   "influent.npz": "f74a15d8fc1ea6ff072d47c8b88c2547ff9a6b114952d66ff14753973eee235e",
+   "manifest.json": "b41fc716ad087d4d3130101bdd867f20eeb982c3d3d6aa64fbf111ade8f81523",
+   "parameters.json": "18acf54267f32406e35c1d2039d8ea105b35b790a08a8a91a39b375a1d96e965",
+   "states.npz": "6db8da6b14c3e37a7f35d174821e9b008eef9bd0d9ec02f813264f1ff28586ca"
+  },
+  "visible_sha256_after": {
+   "manifest.json": "012ace27cb9b94f90e0d6087111e78a278f4aa5101302876551e5b51793d1c3c",
+   "observations/feed_assays.csv": "5a26e6b50bf4bde6bb5ed139f37bc386cf3e9d42901f2f95b7df2d8b7d7593de",
+   "observations/feed_log.csv": "2c6a6ad28325a570dda8ecf6c89c34d5c60f75697bcd63352a03fdea05e56d97",
+   "observations/operator_notes.json": "07f02d3a1fc21590f25690e24d3d5017ef55da0cb8a92799407c459d87637535",
+   "observations/sensors.json": "55876edbddea6cf53009f0f6b8af2765dd9faa175f78d7db74a0aac516418c18"
+  },
+  "visible_sha256_before": {
+   "manifest.json": "012ace27cb9b94f90e0d6087111e78a278f4aa5101302876551e5b51793d1c3c",
+   "observations/feed_assays.csv": "5a26e6b50bf4bde6bb5ed139f37bc386cf3e9d42901f2f95b7df2d8b7d7593de",
+   "observations/feed_log.csv": "2c6a6ad28325a570dda8ecf6c89c34d5c60f75697bcd63352a03fdea05e56d97",
+   "observations/operator_notes.json": "07f02d3a1fc21590f25690e24d3d5017ef55da0cb8a92799407c459d87637535",
+   "observations/sensors.json": "55876edbddea6cf53009f0f6b8af2765dd9faa175f78d7db74a0aac516418c18"
+  }
+ },
+ {
+  "abstain_on_after": [
+   "ch4_fraction_claims",
+   "ch4_yield"
+  ],
+  "abstain_on_before": [
+   "ch4_fraction",
+   "ch4_yield"
+  ],
+  "plant": "C",
+  "run_id": "run_f36d06ef1eb6",
+  "scenario_id": "S2-02",
+  "tier": "C",
+  "truth_sha256_after": {
+   "channels.npz": "1729f24efba8460fb7eb46786b83f56a3d467785a76df2f53c72439df585a145",
+   "faults.json": "de3512bc9b4d287144981b882667c351e0401216cab4b7e0af6b8e98ced2010f",
+   "fractionation.json": "8880089029c1aafdca4db95b1dc0f31858c33f29d512fc2fa099e231c676f471",
+   "geometry.json": "5cd8f24b7bf9c9b2fff51863974c7f4c7ccd7574cda7d8553ce90054b4cd6221",
+   "influent.npz": "f74a15d8fc1ea6ff072d47c8b88c2547ff9a6b114952d66ff14753973eee235e",
+   "manifest.json": "fa89923a8664f6a00cfa14709c5172faf55aeb149358f3ae1a290fa2597e74c2",
+   "parameters.json": "18acf54267f32406e35c1d2039d8ea105b35b790a08a8a91a39b375a1d96e965",
+   "states.npz": "6db8da6b14c3e37a7f35d174821e9b008eef9bd0d9ec02f813264f1ff28586ca"
+  },
+  "truth_sha256_before": {
+   "channels.npz": "1729f24efba8460fb7eb46786b83f56a3d467785a76df2f53c72439df585a145",
+   "faults.json": "e9440ced79f9bfaa9ac2d16fc2aadfc9bf91c239c1abf90ea58bb04e93376c88",
+   "fractionation.json": "8880089029c1aafdca4db95b1dc0f31858c33f29d512fc2fa099e231c676f471",
+   "geometry.json": "5cd8f24b7bf9c9b2fff51863974c7f4c7ccd7574cda7d8553ce90054b4cd6221",
+   "influent.npz": "f74a15d8fc1ea6ff072d47c8b88c2547ff9a6b114952d66ff14753973eee235e",
+   "manifest.json": "fa89923a8664f6a00cfa14709c5172faf55aeb149358f3ae1a290fa2597e74c2",
+   "parameters.json": "18acf54267f32406e35c1d2039d8ea105b35b790a08a8a91a39b375a1d96e965",
+   "states.npz": "6db8da6b14c3e37a7f35d174821e9b008eef9bd0d9ec02f813264f1ff28586ca"
+  },
+  "visible_sha256_after": {
+   "manifest.json": "a4ce88625ace3aafce456bc82d1f1716c748ad32f19d3141b561c505ac483cd9",
+   "observations/feed_assays.csv": "9591be25550459ec1d4ab0c4aacdf1b1b329e335a65e1fb6024577ee0ddc0730",
+   "observations/feed_log.csv": "2c6a6ad28325a570dda8ecf6c89c34d5c60f75697bcd63352a03fdea05e56d97",
+   "observations/operator_notes.json": "07f02d3a1fc21590f25690e24d3d5017ef55da0cb8a92799407c459d87637535",
+   "observations/sensors.json": "b1cfed20ee2457a8f0a7bbb9a55d23d7459be9dcf79518763c2018ddee50f4b3"
+  },
+  "visible_sha256_before": {
+   "manifest.json": "a4ce88625ace3aafce456bc82d1f1716c748ad32f19d3141b561c505ac483cd9",
+   "observations/feed_assays.csv": "9591be25550459ec1d4ab0c4aacdf1b1b329e335a65e1fb6024577ee0ddc0730",
+   "observations/feed_log.csv": "2c6a6ad28325a570dda8ecf6c89c34d5c60f75697bcd63352a03fdea05e56d97",
+   "observations/operator_notes.json": "07f02d3a1fc21590f25690e24d3d5017ef55da0cb8a92799407c459d87637535",
+   "observations/sensors.json": "b1cfed20ee2457a8f0a7bbb9a55d23d7459be9dcf79518763c2018ddee50f4b3"
+  }
+ },
+ {
+  "abstain_on_after": [
+   "ch4_fraction_claims",
+   "ch4_yield"
+  ],
+  "abstain_on_before": [
+   "ch4_fraction",
+   "ch4_yield"
+  ],
+  "plant": "A",
+  "run_id": "run_553fbc700da3",
+  "scenario_id": "S2-02",
+  "tier": "A",
+  "truth_sha256_after": {
+   "channels.npz": "458317177b37d9f2922882166e5a2b15f8edb86e563b67dfa263992d0b4d773a",
+   "faults.json": "7bd176c7d2ec139ad05cf5ef06b786f09f9e4d1e9d519e54a9c207bf89c415d1",
+   "fractionation.json": "80390fb3f0202861fedbafc2fce31f7f8e17b4bd3d9d6ab9df2699b1366d8df1",
+   "geometry.json": "29400ef39100e766c990e200168c9d01c1d60949a67d111bf8af525b30214ccd",
+   "influent.npz": "e7aee5c4dd30428f760c18cb37433b4a6d187a3a208bb2b35bd9cc71676a5d2f",
+   "manifest.json": "4d6e1cfda23aecffcb8131f6bf2569838bf6d8d25783ed1fd955ddf1b95586cd",
+   "parameters.json": "3dfbcc25dd9f4ad62307781efb4a109d49f867e4a09f1447e01e03a2970c4c5a",
+   "states.npz": "080b3c86c08a99d7f90f35e3fa7bef7cb9de54909cac562e5600771a946b5328"
+  },
+  "truth_sha256_before": {
+   "channels.npz": "458317177b37d9f2922882166e5a2b15f8edb86e563b67dfa263992d0b4d773a",
+   "faults.json": "277d14fc75c2bfef2cb30a7cee1659e5862d20085b9923f4329c0dbfc86c1df7",
+   "fractionation.json": "80390fb3f0202861fedbafc2fce31f7f8e17b4bd3d9d6ab9df2699b1366d8df1",
+   "geometry.json": "29400ef39100e766c990e200168c9d01c1d60949a67d111bf8af525b30214ccd",
+   "influent.npz": "e7aee5c4dd30428f760c18cb37433b4a6d187a3a208bb2b35bd9cc71676a5d2f",
+   "manifest.json": "4d6e1cfda23aecffcb8131f6bf2569838bf6d8d25783ed1fd955ddf1b95586cd",
+   "parameters.json": "3dfbcc25dd9f4ad62307781efb4a109d49f867e4a09f1447e01e03a2970c4c5a",
+   "states.npz": "080b3c86c08a99d7f90f35e3fa7bef7cb9de54909cac562e5600771a946b5328"
+  },
+  "visible_sha256_after": {
+   "manifest.json": "fce04e16d45fab75a77e1d84d5d9305c91d943be5964e84f6ae164aaf24a254c",
+   "observations/feed_assays.csv": "e2960d20c393ed87f4d6941aca481e1af81d3aeac1278390a7023f3ce009cfcc",
+   "observations/feed_log.csv": "db226bd7a8e83682c7823a8dbbd5cb3fd78d86a90b04ed4060a88c4de0647546",
+   "observations/operator_notes.json": "fbdb304f780163a849bd1f3b4a381d872e9fb68f2399baace20ab170868457b8",
+   "observations/sensors.json": "e834f1c1af120174095f57cb30031d08d532d0dbd8f768adffa88a19120aab66"
+  },
+  "visible_sha256_before": {
+   "manifest.json": "fce04e16d45fab75a77e1d84d5d9305c91d943be5964e84f6ae164aaf24a254c",
+   "observations/feed_assays.csv": "e2960d20c393ed87f4d6941aca481e1af81d3aeac1278390a7023f3ce009cfcc",
+   "observations/feed_log.csv": "db226bd7a8e83682c7823a8dbbd5cb3fd78d86a90b04ed4060a88c4de0647546",
+   "observations/operator_notes.json": "fbdb304f780163a849bd1f3b4a381d872e9fb68f2399baace20ab170868457b8",
+   "observations/sensors.json": "e834f1c1af120174095f57cb30031d08d532d0dbd8f768adffa88a19120aab66"
+  }
+ },
+ {
+  "abstain_on_after": [
+   "ch4_fraction_claims",
+   "ch4_yield"
+  ],
+  "abstain_on_before": [
+   "ch4_fraction",
+   "ch4_yield"
+  ],
+  "plant": "B",
+  "run_id": "run_80b0b4229d7e",
+  "scenario_id": "S2-02",
+  "tier": "A",
+  "truth_sha256_after": {
+   "channels.npz": "23edf88c8007ec712466a464977eb6ca9c696a55093f97320ca09687f4bd9109",
+   "faults.json": "29f4da2faba97345c8028c64fdda16a8d25300a43b19a2f3bbca408d73466aaf",
+   "fractionation.json": "82c7eaeb576c021cdfeb047d393e0a01a7e72020871266096c457c6d054fba08",
+   "geometry.json": "d108b047b025e596e20dd38afba9ac6e52778c604cba31e4987fbccec27afce6",
+   "influent.npz": "a188846949c0d565c66db12a0331c03cb9799f60cd35650f3ab914b95bfb3745",
+   "manifest.json": "d34e2952159a82d07d0492b4e0356b1472e7ae8ab9ff9ac789c5cfeb2ebc3da9",
+   "parameters.json": "632f41999e2f6313f0f86d8689f73074b415ada5161115eec9780d0353833303",
+   "states.npz": "3727d8ce68793e0ac0113d7fe59475f4a38816ca2f5e258f9433350047ebe8f0"
+  },
+  "truth_sha256_before": {
+   "channels.npz": "23edf88c8007ec712466a464977eb6ca9c696a55093f97320ca09687f4bd9109",
+   "faults.json": "a67cfdca96713b57396dbeae247b29b227d0cb3a674dd130deba6a0468d8cfc6",
+   "fractionation.json": "82c7eaeb576c021cdfeb047d393e0a01a7e72020871266096c457c6d054fba08",
+   "geometry.json": "d108b047b025e596e20dd38afba9ac6e52778c604cba31e4987fbccec27afce6",
+   "influent.npz": "a188846949c0d565c66db12a0331c03cb9799f60cd35650f3ab914b95bfb3745",
+   "manifest.json": "d34e2952159a82d07d0492b4e0356b1472e7ae8ab9ff9ac789c5cfeb2ebc3da9",
+   "parameters.json": "632f41999e2f6313f0f86d8689f73074b415ada5161115eec9780d0353833303",
+   "states.npz": "3727d8ce68793e0ac0113d7fe59475f4a38816ca2f5e258f9433350047ebe8f0"
+  },
+  "visible_sha256_after": {
+   "manifest.json": "31a910a8ce08aae812243daf4963b6044bcedf32466eaa3f1370617b08c426cd",
+   "observations/feed_assays.csv": "170100e10df9c8e7ef8ffb5ddfc5824683bcf9f27fb6707b960b72658df0cad9",
+   "observations/feed_log.csv": "20360025d4e4d786d55b3bdbfc661215edfebdf691cdb48e0ffbd690bbb9fbb6",
+   "observations/operator_notes.json": "3edab503af5d9c1b698b381ff3f74820c11cf39c10d85204632fb568b2740459",
+   "observations/sensors.json": "f766dd072c5edc50e689b51f3d3ba84505ca9856758bcf87c563eef5d698bc82"
+  },
+  "visible_sha256_before": {
+   "manifest.json": "31a910a8ce08aae812243daf4963b6044bcedf32466eaa3f1370617b08c426cd",
+   "observations/feed_assays.csv": "170100e10df9c8e7ef8ffb5ddfc5824683bcf9f27fb6707b960b72658df0cad9",
+   "observations/feed_log.csv": "20360025d4e4d786d55b3bdbfc661215edfebdf691cdb48e0ffbd690bbb9fbb6",
+   "observations/operator_notes.json": "3edab503af5d9c1b698b381ff3f74820c11cf39c10d85204632fb568b2740459",
+   "observations/sensors.json": "f766dd072c5edc50e689b51f3d3ba84505ca9856758bcf87c563eef5d698bc82"
+  }
+ },
+ {
+  "abstain_on_after": [
+   "ch4_fraction_claims",
+   "ch4_yield"
+  ],
+  "abstain_on_before": [
+   "ch4_fraction",
+   "ch4_yield"
+  ],
+  "plant": "B",
+  "run_id": "run_ac39a733023d",
+  "scenario_id": "S2-02",
+  "tier": "B",
+  "truth_sha256_after": {
+   "channels.npz": "23edf88c8007ec712466a464977eb6ca9c696a55093f97320ca09687f4bd9109",
+   "faults.json": "29f4da2faba97345c8028c64fdda16a8d25300a43b19a2f3bbca408d73466aaf",
+   "fractionation.json": "82c7eaeb576c021cdfeb047d393e0a01a7e72020871266096c457c6d054fba08",
+   "geometry.json": "d108b047b025e596e20dd38afba9ac6e52778c604cba31e4987fbccec27afce6",
+   "influent.npz": "a188846949c0d565c66db12a0331c03cb9799f60cd35650f3ab914b95bfb3745",
+   "manifest.json": "9e63ee03714512d44b2c348f8fc6fce5efce4500bc5a7afe71dc802ca76cd0e2",
+   "parameters.json": "632f41999e2f6313f0f86d8689f73074b415ada5161115eec9780d0353833303",
+   "states.npz": "3727d8ce68793e0ac0113d7fe59475f4a38816ca2f5e258f9433350047ebe8f0"
+  },
+  "truth_sha256_before": {
+   "channels.npz": "23edf88c8007ec712466a464977eb6ca9c696a55093f97320ca09687f4bd9109",
+   "faults.json": "a67cfdca96713b57396dbeae247b29b227d0cb3a674dd130deba6a0468d8cfc6",
+   "fractionation.json": "82c7eaeb576c021cdfeb047d393e0a01a7e72020871266096c457c6d054fba08",
+   "geometry.json": "d108b047b025e596e20dd38afba9ac6e52778c604cba31e4987fbccec27afce6",
+   "influent.npz": "a188846949c0d565c66db12a0331c03cb9799f60cd35650f3ab914b95bfb3745",
+   "manifest.json": "9e63ee03714512d44b2c348f8fc6fce5efce4500bc5a7afe71dc802ca76cd0e2",
+   "parameters.json": "632f41999e2f6313f0f86d8689f73074b415ada5161115eec9780d0353833303",
+   "states.npz": "3727d8ce68793e0ac0113d7fe59475f4a38816ca2f5e258f9433350047ebe8f0"
+  },
+  "visible_sha256_after": {
+   "manifest.json": "0326fc786a0fcfcae5e42e3f82a6fc25d4b16ff62220ed7c6628980e861d0a96",
+   "observations/feed_assays.csv": "3c0d1454022c3e83ce3ca6d53f3e3ba77ef6b3e990704d09b064342ebb1ec84f",
+   "observations/feed_log.csv": "20360025d4e4d786d55b3bdbfc661215edfebdf691cdb48e0ffbd690bbb9fbb6",
+   "observations/operator_notes.json": "3edab503af5d9c1b698b381ff3f74820c11cf39c10d85204632fb568b2740459",
+   "observations/sensors.json": "7973c65291b7ee63267c4ee50d3131d73f557beba4910d040acfac05940a132a"
+  },
+  "visible_sha256_before": {
+   "manifest.json": "0326fc786a0fcfcae5e42e3f82a6fc25d4b16ff62220ed7c6628980e861d0a96",
+   "observations/feed_assays.csv": "3c0d1454022c3e83ce3ca6d53f3e3ba77ef6b3e990704d09b064342ebb1ec84f",
+   "observations/feed_log.csv": "20360025d4e4d786d55b3bdbfc661215edfebdf691cdb48e0ffbd690bbb9fbb6",
+   "observations/operator_notes.json": "3edab503af5d9c1b698b381ff3f74820c11cf39c10d85204632fb568b2740459",
+   "observations/sensors.json": "7973c65291b7ee63267c4ee50d3131d73f557beba4910d040acfac05940a132a"
+  }
+ },
+ {
+  "abstain_on_after": [
+   "ch4_fraction_claims",
+   "ch4_yield"
+  ],
+  "abstain_on_before": [
+   "ch4_fraction",
+   "ch4_yield"
+  ],
+  "plant": "B",
+  "run_id": "run_2a4d6d390b15",
+  "scenario_id": "S2-02",
+  "tier": "C",
+  "truth_sha256_after": {
+   "channels.npz": "23edf88c8007ec712466a464977eb6ca9c696a55093f97320ca09687f4bd9109",
+   "faults.json": "29f4da2faba97345c8028c64fdda16a8d25300a43b19a2f3bbca408d73466aaf",
+   "fractionation.json": "82c7eaeb576c021cdfeb047d393e0a01a7e72020871266096c457c6d054fba08",
+   "geometry.json": "d108b047b025e596e20dd38afba9ac6e52778c604cba31e4987fbccec27afce6",
+   "influent.npz": "a188846949c0d565c66db12a0331c03cb9799f60cd35650f3ab914b95bfb3745",
+   "manifest.json": "c5fd2ec1a39dd5d80bb36ebaf3230c57915d8fcb3df216a0dc8b049395a5f48f",
+   "parameters.json": "632f41999e2f6313f0f86d8689f73074b415ada5161115eec9780d0353833303",
+   "states.npz": "3727d8ce68793e0ac0113d7fe59475f4a38816ca2f5e258f9433350047ebe8f0"
+  },
+  "truth_sha256_before": {
+   "channels.npz": "23edf88c8007ec712466a464977eb6ca9c696a55093f97320ca09687f4bd9109",
+   "faults.json": "a67cfdca96713b57396dbeae247b29b227d0cb3a674dd130deba6a0468d8cfc6",
+   "fractionation.json": "82c7eaeb576c021cdfeb047d393e0a01a7e72020871266096c457c6d054fba08",
+   "geometry.json": "d108b047b025e596e20dd38afba9ac6e52778c604cba31e4987fbccec27afce6",
+   "influent.npz": "a188846949c0d565c66db12a0331c03cb9799f60cd35650f3ab914b95bfb3745",
+   "manifest.json": "c5fd2ec1a39dd5d80bb36ebaf3230c57915d8fcb3df216a0dc8b049395a5f48f",
+   "parameters.json": "632f41999e2f6313f0f86d8689f73074b415ada5161115eec9780d0353833303",
+   "states.npz": "3727d8ce68793e0ac0113d7fe59475f4a38816ca2f5e258f9433350047ebe8f0"
+  },
+  "visible_sha256_after": {
+   "manifest.json": "3ff30a0ecc51e6139c3164e98d07eda1df5874eafbf582021aa378e57b59ae89",
+   "observations/feed_assays.csv": "7ec42626a760a9d89e8ae04b27f3c9a818fef2f040988bc62d5467bfcc48d35b",
+   "observations/feed_log.csv": "20360025d4e4d786d55b3bdbfc661215edfebdf691cdb48e0ffbd690bbb9fbb6",
+   "observations/operator_notes.json": "3edab503af5d9c1b698b381ff3f74820c11cf39c10d85204632fb568b2740459",
+   "observations/sensors.json": "ba3d11d4586fa7d189666941095bbc9be3e6303bc848154e46c08e31babc430e"
+  },
+  "visible_sha256_before": {
+   "manifest.json": "3ff30a0ecc51e6139c3164e98d07eda1df5874eafbf582021aa378e57b59ae89",
+   "observations/feed_assays.csv": "7ec42626a760a9d89e8ae04b27f3c9a818fef2f040988bc62d5467bfcc48d35b",
+   "observations/feed_log.csv": "20360025d4e4d786d55b3bdbfc661215edfebdf691cdb48e0ffbd690bbb9fbb6",
+   "observations/operator_notes.json": "3edab503af5d9c1b698b381ff3f74820c11cf39c10d85204632fb568b2740459",
+   "observations/sensors.json": "ba3d11d4586fa7d189666941095bbc9be3e6303bc848154e46c08e31babc430e"
+  }
+ }
+]

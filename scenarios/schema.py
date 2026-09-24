@@ -159,6 +159,30 @@ class CorrectConclusion(BaseModel):
         "its parameters, is at fault.",
     )
 
+    @model_validator(mode="after")
+    def _check_abstentions(self) -> Self:
+        """Reject an ``abstain_on`` term outside the controlled vocabulary.
+
+        The vocabulary is ``configs/abstentions.yaml`` (ruling A3 of 2026-09-24): the
+        evaluator matches abstentions by exact name, so a term a workflow cannot spell is
+        an abstention nobody can score.
+
+        Raises:
+            ValueError: If a term is not in the vocabulary or is repeated.
+        """
+        from state.abstentions import abstention_vocabulary
+
+        vocabulary = abstention_vocabulary()
+        unknown = [term for term in self.abstain_on if term not in vocabulary]
+        if unknown:
+            raise ValueError(
+                f"abstain_on terms {unknown} are not in the controlled vocabulary "
+                "(configs/abstentions.yaml)"
+            )
+        if len(set(self.abstain_on)) != len(self.abstain_on):
+            raise ValueError(f"abstain_on repeats a term: {list(self.abstain_on)}")
+        return self
+
 
 class Budget(BaseModel):
     """The envelope every workflow is held to for this scenario (§6.2, §7).

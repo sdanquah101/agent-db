@@ -2456,3 +2456,30 @@ its head, and every merge waits for the lead's word.
 
 **Blocked:** nothing. **The next session starts on:** the evaluation session's PR for the
 P0 rulings (step 1).
+
+### Session 2026-09-24 — the lead's rulings A1–A4 on the P0 baseline (`claude/p0-rulings`, draft PR #22)
+
+**Done.**
+- **A1.** Every evidence item P0's rules build cites the prediction simulate and the
+  `residual_diag` call of each channel it names. No rule, threshold or verdict moved.
+- **A2.** The empty Tier-A objective is recorded in `docs/p0_design.md` §7.
+- **A3.** One controlled abstention vocabulary (`configs/abstentions.yaml`, 47 terms):
+  - validated on every scenario;
+  - handed to every sandbox;
+  - two answer-key terms respelled to P0's spelling;
+  - the answer key of 13 runs rewritten in place, with a hash listing and a
+    regeneration test.
+- **A4.** The 15 affected cells were re-run and all 78 re-scored:
+  - unsupported claims 0 of 273, down from 13;
+  - exact attribution still 17 of 78;
+  - correct abstention still 0 of 7;
+  - three time-dependent paths, with both rows kept (`reports/p0_sweep_a4_*`).
+
+**Flagged for the lead** (decisions, 2026-09-24):
+- over-abstention scoring;
+- subsumption under `parameter_values`;
+- S8-01's `posterior_intervals`.
+
+**Next.** PR B (positive-control ladder, pre-registered in
+`docs/positive_control.md`) and PR C (distinguishability).
+

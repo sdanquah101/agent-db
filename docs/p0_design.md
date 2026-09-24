@@ -316,3 +316,10 @@ completion, the final label) from its privileged side, and one row per cell to
   in 274–290 s against 3 s for the rest: a stiffness pocket inside the declared bounds. P0 cannot
   avoid it; the wall-clock guard absorbs it. Recorded for the registry (solver settings are
   frozen under G1).
+- **Empty objective at Tier A** (the Level 0–5 sweep, finding 8; the lead's ruling of
+  2026-09-24 recorded in the coordinator's decisions entry of that date: no code change).
+  When QC excludes one of Tier A's two calibrated channels and the post-fit single-offender
+  rule then flags the other, the second pass is left with no channel: its refit and the
+  validation are refused (two invalid actions), the first fit's estimates stand, no
+  forecast is scored, and the flag reported is the alphabetically first flagged sensor
+  (S2-01 at Tier A on both plants).

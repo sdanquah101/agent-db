@@ -290,6 +290,9 @@ class Pipeline:
         self.optimum: dict[str, float] = {}
         self.optimum_fit: Any = None
         self.prediction: Any = None
+        # the log index of the simulate call behind self.prediction, so evidence built on
+        # its residuals can name it (the lead's ruling A1 of 2026-09-24: evidence cites calls)
+        self.prediction_index: int | None = None
         self.posterior: Any = None
         self.first_pass: dict[str, Any] | None = None
         self.feed_log: dict[str, np.ndarray] = {}
@@ -336,6 +339,7 @@ class Pipeline:
         }
         self.loads = self.rec.call("read", "feed_loads", model=MODEL)
         self.baseline = self.rec.call("read", "simulate", model=MODEL)
+        self.baseline_index = self.rec.last_index
         self.checkpoint("read")
 
     # -- step 1 --------------------------------------------------------------------
@@ -815,12 +819,14 @@ class Pipeline:
             self.plan.skipped["fit"] = "no fitter fitted the plan: the defaults stand"
             self.optimum = {}
             self.prediction = self.baseline
+            self.prediction_index = self.baseline_index
         else:
             self.optimum_fit = fit
             self.optimum = {n: float(v) for n, v in zip(fit.parameters, fit.theta, strict=True)}
             self.prediction = self.rec.call(
                 "predict", "simulate", model=MODEL, parameters=self.optimum
             )
+            self.prediction_index = self.rec.last_index
         self.checkpoint("fit")
 
     def _intervals_from_fit(self, fit: Any) -> None:
@@ -1134,9 +1140,7 @@ class Pipeline:
                     "step_z": self.residuals[channel].get("step_z"),
                     "step_day": self.residuals[channel].get("step_day"),
                 },
-                [self.residuals[channel].get("call_index")]
-                if self.residuals[channel].get("call_index") is not None
-                else [],
+                [self.prediction_index, self.residuals[channel].get("call_index")],
             )
         )
         self.series[sensor].status = "flagged"
@@ -1154,6 +1158,7 @@ class Pipeline:
         self.prediction = self.rec.call(
             "second_predict", "simulate", model=MODEL, parameters=self.optimum
         )
+        self.prediction_index = self.rec.last_index
         self.plan.sizes["second_pass"] = True
         self.checkpoint("second_pass")
 
@@ -1364,6 +1369,7 @@ class Pipeline:
             primary_channel=channel_of.get(primary),
             abstentions=list(self.abstentions),
             at_bound=any(e.get("at_bound") for e in self.final_parameters.values()),
+            prediction_call=self.prediction_index,
         )
         scale: dict[str, float] = {}
         for name in verdict["flagged"]:
@@ -1591,6 +1597,7 @@ def classify(
     primary_channel: str | None,
     abstentions: list[str],
     at_bound: bool,
+    prediction_call: int | None = None,
 ) -> dict[str, Any]:
     """The attribution rule of design §3.7 on collected evidence: pure, so it is testable.
 
@@ -1604,6 +1611,9 @@ def classify(
         primary_channel: The primary channel's model output.
         abstentions: Abstentions collected so far.
         at_bound: Whether any fitted parameter sits at a bound.
+        prediction_call: The log index of the simulate call whose prediction the
+            residuals are taken against; every residual-derived evidence item names it
+            and the residual_diag call of each channel it rests on (ruling A1).
 
     Returns:
         ``classification`` (without evidence and scale factors), ``evidence`` (new
@@ -1615,6 +1625,12 @@ def classify(
     flagged = list(flagged)
     abstentions = list(abstentions)
     sensor_of = {ch: name for name, ch in channel_of.items()}
+
+    def _cited(*channels: str | None) -> list[Any]:
+        """The prediction and the residual_diag call of each channel (evidence cites calls)."""
+        return [prediction_call] + [
+            residuals.get(ch, {}).get("call_index") for ch in channels if ch is not None
+        ]
 
     # R1: a flagged sensor (QC), the single offender (post-fit), or the charge check
     offender = single_offender(cfg, residuals, bool(balance.get("admissible", True)))
@@ -1632,7 +1648,7 @@ def classify(
                         "bias_z": residuals[offender].get("bias_z"),
                         "step_z": residuals[offender].get("step_z"),
                     },
-                    [],
+                    _cited(offender),
                 )
             )
     # the lead's ruling B(b) of 2026-09-21: a charge inconsistency is sensor evidence only
@@ -1651,7 +1667,7 @@ def classify(
                 lab["sensor"],
                 "the charge balance also disagrees with the reported pH",
                 {"charge_drift": balance.get("charge_drift")},
-                [],
+                [balance.get("call_index"), *_cited(offender)],
             )
         )
     if flagged:
@@ -1675,7 +1691,7 @@ def classify(
                     lab["influent"],
                     "the primary residual is structured by the feed batch",
                     {"most_explanatory": primary_res.get("most_explanatory")},
-                    [],
+                    _cited(primary_channel),
                 )
             )
 
@@ -1700,7 +1716,7 @@ def classify(
                     lab["initial_state"],
                     "the primary residual is biased in the initial window only",
                     {"early_bias_z": early, "late_bias_z": late},
-                    [],
+                    _cited(primary_channel),
                 )
             )
 
@@ -1728,7 +1744,7 @@ def classify(
                 lab["parameter"],
                 "a common change point in the residuals of several channels",
                 {ch: d for ch, d, _ in steps},
-                [],
+                _cited(*(ch for ch, _, _ in steps)),
             )
         )
 
@@ -1748,7 +1764,7 @@ def classify(
                 lab["structural"],
                 "residuals stay structured by load or time after the fit",
                 {ch: residuals[ch].get("rmse_z") for ch in structured},
-                [],
+                _cited(*structured),
             )
         )
         abstentions += ["parameter_values", "kinetic_attribution"]

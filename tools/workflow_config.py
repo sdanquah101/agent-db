@@ -259,11 +259,13 @@ def sandbox_config(config: P0Config) -> dict[str, Any]:
 
     The configuration itself, plus the declared sensor noise (``cv``, ``sd_abs`` per
     sensor of ``configs/observation/sensors.yaml``) and the declared geometry of every
-    plant (``V_liq_m3``, ``T_op_K``); nothing keyed by the run, so the same document goes
-    into every cell's sandbox.
+    plant (``V_liq_m3``, ``T_op_K``), and the controlled abstention vocabulary (term ->
+    one-line meaning, ``configs/abstentions.yaml``); nothing keyed by the run, so the same
+    document goes into every cell's sandbox.
     """
     from sim.observation import load_observation_config
     from sim.plants import declared_geometry, load_plant_config
+    from state.abstentions import abstention_vocabulary
 
     observation = load_observation_config()
     noise = {}
@@ -285,4 +287,5 @@ def sandbox_config(config: P0Config) -> dict[str, Any]:
     payload = config.model_dump(mode="json")
     payload["sensor_noise"] = noise
     payload["plant_geometry"] = geometry
+    payload["abstentions"] = abstention_vocabulary()
     return payload

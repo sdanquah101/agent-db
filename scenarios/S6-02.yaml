@@ -24,7 +24,7 @@ correct_conclusion:
   flag_sensor: null
   estimate_scale_factor: false
   kinetic_update_allowed: false
-  abstain_on: [alkalinity_budget, inorganic_carbon_balance]
+  abstain_on: [alkalinity_total_budget, inorganic_carbon_balance]
   recommend_structural_review: true
 budget:
   simulator_evals: 750   # the lead's budget ruling of 2026-09-21 on the P0 pilot: allowance x 60 / 12 s per evaluation (was 8000)

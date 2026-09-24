@@ -5518,3 +5518,156 @@ runs (§6.5, §9.3). *Reason:* the P0 table is the comparison P1 is judged again
 prompt tuned to P0's per-cell misses would score the prompt author rather than the agent.
 *Alternative rejected:* forbidding the author to read any P0 result (unenforceable once
 the tables are public).
+
+
+## 2026-09-24 — Rulings A1 and A3: how the P0 session implemented them (branch `claude/p0-rulings`)
+
+The coordinator's docs PR records the rulings themselves. This entry covers only the
+implementation choices.
+
+**A1: which calls a residual-derived item cites.** Every item R1b, R2, R3, R4 and R5
+build (the charge fold too) now cites two calls. The first is the simulate whose
+prediction the residual is taken on (baseline, predict or second predict, whichever is
+current). The second is the `residual_diag` call of each channel the item names. The
+bias and step z-scores are P0's own arithmetic on that residual, so these are the calls
+the numbers rest on. Rules, thresholds and verdicts are unchanged. `claim_sources` is
+unchanged because both tools are already mapped.
+*Alternative:* register a new claim source for P0-derived statistics (rejected: that
+loosens what counts as supported, and the ruling forbids it).
+
+*Which items changed, and which cells A4 re-runs.* A1 changed the calls of seven kinds
+of item:
+1. the second-pass R1b in `step_attribute`, which cited the `residual_diag` call and
+   now cites the prediction as well;
+2. R1b in `classify`;
+3. the charge fold;
+4. R2;
+5. R5 after the fit;
+6. R4;
+7. R3.
+
+Kinds 2–7 used to cite nothing. P0's first-pass R5 items (QC informative missingness,
+citing `data_qc`) and its `R1a` and balance items are unchanged.
+
+The evaluator counts an item unsupported if any call it cites fails to resolve to an ok
+log line. So *adding* a call can move a cell as well as removing one, and A4 re-runs
+every cell that carries any changed item, not only the cells with unsupported claims.
+In the 78 baseline states (read before the re-runs, from their backups):
+- 13 items had no calls, R4 ×8, R3 ×3 and R5 ×2, on exactly the 13 cells with
+  unsupported claims;
+- 2 cells carried the second-pass R1b with a call: S2-01 C/A and S2-01 B/A;
+- no cell fired `classify`'s R1b, the charge fold or R2.
+
+A4 therefore re-runs 15 cells. On every other cell the evidence and every column are
+unchanged by A1.
+
+**A3: where the vocabulary lives and how it is spelled.**
+- *Location.* `configs/abstentions.yaml`, loaded by `state/abstentions.py` (the shared
+  task-state package, beside the label vocabulary). The runner writes it into every
+  sandbox's `p0_config.json` under `abstentions`, so a jailed workflow can read it
+  without reading `configs/`.
+- *Spelling.* P0 emits per-sensor and per-channel terms, so the file declares two
+  templates, `<sensor>_claims` and `<channel>_budget`. They expand over the declared
+  sensors and the fitted model's output channels, giving 47 terms today. Spelling out
+  every expansion would duplicate those lists.
+- *The mapping, every pair, decided on meaning before any re-score.* P0 emits seven
+  kinds of term: `posterior_intervals`, `missing_transient`, `parameter_values`,
+  `kinetic_attribution`, `inorganic_carbon_balance`, `<sensor>_claims` and
+  `<channel>_budget`. In the 78-cell sweep, P0 emits `posterior_intervals` on 75 cells
+  and `missing_transient` on 65 (9 of the 10 pilot cells, as reported). It emits
+  `<sensor>_claims` or `<channel>_budget` on 6 cells. The guard: a term P0 emits whatever
+  the fault never becomes the synonym of a scenario-specific term unless the meanings
+  are the same.
+
+  | scenario term (scenarios) | nearest P0 term | decision | reason |
+  |---|---|---|---|
+  | `ch4_fraction` (S2-02) | `ch4_fraction_claims` | **one spelling** | Same meaning: no claim rests on the flatlined CH4 analyser. P0 emits it only on S2-02 cells (4 of 7). |
+  | `alkalinity_budget` (S6-02) | `alkalinity_total_budget` | **one spelling** | Same meaning: no claim on the alkalinity budget. `alkalinity_total` is the only alkalinity channel. |
+  | `inorganic_carbon_balance` (S6-02) | `inorganic_carbon_balance` | already one spelling | — |
+  | `posterior_intervals` (S8-01) | `posterior_intervals` | already one spelling | Flagged below. |
+  | `transient_response` (S4-02) | `missing_transient` | **distinct** | Two scopes. `missing_transient` declines claims *inside the windows where the record is informatively missing*, a property of the data. `transient_response` declines any claim on *how the digester responds to transients* (load steps, start-up), a property of the process, whether or not those days are missing. In S4-02 the two overlap because the gaps are the overload days, but the words do not mean the same. The guard also applies: P0 emits `missing_transient` on 65 of 78 cells, so merging would score S4-02 correct for a test that fires almost everywhere. |
+  | `peak_load_behaviour` (S4-02) | `missing_transient` | **distinct** | Same reasoning. It concerns behaviour under peak load, not data gaps. |
+  | `ch4_yield` (S2-02) | `q_gas_stp_dry_budget` | **distinct** | Yield is methane per unit of COD fed. A gas-flow budget is not a yield claim. |
+  | `acetoclastic_parameters` (S6-01) | `parameter_values` | **distinct** | Narrower: it declines one population's parameters. `parameter_values` declines all fitted values, so it is a superset, not a synonym. Scoring by subsumption would be an evaluator change and is the lead's call. |
+  | `inhibition_constant_magnitude` (S7-02) | `parameter_values` | **distinct** | Same reasoning: it names one constant. |
+  | `structural_adequacy` (S6-04) | `kinetic_attribution` | **distinct** | Declining a kinetic attribution does not decline a claim that the structure is adequate. |
+  | `acetate_speciation`, `methanogenic_pathway_split` (S6-01/S6-04/S7-02); `effective_volume`, `residence_time_distribution` (S6-03) | none | no counterpart | P0 has no structural or mixing abstention. |
+
+- *Answer keys: what is proven.*
+  - The answer key of the 13 affected runs (S2-02 ×7, S6-02 ×6) was rewritten in place.
+    Only `correct_conclusion.abstain_on` changed, in the harness's own JSON format.
+  - No visible file changed: `reports/p0_abstention_respelling.json` lists the sha256 of
+    the observations, the redacted manifests and every other truth file before and
+    after.
+  - `tests/test_abstentions.py` regenerates a short S2-02 cell under the old key and
+    then the new one, *at a fixed commit*. The test pins `git_sha`, because the visible
+    manifest records the checkout's commit. It shows the same run id and a byte-identical
+    visible tree. Every truth file is identical except `faults.json`
+    (`correct_conclusion.abstain_on`), `manifest.json` (`created_utc`) and the
+    truth-side generation log `calls.jsonl` (the clock fields `t_utc` and
+    `runtime_s`).
+  - A regeneration at a different commit would differ in the recorded `git_sha`, and
+    for that reason the store's cells were not regenerated.
+
+**Flagged for the lead: proposals, none implemented.**
+- (a) *Over-abstention.* The vocabulary is now readable by a workflow. The evaluator
+  scores correct abstention as "every `abstain_on` term appears" and does not penalise
+  extra terms. A workflow that declines all 47 terms would therefore score correct
+  everywhere. The terms that only answer keys use (`effective_volume`,
+  `residence_time_distribution`, `acetate_speciation`, ...) also read like a menu of
+  the scenarios.
+  - Proposal, before P1 is scored: report *abstention precision*, the share of a
+    run's abstentions that are in `abstain_on` (on cells where it is non-empty), and
+    the count of abstentions outside `abstain_on` on every cell.
+  - Optionally, score a run as correct only when that count is below a declared cap.
+- (b) *Subsumption.* `acetoclastic_parameters` (S6-01) and
+  `inhibition_constant_magnitude` (S7-02) are narrower than `parameter_values`, which
+  P0 emits. Should declining all parameter values count as declining those? That would
+  be an evaluator rule, not a spelling, and A3 leaves them distinct.
+- (c) *S8-01.* `posterior_intervals` is S8-01's whole `abstain_on`, and P0 emits it on
+  75 of 78 sweep cells, because MCMC never converges on this machine. S8-01 would score
+  correct abstention for a fallback that fires almost everywhere. The spelling was
+  already shared before this ruling, so A3 leaves it alone.
+*Alternatives:* a Python enum in `state/` (rejected: a new term would then be a code
+change, not a config and decisions change); a vocabulary file in `scenarios/` (rejected:
+a workflow may not read the scenarios).
+
+
+## 2026-09-24 — A4: the re-run and re-score of the P0 baseline after rulings A1 and A3
+
+**What was done.**
+- *Re-runs.* The 15 cells whose evidence items A1 changes were re-run at the A1 code:
+  - the 13 cells with unsupported claims;
+  - S2-01 C/A and B/A, which carry the second-pass R1b.
+
+  Three ran at a time, and their old outputs were kept aside.
+- *Re-score.* All 78 cells were re-scored with the respelled answer keys.
+- *Comparison.* Every column of every cell was compared with the committed baseline:
+  - `reports/p0_sweep_a4_moved.md` lists each move;
+  - `reports/p0_sweep_a4_previous_rows.csv` keeps the pre-A1 rows of the 15 re-run
+    cells.
+
+**What moved.**
+- *A1.* `claims_unsupported` goes from 1 to 0, and `unsupported_claim_rate` to 0, on
+  each of the 13 cells. The table's total is 0 of 273 claims, down from 13. S2-01 B/A
+  and C/A stay supported with the added prediction call.
+- *A3.* S2-02's `abstain_on` is respelled on all 7 cells. `abstention_fraction` goes
+  from 0 to 0.5 on the four S2-02 cells where P0 emits `ch4_fraction_claims`: B/B, B/C,
+  C/B and C/C. No cell's `abstention_correct` moves, so correct abstention stays 0 of 7:
+  P0 never declines `ch4_yield`, and S4-02's two terms stay distinct.
+- *Time-dependent paths, both rows kept.* Clock columns (`wall_clock_s`, `log_span_s`,
+  `tool_runtime_s`, `wall_clock_fraction`) differ on every re-run cell. Three cells took
+  a different timing-gated path:
+  - *S2-01 C/A.* The plan's guard now refuses the second LSQ at the measured rate. It
+    used to call it and fail on the empty objective. So there is one invalid action
+    instead of two, one fallback, one guard trip and one fewer call.
+  - *S2-03 A/A.* An extra LSQ guard trip.
+  - *S3-02 A/A.* The MCMC guard no longer trips.
+
+  No label, flag, attribution, drift, recovery or forecast column moved on any cell.
+  Exact attribution stays 17 of 78.
+- *Nothing else.* No column moved on any cell that was neither re-run nor S2-02.
+
+**Note on timing.** The full test suite (twice) and the positive-control hook tests ran
+on the same four-core container during part of the re-runs. The three time-dependent
+differences above are the kind that load produces. They are reported, not tuned away.
