@@ -93,10 +93,15 @@ class AggregateConfig(_Frozen):
 
 
 class DistinguishabilityConfig(_Frozen):
-    """The admissible-set analysis (docs/distinguishability.md)."""
+    """The admissible-set analysis (docs/distinguishability.md, method version 3)."""
 
+    method_version: Annotated[int, Field(ge=1)]
     margin: Annotated[float, Field(gt=0.0)]
     sensitivity_margin: Annotated[float, Field(gt=0.0)]
+    baseline_parameters: tuple[str, ...]
+    overdispersion_from_level0: bool
+    lr_alpha: _Frac
+    n_alternatives: Annotated[int, Field(ge=1)]
     look_elsewhere: bool
     none_admissible_rate_min: _Frac
     lsq_max_nfev: Annotated[int, Field(ge=1)]

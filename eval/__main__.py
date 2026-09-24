@@ -74,11 +74,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         # cannot look good (docs/distinguishability.md)
         hits = sum(1 for r in scored if r["attribution_admissible"])
         print(f"admissible attribution: {hits} of {len(scored)} scored runs (exact: {exact})")
-        for size in sorted({int(r["n_admissible"]) for r in scored}):
-            group = [r for r in scored if int(r["n_admissible"]) == size]
+        for rate in sorted({float(r["admissible_chance_rate"]) for r in scored}):
+            group = [r for r in scored if float(r["admissible_chance_rate"]) == rate]
             h = sum(1 for r in group if r["attribution_admissible"])
-            chance = f"{1 / size:.2f}" if size else "-"
-            print(f"  |A| = {size}: {h} of {len(group)} (chance per label {chance})")
+            print(f"  chance |A or truth|/6 = {rate:.2f}: {h} of {len(group)}")
     return 0
 
 

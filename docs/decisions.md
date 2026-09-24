@@ -5737,3 +5737,45 @@ before the analysis ran on any cell.
   what the ruling required is isolation from workflows. The package is listed in
   `pyproject.toml`. The rule-1 checker forbids it by import and by its string form. The
   evaluator keeps its import allow-list and reads only the precomputed file.
+
+
+## 2026-09-24 — Re-review of PR #25: distinguishability method version 3 (the calibrated null)
+
+The coordinator relayed the re-review at ~19:05 UTC. Two blockers were fixed before any
+result was computed.
+
+- **A. The null was misspecified.** On a clean cell, `sensor` was the only admissible
+  label, because the default-parameter model misfits the truth record even with no fault
+  (the benchmark card §4.2; gas flow χ²/n = 63 on S0-01 C/B).
+  - The review offered two fixes. *Chosen:* both, layered, recorded here.
+    1. The null is the calibrated no-fault baseline: the background multipliers
+       `Y_ac`, `k_m_ac`, `k_m_h2` and `Y_h2` are fitted under `none`, and every class is
+       fitted on top of them.
+    2. Each sensor's χ² is divided by its Level-0 dispersion under that baseline, for
+       the same plant and tier.
+  - Why both: calibrating the kinetics alone may leave a scale-type misfit in gas flow
+    (volume, fractionation) that a sensor rescale still removes. Overdispersion alone
+    leaves the kinetic misfit in the residual *structure*, which the other classes
+    would then compete to absorb.
+  - *Conditional, not joint:* the classes are fitted with the baseline held at its fit.
+    This costs a fraction of a joint fit. It can only lower an alternative's fit, so it
+    errs toward `none`, the conservative direction for credit.
+  - *Plant A* has no Level-0 cell. Its cells take the dispersion of their own calibrated
+    baseline, flagged per cell.
+  - *The check:* every Level-0 cell of the matrix (S0-01 on Plants B and C, three tiers
+    each) is analysed first, and `none` must be admissible on each. Any cell where it is
+    not is reported, with the reason.
+- **B. The calibration covered only sensor against `none`.**
+  - The penalty is now the likelihood-ratio critical value at α / m (Bonferroni over the
+    five alternatives), plus 2 ln N for a search. On noise, with all classes competing,
+    `none` is admissible at least 1 − α of the time.
+  - The joint noise test declares and checks it: ≥ 0.95 at α = 0.05. The version-2 rule
+    falls short on the same records.
+- **Item 8.** The chance rate is |A ∪ truth| / 6.
+- **Nits.**
+  - The table reports each class's convergence.
+  - The evaluator reads `admissible.json` only at `distinguishability.method_version`.
+  - The fit sizes are `lsq_max_nfev` = 15 and `scalar_max_iter` = 15.
+  - One cell's convergence and wall time are reported with the Level-0 check, together
+    with a compute plan that stays inside about one sweep.
+

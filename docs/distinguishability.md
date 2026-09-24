@@ -1,7 +1,8 @@
 # Distinguishability: which labels the record admits (evaluation side)
 
-*Ruling of 2026-09-24 (PR C of the coordinator's relay). Method version 2, after the
-review of PR #25 and before any result was computed. Method choices are recorded in
+*Ruling of 2026-09-24 (PR C of the coordinator's relay). Method version 3, after the
+review and the re-review of PR #25 and before any result was computed. §2.0 and §3 are
+superseded by version 3 as described there. Method choices are recorded in
 `docs/decisions.md`. This analysis never replaces the truth-label score, and nothing under
 `workflows/` can import it.*
 
@@ -18,6 +19,42 @@ all. It then reports a second score, **`attribution_admissible`**, *next to*
 `attribution_exact`, never instead of it. The score is true when the final primary label
 is in *A* or in the truth. It **only ever adds credit**: a workflow that answers the truth
 is never marked wrong by it.
+
+## 2.0 Method version 3: the calibrated null (re-review of PR #25)
+
+The re-review found that a null at the default parameters is misspecified. The
+default-parameter model misfits even a clean record (the benchmark card, §4.2): on
+S0-01 C/B, χ²(none) is 9,357 over 506 samples, and gas flow alone has χ²/n = 63. So any
+class that rescales gas flow beat `none` by about 300, and would have earned
+admissible credit for "sensor" on a clean cell. Version 3 changes four things.
+
+- **The null is the calibrated no-fault baseline.** Under `none`, the background
+  multipliers `Y_ac`, `k_m_ac`, `k_m_h2` and `Y_h2` are fitted to the calibration window
+  (`distinguishability.baseline_parameters` in `configs/eval.yaml`; these are P0's four
+  most-approved parameters, and not the Level-5 targets). Every other class is fitted on
+  top of that same calibrated background, with the baseline held at its fit (a
+  conditional fit). The baseline's k is shared by every class, so it cancels.
+- **Overdispersion.** Each sensor's χ² is divided by its dispersion under the calibrated
+  baseline on the Level-0 cell of the same plant and tier (χ²/n, floor 1; the
+  quasi-likelihood treatment of known misfit).
+  - The Level-0 cells run first and use their own baseline.
+  - Plant A has no Level-0 cell, so its cells use their own calibrated baseline and are
+    flagged in `overdispersion_source`. This is conservative: it can only favour `none`.
+- **The penalty is a joint test.** A class's score is χ² plus the likelihood-ratio
+  critical value of its k knobs at α / m (α = 0.05, m = 5 alternatives, Bonferroni),
+  plus 2 ln N for a best-of-N search. With every class competing at once on noise,
+  `none` is then admissible at least 1 − α of the time.
+  - `tests/test_distinguish.py` checks this jointly on 400 noise records, with the
+    sensor class's real closed form and a linear-Gaussian surrogate for the fitted
+    classes.
+  - On the same records, the version-2 rule (2k + 2 ln N) falls short, as the reviewer
+    found (0.873).
+- **The parameter class** is, on top of the baseline, a constant change of the two
+  Level-5 target parameters (k = 2). On a Level-5 cell it is also the truth's own change
+  point at the known onset, with the baseline before the onset.
+
+**The chance rate** of the second score is |A ∪ truth| / 6: what a uniform guess over the
+six labels scores. The CLI stratifies by it.
 
 ## 2. Hypothesis classes
 

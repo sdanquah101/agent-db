@@ -95,17 +95,27 @@ attribution:
 # The admissible label set per cell (docs/distinguishability.md; the review of PR #25 moved
 # these out of the code, and they are committed before the analysis runs).
 distinguishability:
-  margin: 2.0                 # DESIGN  AIC units; a label within this of the best is admissible
+  method_version: 3           # the evaluator reads admissible.json only at this version
+  margin: 2.0                 # DESIGN  score units; a label within this of the best is admissible
   sensitivity_margin: 10.0    # DESIGN  reported beside it
-  # A class that picks the best of N candidates (which sensor, which onset, which
-  # extension) pays 2 ln N on top of 2k: the look-elsewhere correction (review item 1).
+  # The null is the calibrated no-fault baseline (method version 3, re-review of PR #25):
+  # these multipliers are fitted under `none`, and every other class is fitted on top of
+  # the same calibrated background, so the model's known background misfit (benchmark
+  # card §4.2) does not make every alternative beat `none`.
+  baseline_parameters: [Y_ac, k_m_ac, k_m_h2, Y_h2]
+  # Overdispersion: each sensor's chi2 is divided by its dispersion under the baseline on
+  # the Level-0 cell of the same plant and tier (quasi-likelihood; floor 1).
+  overdispersion_from_level0: true
+  # A class's penalty is the likelihood-ratio critical value of its k free parameters at
+  # lr_alpha / n_alternatives (Bonferroni over the classes competing with `none`), plus
+  # 2 ln N for a best-of-N search when look_elsewhere is on. On noise, `none` is then
+  # admissible at least 1 - lr_alpha of the time with every class competing at once.
+  lr_alpha: 0.05
+  n_alternatives: 5
   look_elsewhere: true
-  # Declared calibration target: on a record that is pure noise around the defaults,
-  # `none` must stay admissible at least this often (tests/test_distinguish.py checks it
-  # on white noise; the Level-0 cells' rate is reported with the results).
-  none_admissible_rate_min: 0.95
-  lsq_max_nfev: 40            # DESIGN  least-squares function evaluations to convergence
-  scalar_max_iter: 25         # DESIGN  bounded scalar fits
+  none_admissible_rate_min: 0.95   # declared; checked by the joint noise test
+  lsq_max_nfev: 15            # DESIGN  least-squares function evaluations (convergence reported)
+  scalar_max_iter: 15         # DESIGN  bounded scalar fits
   sensor_onset_every_d: 10.0  # DESIGN  scale-step onsets tried
 
 # ---------------------------------------------------------------- family C: efficiency

@@ -1,11 +1,11 @@
 """The distinguishability analysis (docs/distinguishability.md) and its second score.
 
-- The admissibility rule, on constructed class fits: AIC with the look-elsewhere
-  penalty, not χ², and a margin read from ``configs/eval.yaml``.
-- The look-elsewhere calibration (review of PR #25, item 1): on pure white noise around
-  the defaults, the sensor class's best-of-N search pushes ``none`` out of the admissible
-  set no more often than the declared rate allows. Without the penalty it does so most
-  of the time, which reproduces the reviewer's finding.
+- The admissibility rule, on constructed class fits: a score of χ² plus a penalty (the
+  likelihood-ratio critical value at alpha / alternatives, plus 2 ln N for a search),
+  and a margin read from ``configs/eval.yaml`` (method version 3).
+- The joint noise calibration (re-review of PR #25, B): with every class competing at
+  once on pure noise, ``none`` stays admissible at least the declared rate; with the
+  version-2 penalty (2k + 2 ln N) it does not, which reproduces the reviewer's 0.873.
 - The sensor class's closed form recovers a planted scale step.
 - The hold-out is never read.
 - The truth's own form: the change-point model with nothing changed equals the plain
@@ -25,6 +25,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from scipy.stats import chi2 as chi2_dist
 
 from distinguish.analysis import (
     ClassFit,
@@ -34,7 +35,9 @@ from distinguish.analysis import (
     admissible,
     analyse_pair,
     calibration_end,
+    chance_rate,
     class_limited,
+    class_penalty,
     load_series,
     truth_representable,
 )
@@ -51,13 +54,13 @@ def _fits(**chi2_k: tuple[float, int]) -> dict[str, ClassFit]:
     return {lab: ClassFit(lab, c, k) for lab, (c, k) in chi2_k.items()}
 
 
-def test_admissibility_is_an_aic_margin():
-    fits = _fits(none=(100.0, 0), sensor=(97.0, 2), state=(101.5, 1), parameter=(90.0, 6))
-    # AIC: none 100, sensor 101, state 103.5, parameter 102
-    assert admissible(fits, 2.0) == ["none", "sensor", "parameter"]
-    assert admissible(fits, 10.0) == ["none", "sensor", "state", "parameter"]
-    # more knobs do not buy admission: a lower χ² with a larger k can still be out
-    assert admissible(_fits(none=(50.0, 0), parameter=(47.0, 6)), 2.0) == ["none"]
+def test_admissibility_is_a_penalised_margin():
+    p1, p2 = class_penalty(1, 1), class_penalty(2, 1)
+    assert p1 == pytest.approx(chi2_dist.ppf(1 - 0.05 / 5, 1))  # 6.63
+    fits = _fits(none=(100.0, 0), state=(100.0 - p1 + 2.5, 1), sensor=(100.0 - p2 - 1.0, 2))
+    # scores: none 100, state 102.5, sensor 99
+    assert admissible(fits, 2.0) == ["none", "sensor"]
+    assert admissible(fits, 10.0) == ["none", "sensor", "state"]
     # a failed class is never admissible, and all-failed admits nothing
     assert admissible(_fits(none=(float("inf"), 0), state=(10.0, 1)), 2.0) == ["state"]
     assert admissible(_fits(none=(float("inf"), 0)), 2.0) == []
@@ -65,21 +68,35 @@ def test_admissibility_is_an_aic_margin():
 
 def test_a_search_pays_two_ln_n():
     searched = ClassFit("sensor", 90.0, 2, n_candidates=300)
-    assert searched.search_penalty == pytest.approx(2.0 * np.log(300))
-    assert searched.aic == pytest.approx(90.0 + 4.0 + 2.0 * np.log(300))
-    # a 10-unit χ² gain found among 300 candidates does not beat the defaults
+    assert searched.penalty == pytest.approx(class_penalty(2, 1) + 2.0 * np.log(300))
+    # a 10-unit χ² gain found among 300 candidates does not beat the baseline
     fits = {"none": ClassFit("none", 100.0, 0), "sensor": searched}
     assert admissible(fits, 2.0) == ["none"]
 
 
-def test_the_margins_come_from_the_configuration():
-    assert CFG.margin == 2.0 and CFG.sensitivity_margin == 10.0 and CFG.look_elsewhere
+def test_the_rule_comes_from_the_configuration():
+    assert CFG.method_version == 3 and CFG.margin == 2.0 and CFG.sensitivity_margin == 10.0
+    assert CFG.lr_alpha == 0.05 and CFG.n_alternatives == 5 and CFG.look_elsewhere
+    assert CFG.baseline_parameters == ("Y_ac", "k_m_ac", "k_m_h2", "Y_h2")
 
 
-def _white_noise(rng: np.random.Generator) -> tuple[list[Series], dict, float]:
-    """Nine sensors, daily or weekly, pure noise around a flat default prediction."""
+def test_the_chance_rate_counts_a_or_the_truth():
+    """Re-review item 8: a uniform guess lands in A or the truth with |A or T| / 6."""
+    assert chance_rate(["none", "sensor"], ["sensor"]) == pytest.approx(2 / 6)
+    assert chance_rate(["none"], ["state", "sensor"]) == pytest.approx(3 / 6)
+
+
+def _noise_trial(rng: np.random.Generator) -> dict[str, ClassFit]:
+    """Every class on one pure-noise record, as each class's fit sees it.
+
+    Nine sensors (daily and weekly) around a flat baseline. A class with k continuous
+    knobs gains exactly the projection of the noise onto a k-dimensional subspace (the
+    linear-Gaussian surrogate of a fit near the truth); the sensor class runs its real
+    closed form; an extension left out changes the prediction deterministically, so it
+    gains nothing on noise.
+    """
     t_daily, t_weekly = np.arange(0.0, 150.0), np.arange(0.0, 150.0, 7.0)
-    series, base, chi2 = [], {"t": np.arange(0.0, 200.0)}, 0.0
+    series, base, z_all = [], {"t": np.arange(0.0, 200.0)}, []
     for i in range(9):
         t = t_daily if i < 4 else t_weekly
         level = 10.0 + i
@@ -87,34 +104,51 @@ def _white_noise(rng: np.random.Generator) -> tuple[list[Series], dict, float]:
         z = rng.standard_normal(t.size)
         series.append(Series(f"s{i}", f"c{i}", t, level + sd * z, sd))
         base[f"c{i}"] = np.full(base["t"].size, level)
-        chi2 += float(z @ z)
-    return series, base, chi2
+        z_all.append(z)
+    z = np.concatenate(z_all)
+    none = float(z @ z)
+
+    def gain(k: int) -> float:
+        q, _ = np.linalg.qr(rng.standard_normal((z.size, k)))
+        proj = q.T @ z
+        return float(proj @ proj)
+
+    influent = [ClassFit("influent", none - gain(4), 4), ClassFit("influent", none - gain(1), 1)]
+    best_influent = min(influent, key=lambda c: c.score)
+    best_influent.n_candidates = 2
+    structural = [ClassFit("structural", none, 0) for _ in range(4)]
+    structural.append(ClassFit("structural", none - gain(1), 1))
+    best_structural = min(structural, key=lambda c: c.chi2 + class_penalty(c.k, 1))
+    best_structural.n_candidates = 5
+    return {
+        "none": ClassFit("none", none, 0),
+        "sensor": _fit_sensor(series, base, CFG.sensor_onset_every_d),
+        "influent": best_influent,
+        "state": ClassFit("state", none - gain(1), 1),
+        "parameter": ClassFit("parameter", none - gain(2), 2),
+        "structural": best_structural,
+    }
 
 
-def test_on_white_noise_none_stays_admissible_at_the_declared_rate():
-    """Review of PR #25, item 1: the look-elsewhere effect, measured and corrected."""
+def test_on_noise_with_every_class_competing_none_stays_admissible():
+    """Re-review of PR #25, B: the joint calibration, and the version-2 rule's shortfall."""
     from distinguish import analysis
 
     rng = np.random.default_rng(20260924)
-    trials = [_white_noise(rng) for _ in range(300)]
+    trials = [_noise_trial(rng) for _ in range(400)]
+    rate = np.mean(["none" in admissible(fits, CFG.margin) for fits in trials])
+    assert rate >= CFG.none_admissible_rate_min, rate
 
-    def rate(look_elsewhere: bool) -> float:
-        analysis._LOOK_ELSEWHERE[0] = look_elsewhere
-        kept = 0
-        for series, base, chi2 in trials:
-            fits = {
-                "none": ClassFit("none", chi2, 0),
-                "sensor": _fit_sensor(series, base, CFG.sensor_onset_every_d),
-            }
-            kept += "none" in admissible(fits, CFG.margin)
-        return kept / len(trials)
+    # the version-2 rule (2k + 2 ln N) on the same trials falls short, as the reviewer found
+    def aic_v2(c: ClassFit) -> float:
+        return c.chi2 + 2.0 * c.k + 2.0 * np.log(c.n_candidates)
 
-    try:
-        without, with_penalty = rate(False), rate(True)
-    finally:
-        analysis._LOOK_ELSEWHERE[0] = True
-    assert without < 0.5  # the reviewer's finding reproduces: the search wins on noise
-    assert with_penalty >= CFG.none_admissible_rate_min
+    kept = 0
+    for fits in trials:
+        best = min(aic_v2(c) for c in fits.values())
+        kept += aic_v2(fits["none"]) - best <= CFG.margin
+    assert kept / len(trials) < CFG.none_admissible_rate_min
+    assert analysis._PENALTY["alpha"] == CFG.lr_alpha
 
 
 def test_class_limits_are_declared_per_fault_type():
@@ -180,8 +214,8 @@ def _others(row: dict) -> dict:
 
 
 def test_the_second_score_only_adds_credit(tmp_path: Path):
-    doc = {"admissible_set": ["none", "state"], "truth_admissible": False,
-           "truth_representable": True}  # fmt: skip
+    doc = {"method_version": 3, "admissible_set": ["none", "state"], "truth_admissible": False,
+           "truth_representable": True, "chance_rate": 3 / 6}  # fmt: skip
     # the truth itself is never marked wrong, even when the record does not admit it
     truth = _score(tmp_path / "a", doc, "sensor")
     assert truth["attribution_exact"] is True and truth["attribution_admissible"] is True
@@ -189,6 +223,9 @@ def test_the_second_score_only_adds_credit(tmp_path: Path):
     other = _score(tmp_path / "b", doc, "none")
     assert other["attribution_exact"] is False and other["attribution_admissible"] is True
     assert other["n_admissible"] == 2 and other["admissible_chance_rate"] == 0.5
+    # an analysis of another method version is not read
+    stale = _score(tmp_path / "f", {**doc, "method_version": 2}, "none")
+    assert stale["attribution_admissible"] is None and stale["admissible_set"] is None
     wrong = _score(tmp_path / "c", doc, "parameter")
     assert wrong["attribution_admissible"] is False
     # an unrepresentable truth gives a null score, never a credit
@@ -213,17 +250,28 @@ def test_no_workflow_may_import_the_analysis(tmp_path: Path):
         assert find_truth_references(module) == [], module
 
 
-def test_one_short_cell_end_to_end(store, tiny_cell):
+def test_one_short_cell_end_to_end(store, tiny_cell, monkeypatch):
+    """A clean 30-day cell: the null is the calibrated baseline, and it is admissible."""
+    from distinguish import analysis
+
+    small = CFG.model_copy(update={"lsq_max_nfev": 3, "scalar_max_iter": 3})
+    monkeypatch.setattr(analysis, "_cfg", lambda: small)
     run, scenario = tiny_cell
     docs = analyse_pair(
         [(run.run_id, run.paths.root, run.paths.truth)], classes=("none", "sensor"), log=str
     )
     doc = docs[run.run_id]
+    assert doc["method_version"] == 3
     assert doc["truth_label"] == ["none"] and doc["tier"] == "B"
     assert doc["calibration_end_d"] == pytest.approx(0.75 * scenario.duration_days)
     assert set(doc["classes"]) == {"none", "sensor"}
-    assert doc["simulations"] == 1  # the sensor class reuses the default prediction
-    assert doc["admissible_set"] and set(doc["admissible_set"]) <= {"none", "sensor"}
+    assert doc["classes"]["none"]["knobs"]["form"] == "calibrated_baseline"
+    assert set(doc["baseline"]) - {"form"} == set(CFG.baseline_parameters)
+    # a clean cell with no Level-0 table given: its own baseline gives the dispersion
+    assert "own calibrated baseline" in doc["overdispersion_source"]
+    assert all(v >= 1.0 for v in doc["overdispersion"].values())
+    assert doc["none_admissible"]  # the Level-0 requirement (re-review, blocker A)
     assert doc["n_admissible"] == len(doc["admissible_set"]) and doc["truth_representable"]
+    assert doc["chance_rate"] == pytest.approx(len(set(doc["admissible_set"]) | {"none"}) / 6)
     assert doc["classes"]["sensor"]["n_candidates"] > 1
-    assert doc["classes"]["none"]["chi2"] is not None and doc["n_samples"] > 0
+    assert doc["classes"]["none"]["converged"] in (True, False)

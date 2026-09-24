@@ -2,9 +2,9 @@
 
 A Level-5 truth is a parameter shift at a known onset. A constant multiplier cannot
 represent it, so this subclass gives the parameter class its representable form. The
-defaults hold until ``onset_d``, and ``theta`` holds after it. It uses the harness's own
-segment helpers (``sim.run.harness``, read-only): one integration per segment, stitched
-with no repeated time.
+baseline multipliers (``before``) hold until ``onset_d``, and ``theta`` holds after it.
+It uses the harness's own segment helpers (``sim.run.harness``, read-only): one
+integration per segment, stitched with no repeated time.
 """
 
 from __future__ import annotations
@@ -21,20 +21,31 @@ __all__ = ["ChangePointADM1"]
 
 
 class ChangePointADM1(FittedADM1):
-    """``FittedADM1`` whose ``theta`` applies from ``onset_d`` on; the defaults before."""
+    """``FittedADM1`` whose ``theta`` applies from ``onset_d`` on; ``before`` until then.
 
-    def __init__(self, *args: object, onset_d: float, **kwargs: object) -> None:
+    ``before`` is the multiplier vector of the first segment: the calibrated no-fault
+    baseline of the cell (method version 3), or the defaults when it is not given.
+    """
+
+    def __init__(
+        self,
+        *args: object,
+        onset_d: float,
+        before: np.ndarray | None = None,
+        **kwargs: object,
+    ) -> None:
         """Build the fitted model and remember the change point."""
         super().__init__(*args, **kwargs)
         if not 0.0 < float(onset_d) < self.horizon_d:
             raise ValueError(f"onset {onset_d} d is outside the record (0, {self.horizon_d})")
         self.onset_d = float(onset_d)
+        self.before = self.defaults.copy() if before is None else np.asarray(before, float)
 
     def evaluate(self, theta: np.ndarray, **options: object) -> dict[str, np.ndarray]:
-        """Burn-in and the first segment at the defaults, the second at ``theta``."""
+        """Burn-in and the first segment at ``before``, the second at ``theta``."""
         if options:
             raise ValueError(f"the change-point model takes no options, got {sorted(options)}")
-        before = self._parameters(self.defaults)
+        before = self._parameters(self.before)
         after = self._parameters(theta)
         models = [
             compile_extended(

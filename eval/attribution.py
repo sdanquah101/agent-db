@@ -46,6 +46,13 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return float(len(a & b) / len(union)) if union else 1.0
 
 
+def cfg_method_version() -> int:
+    """The analysis method version this evaluator reads (``configs/eval.yaml``)."""
+    from eval.config import load_eval_config
+
+    return int(load_eval_config().distinguishability.method_version)
+
+
 def score_attribution(
     records: RunRecords, cfg: AttributionConfig, model: FittedModelConfig
 ) -> dict[str, Any]:
@@ -86,6 +93,9 @@ def score_attribution(
         "attribution_admissible_set": None,
     }
     adm = records.admissible
+    if adm is not None and adm.get("method_version") != cfg_method_version():
+        # an analysis of another method version is not this evaluator's to read
+        adm = None
     # the score only ever ADDS credit (review of PR #25, item 3): it is judged against the
     # admissible set together with the truth, so answering the truth is never marked wrong;
     # and it is null where no class can represent the truth (item 4)
@@ -94,7 +104,8 @@ def score_attribution(
         allowed = [str(x) for x in adm.get("admissible_set", [])]
         out["admissible_set"] = "+".join(allowed)
         out["n_admissible"] = len(allowed)
-        out["admissible_chance_rate"] = (1.0 / len(allowed)) if allowed else None
+        # a uniform guess over the six labels lands in A or the truth with |A or T| / 6
+        out["admissible_chance_rate"] = adm.get("chance_rate")
         out["truth_admissible"] = bool(adm.get("truth_admissible"))
         out["truth_representable"] = bool(adm.get("truth_representable", True))
         if out["truth_representable"]:
