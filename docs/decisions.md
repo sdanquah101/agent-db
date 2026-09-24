@@ -5431,8 +5431,8 @@ coordinator reviews each PR at its head, and each merge waits for the lead's wor
 **The three P0 findings** (P0 is frozen; this ruling is the approval rule 5 requires).
 
 1. **Evidence items without a call reference: fix.** P0's residual-derived evidence items
-   (R3, R4 and R5, 13 of the baseline's 273 items) name the tool call whose output they
-   cite. The fix changes no rule, threshold or verdict. *Reason:* the items are true, but
+   (R3, R4 and R5, 13 of the baseline's 273 items) will name the tool call whose output
+   they cite. The fix changes no rule, threshold or verdict. *Reason:* the items are true, but
    the contract of `docs/eval_design.md` says an item naming no call is unsupported, and
    P1 is held to that contract. Leaving P0 in breach would make the unsupported-claims
    column compare a pipeline that cannot comply with one that can. *Alternative
@@ -5448,9 +5448,11 @@ coordinator reviews each PR at its head, and each merge waits for the lead's wor
    vocabulary is published where workflows can read it, next to the label vocabulary and
    never inside an answer key. Every scenario's `abstain_on` is validated against it.
    Scenario terms that mean the same thing as a term P0 already emits take one spelling.
-   Terms with no P0 counterpart, such as `transient_response` and
-   `peak_load_behaviour`, stay in the vocabulary, and P0 misses them. That miss is part of
-   the baseline. P0 may rename what it emits to the vocabulary's spelling but gains no new
+   Whether two terms mean the same thing is decided in the vocabulary PR, and the reasoning
+   for each pair is written down before any re-scoring. A term P0 emits on most cells
+   whatever the fault is not accepted as a synonym for a scenario-specific term unless its
+   meaning matches. A scenario term with no P0 counterpart stays in the vocabulary and P0
+   misses it. That miss is part of the baseline. P0 may rename what it emits to the vocabulary's spelling but gains no new
    abstention logic. Only the answer-key records in the truth store are regenerated, and a
    test proves that observations, redacted manifests and run ids are byte-identical.
    *Alternatives rejected:* an evaluator-side synonym table (P1 would be scored against
@@ -5467,14 +5469,19 @@ in this order:
    `docs/positive_control.md`). P0 is re-run with one thing made easier at a time: three
    times the budget, an exact feed record (a new variant cell, so the workflow still reads
    only its observations), and the shifted parameter guaranteed a place in the fitted set.
-   The expectations are written down before any run. *Reason:* the baseline's misses can be
+   The shifted parameter is truth information, so the experimenter supplies it as a
+   declared, logged configuration variant that is off by default. P0 never reads it from
+   the truth store, and rule 1 holds. Ladder runs are diagnostics: they are never P0
+   entries and never rows of the baseline table. The expectations are written down before
+   any run, and compute is capped at about one sweep. *Reason:* the baseline's misses can be
    read as the problem being hard only once the same pipeline is shown to succeed when it
    is made easy. Until then a broken harness is an equally good explanation.
 2. **A distinguishability analysis** (the third PR, evaluator-side only). For each Level
    0–5 cell, the analysis asks whether the true cause fits the visible channels
    measurably better than every alternative cause. A cell where it does not gets an
    admissible label set. Attribution is then also reported against that set, next to the
-   truth-label score and never in place of it. *Reason:* a cell that no workflow could
+   truth-label score and never in place of it. Compute is capped at about one sweep.
+   *Reason:* a cell that no workflow could
    attribute from the visible record measures the scenario, not the workflow.
 3. **Narrative scope** (this PR). The benchmark card now says what the P0 baseline does
    and does not show. It is one scripted pipeline of conventional tools, run under these
@@ -5493,12 +5500,21 @@ in this order:
    and never as P0.
 
 **The P1 prompt rule.** P1's prompts are written from the proposal, the benchmark card,
-the tool registry's documentation and the published vocabularies only. A prompt must not
-name a scenario, state or hint at how often each label occurs in the library, or encode
-what P0 got right or wrong on any cell. Prompts are developed only on development cells.
-They are frozen and hashed before the held-out variants of §7 are generated, and any later
-change invalidates the runs (§11). The P0 sweep's aggregate tables may be read by the
-prompt author, but its per-cell rows may not. *Reason:* the P0 table is the comparison P1
-is judged against, so a prompt tuned to its per-cell misses would score the prompt author
-rather than the agent. *Alternative rejected:* a prompt author with no access to any P0
-result (unenforceable once the tables are public, and unnecessary for aggregates).
+the tool registry's documentation and the published vocabularies. A committed prompt must
+not name a scenario, name a P0 rule, state or hint at how often each label occurs in the
+library, or encode what P0 got right or wrong on any cell. Per-cell P0 results are public
+already: the scored tables are per-cell, including `reports/p0_sweep_scored_aggregate.*`
+at one seed, and the milestones and the card name cells. The rule therefore restricts what
+a prompt contains, not what its author reads. It is enforced in three ways:
+
+- a test fails if a committed prompt contains a scenario id (`S<level>-<nn>`) or a P0 rule
+  id (`R1`–`R6`);
+- the prompt author lists in the PR body what they read, and the reviewer checks the
+  prompt for label frequencies and per-cell P0 outcomes;
+- the prompt hash is committed before the held-out variants of §7 are generated.
+
+Prompts are developed only on development cells, and any later change invalidates the
+runs (§6.5, §9.3). *Reason:* the P0 table is the comparison P1 is judged against, so a
+prompt tuned to P0's per-cell misses would score the prompt author rather than the agent.
+*Alternative rejected:* forbidding the author to read any P0 result (unenforceable once
+the tables are public).

@@ -2434,10 +2434,12 @@ its head, and every merge waits for the lead's word.
    only the answer-key records are regenerated. The cells whose columns move are re-run.
 2. **Positive-control ladder** (the evaluation session, `docs/positive_control.md`). P0
    is run at three times the budget, with an exact feed record, and with the shifted
-   parameter in its fitted set. Expectations are pre-registered and compute is capped at
-   about one sweep.
+   parameter in its fitted set (a declared config variant, off by default). Expectations
+   are pre-registered and compute is capped at about one sweep. These runs are
+   diagnostics, never P0 entries.
 3. **Distinguishability analysis** (the evaluation session, evaluator-side). Each cell
-   gets an admissible label set, and attribution is also reported against it.
+   gets an admissible label set, and attribution is also reported against it. Compute is
+   capped at about one sweep.
 4. **Narrative scope** (the coordinator, this entry's PR). The benchmark card §3, §4.2 and
    §8 say what the baseline does and does not show.
 5. **Before P1 is scored:** an assumption-sensitivity subset, with the ASSUMED
@@ -2447,9 +2449,10 @@ its head, and every merge waits for the lead's word.
 6. **The selection step as a named ablation.** P0 fits a larger, truth-blind parameter
    set, and the result is reported only as an ablation.
 7. **P1** (`launch: p1-single-agent`, the lead's word). Its prompts follow the prompt
-   rule of 2026-09-24: they are written from the published documents only, name no
-   scenario or label frequency, encode no per-cell P0 result, and are frozen and hashed
-   before the held-out variants are generated.
+   rule of 2026-09-24. They name no scenario, P0 rule or label frequency and encode no
+   per-cell P0 result, which a test and the reviewer check. They are developed only on
+   development cells, and they are frozen and hashed before the held-out variants are
+   generated.
 
 **Blocked:** nothing. **The next session starts on:** the evaluation session's PR for the
 P0 rulings (step 1).

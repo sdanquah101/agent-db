@@ -293,7 +293,7 @@ no number from the sweep should be quoted without them:
 
 - **That P0 can succeed when the problem is made easy.** A positive-control ladder
   (more budget, an exact feed record, the shifted parameter in the fitted set) is
-  scheduled. Until it reports, a harness defect explains a miss as well as difficulty
+  scheduled. Its runs are diagnostics under declared config variants, never P0 entries. Until it reports, a harness defect explains a miss as well as difficulty
   does.
 - **That each fault is distinguishable from the visible record.** A distinguishability
   analysis (evaluator-side) is scheduled. A cell whose true cause fits no better than an
