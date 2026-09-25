@@ -157,8 +157,8 @@ once.
   records** (declared minimum `none_admissible_rate_min` = 0.95; the test checks it on
   300).
 - **The limit is correlation the observation model does not have.** With the white noise
-  replaced by an AR(1) process of the same marginal sd, the rate is **0.9575 at
-  ρ = 0.3** and **0.785 at ρ = 0.6** (400 records each). The method's guarantee is for
+  replaced by an AR(1) process of the same marginal sd, the rate is **0.96 at
+  ρ = 0.3** and **0.79 at ρ = 0.6** (400 records each). The method's guarantee is for
   the noise the benchmark draws, which has no such correlation. A real plant's record
   might, and this analysis would then admit alternatives more often than α says. The
   test checks that the rate falls with ρ.

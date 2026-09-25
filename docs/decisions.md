@@ -5861,8 +5861,8 @@ How the session implemented it. Each choice is the smallest that meets the decis
     surrogates.
   - **On the model's own noise,** `none` is admissible on 0.9825 of 400 records
     (declared minimum 0.95).
-  - **With AR(1) white noise, which the model does not have,** the rate is 0.9575 at
-    ρ = 0.3 and 0.785 at ρ = 0.6. The reviewer saw 0.96 and 0.49 under version 3. This is
+  - **With AR(1) white noise, which the model does not have,** the rate is 0.96 at
+    ρ = 0.3 and 0.79 at ρ = 0.6. The reviewer saw 0.96 and 0.49 under version 3. This is
     stated as the limit: the guarantee is for the benchmark's own noise.
 - **One structural candidate is not offered: `precipitation` switched off.**
   - `sao` switched off needed only a harness setting: its initial state is dropped via
