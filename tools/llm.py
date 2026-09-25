@@ -293,11 +293,13 @@ class OpenAIResponsesClient:
         self.settings = settings
         self.system_sha256 = system_sha256
         self.last_request = None
+        self.last_response = None
         self.name = f"openai:{settings.model_id}"
 
     def create(self, params: dict[str, Any]) -> dict[str, Any]:
         """One Responses API call, translated both ways, checked before it is sent."""
         self.last_request: dict[str, Any] | None = None
+        self.last_response: dict[str, Any] | None = None
         kwargs = to_responses_request(params)
         self.last_request = kwargs
         check_responses_request(kwargs, self.settings, self.system_sha256)
@@ -313,6 +315,7 @@ class OpenAIResponsesClient:
                 raise ModelError(f"{type(exc).__name__}: {exc}") from exc
             raise
         raw = response if isinstance(response, dict) else response.to_dict()
+        self.last_response = raw
         return from_responses_output(raw, kwargs)
 
 
@@ -856,6 +859,11 @@ class ModelGateway:
             provider_request = getattr(self.client, "last_request", None)
             if provider_request is not None:
                 line["provider_request"] = provider_request
+            # and the raw response it got, when one came back but could not be used (an
+            # unhandled item): the log keeps what the provider said, not only the error
+            provider_response = getattr(self.client, "last_response", None)
+            if provider_response is not None:
+                line["provider_response"] = provider_response
         line["response"] = response
         line["error"] = error
         if response is not None:

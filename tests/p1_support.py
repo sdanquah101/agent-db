@@ -226,13 +226,17 @@ def peeking_policy(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def chosen_point_policy(params: dict[str, Any]) -> dict[str, Any]:
-    """Reports a point it chose as an estimate, then a fit's own optimum.
+    """Tries every way to pass a chosen point off as an estimate, then reports a real one.
 
-    The re-review of e4fc44a, item 2. A Fisher call at a chosen point (k_m_ac 1.37,
-    never fitted) is offered as a Fisher-backed estimate, then the same point with
-    method none after a simulate at it: both refused. Then a one-start fit, whose optimum
-    is reported with the fit's own Fisher interval where finite (else method none):
-    accepted.
+    The re-reviews of e4fc44a (2) and 1624e4d (2). Turn 0 simulates at a chosen k_m_ac of
+    1.37, calls Fisher there, and runs a fit that starts at 1.37 with one evaluation (it
+    does not converge and returns its start). Turn 1 offers 1.37 with the Fisher call's
+    interval; turn 2 offers 1.37 with method none. Both are refused. Turn 3 fits properly.
+    Turn 4 calls Fisher at the optimum twice: once with a second parameter at a chosen
+    value, once at the optimum alone. Turn 5 offers the first call's interval (refused
+    unless it is also the fit's own interval); turn 6 the second's (accepted), or the
+    optimum with method none if the Fisher bound is not finite. A fit that did not
+    converge ends the run with no estimate.
     """
     turn = turn_of(params)
     got = results(params)
@@ -241,6 +245,9 @@ def chosen_point_policy(params: dict[str, Any]) -> dict[str, Any]:
             tool_use(0, 0, "simulate", {"parameters": {"k_m_ac": 1.37}}),
             tool_use(0, 1, "fisher_info",
                      {"parameters": ["k_m_ac"], "sensors": ["gas_flow"], "at": {"k_m_ac": 1.37}}),
+            tool_use(0, 2, "fit_lsq",
+                     {"parameters": ["k_m_ac"], "sensors": ["gas_flow"], "start": {"k_m_ac": 1.37},
+                      "n_starts": 1, "max_nfev_per_start": 1}),
         )  # fmt: skip
     sim = got["tu_0_0"]["call_index"]
     base = conclusion_for(sim)
@@ -257,15 +264,62 @@ def chosen_point_policy(params: dict[str, Any]) -> dict[str, Any]:
     if turn == 3:
         return reply(
             tool_use(3, 0, "fit_lsq", {"parameters": ["k_m_ac"], "sensors": ["gas_flow"],
-                                       "n_starts": 1, "max_nfev_per_start": 3})
+                                       "n_starts": 1, "max_nfev_per_start": 20})
         )  # fmt: skip
     fit = got["tu_3_0"]["result"]
     theta = fit["theta"]["k_m_ac"]
-    iv = fit["fisher_interval_90"]["k_m_ac"]
-    if iv is not None:
-        est = {"estimate": theta, "lower": iv[0], "upper": iv[1], "method": "fisher"}
+    if not fit["converged"]:
+        return reply(tool_use(turn, 0, "conclude", base))
+    if turn == 4:
+        return reply(
+            tool_use(4, 0, "fisher_info",
+                     {"parameters": ["k_m_ac", "k_dis"], "sensors": ["gas_flow"],
+                      "at": {"k_m_ac": theta, "k_dis": 1.37}}),
+            tool_use(4, 1, "fisher_info",
+                     {"parameters": ["k_m_ac"], "sensors": ["gas_flow"], "at": {"k_m_ac": theta}}),
+        )  # fmt: skip
+    mixed = got["tu_4_0"]["result"]["interval_90_at_point"]["k_m_ac"]
+    alone = got["tu_4_1"]["result"]["interval_90_at_point"]["k_m_ac"]
+    if turn == 5 and mixed is not None:
+        est = {"estimate": theta, "lower": mixed[0], "upper": mixed[1], "method": "fisher"}
+        return reply(
+            tool_use(5, 0, "conclude", {**base, "parameters": {"k_m_ac": est},
+                                        "interval_method": "fisher"})
+        )  # fmt: skip
+    if alone is not None and alone != mixed:
+        est = {"estimate": theta, "lower": alone[0], "upper": alone[1], "method": "fisher"}
         final = {**base, "parameters": {"k_m_ac": est}, "interval_method": "fisher"}
     else:
         est = {"estimate": theta, "lower": None, "upper": None, "method": "none"}
         final = {**base, "parameters": {"k_m_ac": est}}
     return reply(tool_use(turn, 0, "conclude", final))
+
+
+def probe_policy(params: dict[str, Any]) -> dict[str, Any]:
+    """Uses every tool that reads the record, for the two-copy hold-out test.
+
+    The re-review of 1624e4d, item 1: run on two copies of a cell that differ only in
+    hold-out values, every request this policy's run sends must be the same.
+    """
+    turn = turn_of(params)
+    got = results(params)
+    if turn == 0:
+        return reply(
+            tool_use(0, 0, "data_qc", {}),
+            tool_use(0, 1, "mass_balance", {"window_d": 5}),
+            tool_use(0, 2, "inspect_record", {"what": "sensor", "name": "gas_flow"}),
+            tool_use(0, 3, "inspect_record", {"what": "feed_assays"}),
+            tool_use(0, 4, "simulate", {}),
+            tool_use(0, 5, "feed_loads", {}),
+        )
+    sim = got["tu_0_4"]["call_index"]
+    if turn == 1:
+        return reply(
+            tool_use(1, 0, "residual_diag", {"sensor": "gas_flow", "prediction": sim}),
+            tool_use(1, 1, "residual_diag", {"sensor": "ph", "prediction": sim}),
+            tool_use(1, 2, "fisher_info", {"parameters": ["k_m_ac"]}),
+            tool_use(1, 3, "fit_lsq",
+                     {"parameters": ["k_m_ac"], "n_starts": 1, "max_nfev_per_start": 3}),
+            tool_use(1, 4, "request_assay", {"assay": "tan", "day": 10, "prediction": sim}),
+        )  # fmt: skip
+    return reply(tool_use(turn, 0, "conclude", conclusion_for(sim)))

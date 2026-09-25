@@ -60,9 +60,10 @@ def visible_notes(notes: list[dict[str, Any]], cal_end: float) -> list[dict[str,
     """The operator's notes of the calibration window only.
 
     A note from a hold-out day is part of the hold-out record (the coordinator's ruling of
-    2026-09-25, re-review 3).
+    2026-09-25, re-review 3). The window is half-open: day ``cal_end`` itself is the
+    hold-out's first day.
     """
-    return [n for n in notes if float(n.get("day", 0)) <= cal_end]
+    return [n for n in notes if float(n.get("day", 0)) < cal_end]
 
 
 class ActionError(Exception):
@@ -262,8 +263,14 @@ class Recorder:
 class Series:
     """One sensor as the harness serves it: times, values (NaN missing), weights, status."""
 
-    def __init__(self, name: str, raw: dict[str, Any], noise: dict[str, Any], cal: dict) -> None:
-        """Set up from the run view's record and the declared noise."""
+    def __init__(
+        self, name: str, raw: dict[str, Any], noise: dict[str, Any], cal: dict, cal_end: float
+    ) -> None:
+        """Set up from the run view's record and the declared noise.
+
+        Every statistic is taken from the calibration window ``t < cal_end`` only, so that
+        no hold-out value reaches a weight, a z-score or a fit (the re-review of 1624e4d, 1).
+        """
         self.name = name
         self.channel = str(raw["channel"])
         self.unit = str(raw["unit"])
@@ -273,8 +280,8 @@ class Series:
         self.noise = {k: _f(v) for k, v in noise.items()}
         cv = float(noise.get("cv") or 0.0)
         sd_abs = float(noise.get("sd_abs") or 0.0)
-        finite = self.raw[np.isfinite(self.raw)]
-        scale = float(np.median(np.abs(finite))) if finite.size else 1.0
+        in_cal = self.raw[(self.t < cal_end) & np.isfinite(self.raw)]
+        scale = float(np.median(np.abs(in_cal))) if in_cal.size else 1.0
         floor = max(float(cal["min_relative_sd"]) * scale, float(cal["sd_floor_abs"]))
         sd = np.sqrt((cv * np.abs(np.nan_to_num(self.raw))) ** 2 + sd_abs**2)
         self.sd = np.maximum(sd, floor)
@@ -289,10 +296,14 @@ class Series:
         return float(np.mean(~np.isfinite(self.raw))) if self.raw.size else None
 
     def mask(self, window: tuple[float, float] | None) -> np.ndarray:
-        """Samples inside ``window`` (all when None)."""
+        """Samples inside the half-open ``[start, end)`` (all when None).
+
+        Half-open so that a sample at exactly the calibration window's end, the hold-out's
+        first instant, is never shown to the agent (the re-review of 1624e4d, 1).
+        """
         if window is None:
             return np.ones(self.t.shape, dtype=bool)
-        return (self.t >= window[0]) & (self.t <= window[1])
+        return (self.t >= window[0]) & (self.t < window[1])
 
     def recorded(self) -> dict[str, Any]:
         """The whole record as recorded, no quarantine applied (what validation scores)."""
@@ -665,7 +676,7 @@ class Workspace:
         noise = cfg.get("sensor_noise", {})
         record = tools.run.sensors()["sensors"]
         self.series: dict[str, Series] = {
-            name: Series(name, record[name], noise.get(name, {}), cfg["calibration"])
+            name: Series(name, record[name], noise.get(name, {}), cfg["calibration"], self.cal[1])
             for name in sorted(record)
         }
         self.feed_log = tools.run.feed_log()
@@ -807,7 +818,7 @@ class Workspace:
     def feeds_text(self) -> str:
         """The feed log, per feed, for the task prompt (calibration window only)."""
         lines = []
-        n_cal = math.floor(self.cal[1])
+        n_cal = math.ceil(self.cal[1])  # days 0 .. n_cal - 1, all < cal_end
         for name in sorted(self.feed_log):
             x = np.asarray(self.feed_log[name], dtype=float)[:n_cal]
             lines.append(
@@ -821,7 +832,7 @@ class Workspace:
         """Counts of the feed assays in the calibration window, by feed and assay."""
         counts: dict[str, int] = {}
         for a in self.feed_assays:
-            if float(a.get("sample_day_d", 0)) <= self.cal[1]:
+            if float(a.get("sample_day_d", 0)) < self.cal[1]:
                 key = f"{a.get('feed_id')}:{a.get('assay')} [{a.get('unit')}, {a.get('basis')}]"
                 counts[key] = counts.get(key, 0) + 1
         return ", ".join(f"{k} x{v}" for k, v in sorted(counts.items())) or "none"
@@ -936,7 +947,7 @@ class Workspace:
                     raise ActionError(f"no feed {n!r}; feeds: {sorted(self.feed_log)}")
                 x = np.asarray(self.feed_log[n], dtype=float)
                 days = np.arange(x.size, dtype=float)
-                keep = (days >= start) & (days <= end)
+                keep = (days >= start) & (days < end)
                 stride = max(1, math.ceil(int(keep.sum()) / limit))
                 out[n] = {
                     "day": [int(d) for d in days[keep][::stride]],
@@ -946,7 +957,7 @@ class Workspace:
         rows = [
             a
             for a in self.feed_assays
-            if start <= float(a.get("sample_day_d", 0)) <= end
+            if start <= float(a.get("sample_day_d", 0)) < end
             and (not inp.get("name") or a.get("feed_id") == inp.get("name"))
         ]
         stride = max(1, math.ceil(len(rows) / limit))
@@ -982,7 +993,7 @@ class Workspace:
             raise ActionError("event_load_quantile must lie in (0, 1)")
         loads = self.need_loads(step)
         t_all = np.asarray(loads.t, dtype=float)
-        keep = t_all <= self.cal[1]
+        keep = t_all < self.cal[1]
         load = np.asarray(loads.cod_kg_d, dtype=float)[keep]
         t = t_all[keep]
         if not load.size:
@@ -1053,7 +1064,7 @@ class Workspace:
         if temp is not None and np.isfinite(temp.value[temp.mask(self.cal)]).any():
             t_op = float(np.nanmean(temp.value[temp.mask(self.cal)]))
         lt = np.asarray(loads.t, dtype=float)
-        lk = lt <= end_d
+        lk = lt < end_d
 
         def obs(name: str) -> dict[str, Any] | None:
             s = self.series.get(name)
@@ -1381,16 +1392,18 @@ class Workspace:
     def covariates(self) -> list[dict[str, Any]]:
         """Load, time, feed batch, feed fractions and temperature, as residual covariates."""
         loads = self.need_loads("residual_diag")
-        t = np.asarray(loads.t, dtype=float)
+        t_all = np.asarray(loads.t, dtype=float)
+        keep = t_all < self.cal[1]  # the calibration window only, as every other input
+        t = t_all[keep]
         feeds = sorted(self.feed_log)
         cov: list[dict[str, Any]] = [
-            {"name": "load", "t": t, "value": np.asarray(loads.cod_kg_d, dtype=float)},
+            {"name": "load", "t": t, "value": np.asarray(loads.cod_kg_d, dtype=float)[keep]},
             {"name": "time", "t": t, "value": t},
         ]
         if feeds:
             masses = np.stack([np.asarray(self.feed_log[f], dtype=float) for f in feeds], axis=1)
-            n = min(masses.shape[0], t.size)
-            masses, tt = masses[:n], t[:n]
+            n = min(masses.shape[0], t_all.size)
+            masses, tt = masses[:n][keep[:n]], t_all[:n][keep[:n]]
             total = masses.sum(axis=1)
             dominant = np.argmax(masses, axis=1).astype(float)
             cov.append({"name": "feed_batch", "t": tt, "value": dominant, "categorical": True})
@@ -1398,8 +1411,8 @@ class Workspace:
                 frac = np.where(total > 0, masses[:, i] / np.where(total > 0, total, 1.0), 0.0)
                 cov.append({"name": f"feed_{f}", "t": tt, "value": frac})
         temp = self.series.get("temperature")
-        if temp is not None and np.isfinite(temp.value).sum() >= 4:
-            m = np.isfinite(temp.value)
+        if temp is not None and (np.isfinite(temp.value) & temp.mask(self.cal)).sum() >= 4:
+            m = np.isfinite(temp.value) & temp.mask(self.cal)
             cov.append({"name": "temperature", "t": temp.t[m], "value": temp.value[m]})
         return cov
 
@@ -1474,7 +1487,7 @@ class Workspace:
     def t_assay(self, inp: dict[str, Any]) -> dict[str, Any]:
         """A requested assay (never on a hold-out day)."""
         day = float(inp["day"])
-        if not self.cal[0] <= day <= self.cal[1]:
+        if not self.cal[0] <= day < self.cal[1]:
             raise ActionError(f"an assay day must lie in the calibration window {list(self.cal)}")
         sim = None
         if inp.get("prediction") is not None:
@@ -1515,7 +1528,7 @@ class Workspace:
         """Expected information gain of the assays, from a stored posterior."""
         post = self.stored(self.posteriors, inp["posterior"], "bayes_mcmc")
         day = float(inp["day"])
-        if not self.cal[0] <= day <= self.cal[1]:
+        if not self.cal[0] <= day < self.cal[1]:
             raise ActionError(f"an assay day must lie in the calibration window {list(self.cal)}")
         args: dict[str, Any] = {
             "model": MODEL,
@@ -1769,20 +1782,26 @@ class Workspace:
                     out.append(([best], float(lo), float(hi)))
         elif method == "fisher":
             for fit in self.fits.values():
-                if fit.sd is not None and name in fit.parameters:
+                if fit.converged and fit.sd is not None and name in fit.parameters:
                     i = list(fit.parameters).index(name)
                     theta = float(list(fit.theta)[i])
                     iv = self.fisher_interval(name, theta, list(fit.sd)[i])
                     if iv is not None:
                         out.append(([theta], iv[0], iv[1]))
-            estimated = self.estimated_points(name)
+            optima = self.estimated_optima()
             for index, fisher in self.fishers.items():
                 if name in fisher.parameters:
                     i = list(fisher.parameters).index(name)
-                    point = float(self.fisher_at.get(index, {}).get(name, 1.0))
-                    # a Fisher call's interval backs an estimate only at a point this run
-                    # estimated, never at one the agent chose (the re-review of e4fc44a, 2)
-                    if not any(self._close(point, x) for x in estimated):
+                    at = self.fisher_at.get(index, {})
+                    full = {p: float(at.get(p, 1.0)) for p in fisher.parameters}
+                    point = full[name]
+                    # a Fisher call's interval backs an estimate only when ALL its
+                    # coordinates are an optimum this run estimated, never a point the
+                    # agent chose (the re-reviews of e4fc44a, 2 and 1624e4d, 2)
+                    if not any(
+                        all(p in o and self._close(v, o[p]) for p, v in full.items())
+                        for o in optima
+                    ):
                         continue
                     iv = self.fisher_interval(name, point, list(fisher.crlb_sd)[i])
                     if iv is not None:
@@ -1793,25 +1812,29 @@ class Workspace:
                 out.append((estimated, None, None))
         return out
 
-    def estimated_points(self, name: str) -> list[float]:
-        """The values an estimator of this run returned for ``name``.
+    def estimated_optima(self) -> list[dict[str, float]]:
+        """Every whole point an estimator of this run returned, parameter -> value.
 
-        These are a fit's optimum and a converged sampler's mean or median. They exclude
-        a simulate's input and the default: an estimate is what a call estimated, never
-        a value the agent chose (the re-review of e4fc44a, 2).
+        A converged fit's optimum, and a converged sampler's mean and its median. A fit
+        that did not converge returns its start, not an estimate (the re-review of
+        1624e4d, 2); a simulate's input and the default are never estimates.
         """
-        out: list[float] = []
+        out: list[dict[str, float]] = []
         for fit in self.fits.values():
-            if name in fit.parameters:
-                out.append(float(list(fit.theta)[list(fit.parameters).index(name)]))
+            if fit.converged:
+                out.append({n: float(v) for n, v in zip(fit.parameters, fit.theta, strict=True)})
         for post in self.posteriors.values():
-            if post.converged and name in post.parameters:
-                i = list(post.parameters).index(name)
-                out.append(float(list(post.mean)[i]))
+            if post.converged:
+                names = list(post.parameters)
+                out.append({n: float(v) for n, v in zip(names, post.mean, strict=True)})
                 q50 = dict(post.quantiles).get("q50")
                 if q50 is not None:
-                    out.append(float(list(q50)[i]))
+                    out.append({n: float(v) for n, v in zip(names, q50, strict=True)})
         return out
+
+    def estimated_points(self, name: str) -> list[float]:
+        """The values an estimator of this run returned for ``name`` (see estimated_optima)."""
+        return [o[name] for o in self.estimated_optima() if name in o]
 
     def interval_problem(self, name: str, e: float, lo: Any, hi: Any, method: str) -> str | None:
         """Why an estimate and its interval are not what a call of this run produced."""

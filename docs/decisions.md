@@ -6121,3 +6121,54 @@ recommendations"). The development pilot plan is approved, in this order:
 
 Still forbidden without the lead's word: scoring the Level 0–5 sweep, freezing the
 prompt, and generating or running the held-out variants.
+
+## 2026-09-25 — P1: the fixes of the coordinator's re-review at `1624e4d`
+
+**Decision.**
+1. **Every statistic comes from calibration-window samples only.** The noise floor used
+   the median of the whole record; it now uses the calibration samples. Loads, feeds and
+   temperature used as residual covariates, event windows, assays and notes are all cut
+   at the calibration end too. A regression test
+   (`test_tool_outputs_do_not_depend_on_hold_out_values`) runs one scripted agent on two
+   copies of a cell that differ only in hold-out sensor values. Every request the gateway
+   logs must have the same replay digest, and the hold-out validation, which runs after
+   `conclude` and is never shown, must differ. That last check is the negative control.
+2. **The window is half-open, `t < cal_end`**, in every P1 mask. A sample on the boundary
+   day belongs to the hold-out only.
+   - **P0 limitation, recorded but not changed.** P0's `Series.mask` is closed
+     (`start <= t <= end`), so P0 counts a sample exactly at `cal_end` in both windows.
+   - P0 is frozen (rule 5), so this is a note for the P0/P1 comparison, not a P0 change.
+3. **`feed_loads` is not clipped.** Instead, the task prompt says that the declared feed
+   schedule covers the whole record.
+   - The declared loads are the model's input: `simulate` integrates them over the whole
+     horizon, and P0 uses the same schedule.
+   - Clipping `feed_loads` alone would hide nothing that a `simulate` call does not
+     already imply.
+   - The feed *log* (`inspect_record`) and the feed assays stay clipped, because they
+     are observations.
+   - The sentence ships in prompt revision 1a (below).
+4. **Only converged fits are estimates.** `estimated_optima`, `estimated_points` and the
+   fit branch of `interval_sources` accept only a fit with `converged: true`. A fit that
+   stops early returns its start, and that start is a point the agent chose.
+5. **A Fisher call backs an interval only at a whole optimum.** That means every one of
+   its `at` coordinates must equal one qualifying optimum: a converged fit, or a
+   converged sampler's mean or median. A call that matches the optimum in the named
+   parameter but sets another coordinate by choice (or leaves it at the default) does not
+   qualify. Unit tests (`test_a_fisher_call_backs_an_interval_only_at_a_whole_optimum`,
+   `test_only_a_converged_fit_is_an_estimate`) pin both rules, each with a negative
+   control. The e2e test `chosen_point_policy` exercises them in a real run.
+   - In that short cell, the mixed call's interval is clipped to the full bounds, so it
+     equals the fit's own interval. It is then accepted, correctly, because the fit
+     backs it.
+6. **The prompt guard is wider, and still a backstop.**
+   - Its co-occurrence window is now three sentences.
+   - It adds wording about water and dilution (more water, more dilute) and solids (not
+     stirred).
+   - The listed items are planted in the guard's own tests.
+   - The defence is still the P1 prompt rule and review of the prompt text.
+7. **An unhandled response item keeps the raw response in the log** (`provider_response`),
+   next to the translated request, so the item can be read back.
+
+**Alternatives.**
+- Clipping `feed_loads` (rejected, see 3).
+- Closing P1's window to match P0 (rejected: the ruling asks for half-open).

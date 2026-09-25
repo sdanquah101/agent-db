@@ -38,6 +38,7 @@ from tests.p1_support import (
     clean_policy,
     dawdling_policy,
     peeking_policy,
+    probe_policy,
     slow,
 )
 from tests.test_truth_isolation import find_truth_references
@@ -140,21 +141,27 @@ _LIBRARY_EXAMPLES = re.compile(
     r"|precipitat|calcite|imperfect mixing|poor mixing|dead zone|short-circuit"
     r"|bypass (flow|fraction|zone|stream)"
     r"|ammonia inhibition|inhibition shift|overload|foaming|frozen signal|calibration error"
-    r"|under-?read|over-?read",
+    r"|under-?read|over-?read|more water|water than|dilute|solids than declared"
+    r"|declared solids|never appear|missing from the feed log"
+    r"|not (?:\w+ )?(?:completely|fully|well|perfectly) (?:stirred|mixed)"
+    r"|free ammonia|ammonia \w+ suppress"
+    r"|one in (?:two|three|four|five|six|seven|eight|nine|ten|\d+)\b"
+    r"|\d+ (?:of|in|out of) \d+ (?:cells|runs|scenarios)",
     re.IGNORECASE,
 )
 
 
 # Paraphrases of the library's three sensor faults (the re-reviews of PR #26): any two of
-# drift-, stuck-or-flat- and scale-or-factor-wording in one sentence or two adjacent
-# sentences name them whatever the words; "hold a value" alone names one. Applied to the
+# drift-, stuck-or-flat- and scale-or-factor-wording within three adjacent sentences name
+# them whatever the words; "hold a value" alone names one. Applied to the
 # prompt files; the QC tool's own description names its detectors (flatlines, drift) and
 # is registry documentation, so the tool specifications and the harness source are held
 # to the phrase, id and frequency checks only.
 _FAULT_GROUPS = (
-    re.compile(r"drift|wander|creep", re.IGNORECASE),
+    re.compile(r"drift|wander|creep|slowly away|move\w* away|lose\w* (?:its )?zero|offset",
+               re.IGNORECASE),
     re.compile(r"\bhold(?!-out)|\bheld\b|\bstick|stuck|frozen (?!hold-out)|freez|flat"
-               r"|same (value|reading)", re.IGNORECASE),
+               r"|same (value|reading)|constant (value|reading)", re.IGNORECASE),
     re.compile(r"scale|factor|\bratio|percent|multipl|\bgain\b|proportional|off by",
                re.IGNORECASE),
 )  # fmt: skip
@@ -193,7 +200,7 @@ def library_examples(texts: dict[str, str], *, paraphrases: bool = True) -> list
             continue
         sentences = [x for x in _SENTENCE.split(text) if x and x.strip()]
         for i in range(len(sentences)):
-            window = " ".join(sentences[i : i + 2])
+            window = " ".join(sentences[i : i + 3])
             if sum(bool(g.search(window)) for g in _FAULT_GROUPS) >= 2:
                 found.append((where, " ".join(window.split())[:120]))
     return found
@@ -234,6 +241,18 @@ _PLANTED = {
     "influent_wetter.md": "Consider that the feed may have become wetter.",
     "structural_mixing.md": "Poor mixing leaves a load-dependent residual.",
     "structural_ammonia.md": "Ammonia inhibition may have changed.",
+    # the re-review of 1624e4d, 5
+    "split_neutral.md": "An instrument may slowly drift away. The digester is large. It may "
+    "also read off by a constant factor.",
+    "more_water.md": "The feed may carry more water than declared.",
+    "more_dilute.md": "A feed may be more dilute than its declared solids.",
+    "never_appear.md": "Some deliveries never appear in the feed log.",
+    "not_stirred.md": "The tank may not be completely stirred.",
+    "free_ammonia.md": "Free ammonia can suppress the methanogens.",
+    "one_in_five.md": "One in five cells has nothing wrong with it.",
+    "lose_zero.md": "A probe may lose its zero and then report a constant value.",
+    "constant_multiple.md": "A meter may read a constant multiple of the truth or move slowly "
+    "away from it.",
 }  # fmt: skip
 
 
@@ -1082,14 +1101,117 @@ def test_an_estimate_must_be_one_an_estimator_returned(p1_cell):
         (run.paths.root / OUTPUTS_DIR / "p1_chosen" / "state.json").read_text("utf-8")
     )
     refused = [f.message for f in state.tool_failures if f.name == "p1.conclude"]
-    # a Fisher call at a chosen point, and the chosen point with method none (it was only
-    # a simulate input): both refused
-    assert len(refused) == 2, refused
-    assert all(m.startswith("k_m_ac:") for m in refused), refused
-    # the fit's own optimum is accepted
     got = _results_of(run, "p1_chosen")
-    theta = got["tu_3_0"]["result"]["theta"]["k_m_ac"]
-    assert state.final.parameters["k_m_ac"].estimate == pytest.approx(theta, rel=1e-3)
+    # a fit that did not converge returned its chosen start: not an estimate
+    early = got["tu_0_2"]["result"]
+    assert early["converged"] is False
+    assert early["theta"]["k_m_ac"] == pytest.approx(1.37)
+    fit = got["tu_3_0"]["result"]
+    assert fit["converged"] is True
+    # refused: 1.37 with the Fisher interval at 1.37; 1.37 with method none (backed only by
+    # a simulate input and the fit that did not converge); and the optimum with the
+    # interval of a Fisher call whose other coordinate was chosen, unless that interval is
+    # also the fit's own (in this short cell both are clipped to the bounds; the rule
+    # itself is pinned by test_a_fisher_call_backs_an_interval_only_at_a_whole_optimum)
+    mixed = got["tu_4_0"]["result"]["interval_90_at_point"]["k_m_ac"]
+    own = fit["fisher_interval_90"]["k_m_ac"]
+    assert len(refused) == (2 if mixed == own else 3), refused
+    assert all(m.startswith("k_m_ac:") for m in refused), refused
+    assert "fisher interval" in refused[0] and "none interval" in refused[1]
+    final = state.final.parameters["k_m_ac"]
+    assert final.estimate == pytest.approx(fit["theta"]["k_m_ac"], rel=1e-3)
+
+
+def _interval_workspace(fits=(), fishers=()):
+    """A Workspace holding only the calls interval_sources reads (a unit-test stub)."""
+    from types import SimpleNamespace as NS
+
+    ws = object.__new__(agent.Workspace)
+    ws.cfg = {"uncertainty": {"z": 1.645, "rel_tolerance": 1e-3}}
+    ws.lower, ws.upper = {"a": 0.1, "b": 0.1}, {"a": 10.0, "b": 10.0}
+    ws.posteriors, ws.profiles = {}, {}
+    ws.fits = {
+        i: NS(parameters=list(p), theta=list(t), sd=[0.1] * len(p), converged=c)
+        for i, (p, t, c) in enumerate(fits)
+    }
+    ws.fishers = {
+        100 + i: NS(parameters=list(at), crlb_sd=[0.2] * len(at)) for i, at in enumerate(fishers)
+    }
+    ws.fisher_at = {100 + i: dict(at) for i, at in enumerate(fishers)}
+    return ws
+
+
+def test_a_fisher_call_backs_an_interval_only_at_a_whole_optimum():
+    # the re-review of 1624e4d, item 2
+    iv = [2.0 - 1.645 * 0.2, 2.0 + 1.645 * 0.2]
+    # negative control: a Fisher call at the whole optimum of a converged fit backs it
+    ws = _interval_workspace(fits=[(["a", "b"], [2.0, 3.0], True)], fishers=[{"a": 2.0, "b": 3.0}])
+    assert ws.interval_problem("a", 2.0, *iv, "fisher") is None
+    # a Fisher call that matches the optimum in `a` but not in `b` does not
+    ws = _interval_workspace(fits=[(["a", "b"], [2.0, 3.0], True)], fishers=[{"a": 2.0, "b": 5.0}])
+    assert ws.interval_problem("a", 2.0, *iv, "fisher") is not None
+    # nor one whose second coordinate is at its default when the optimum is elsewhere
+    ws = _interval_workspace(fits=[(["a", "b"], [2.0, 3.0], True)], fishers=[{"a": 2.0}])
+    ws.fishers[100].parameters = ["a", "b"]
+    ws.fishers[100].crlb_sd = [0.2, 0.2]
+    assert ws.interval_problem("a", 2.0, *iv, "fisher") is not None
+
+
+def test_only_a_converged_fit_is_an_estimate():
+    # the re-review of 1624e4d, item 2: a fit that did not converge returned its start
+    fit_iv = [2.0 - 1.645 * 0.1, 2.0 + 1.645 * 0.1]
+    for converged in (True, False):  # True is the negative control
+        ws = _interval_workspace(fits=[(["a"], [2.0], converged)], fishers=[{"a": 2.0}])
+        assert (ws.estimated_points("a") == [2.0]) is converged
+        assert (ws.interval_problem("a", 2.0, None, None, "none") is None) is converged
+        assert (ws.interval_problem("a", 2.0, *fit_iv, "fisher") is None) is converged
+        fisher_iv = [2.0 - 1.645 * 0.2, 2.0 + 1.645 * 0.2]
+        assert (ws.interval_problem("a", 2.0, *fisher_iv, "fisher") is None) is converged
+
+
+def test_tool_outputs_do_not_depend_on_hold_out_values(p1_cell, tmp_path):
+    # the re-review of 1624e4d, item 1: two copies of one cell that differ only in hold-out
+    # sensor values must produce byte-identical tool outputs; the hold-out validation, which
+    # runs after conclude and is never shown, is the negative control
+    import shutil
+
+    run, scenario = p1_cell
+    store = run.paths.root.parent.parent
+    copy = tmp_path / "copy"
+    shutil.copytree(store, copy, ignore=shutil.ignore_patterns(OUTPUTS_DIR))
+    sensors_path = copy / "runs" / run.run_id / "observations" / "sensors.json"
+    record = json.loads(sensors_path.read_text("utf-8"))
+    cal_end, changed = 22.5, 0
+    for sensor in record["sensors"].values():
+        for i, t in enumerate(sensor["sample_t_d"]):
+            if t >= cal_end and sensor["value"][i] is not None:
+                sensor["value"][i] = 987654.0
+                changed += 1
+    assert changed > 0
+    sensors_path.write_text(json.dumps(record), encoding="utf-8")
+
+    lines, states = [], []
+    for root in (store / "runs", copy / "runs"):
+        result = run_workflow(
+            run.run_id,
+            "p1",
+            runs_root=root,
+            scenario=scenario,
+            model_client=ScriptedClient(probe_policy),
+            output_name="p1_probe",
+        )
+        assert result.completed, result.stderr_tail
+        out = root / run.run_id / OUTPUTS_DIR / "p1_probe"
+        lines.append(read_transcript(out / LLM_LOG_FILE))
+        states.append(json.loads((out / "state.json").read_text("utf-8")))
+    assert len(lines[0]) == len(lines[1]) >= 3
+    for a, b in zip(*lines, strict=True):
+        assert a["replay_sha256"] == b["replay_sha256"]
+    # every tool the policy called before conclude returned a result, not an error
+    got = _results_of(run, "p1_probe")
+    assert len(got) == 11 and not any("error" in r for r in got.values()), got
+    assert states[0]["validation"] and states[1]["validation"]
+    assert states[0]["validation"] != states[1]["validation"]  # the negative control
 
 
 def test_provenance_is_in_the_summary_and_every_model_record(p1_result):
@@ -1149,6 +1271,8 @@ def test_an_unhandled_response_item_raises_and_is_logged(tmp_path):
         gw.complete(request)
     line = read_transcript(tmp_path / LLM_LOG_FILE)[-1]
     assert "unhandled" in line["error"] and line["provider_request"]["store"] is False
+    # the raw response is kept, so the unhandled item can be read back from the log
+    assert line["provider_response"]["output"] == [{"type": "code_interpreter_call"}]
 
 
 def test_a_bad_signature_is_a_logged_model_error(tmp_path):
