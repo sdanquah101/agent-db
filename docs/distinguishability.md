@@ -101,8 +101,11 @@ observation model's own noise at the declared σ, with **no dispersion rescaling
   `min(i, j) − start + 1` steps, and samples of different intervals share none. That is
   the drift the model draws, which `tests/test_distinguish.py` checks against 3,000 of
   its draws.
-- The white-noise level is taken at the reference prediction, so the covariance is the
-  same for every class and its determinant cancels.
+- **Each candidate is scored with its own covariance:** the declared noise at the
+  candidate's own predicted level, as the observation model would draw it under that
+  hypothesis, with the log-determinant included. A sensor candidate's size is solved in
+  closed form with the reference covariance (the truth less its fault), then scored with
+  its own.
 - **Which samples.** Missing, saturated, fouled and flatlined samples give no value.
 
 **The flag term.** Flatlined samples stay visible to the sensor class through their flags.

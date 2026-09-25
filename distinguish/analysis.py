@@ -63,6 +63,7 @@ __all__ = [
     "flag_deviance",
     "load_record",
     "sensor_candidates",
+    "sensor_deviance",
     "truth_representable",
 ]
 
@@ -171,7 +172,11 @@ class SensorData:
     hazard_per_d: float
     episode_d: float
     chol: Any = None
-    """Cholesky factor of the kept samples' covariance (set by :func:`prepare`)."""
+    """Cholesky factor of the reference covariance of the kept samples (:func:`prepare`)."""
+    drift_k: Any = None
+    """The drift walk's covariance of the kept samples (:func:`prepare`)."""
+    logdet_ref: float = 0.0
+    white_floor: float = 0.0
 
 
 def load_record(
@@ -255,25 +260,53 @@ def drift_covariance(
     return (sd_per_sqrt_d**2 * dt) * np.where(same, shared, 0).astype(float)
 
 
-def prepare(record: Sequence[SensorData], mu_ref: Mapping[str, np.ndarray]) -> None:
-    """Factor each sensor's covariance once: white noise plus the drift walk.
+def _white(s: SensorData, mu: np.ndarray) -> np.ndarray:
+    """The declared white-noise variance at the prediction ``mu`` (kept samples)."""
+    return np.maximum((s.cv * np.abs(mu)) ** 2 + s.sd_abs**2, s.white_floor)
 
-    The white noise is taken at the reference prediction's level. The covariance is the
-    same for every class, so the log-determinant cancels and each class's Gaussian term
-    is a whitened sum of squares.
+
+def prepare(record: Sequence[SensorData], mu_ref: Mapping[str, np.ndarray]) -> None:
+    """Set each sensor's drift covariance and its reference factor.
+
+    The reference factor (white noise at the reference prediction, plus the drift walk)
+    whitens a design in the sensor class's closed-form fit and fixes the zero of the
+    log-determinant; every class is then scored with its own covariance
+    (:func:`sensor_deviance`).
     """
     for s in record:
         mu = mu_ref[s.sensor][s.keep]
-        white = (s.cv * np.abs(mu)) ** 2 + s.sd_abs**2
-        white = np.maximum(white, 1e-24 + (1e-9 * max(float(np.median(np.abs(mu))), 1e-12)) ** 2)
-        cov = np.diag(white) + drift_covariance(
-            s.t[s.keep], s.dt, s.drift_sd, s.recal_d, s.recalibrated
-        )
+        s.white_floor = 1e-24 + (1e-9 * max(float(np.median(np.abs(mu))) if mu.size else 0.0,
+                                            1e-12)) ** 2  # fmt: skip
+        s.drift_k = drift_covariance(s.t[s.keep], s.dt, s.drift_sd, s.recal_d, s.recalibrated)
+        cov = np.diag(_white(s, mu)) + s.drift_k
         s.chol = cho_factor(cov, lower=True)[0] if cov.size else None
+        s.logdet_ref = 2.0 * float(np.log(np.diag(s.chol)).sum()) if cov.size else 0.0
+
+
+def sensor_deviance(s: SensorData, mu: np.ndarray) -> float:
+    """-2 log-likelihood of one sensor's kept values under the prediction ``mu``.
+
+    The covariance is the declared noise at ``mu``'s own level plus the drift walk, as
+    the observation model draws it under that hypothesis; the log-determinant is taken
+    relative to the reference's, so the reference prediction scores its whitened sum of
+    squares.
+    """
+    if s.chol is None:
+        return 0.0
+    m = mu[s.keep]
+    if not np.all(np.isfinite(m)):
+        return float("inf")
+    try:
+        chol = cho_factor(np.diag(_white(s, m)) + s.drift_k, lower=True)[0]
+    except np.linalg.LinAlgError:
+        return float("inf")
+    w = solve_triangular(chol, s.y[s.keep] - m, lower=True, check_finite=False)
+    logdet = 2.0 * float(np.log(np.diag(chol)).sum())
+    return float(w @ w) + logdet - s.logdet_ref
 
 
 def whiten(s: SensorData, v: np.ndarray) -> np.ndarray:
-    """``L^-1 v`` over the kept samples (``v`` is on the full sample grid)."""
+    """``L^-1 v`` over the kept samples with the reference factor (``v`` on the full grid)."""
     if s.chol is None:
         return np.zeros(0)
     return solve_triangular(s.chol, v[s.keep], lower=True, check_finite=False)
@@ -359,12 +392,8 @@ def predict(channels: Any, record: Sequence[SensorData]) -> dict[str, np.ndarray
 
 
 def gaussian_terms(record: Sequence[SensorData], mu: Mapping[str, np.ndarray]) -> dict[str, float]:
-    """Each sensor's whitened sum of squares of ``y - mu`` over its kept samples."""
-    out = {}
-    for s in record:
-        w = whiten(s, s.y - mu[s.sensor])
-        out[s.sensor] = float(w @ w) if np.all(np.isfinite(w)) else float("inf")
-    return out
+    """Each sensor's Gaussian deviance under ``mu`` (:func:`sensor_deviance`)."""
+    return {s.sensor: sensor_deviance(s, mu[s.sensor]) for s in record}
 
 
 def _ramp(s: SensorData, onset: float) -> np.ndarray:
@@ -389,9 +418,10 @@ def sensor_candidates(
     """The sensor class on top of the reference prediction ``mu``.
 
     On one sensor at a time: a scale step, an offset step or a calibration ramp from an
-    onset (k = 1 each, fitted in closed form by generalised least squares), or a flatline
-    window (k = 0: it changes only which flags are explained). The best candidate pays
-    the search over all of them.
+    onset (k = 1 each; the size is solved in closed form by generalised least squares
+    with the reference covariance, and the candidate is then scored with its own), or a
+    flatline window (k = 0: it changes only which flags are explained). The best
+    candidate pays the search over all of them.
     """
     gauss0 = gaussian_terms(record, mu)
     base = sum(gauss0.values()) + sum(flags0.values())
@@ -400,7 +430,7 @@ def sensor_candidates(
         if s.chol is None:
             continue
         w0 = whiten(s, s.y - mu[s.sensor])
-        g0 = float(w0 @ w0)
+        g0 = gauss0[s.sensor]
         for onset in onsets:
             step = (s.t >= onset).astype(float)
             for form, design in (
@@ -413,7 +443,7 @@ def sensor_candidates(
                 if dd <= 0.0 or not np.isfinite(dd):
                     continue
                 beta = float(wd @ w0) / dd
-                dev = base - g0 + (g0 - beta * beta * dd)
+                dev = base - g0 + sensor_deviance(s, mu[s.sensor] + beta * design)
                 knob = {"scale": 1.0 + beta, "offset": beta, "ramp": beta}[form]
                 options.append(
                     (dev, 1, {"sensor": s.sensor, "form": form, "onset_d": onset, "value": knob})

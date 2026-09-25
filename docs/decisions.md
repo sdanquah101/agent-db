@@ -5826,11 +5826,18 @@ How the session implemented it. Each choice is the smallest that meets the decis
   removes only the label-bearing faults.
 - **The likelihood is the observation model's own.**
   - White noise plus the recalibrated drift walk, whose covariance is modelled (the
-    reviewer's correlated-noise finding, item 2). The white-noise level is taken at the
-    reference prediction, so the covariance is shared and its determinant cancels.
+    reviewer's correlated-noise finding, item 2). Each candidate is scored with the
+    declared noise at its own predicted level, log-determinant included: the exact
+    Gaussian likelihood of the observation model under that hypothesis.
+  - *First implemented, then corrected before any result:* one covariance for every
+    class, at the reference prediction's level. It failed on S5-01 A/C.
+    - The reference's acetate stays near 0.02 kg/m³ while the truth's rises to 2.5.
+      So a cv-only sensor (vfa_ac, 8 %) was judged with a σ about 100× too small, and
+      even the exact truth candidate scored 348,701 on 40 samples.
+    - The check was re-run from the simulation cache.
   - *Alternatives:* σ from the observed values (as P0 does), or P0's relative-sd floor.
-    Rejected: the floor is not the declared noise (it is 7× the declared pH sd), and a
-    shared covariance keeps the comparison between classes exact.
+    Rejected: the floor is not the declared noise (it is 7× the declared pH sd), and
+    the observed value is not the level the hypothesis predicts.
 - **Flatlined samples stay visible (item 1).**
   - Their values are dropped, because a stuck sensor repeats its last reading. Their
     flags enter through the observation model's flatline episode model.
