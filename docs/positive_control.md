@@ -242,8 +242,13 @@ of 10".** §5.1 says anything less than 10 of 10 is reported as not run.
   ("lsq: bound 61 at the measured rate"). No fitter ran, and the defaults stood, so the
   forced parameters were never estimated.
 - §5.1 calls any shortfall "a bug in the hook". The cause here is P0's own time guard, not
-  the hook. **The criterion is left exactly as registered**; the coordinator decides
-  whether that wording matters (see the PR body).
+  the hook. **The criterion is left exactly as registered.**
+- The coordinator's decision (2026-09-25 ~05:35 UTC): the verdict stands exactly as
+  registered, and the two cells are not re-run under another budget as part of R3.
+  The shortfall on S5-01 A/C and S5-02 A/A is P0's own wall-clock guard at Plant A's
+  measured rate, not the hook (the hook placed the forced parameters on all 10 cells);
+  §5.1's "bug in the hook" reading does not apply, and the verdict is left as
+  registered.
 
 **What the 8 fitted cells show.** This is reported for the record, and is not the
 verdict:
