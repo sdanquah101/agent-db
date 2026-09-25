@@ -328,6 +328,13 @@ class Loop(_Frozen):
     array_preview: _PosInt
 
 
+class P1Uncertainty(_Frozen):
+    """How a reported interval is checked against the call that produced it."""
+
+    z: _Pos
+    rel_tolerance: Annotated[float, Field(gt=0.0, lt=0.1)]
+
+
 class P1Seeds(_Frozen):
     """Rule 4: a stochastic call's seed is ``base`` plus its registry call index."""
 
@@ -353,6 +360,7 @@ class P1Config(_Frozen):
     defaults: P1Defaults
     model: ModelSettings
     loop: Loop
+    uncertainty: P1Uncertainty
     seeds: P1Seeds
     evidence_keys: dict[str, tuple[str, ...]] = Field(min_length=1)
     prompts: Prompts

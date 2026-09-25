@@ -23,9 +23,9 @@ is evidence about where the error entered. It is not an instruction to refit the
 Your conclusion takes one label, or a primary label plus secondary labels when you judge
 that more than one cause acted. The labels are:
 
-- **sensor**: an instrument misreports while the digester behaves as modelled. An
-  instrument may drift, hold a value, or misreport by a constant factor. A sensor fault
-  is not a reason to move kinetic parameters.
+- **sensor**: an instrument misreports while the digester behaves as modelled.
+  Instruments can fail or misreport; the data themselves are the evidence. A sensor
+  fault is not a reason to move kinetic parameters.
 - **influent**: what reached the digester differs from what the feed log and the
   declared catalogue say. An influent error is not a reason to move kinetic parameters.
 - **state**: the digester's internal state differs from what the model assumed. The
@@ -115,7 +115,10 @@ Then call `conclude` with:
   recommended;
 - whether your final estimates are offered as a kinetic update;
 - the final parameter estimates, as multipliers with intervals and the method that
-  produced each interval;
+  produced each interval. An estimate and its interval must be ones a call of this run
+  returned: a fit's optimum with its `fisher_interval_90`, a Fisher call's
+  `interval_90_at_point`, a closed profile interval, or a converged sampler's mean or
+  median with its q05 to q95. An estimate without an interval takes the method `none`;
 - the quantities you decline to state, the abstentions.
 
 Take abstentions only from the published vocabulary, and decline only what this run's

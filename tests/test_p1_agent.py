@@ -121,9 +121,35 @@ _LIBRARY_EXAMPLES = re.compile(
 )
 
 
+# Paraphrases of the library's three sensor faults (the coordinator's re-review of PR #26,
+# 2): a sentence that names a drift, a stuck or flat reading and a scale or factor error
+# together enumerates them whatever the words, and "hold a value" alone names one.
+_FAULT_GROUPS = (
+    re.compile(r"drift|wander|creep", re.IGNORECASE),
+    re.compile(r"\bhold|\bheld\b|stuck|frozen|freez|flat|same (value|reading)", re.IGNORECASE),
+    re.compile(r"scale|factor|multipl|\bgain\b|proportional", re.IGNORECASE),
+)
+_HOLD_A_VALUE = re.compile(
+    r"\b(hold|holds|holding|held|stuck at|freezes? (at|on))\s+(a|one|its|the same|a single|"
+    r"a constant)\s+(single\s+|constant\s+)?(value|reading)",
+    re.IGNORECASE,
+)
+_SENTENCE = re.compile(r"(?<=[.;:!?])\s+|\n\s*\n|\n\s*[-*]\s")
+
+
 def library_examples(texts: dict[str, str]) -> list[tuple[str, str]]:
-    """(where, match) for every library-shaped example in the committed prompt surfaces."""
-    return [(w, m.group(0)) for w, t in texts.items() for m in _LIBRARY_EXAMPLES.finditer(t)]
+    """(where, match) for every library-shaped example in the committed prompt surfaces.
+
+    The old phrases, "hold a value" in any form, and any sentence that names all three
+    sensor-fault kinds together.
+    """
+    found = [(w, m.group(0)) for w, t in texts.items() for m in _LIBRARY_EXAMPLES.finditer(t)]
+    for where, text in texts.items():
+        found += [(where, m.group(0)) for m in _HOLD_A_VALUE.finditer(text)]
+        for sentence in _SENTENCE.split(text):
+            if all(g.search(sentence) for g in _FAULT_GROUPS):
+                found.append((where, " ".join(sentence.split())[:120]))
+    return found
 
 
 def test_no_prompt_surface_reintroduces_the_librarys_examples(tmp_path):
@@ -134,6 +160,16 @@ def test_no_prompt_surface_reintroduces_the_librarys_examples(tmp_path):
     )
     found = {m.lower() for _, m in library_examples({"old.md": (tmp_path / "old.md").read_text()})}
     assert found == {"gas meter", "scale error", "wetter"}
+    # paraphrases: the three sensor faults in other words, and "hold a value" alone
+    planted = {
+        "paraphrase.md": "An instrument can creep over time, freeze on the same value, or "
+        "read high by a fixed multiplier.",
+        "reviewer.md": "- **sensor**: an instrument may hold a value while the plant moves.",
+        "first_ruling.md": "An instrument may drift, hold a value, or misreport by a "
+        "constant factor.",
+    }
+    caught = {w for w, _ in library_examples(planted)}
+    assert caught == set(planted)
 
 
 def test_the_prompt_check_fails_on_a_planted_file(tmp_path):
@@ -728,20 +764,24 @@ def test_every_refused_form_is_refused_and_recorded(p1_cell):
     expected = [
         "`bias_z` = 42.0 is not what the cited calls produced",  # fabricated number
         "`bias_z` is a number; got 'huge'",  # a word for a number
+        "no cited call produced a `bias_z` for ['ph']",  # another sensor's value
         "no tool 'validate'",  # the hold-out is not the agent's to read
         "reaches into the hold-out window",  # nor its to edit
-        "k_m_ac: no successful call of this run produced a fisher interval",
+        "k_m_ac: estimate 1.0 with interval [0.999, 1.001] is not what a fisher call",
         "k_dis: no successful call of this run produced a profile interval",
         "`none` never stands beside another label",
         "the run is concluded; nothing runs after it",  # a use after conclude, same turn
     ]
     for text in expected:
         assert any(text in m for m in messages), (text, messages)
-    assert state.plan.sizes["refused_actions"] == 7  # the two intervals are one refusal
+    assert state.plan.sizes["refused_actions"] == 8  # the two intervals are one refusal
     # the refused quarantine applied none of its windows
     assert state.data_quality["gas_flow"].quarantined_windows == ()
     assert state.classification.evidence == ()  # neither fabricated item was kept
     assert state.final.label == "none" and state.final.secondary_labels == ()
+    # the Fisher call's own interval, reported as shown, is accepted where it is finite
+    if "k_m_ac" in state.final.parameters:
+        assert state.final.parameters["k_m_ac"].method == "fisher"
     # the simulate after the conclusion never reached the registry
     assert [a.name for a in state.actions].count("simulate") == 1
 

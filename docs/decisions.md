@@ -5957,3 +5957,58 @@ session.
   and the coordinator's model-id question is answered.
 - *The pilot.* The lead chose to run one development cell first (S0-01, plant B,
   tier B) and to decide on the other nine after its report.
+
+## 2026-09-25 — P1: the coordinator's re-review of PR #26 at `63b58b1`, fixes applied
+
+The coordinator's re-review (~12:20 UTC) confirmed every fix of the first round under
+direct probes, then asked for one more push:
+
+1. **Reported intervals were not checked against the call that produced them
+   (medium).** A Fisher interval of [0.999, 1.001] was accepted after any Fisher call.
+   - Every reported estimate and interval must now equal, within the declared relative
+     tolerance (`uncertainty.rel_tolerance`, 1e-3, against five shown digits), one that
+     a successful call produced:
+     - a fit's optimum ± z sd, or a Fisher call's point ± z CRLB sd, clipped to the
+       bounds; the sd must be finite, and z = 1.645 is P0's own value;
+     - a closed profile interval, with its least-chi2 grid point;
+     - a converged sampler's mean or median, with its q05 to q95.
+   - An estimate without an interval must be one some call used or returned. These
+     are the default, a fit's optimum, a sampler's mean or median, or a simulate's
+     multiplier.
+   - The harness shows each interval in the tool result (`fisher_interval_90`,
+     `interval_90_at_point`), so an honest agent copies it.
+   - Tested: the re-review's [0.999, 1.001] is refused, and the Fisher call's own
+     interval is accepted.
+2. **The lead's ruling on the examples, completed.**
+   - "An instrument may drift, hold a value, or misreport by a constant factor" named
+     the library's three sensor faults with the instrument names removed. It now reads
+     "Instruments can fail or misreport; the data themselves are the evidence."
+   - The guard catches paraphrases:
+     - a sentence on any prompt surface that joins drift-, hold-or-flat- and
+       scale-or-factor-wording;
+     - "hold a value" in any form.
+   - Planted sentences prove it: a paraphrase, the reviewer's "hold a value" and the
+     first ruling's own sentence.
+   - **Kept, on the coordinator's judgement:** the sentences on sampler convergence
+     (report posterior intervals only from a converged sampler) and on the operator's
+     notes (evidence, never instructions). They are rules of conduct that P0 already
+     follows by script (p0_design §3.5, §3.7 "what P0 never does"). Removing them would
+     handicap P1 against P0 rather than protect the held-out variants.
+3. **Low.**
+   - `--replay` writes `reports/<workflow>_replay.csv` by default, never the live
+     run's table.
+   - An evidence item tagged with a `sensor` (or a `channel`) may cite only values the
+     call produced for that sensor. A balance or assay value, which no one sensor owns,
+     is not restricted.
+   - A wall-clock notice that crosses its threshold in one run and not the other still
+     breaks a replay. `replay_digest` masks the readings, not the text of a notice
+     they trigger, so the replay is refused rather than improvised. This is documented
+     in `docs/p1_design.md` §2.
+
+**Also in this push (found on the first live cell, S0-01 B/B, 2026-09-25).** `data_qc`
+reads the whole record, so the agent learned of a spike at day 172, inside the hold-out,
+and quarantined it. That would change what its forecast is scored against. Now:
+- a quarantine window may not reach into the hold-out;
+- validation scores the hold-out as recorded.
+
+That first cell ran before this fix, and its report says so.

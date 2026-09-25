@@ -589,7 +589,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     table = args.table
     if table is None:
-        table = REPORTS_DIR / f"{args.workflow}_pilot.csv"
+        # a replay writes its own table, never over the live run's row (the coordinator's
+        # re-review of PR #26, 3)
+        suffix = "replay" if args.replay is not None else "pilot"
+        table = REPORTS_DIR / f"{args.workflow}_{suffix}.csv"
     rows = batch(
         cells,
         args.workflow,

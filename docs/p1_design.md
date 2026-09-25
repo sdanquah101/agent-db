@@ -74,7 +74,8 @@ CI with no network and no key:
   whose **replay digest** differs from the recorded one. The digest masks the wall-clock
   readings the agent is shown, which no replay can reproduce, and nothing else. A harness
   notice that the clock triggered in one run and not the other still differs, and the
-  replay is refused. The transcript is read once and never written. A replay writes to
+  replay is refused. **A limit, stated:** a run whose clock crossed the conclude-notice
+  threshold at a different turn from its replay cannot be replayed. The transcript is read once and never written. A replay writes to
   its own output directory, and a gateway asked to log over the transcript it replays
   refuses to start. `python -m tools.runner --workflow p1 --run <id> --replay
   <llm_calls.jsonl>` re-runs a cell into `runs/<id>/workflows/p1_replay/` (tested with a
@@ -123,7 +124,20 @@ The model decides; the harness does what a JSON argument cannot.
   - any tool use after `conclude` in the same turn (the review of PR #26, 7);
   - a bounds change without a justification;
   - a flagged or excluded sensor in the objective;
-  - an estimate outside the declared bounds.
+  - an estimate outside the declared bounds;
+  - **an estimate or interval that no call produced** (the re-review of PR #26, 1):
+    - a Fisher interval must be a fit's optimum ± z sd, or a Fisher call's point ± z
+      CRLB sd, clipped to the bounds, with a finite sd (z = 1.645, P0's);
+    - a profile interval must be a closed profile's;
+    - a posterior must be a converged sampler's mean or median with its q05 to q95;
+    - an estimate without an interval must be one some call used or returned.
+
+    Matches are to `uncertainty.rel_tolerance`, and the harness shows each interval in
+    the tool result;
+  - an evidence value that the cited call did not produce for the sensor the item's tag
+    names (the re-review, 3);
+  - a quarantine window that reaches into the hold-out (found on the first live cell).
+    Validation scores the hold-out as recorded.
 
   A refusal goes back to the model as an error. It is recorded under `tool_failures` (name
   `p1.<action>`) and counted in `plan.sizes.refused_actions`. The harness does **not**

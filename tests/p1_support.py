@@ -125,12 +125,14 @@ def slow(policy: Policy, turn: int, seconds: float) -> Policy:
 def adversarial_policy(params: dict[str, Any]) -> dict[str, Any]:
     """Every refused form of the review of PR #26, then a valid conclusion.
 
-    Turn 2 fabricates a residual z-score, gives a word for a number, asks for the hold-out
-    validation, and quarantines a window of the hold-out (with one of the calibration
-    window in the same call, which must not be applied either); turn 3 claims a Fisher
-    interval with no Fisher call and a profile interval with no profile; turn 4 puts
-    `none` beside a real label; turn 5 concludes validly and, in the same turn, asks for
-    one more simulate.
+    Turn 1 examines the gas-flow residual and calls Fisher on one parameter. Turn 2
+    fabricates a residual z-score, gives a word for a number, cites the gas-flow value
+    under the pH sensor's tag, asks for the hold-out validation, and quarantines a window
+    of the hold-out (with one of the calibration window in the same call, which must not
+    be applied either). Turn 3 claims a Fisher interval that is not the Fisher call's (the
+    re-review's [0.999, 1.001]) and a profile interval with no profile. Turn 4 puts `none`
+    beside a real label. Turn 5 concludes validly, reporting the Fisher call's own interval
+    where it is finite, and in the same turn asks for one more simulate.
     """
     turn = turn_of(params)
     got = results(params)
@@ -138,13 +140,18 @@ def adversarial_policy(params: dict[str, Any]) -> dict[str, Any]:
         return reply(tool_use(0, 0, "simulate", {}))
     sim = got["tu_0_0"]["call_index"]
     if turn == 1:
-        return reply(tool_use(1, 0, "residual_diag", {"sensor": "gas_flow", "prediction": sim}))
+        return reply(
+            tool_use(1, 0, "residual_diag", {"sensor": "gas_flow", "prediction": sim}),
+            tool_use(1, 1, "fisher_info", {"parameters": ["k_m_ac"], "sensors": ["gas_flow"]}),
+        )
     rd = got["tu_1_0"]["call_index"]
+    real_z = got["tu_1_0"]["result"]["standardised"]["bias_z"]
     if turn == 2:
         ev = {"label": "sensor", "statement": "a large bias", "calls": [sim, rd]}
         return reply(
             tool_use(2, 0, "record_evidence", {**ev, "values": {"bias_z": 42.0}}),
             tool_use(2, 1, "record_evidence", {**ev, "values": {"bias_z": "huge"}}),
+            tool_use(2, 4, "record_evidence", {**ev, "values": {"sensor": "ph", "bias_z": real_z}}),
             tool_use(2, 2, "validate", {"prediction": sim}),
             tool_use(
                 2,
@@ -161,7 +168,6 @@ def adversarial_policy(params: dict[str, Any]) -> dict[str, Any]:
         )
     base = conclusion_for(sim)
     if turn == 3:
-        est = {"estimate": 1.0, "lower": 0.9, "upper": 1.1}
         return reply(
             tool_use(
                 3,
@@ -170,8 +176,13 @@ def adversarial_policy(params: dict[str, Any]) -> dict[str, Any]:
                 {
                     **base,
                     "parameters": {
-                        "k_m_ac": {**est, "method": "fisher"},
-                        "k_dis": {**est, "method": "profile"},
+                        "k_m_ac": {
+                            "estimate": 1.0,
+                            "lower": 0.999,
+                            "upper": 1.001,
+                            "method": "fisher",
+                        },
+                        "k_dis": {"estimate": 1.0, "lower": 0.9, "upper": 1.1, "method": "profile"},
                     },
                     "interval_method": "fisher",
                 },
@@ -181,8 +192,20 @@ def adversarial_policy(params: dict[str, Any]) -> dict[str, Any]:
         return reply(
             tool_use(4, 0, "conclude", {**base, "label": "sensor", "secondary_labels": ["none"]})
         )
+    final = dict(base)
+    interval = got["tu_1_1"]["result"]["interval_90_at_point"].get("k_m_ac")
+    if interval is not None:  # the Fisher call's own interval, as shown: accepted
+        final["parameters"] = {
+            "k_m_ac": {
+                "estimate": 1.0,
+                "lower": interval[0],
+                "upper": interval[1],
+                "method": "fisher",
+            }
+        }
+        final["interval_method"] = "fisher"
     return reply(
-        tool_use(turn, 0, "conclude", base),
+        tool_use(turn, 0, "conclude", final),
         tool_use(turn, 1, "simulate", {"parameters": {"k_m_ac": 1.5}}),
     )
 

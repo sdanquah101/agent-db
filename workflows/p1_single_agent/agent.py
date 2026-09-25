@@ -683,6 +683,8 @@ class Workspace:
         self.fits: dict[int, Any] = {}
         self.posteriors: dict[int, Any] = {}
         self.fishers: dict[int, Any] = {}
+        self.fisher_at: dict[int, dict[str, float]] = {}
+        self.sim_params: dict[int, dict[str, float]] = {}
         self.profiles: dict[int, Any] = {}
         # the evidence values each call produced, by call index and evidence key: an
         # evidence item may cite only these (§6.5: no fabricated values)
@@ -879,11 +881,14 @@ class Workspace:
             "record_evidence": self.t_evidence,
         }
 
-    def produce(self, index: int, key: str, value: Any) -> None:
-        """Record a value a call produced under an evidence key."""
+    def produce(self, index: int, key: str, value: Any, sensor: str | None = None) -> None:
+        """Record a value a call produced under an evidence key, and the sensor it concerns.
+
+        ``sensor`` is None for a value no single sensor owns (a balance, an assay).
+        """
         if value is None or (isinstance(value, float) and not math.isfinite(value)):
             return
-        self.produced.setdefault(index, {}).setdefault(key, []).append(value)
+        self.produced.setdefault(index, {}).setdefault(key, []).append((value, sensor))
 
     def _out(self, index: int | None, result: Any) -> dict[str, Any]:
         out: dict[str, Any] = {}
@@ -992,13 +997,15 @@ class Workspace:
         for r in out.results:
             if r.name in self.series:
                 self.series[r.name].flags = list(r.flags)
-                self.produce(index, "declared_bound", self.series[r.name].noise.get("drift_bound"))
-            self.produce(index, "slope_per_d", _f(r.drift_slope_per_d))
-            self.produce(index, "signal_to_noise", _f(r.drift_signal_to_noise))
-            self.produce(index, "event_missing_ratio", _f(r.event_missing_ratio))
+                self.produce(
+                    index, "declared_bound", self.series[r.name].noise.get("drift_bound"), r.name
+                )
+            self.produce(index, "slope_per_d", _f(r.drift_slope_per_d), r.name)
+            self.produce(index, "signal_to_noise", _f(r.drift_signal_to_noise), r.name)
+            self.produce(index, "event_missing_ratio", _f(r.event_missing_ratio), r.name)
             for seg in r.flatlines:
-                self.produce(index, "start_d", float(seg.start))
-                self.produce(index, "end_d", float(seg.end))
+                self.produce(index, "start_d", float(seg.start), r.name)
+                self.produce(index, "end_d", float(seg.end), r.name)
         return self._out(index, out.model_dump(mode="json"))
 
     def t_balance(self, inp: dict[str, Any]) -> dict[str, Any]:
@@ -1106,6 +1113,7 @@ class Workspace:
             args["biomass_scale"] = float(inp["biomass_scale"])
         out, index = self.rec.call("simulate", "simulate", **args)
         self.sims[index] = out
+        self.sim_params[index] = dict(args["parameters"])
         return self._out(
             index,
             {
@@ -1208,6 +1216,8 @@ class Workspace:
             at=self._multipliers(inp.get("at"), "at"),
         )
         self.fishers[index] = out
+        at = self._multipliers(inp.get("at"), "at")
+        self.fisher_at[index] = at
         rel: dict[str, float | None] = {}
         for n, sd in zip(out.parameters, out.crlb_sd, strict=True):
             width = self.upper[n] - self.lower[n]
@@ -1217,6 +1227,10 @@ class Workspace:
         result.pop("fim", None)
         result["crlb_sd"] = dict(zip(out.parameters, out.crlb_sd, strict=True))
         result["crlb_sd_over_bound_width"] = rel
+        result["interval_90_at_point"] = {
+            n: self.fisher_interval(n, at.get(n, 1.0), sd)
+            for n, sd in zip(out.parameters, out.crlb_sd, strict=True)
+        }
         return self._out(index, result)
 
     def t_profile(self, inp: dict[str, Any]) -> dict[str, Any]:
@@ -1271,6 +1285,10 @@ class Workspace:
         names = list(out.parameters)
         sd = list(out.sd) if out.sd is not None else [None] * len(names)
         return {
+            "fisher_interval_90": {
+                n: self.fisher_interval(n, float(t), d)
+                for n, t, d in zip(names, out.theta, sd, strict=True)
+            },
             "method": out.method,
             "theta": dict(zip(names, out.theta, strict=True)),
             "sd": dict(zip(names, sd, strict=True)),
@@ -1416,8 +1434,8 @@ class Workspace:
         if summary["bias_z"] is not None and summary["rmse_z"] is not None:
             self.residuals[s.channel] = summary
         for key in ("bias_z", "rmse_z", "step_z", "step_day", "early_bias_z", "late_bias_z"):
-            self.produce(index, key, stats[key])
-        self.produce(index, "most_explanatory", out.most_explanatory)
+            self.produce(index, key, stats[key], s.name)
+        self.produce(index, "most_explanatory", out.most_explanatory, s.name)
         result = out.model_dump(mode="json")
         result["standardised"] = {**stats, "prediction_call_index": int(inp["prediction"])}
         return self._out(index, result)
@@ -1605,8 +1623,19 @@ class Workspace:
                 known = set(self.series) if key == "sensor" else set(self.outputs)
                 if values[key] not in known:
                     raise ActionError(f"{key} {values[key]!r} is not one of {sorted(known)}")
+        tagged: set[str] | None = None
+        if "sensor" in values:
+            tagged = {str(values["sensor"])}
+        if "channel" in values:
+            by_channel = {n for n, x in self.series.items() if x.channel == values["channel"]}
+            tagged = by_channel if tagged is None else tagged & by_channel
+            if not tagged:
+                raise ActionError(
+                    f"the sensor and channel tags disagree, or no sensor observes "
+                    f"{values['channel']!r}"
+                )
         for key in sorted(set(values) & set(self.evidence_keys)):
-            self.check_value(key, values[key], calls)
+            self.check_value(key, values[key], calls, tagged)
         item = {
             "rule": RULE,
             "label": inp["label"],
@@ -1620,18 +1649,26 @@ class Workspace:
         self.evidence.append(item)
         return {"evidence_id": len(self.evidence) - 1, "n_evidence": len(self.evidence)}
 
-    def check_value(self, key: str, value: Any, calls: list[int]) -> None:
+    def check_value(
+        self, key: str, value: Any, calls: list[int], sensors: set[str] | None = None
+    ) -> None:
         """A cited value must be one the cited calls produced (§6.5: no fabricated values).
 
         Numbers match to the five significant digits the agent is shown; strings exactly.
+        With a ``sensor`` (or ``channel``) tag on the item, a per-sensor value must be one
+        the call produced *for that sensor* (the coordinator's re-review of PR #26, 3).
 
         Raises:
             ActionError: If no cited call produced that value under that key.
         """
-        produced = [v for i in calls for v in self.produced.get(i, {}).get(key, [])]
+        entries = [e for i in calls for e in self.produced.get(i, {}).get(key, [])]
+        if sensors is not None:
+            entries = [(v, who) for v, who in entries if who is None or who in sensors]
+        produced = [v for v, _ in entries]
         if not produced:
+            where = "" if sensors is None else f" for {sorted(sensors)}"
             raise ActionError(
-                f"no cited call produced a `{key}`; cite the call the number rests on"
+                f"no cited call produced a `{key}`{where}; cite the call the number rests on"
             )
         numeric = [v for v in produced if not isinstance(v, str)]
         if numeric:
@@ -1649,24 +1686,116 @@ class Workspace:
         if value not in produced:
             raise ActionError(f"`{key}` = {value!r:.40} is not what the cited calls produced")
 
-    def interval_backed(self, name: str, method: str) -> bool:
-        """Whether a successful call of this run produced ``method``'s interval for ``name``."""
-        if method == "none":
-            return True
+    def fisher_interval(self, name: str, estimate: float, sd: Any) -> list[float] | None:
+        """``estimate +/- z sd`` clipped to the bounds; None for a non-finite sd."""
+        sd_f = _f(sd)
+        if sd_f is None or name not in self.lower:
+            return None
+        z = float(self.cfg["uncertainty"]["z"])
+        return [
+            max(self.lower[name], estimate - z * sd_f),
+            min(self.upper[name], estimate + z * sd_f),
+        ]
+
+    def _close(self, a: float, b: float) -> bool:
+        tol = float(self.cfg["uncertainty"]["rel_tolerance"])
+        return abs(a - b) <= tol * max(abs(a), abs(b)) + 1e-9
+
+    def interval_sources(self, name: str, method: str) -> list[tuple[list[float], Any, Any]]:
+        """Every (estimates, lower, upper) a successful call produced for ``name`` by ``method``.
+
+        The coordinator's re-review of PR #26, item 1:
+
+        - posterior: a converged sampler's mean or median, and its q05-q95;
+        - profile: the grid point of least chi2, and the profile's closed interval;
+        - fisher: a fit's optimum +/- z sd (its covariance is the Fisher information at
+          the optimum, P0's intervals) or a Fisher call's point +/- z CRLB sd, clipped to
+          the bounds, where that sd is finite;
+        - none: an estimate some call used or returned (1.0 the default, a fit's optimum,
+          a sampler's mean or median, a simulate's multiplier), with no interval.
+        """
+        out: list[tuple[list[float], Any, Any]] = []
         if method == "posterior":
-            return any(p.converged and name in p.parameters for p in self.posteriors.values())
-        if method == "profile":
-            return any(pr.parameter == name for pr in self.profiles.values())
-        # fisher: a Fisher-information call, or a fit's covariance, which is the Fisher
-        # information at the optimum (P0's intervals, design §3.3)
-        if any(name in f.parameters for f in self.fishers.values()):
-            return True
-        for fit in self.fits.values():
-            if fit.sd is not None and name in fit.parameters:
-                sd = list(fit.sd)[list(fit.parameters).index(name)]
-                if _f(sd) is not None:
-                    return True
-        return False
+            for post in self.posteriors.values():
+                if post.converged and name in post.parameters:
+                    i = list(post.parameters).index(name)
+                    q = {k: list(v) for k, v in dict(post.quantiles).items()}
+                    ests = [float(list(post.mean)[i])]
+                    if "q50" in q:
+                        ests.append(float(q["q50"][i]))
+                    if "q05" in q and "q95" in q:
+                        out.append((ests, float(q["q05"][i]), float(q["q95"][i])))
+        elif method == "profile":
+            for pr in self.profiles.values():
+                lo, hi = pr.interval
+                if pr.parameter == name and lo is not None and hi is not None:
+                    chi2 = np.asarray(pr.chi2, dtype=float)
+                    grid = np.asarray(pr.grid, dtype=float)
+                    best = float(grid[int(np.nanargmin(chi2))]) if chi2.size else float(lo)
+                    out.append(([best], float(lo), float(hi)))
+        elif method == "fisher":
+            for fit in self.fits.values():
+                if fit.sd is not None and name in fit.parameters:
+                    i = list(fit.parameters).index(name)
+                    theta = float(list(fit.theta)[i])
+                    iv = self.fisher_interval(name, theta, list(fit.sd)[i])
+                    if iv is not None:
+                        out.append(([theta], iv[0], iv[1]))
+            for index, fisher in self.fishers.items():
+                if name in fisher.parameters:
+                    i = list(fisher.parameters).index(name)
+                    point = float(self.fisher_at.get(index, {}).get(name, 1.0))
+                    iv = self.fisher_interval(name, point, list(fisher.crlb_sd)[i])
+                    if iv is not None:
+                        out.append(([point], iv[0], iv[1]))
+        else:
+            ests = [1.0]
+            for fit in self.fits.values():
+                if name in fit.parameters:
+                    ests.append(float(list(fit.theta)[list(fit.parameters).index(name)]))
+            for post in self.posteriors.values():
+                if name in post.parameters:
+                    i = list(post.parameters).index(name)
+                    ests.append(float(list(post.mean)[i]))
+                    q50 = dict(post.quantiles).get("q50")
+                    if q50 is not None:
+                        ests.append(float(list(q50)[i]))
+            for used in self.sim_params.values():
+                if name in used:
+                    ests.append(float(used[name]))
+            out.append((ests, None, None))
+        return out
+
+    def interval_problem(self, name: str, e: float, lo: Any, hi: Any, method: str) -> str | None:
+        """Why an estimate and its interval are not what a call of this run produced."""
+        sources = self.interval_sources(name, method)
+        if not sources:
+            return (
+                f"{name}: no successful call of this run produced a {method} interval for it "
+                "(posterior: a converged sampler; profile: a closed profile; fisher: a fit "
+                "or a Fisher call with a finite sd)"
+            )
+        for ests, s_lo, s_hi in sources:
+            if not any(self._close(e, x) for x in ests):
+                continue
+            if s_lo is None and lo is None and hi is None:
+                return None
+            if (
+                s_lo is not None
+                and lo is not None
+                and hi is not None
+                and self._close(float(lo), s_lo)
+                and self._close(float(hi), s_hi)
+            ):
+                return None
+        shown = [
+            [_round(x) for x in ests[:3]] + ([] if s_lo is None else [[_round(s_lo), _round(s_hi)]])
+            for ests, s_lo, s_hi in sources[:4]
+        ]
+        return (
+            f"{name}: estimate {e} with interval [{lo}, {hi}] is not what a {method} call of "
+            f"this run produced (estimates and intervals produced: {shown})"
+        )
 
     def conclude(self, inp: dict[str, Any]) -> dict[str, Any]:
         """Validate the final conclusion and hold it.
@@ -1708,12 +1837,9 @@ class Workspace:
                 problems.append(f"{name}: estimate outside the declared bounds")
             if (lo is None) != (hi is None) or (lo is not None and not lo <= e <= hi):
                 problems.append(f"{name}: an interval is [lower, upper] around the estimate")
-            if not self.interval_backed(name, method):
-                problems.append(
-                    f"{name}: no successful call of this run produced a {method} interval "
-                    "for it (posterior: a converged sampler; profile: its profile; fisher: "
-                    "Fisher information or a fit's covariance)"
-                )
+            problem = self.interval_problem(name, e, lo, hi, method)
+            if problem is not None:
+                problems.append(problem)
             if method != "none" and lo is None:
                 problems.append(f"{name}: method {method} needs an interval")
             span = self.upper[name] - self.lower[name]

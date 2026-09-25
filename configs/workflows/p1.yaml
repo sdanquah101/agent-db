@@ -92,6 +92,16 @@ loop:
   max_points_shown: 200       # DESIGN  samples one record inspection returns at most
   array_preview: 12           # DESIGN  elements of a long array shown before it is summarised
 
+uncertainty:
+  # The half-width of a Fisher (Cramer-Rao) interval in sd units: the central 90 % of a
+  # normal, P0's own value (configs/workflows/p0.yaml uncertainty.z). A reported interval
+  # must be one a call of the run produced (the coordinator's re-review of PR #26, 1):
+  # a fit's estimate +/- z sd or a Fisher call's point +/- z CRLB sd, clipped to the
+  # bounds; a profile's interval; a converged sampler's q05-q95. The harness shows each.
+  z: 1.645                    # DESIGN  -
+  rel_tolerance: 1.0e-3       # DESIGN  -; a reported number matches a produced one to
+                              # this relative tolerance (the agent is shown five digits)
+
 seeds:
   base: 20260925              # rule 4: a stochastic call's seed is base + its call index
 
