@@ -47,15 +47,19 @@ from pydantic import ValidationError
 from scenarios.schema import Scenario, load_scenario
 from sim.run.layout import INDEX_FILE, RUNS_ROOT, RunPaths, truth_store_for
 from state.task_state import TaskState
+from tools.llm import AnthropicClient, ModelClient, ModelGateway
 from tools.privileged import SCENARIOS_DIR, open_registry
 from tools.registry import Registry
 from tools.sandbox import REPO_ROOT, SandboxError, launch
 from tools.server import OUTPUTS_DIR
-from tools.workflow_config import load_p0, sandbox_config
+from tools.workflow_config import P1Config, load_workflow_config, sandbox_config
 
 __all__ = ["WORKFLOWS", "WorkflowResult", "batch", "main", "run_workflow", "write_table"]
 
-WORKFLOWS: dict[str, Path] = {"p0": REPO_ROOT / "workflows" / "p0_scripted" / "pipeline.py"}
+WORKFLOWS: dict[str, Path] = {
+    "p0": REPO_ROOT / "workflows" / "p0_scripted" / "pipeline.py",
+    "p1": REPO_ROOT / "workflows" / "p1_single_agent" / "agent.py",
+}
 """The workflow scripts the runner knows, by name."""
 
 REPORTS_DIR = REPO_ROOT / "reports"
@@ -70,7 +74,8 @@ class WorkflowResult:
     launch -- never from the workflow's task state, which is its self-report (the evaluation
     session, 2026-09-22, on follow-up (d) of milestone 5: rule 3 says evaluation reads logs
     only). The self-reported counts are kept beside them, so the evaluator can score a
-    misreport; ``tokens_used`` is the field an LLM workflow's runner fills.
+    misreport; ``tokens_used`` is the field an LLM workflow's runner fills, from the model
+    gateway's meter (:class:`tools.llm.ModelGateway`) on this side, never from the state.
     """
 
     run_id: str
@@ -90,6 +95,15 @@ class WorkflowResult:
     self_reported_assay_units_used: int | None = None
     self_reported_n_calls: int | None = None
     tokens_used: int | None = None
+    tokens_input: int | None = None
+    tokens_output: int | None = None
+    tokens_cache_write: int | None = None
+    tokens_cache_read: int | None = None
+    llm_turns: int | None = None
+    llm_attempts: int | None = None
+    llm_cost_usd: float | None = None
+    model_id: str | None = None
+    model_client: str | None = None
     secondary_labels: list[str] = field(default_factory=list)
     confidence: float | None = None
     flag_sensor: str | None = None
@@ -139,6 +153,7 @@ def run_workflow(
     scenario: Scenario | None = None,
     keep_sandbox: bool = False,
     config_path: Path | None = None,
+    model_client: ModelClient | None = None,
 ) -> WorkflowResult:
     """Run one workflow on one generated run.
 
@@ -153,7 +168,9 @@ def run_workflow(
             plus ``runner.timeout_margin_min``).
         scenario: The run's scenario, if the caller holds it (else the truth-side index).
         keep_sandbox: Leave the sandbox directory behind for inspection.
-        config_path: A different ``p0.yaml`` (tests).
+        config_path: A different workflow configuration (tests).
+        model_client: For an LLM workflow, the client its gateway calls (a test double in
+            CI); by default the provider's client from the configuration's ``model`` block.
 
     Returns:
         The result; ``summary.json`` is written beside the workflow's outputs.
@@ -166,15 +183,24 @@ def run_workflow(
         raise KeyError(f"unknown workflow {workflow!r}; known: {sorted(WORKFLOWS)}")
     store = truth_store_for(runs_root) if truth_store is None else Path(truth_store)
     paths = RunPaths.for_run(run_id, runs_root, store)
-    config = load_p0() if config_path is None else load_p0(config_path)
+    config = load_workflow_config(workflow, config_path)
     registry = open_registry(run_id, runs_root=runs_root, truth_store=store, scenario=scenario)
     if timeout_s is None:
         timeout_s = (registry.budget.wall_clock_min + config.runner.timeout_margin_min) * 60.0
     box = _fresh_sandbox(sandbox_root, workflow)
     (box / "cwd").mkdir(exist_ok=True)
-    (box / "cwd" / "p0_config.json").write_text(
+    (box / "cwd" / f"{workflow}_config.json").write_text(
         json.dumps(sandbox_config(config), indent=1, sort_keys=True), encoding="utf-8"
     )
+    gateway: ModelGateway | None = None
+    if isinstance(config, P1Config):
+        gateway = ModelGateway(
+            settings=config.model,
+            client=model_client if model_client is not None else AnthropicClient(config.model),
+            log_dir=paths.root / OUTPUTS_DIR / workflow,
+            max_turns=config.loop.max_turns,
+            max_total_tokens=config.loop.max_total_tokens,
+        )
     started = time.perf_counter()
     returncode: int | None = None
     error = ""
@@ -187,6 +213,7 @@ def run_workflow(
             run_dir=paths.root,
             timeout_s=timeout_s,
             workflow=workflow,
+            model_gateway=gateway,
         )
         returncode, stderr = result.returncode, result.stderr
         if returncode != 0:
@@ -201,6 +228,18 @@ def run_workflow(
         if not keep_sandbox:
             shutil.rmtree(box, ignore_errors=True)
     summary = _summarise(paths, workflow, wall_s, returncode, error, stderr, registry=registry)
+    if gateway is not None:
+        meter = gateway.meter
+        summary.tokens_used = meter.total
+        summary.tokens_input = meter.input
+        summary.tokens_output = meter.output
+        summary.tokens_cache_write = meter.cache_write
+        summary.tokens_cache_read = meter.cache_read
+        summary.llm_turns = meter.requests
+        summary.llm_attempts = meter.attempts
+        summary.llm_cost_usd = round(gateway.cost_usd(), 6)
+        summary.model_id = gateway.settings.model_id
+        summary.model_client = gateway.client.name
     out_dir = paths.root / OUTPUTS_DIR / workflow
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "summary.json").write_text(

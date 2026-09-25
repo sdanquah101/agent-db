@@ -54,6 +54,7 @@ import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 
+from tools.llm import ModelGateway
 from tools.registry import Registry
 from tools.server import RegistryServer
 
@@ -464,6 +465,7 @@ def launch(
     run_dir: str | Path | None = None,
     timeout_s: float = 600.0,
     workflow: str | None = None,
+    model_gateway: ModelGateway | None = None,
 ) -> SandboxResult:
     """Run a workflow script in the jail against ``registry``.
 
@@ -481,6 +483,8 @@ def launch(
         timeout_s: Kill the workflow after this long.
         workflow: The workflow's name; with ``run_dir``, lets the workflow write its own
             outputs into ``runs/<id>/workflows/<workflow>/`` through ``tools.run.write_output``.
+        model_gateway: For an LLM workflow, the gateway its model turns go through
+            (``tools.llm``); it lives on this side, so no key or model setting enters the jail.
 
     Returns:
         The process outcome and how many requests the server answered. A workflow's own
@@ -550,7 +554,9 @@ def launch(
         "/bin/sh",
         str(jail_script),
     ]
-    server = RegistryServer(registry, socket_path, run_dir=run_dir, workflow=workflow)
+    server = RegistryServer(
+        registry, socket_path, run_dir=run_dir, workflow=workflow, model_gateway=model_gateway
+    )
     with server:
         completed = subprocess.run(
             command,
