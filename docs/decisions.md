@@ -5762,3 +5762,228 @@ The coordinator relayed an adversarial review (~17:40 UTC) with four points.
 workflow records would no longer match its log line's outcome, which the evaluator's
 trail requires, and it would change `state.provenance.Outcome` for every consumer).
 
+
+## 2026-09-24 — The distinguishability analysis: method choices (`docs/distinguishability.md`)
+
+The ruling asks for an admissible label set per cell and a second attribution score
+reported beside the exact one. These are the choices made for it.
+
+- **One hypothesis class per label,** fitted from the defaults on the visible record.
+  - *Alternative:* a single Jacobian over every class's knobs, comparing subspace angles
+    (rejected: it measures local confusability at the defaults, not whether a class can
+    explain the record).
+- **AIC, with a margin of 2** (Burnham and Anderson's "substantial support"). A margin of
+  10 is reported alongside for sensitivity.
+  - *Alternatives:* raw Δχ² (rejected: more knobs would always win); a likelihood-ratio
+    test against the truth class (rejected: the truth class often cannot be represented,
+    §2.2).
+- **Parameter subset:** the two Level-5 targets plus P0's four most approved, fixed for
+  every cell.
+  - *Alternative:* all 20 multipliers (rejected: about 3× the compute, and the fit would
+    not converge in the budget).
+- **Sensor class:** one sensor at a time, by transforming the default prediction, so it
+  needs no simulation. Flatlined samples are dropped for every class, because the record
+  flags them.
+- **Where things live.** Truth-side output goes in `truth_store/<id>/admissible.json`;
+  `eval/` reads the file and imports nothing new. The package is `distinguish/`, which
+  the rule-1 checker forbids to workflows.
+- **Declared limits:** a mid-record parameter change, windowed fractionation, per-day
+  solids and a stagnant zone are not representable. The affected cells are named in
+  `truth_class_limited` rather than excluded.
+
+
+
+## 2026-09-24 — Review of PR #25: distinguishability method version 2 (before any result)
+
+The coordinator relayed an adversarial review (~17:40 UTC). Every change below was made
+before the analysis ran on any cell.
+
+- **The look-elsewhere effect.** On white noise, the sensor class (the best of about 9
+  sensors × 36 onsets × 2 kinds, charged k = 2) pushed `none` out in 71 % of trials.
+  - Each class now pays 2 ln N for a best-of-N search: sensor candidates, structural
+    alternatives, and forms of a class.
+  - A white-noise test holds `none` admissible at or above the declared 0.95.
+  - *Alternative:* calibrating a margin per class on the Level-0 cells (rejected: the
+    Level-0 cells are part of what is measured).
+- **The hold-out is excluded.** The data are cut at P0's calibration end,
+  `duration × (1 − holdout_fraction)`, as the ruling asked. This replaces the first
+  draft's whole record.
+- **The score only adds credit.** `attribution_admissible` is judged against *A* ∪
+  truth.
+- **The truth's own form.** A Level-5 shift is fitted as a change point at its known
+  onset (`distinguish/segments.py`), and S3-02's delivery on its known day. Cells whose
+  truth no class represents (windowed fractionation, per-day solids, stagnant zone)
+  score null, not credited.
+- **Fits to convergence,** with the status reported per class. `lsq_max_nfev` and
+  `scalar_max_iter` are in `configs/eval.yaml`.
+- **The margins are in `configs/eval.yaml`** (`distinguishability`), committed before
+  the sweep, together with the look-elsewhere switch and the calibration target.
+- **A multi-label truth** passes when any one of its labels is admissible; no joint
+  class is fitted.
+- **Reporting.** `n_admissible` and the chance rate are reported per cell, and
+  `python -m eval` stratifies the second score by |*A*|.
+- **Deviation recorded: `distinguish/` instead of `eval/`.** The ruling placed the
+  analysis evaluation-side, and the coordinator accepted a separate package, because
+  what the ruling required is isolation from workflows. The package is listed in
+  `pyproject.toml`. The rule-1 checker forbids it by import and by its string form. The
+  evaluator keeps its import allow-list and reads only the precomputed file.
+
+
+## 2026-09-24 — Re-review of PR #25: distinguishability method version 3 (the calibrated null)
+
+The coordinator relayed the re-review at ~19:05 UTC. Two blockers were fixed before any
+result was computed.
+
+- **A. The null was misspecified.** On a clean cell, `sensor` was the only admissible
+  label, because the default-parameter model misfits the truth record even with no fault
+  (the benchmark card §4.2; gas flow χ²/n = 63 on S0-01 C/B).
+  - The review offered two fixes. *Chosen:* both, layered, recorded here.
+    1. The null is the calibrated no-fault baseline: the background multipliers
+       `Y_ac`, `k_m_ac`, `k_m_h2` and `Y_h2` are fitted under `none`, and every class is
+       fitted on top of them.
+    2. Each sensor's χ² is divided by its Level-0 dispersion under that baseline, for
+       the same plant and tier.
+  - Why both: calibrating the kinetics alone may leave a scale-type misfit in gas flow
+    (volume, fractionation) that a sensor rescale still removes. Overdispersion alone
+    leaves the kinetic misfit in the residual *structure*, which the other classes
+    would then compete to absorb.
+  - *Conditional, not joint:* the classes are fitted with the baseline held at its fit.
+    This costs a fraction of a joint fit. It can only lower an alternative's fit, so it
+    errs toward `none`, the conservative direction for credit.
+  - *Plant A* has no Level-0 cell. Its cells take the dispersion of their own calibrated
+    baseline, flagged per cell.
+  - *The check:* every Level-0 cell of the matrix (S0-01 on Plants B and C, three tiers
+    each) is analysed first, and `none` must be admissible on each. Any cell where it is
+    not is reported, with the reason.
+- **B. The calibration covered only sensor against `none`.**
+  - The penalty is now the likelihood-ratio critical value at α / m (Bonferroni over the
+    five alternatives), plus 2 ln N for a search. On noise, with all classes competing,
+    `none` is admissible at least 1 − α of the time.
+  - The joint noise test declares and checks it: ≥ 0.95 at α = 0.05. The version-2 rule
+    falls short on the same records.
+- **Item 8.** The chance rate is |A ∪ truth| / 6.
+- **Nits.**
+  - The table reports each class's convergence.
+  - The evaluator reads `admissible.json` only at `distinguishability.method_version`.
+  - The fit sizes are `lsq_max_nfev` = 15 and `scalar_max_iter` = 15.
+  - One cell's convergence and wall time are reported with the Level-0 check, together
+    with a compute plan that stays inside about one sweep.
+- **A bug found by the Level-0 check, fixed before any result.** The first Level-0 run
+  (three S0-01 Plant B cells, discarded) showed every least-squares fit stopping at one
+  evaluation. Cause: the fits start at log multiplier 0, scipy's finite-difference step
+  is relative to the variable, so the gradient read zero. The baseline was therefore
+  never calibrated, and the parameter and influent classes never fitted (this affected
+  versions 1 and 2 as well). The solver now works on u + 1, and a unit test recovers
+  known log multipliers. The Level-0 check was rerun after the fix.
+
+
+## 2026-09-25 — Second re-review of PR #25: distinguishability method version 4 (the truth baseline)
+
+The coordinator relayed the second re-review of 36d0fde at ~01:00 UTC. It found that
+blocker A was not fixed:
+- `none` was inadmissible on the Level-0 cells C/B, B/B and C/C;
+- on S2-03 C/B the truth's sensor class was not admissible;
+- on S2-02 C/B the win was a spurious TAN step;
+- the compute estimate was about 150 runner-hours;
+- and the doc still carried version-2 text.
+
+**Decision (the coordinator's): the baseline is the truth.** It was taken before any
+result was computed.
+- For each cell, the reference for every class is the truth simulation: true
+  parameters, true influent, true initial state and the run's own seeds, through the
+  same observation operator (tier, channels, calibration window, noise model).
+- `none` is that truth with the injected fault removed. Each other class adds only its
+  own candidate perturbation from the fault library, fitted by its few fault knobs.
+- The residuals are compared with the declared noise, with no dispersion rescaling.
+  Each class's search is penalised as before.
+
+**This is an upper bound on distinguishability, optimistic by construction.** The
+analysis is given everything a workflow must estimate, and the truth's own fault is
+always a candidate of its class. The doc says so at the top. Removed with it: the
+calibrated baseline, the overdispersion, the least-squares fits and their
+configuration.
+
+How the session implemented it. Each choice is the smallest that meets the decision.
+- **The truth is rebuilt, not read.** `simulate_truth` is re-run with the scenario at
+  the plant's horizon and the run's seeds and target feed. The analysis stops unless the
+  rebuilt channels equal the stored `channels.npz` exactly. Every candidate is the same
+  call with the scenario's faults replaced, so a candidate is exactly what the library
+  would have generated.
+  - *Alternative:* perturb the stored channels. Rejected: the influent, state and
+    parameter faults act through the dynamics.
+- **The Level-1 nuisances stay in every class.** `sensor_noise` and `random_gaps` carry
+  no label and are part of the record's noise model, so "the injected fault removed"
+  removes only the label-bearing faults.
+- **The likelihood is the observation model's own.**
+  - White noise plus the recalibrated drift walk, whose covariance is modelled (the
+    reviewer's correlated-noise finding, item 2). Each candidate is scored with the
+    declared noise at its own predicted level, log-determinant included: the exact
+    Gaussian likelihood of the observation model under that hypothesis.
+  - *First implemented, then corrected before any result:* one covariance for every
+    class, at the reference prediction's level. It failed on S5-01 A/C.
+    - The reference's acetate stays near 0.02 kg/m³ while the truth's rises to 2.5.
+      So a cv-only sensor (vfa_ac, 8 %) was judged with a σ about 100× too small, and
+      even the exact truth candidate scored 348,701 on 40 samples.
+    - The check was re-run from the simulation cache.
+  - *Alternatives:* σ from the observed values (as P0 does), or P0's relative-sd floor.
+    Rejected: the floor is not the declared noise (it is 7× the declared pH sd), and
+    the observed value is not the level the hypothesis predicts.
+- **Flatlined samples stay visible (item 1).**
+  - Their values are dropped, because a stuck sensor repeats its last reading. Their
+    flags enter through the observation model's flatline episode model.
+  - A flatline candidate requires its whole window flagged, as `observe` flags an
+    injected flatline.
+  - Candidate windows are at least 2 d: a one-sample hold is the sensor's own declared
+    episode. With 1-d windows, 13 of 400 noise records lost `none` to a natural gas-flow
+    hold.
+- **A fixed alternative pays the simple-hypothesis critical value.** This is the one
+  change to the penalty, and it is made for the declared rate.
+  - An extension switched off or a flatline window has no knob (*k* = 0), and had
+    paid only 2 ln N. Its gain over the null, `2 δ·w − |δ|²`, exceeds *c* with
+    probability at most P(Z > √c) whatever |δ| is. So its critical value at α/m is
+    Φ⁻¹(1 − α/m)² = 5.41.
+  - *Alternative:* keep 0. Rejected: the worst case then costs about 6 % of the joint
+    rate on its own.
+- **The declared joint rate (item 2).**
+  - **The records.** They are drawn by the observation model itself: drift, fouling,
+    flatline episodes and missingness. Every class competes with `none` at once. The
+    sensor class is exact; the simulated classes are worst-case linear-Gaussian
+    surrogates.
+  - **On the model's own noise,** `none` is admissible on 0.9825 of 400 records
+    (declared minimum 0.95).
+  - **With AR(1) white noise, which the model does not have,** the rate is 0.96 at
+    ρ = 0.3 and 0.79 at ρ = 0.6. The reviewer saw 0.96 and 0.49 under version 3. This is
+    stated as the limit: the guarantee is for the benchmark's own noise.
+- **One structural candidate is not offered: `precipitation` switched off.**
+  - `sao` switched off needed only a harness setting: its initial state is dropped via
+    `simulate_truth`'s `harness=` argument.
+  - `precipitation` cannot be done that way: `simulate_truth` always feeds `S_ca` to the
+    reactor, and the model without the extension refuses it. Offering it needs a change
+    under `sim/`, which this PR does not make (flagged in the PR body).
+  - No Level 0–5 truth is structural.
+- **Representability.** Every Level 1–5 fault is now a candidate of its class. The one
+  exception is `informative_missingness`: the likelihood does not model which samples
+  are missing, so S4-02 stays not representable and its admissible score null.
+- **Compute.** About 100 simulations per 200-d pair and 165 per 365-d pair, shared by the
+  tiers, at 13–14 s each. The fits are closed-form or grid look-ups. Every simulation is
+  kept in a cache, so a re-analysis integrates nothing.
+- **The re-review of 28368fa (relayed ~08:05 UTC) passed on the cells it reproduced,**
+  and asked for four things before the sweep. Done:
+  - **The S5 check is committed** (`reports/p0_distinguishability_check.{csv,json}`).
+    `parameter` is admissible, and alone, on S5-01 A at all three tiers. On S5-02 B
+    and C (six cells) it is not: even the exact truth gains only about 4 in deviance
+    over `none` by day 150, 30 days after the onset.
+  - **§6 now carries measured figures,** both this session's and the reviewer's. The
+    plan is 19–32 runner-hours.
+  - **Structural candidates must be visible.** `sao` off moved Plant C's channels by
+    about 1e-6 relative and tied `none`. A structural candidate now enters the search,
+    and its *N*, only if it moves the visible record by at least 1 (the whitened squared
+    distance from the reference). Otherwise it is named in `not_visible`.
+    - *Alternative:* keep it and declare it. Rejected: an invisible alternative is a
+      free structural explanation of every clean record.
+  - **S2-02's off-grid window is declared** as part of the optimistic bound. The grid
+    alone also wins there, by 37.7 and 36.6.
+- **The order (item 4).** No sweep until `none` is admissible on all six Level-0 cells,
+  and the truth's class on S2-03 C/B, S2-02 C/B and one S5 cell. The results and the
+  time per cell are reported in the PR.
+

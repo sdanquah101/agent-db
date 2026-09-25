@@ -58,7 +58,9 @@ _TRUTH_PATH = re.compile(r"(?i)(^|[/\\])(truth(_store)?|scenarios|eval|eval\.yam
 # the path rule closes ``open("eval/...")``, the bare segment and ``configs/eval.yaml``, the
 # scorer's own thresholds -- named here so it is caught by the path rule and not, as it
 # happened to be, by the dotted-module regex matching ``eval.yaml``).
-_TRUTH_MODULES = frozenset({"truth", "truth_store", "scenarios", "eval"})
+# ``distinguish`` joined them with the distinguishability analysis (2026-09-24): it reads
+# answer keys and writes ``admissible.json`` beside them, so it is the scorer's side too.
+_TRUTH_MODULES = frozenset({"truth", "truth_store", "scenarios", "eval", "distinguish"})
 
 # The layout API hands out the truth tree without spelling "truth" in any path literal:
 # ``RunPaths.for_run(id).truth``, ``truth_store_for(runs_root)`` and ``TRUTH_STORE_DIR`` are
@@ -116,10 +118,18 @@ _DENIED_OS_ATTRS = re.compile(r"^(system|popen|exec\w*|spawn\w*)$")
 _DYNAMIC_ATTR_CALLS = frozenset({"getattr", "setattr", "delattr"})
 # a module path a workflow must not spell: the exact name, or a dotted path under it, or an
 # import statement of it inside a string (code handed to exec or a second interpreter)
-_FORBIDDEN_MODULE_ROOTS = ("sim", "scenarios", "anchor", "eval", "state.provenance", "state")
+_FORBIDDEN_MODULE_ROOTS = (
+    "sim",
+    "scenarios",
+    "anchor",
+    "eval",
+    "distinguish",
+    "state.provenance",
+    "state",
+)
 _MODULE_LITERAL = re.compile(
-    r"(?<![\w.])(?:sim|scenarios|anchor|eval|state\.provenance)\.[A-Za-z_][\w.]*"
-    r"|\b(?:import|from)\s+(?:sim|scenarios|anchor|eval|state\.provenance|state)\b"
+    r"(?<![\w.])(?:sim|scenarios|anchor|eval|distinguish|state\.provenance)\.[A-Za-z_][\w.]*"
+    r"|\b(?:import|from)\s+(?:sim|scenarios|anchor|eval|distinguish|state\.provenance|state)\b"
 )
 
 

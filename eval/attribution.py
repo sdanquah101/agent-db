@@ -50,6 +50,13 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return float(len(a & b) / len(union)) if union else 1.0
 
 
+def cfg_method_version() -> int:
+    """The analysis method version this evaluator reads (``configs/eval.yaml``)."""
+    from eval.config import load_eval_config
+
+    return int(load_eval_config().distinguishability.method_version)
+
+
 def _earned(rule: EarnedAbstention, records: RunRecords) -> bool:
     """Whether the logs show the last call of ``rule.tool`` that ran failed (ruling D2)."""
     ran = [
@@ -102,7 +109,34 @@ def score_attribution(
         "claims": None,
         "claims_unsupported": None,
         "unsupported_claim_rate": None,
+        # the second attribution score, reported beside attribution_exact and never in its
+        # place (docs/distinguishability.md): None when the analysis has not run on the cell
+        "admissible_set": None,
+        "n_admissible": None,
+        "admissible_chance_rate": None,
+        "truth_admissible": None,
+        "truth_representable": None,
+        "attribution_admissible": None,
+        "attribution_admissible_set": None,
     }
+    adm = records.admissible
+    if adm is not None and adm.get("method_version") != cfg_method_version():
+        # an analysis of another method version is not this evaluator's to read
+        adm = None
+    # the score only ever ADDS credit (review of PR #25, item 3): it is judged against the
+    # admissible set together with the truth, so answering the truth is never marked wrong;
+    # and it is null where no class can represent the truth (item 4)
+    credit: set[str] | None = None
+    if adm is not None:
+        allowed = [str(x) for x in adm.get("admissible_set", [])]
+        out["admissible_set"] = "+".join(allowed)
+        out["n_admissible"] = len(allowed)
+        # a uniform guess over the six labels lands in A or the truth with |A or T| / 6
+        out["admissible_chance_rate"] = adm.get("chance_rate")
+        out["truth_admissible"] = bool(adm.get("truth_admissible"))
+        out["truth_representable"] = bool(adm.get("truth_representable", True))
+        if out["truth_representable"]:
+            credit = set(allowed) | truth
     state = records.state
     if state is None:
         # a launched run that left no valid state is an attribution MISS, not an absent
@@ -114,6 +148,9 @@ def score_attribution(
             out["attribution_exact"] = False
             out["attribution_partial"] = 0.0
             out["primary_in_truth"] = False
+            if credit is not None:
+                out["attribution_admissible"] = False
+                out["attribution_admissible_set"] = False
         return out
 
     final = {state.final.label, *state.final.secondary_labels}
@@ -122,6 +159,9 @@ def score_attribution(
     out["attribution_exact"] = final == truth
     out["attribution_partial"] = _jaccard(final, truth)
     out["primary_in_truth"] = state.final.label in truth
+    if credit is not None:
+        out["attribution_admissible"] = state.final.label in credit
+        out["attribution_admissible_set"] = final <= credit
 
     # false kinetic drift: the prior interval of every kinetic parameter, from the
     # declared bounds (configs/tools/model.yaml), read here and nowhere else
