@@ -268,6 +268,37 @@ verdict:
 any of the 8 cells where the fit ran. Where it recovered the parameter, it did so mostly
 through wide intervals.
 
+### 8.3 R1 at 3×, the budget: verdict "fail", as predicted (2026-09-25)
+
+The 14 cells ran from 01:38 UTC on 2026-09-25, after the clean restart recorded in the PR,
+and were scored with the earlier rungs. The rows are in
+`reports/p0_positive_control.{csv,json}`, the verdict in
+`reports/p0_positive_control_summary.json`, and the launch records in
+`reports/positive_control/r1x3_variants.jsonl`.
+
+**The verdict, computed by the committed code: "fail".** No cell moved:
+- 0 of the 10 parameter cells;
+- 0 of the 4 sensor and state cells.
+
+§5.1 calls a rung a fail when at most one cell moves in each group.
+
+**What happened, stated plainly.**
+- **Every cell gave the same final label as at baseline.** The two parameter cells that
+  were exact at baseline (S5-01 A/A and S5-02 C/A) stay exact. Every miss stays the
+  same miss.
+- **P0 did not use the extra allowance.** It spent 301–371 simulator evaluations, 17–41 %
+  of the tripled budget. That is no more than the baseline sweep's 227–362 of the
+  original budget.
+- **This is the pre-registered prediction.** P0's plan starts from fixed step sizes and
+  only shrinks them when the budget is short, so a larger allowance buys no bigger
+  design.
+- **No time-dependent path was excluded.** On a rung that changes the budget, a
+  wall-clock difference is the rung's own lever (§10), and the timing flag is never set.
+
+**Plainly:** giving P0 three times the simulations and the time changed nothing it
+concluded. Its misses on these cells are not a budget shortage. R1 at 10× (two cells) runs
+after R2 and tests the same thing with nothing able to bind.
+
 ---
 
 ## 9. Amendment, 2026-09-24 ~17:30 UTC (review of PR #23)
