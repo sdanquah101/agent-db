@@ -155,6 +155,9 @@ penalty:
     hypothesis. Its gain over the null is `2 δ·w − |δ|²` for a fixed whitened shift δ.
     That exceeds *c* with probability at most P(Z > √c), whatever |δ| is. So its critical
     value is Φ⁻¹(1 − α/m)², which is 5.41.
+    The bound assumes a fixed covariance. Under the own-level covariance, a fixed
+    near-level alternative exceeded the critical value in up to 1.5 % of draws,
+    against the nominal 1 %. The recomputed joint rate (0.9825) covers this.
   - `none` pays nothing.
 - **The search.** 2 ln N is the look-elsewhere correction for a class's discrete search.
 
