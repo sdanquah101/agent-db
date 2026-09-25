@@ -1,10 +1,16 @@
 # Distinguishability: which labels the record admits (evaluation side)
 
-*Ruling of 2026-09-24 (PR C of the coordinator's relay). Method version 3, after the
-review and the re-review of PR #25 and before any result was computed. §2.0 and §3 are
-superseded by version 3 as described there. Method choices are recorded in
+*Method version 4, the coordinator's decision on the second re-review of PR #25
+(2026-09-25), taken before any result was computed. Method choices are recorded in
 `docs/decisions.md`. This analysis never replaces the truth-label score, and nothing under
 `workflows/` can import it.*
+
+**This is an upper bound on distinguishability, optimistic by construction.** Every class
+is built on the truth simulation: the true parameters, the true influent and the true
+initial state, which no workflow knows. Where this analysis finds two labels
+indistinguishable, a workflow cannot be expected to tell them apart. Where it finds them
+distinguishable, a workflow may still fail to, because it must also estimate everything
+the analysis is given.
 
 ## 1. The question
 
@@ -20,169 +26,184 @@ all. It then reports a second score, **`attribution_admissible`**, *next to*
 is in *A* or in the truth. It **only ever adds credit**: a workflow that answers the truth
 is never marked wrong by it.
 
-## 2.0 Method version 3: the calibrated null (re-review of PR #25)
+## 2. The classes: the truth, less its fault, plus one candidate
 
-The re-review found that a null at the default parameters is misspecified. The
-default-parameter model misfits even a clean record (the benchmark card, §4.2): on
-S0-01 C/B, χ²(none) is 9,357 over 506 samples, and gas flow alone has χ²/n = 63. So any
-class that rescales gas flow beat `none` by about 300, and would have earned
-admissible credit for "sensor" on a clean cell. Version 3 changes four things.
+**The reference.** For each (scenario, plant), the truth is rebuilt with
+`sim.run.harness.simulate_truth`. It uses:
+- the scenario, re-timed to the plant's horizon as the matrix re-timed it;
+- the run's own seeds, taken from the truth manifest and checked against
+  `RunSeeds.derive`;
+- the run's target feed.
 
-- **The null is the calibrated no-fault baseline.** Under `none`, the background
-  multipliers `Y_ac`, `k_m_ac`, `k_m_h2` and `Y_h2` are fitted to the calibration window
-  (`distinguishability.baseline_parameters` in `configs/eval.yaml`; these are P0's four
-  most-approved parameters, and not the Level-5 targets). Every other class is fitted on
-  top of that same calibrated background, with the baseline held at its fit (a
-  conditional fit). The baseline's k is shared by every class, so it cancels.
-- **Overdispersion.** Each sensor's χ² is divided by its dispersion under the calibrated
-  baseline on the Level-0 cell of the same plant and tier (χ²/n, floor 1; the
-  quasi-likelihood treatment of known misfit).
-  - The Level-0 cells run first and use their own baseline.
-  - Plant A has no Level-0 cell, so its cells use their own calibrated baseline and are
-    flagged in `overdispersion_source`. This is conservative: it can only favour `none`.
-- **The penalty is a joint test.** A class's score is χ² plus the likelihood-ratio
-  critical value of its k knobs at α / m (α = 0.05, m = 5 alternatives, Bonferroni),
-  plus 2 ln N for a best-of-N search. With every class competing at once on noise,
-  `none` is then admissible at least 1 − α of the time.
-  - `tests/test_distinguish.py` checks this jointly on 400 noise records, with the
-    sensor class's real closed form and a linear-Gaussian surrogate for the fitted
-    classes.
-  - On the same records, the version-2 rule (2k + 2 ln N) falls short, as the reviewer
-    found (0.873).
-- **The parameter class** is, on top of the baseline, a constant change of the two
-  Level-5 target parameters (k = 2). On a Level-5 cell it is also the truth's own change
-  point at the known onset, with the baseline before the onset.
+The rebuilt channels must equal the stored `channels.npz` exactly, or the analysis
+stops. On every pair run so far the maximum difference is 0.
 
-**The chance rate** of the second score is |A ∪ truth| / 6: what a uniform guess over the
-six labels scores. The CLI stratifies by it.
+The reference for every class is that truth with the injected fault **removed**. The
+Level-1 nuisances (`sensor_noise`, `random_gaps`) carry no label and are part of the
+record's noise, so they stay in every class. `sensor_noise` scales the declared noise.
 
-## 2. Hypothesis classes
+**Each class adds only its own candidate perturbation.** The candidates are the fault
+library's own faults (`sim/faults`), applied by the simulator or by the observation
+operator exactly as a scenario applies them:
 
-The analysis uses the fitted model (`tools.fitted.FittedADM1`), built on the privileged
-side as the registry builds it: the plant's declared configuration, the run's visible
-feed log and the run's fitted extensions. It does not use the registry, which would
-append to the run's call logs. Each label is represented by the knobs of its class,
-fitted from the defaults (all multipliers 1):
+| label | candidates | fitted knob (*k*) | discrete search (*N*) |
+|---|---|---|---|
+| `none` | the reference itself | — | 1 |
+| `sensor` | on one calibrated sensor, from an onset every 10 d: a scale step, an offset step, or a calibration ramp reset at recalibration (as `ph_electrode_drift` is) | the size, by closed-form generalised least squares (*k* = 1) | every (sensor, form, onset) |
+| `sensor` | on one online sensor that can flatline: an injected flatline window, onset every 10 d, 2–16 d long | none (*k* = 0) | every (sensor, window) |
+| `influent` | an unrecorded delivery (every 20 d; 1, 3 or 10 median deliveries); a fractionation redraw (`feed_mislabelled`; onset every 40 d, 30 or 60 d, concentration 5 or 50); a solids ramp (`moisture_drift`; onset every 40 d, 60 or 150 d, ±30 %) | the magnitude, on its grid (*k* = 1) | every (form, onset[, duration]) |
+| `state` | every biomass state at t = 0 × 0.1, 0.25, 0.5, 2 or 4 (`biomass_misinitialised`) | the multiplier, on its grid (*k* = 1) | 1 |
+| `parameter` | a change point on `K_I_nh3`, or on the three `k_hyd`, from an onset every 40 d (0 = from the start), × 0.2, 0.5, 2 or 5 | the multiplier, on its grid (*k* = 1) | every (group, onset) |
+| `structural` | one truth extension switched off: `sao`, `ionic_strength` or `carbonate` (§2.1) | none (*k* = 0) | 3 |
 
-| label | forms (free parameters *k*) | fit |
-|---|---|---|
-| `none` | the defaults (*k* = 0) | — |
-| `parameter` | a constant multiplier on 6 parameters (§2.1) (*k* = 6); and, on a cell whose injected fault is a parameter shift, **the truth's own form**: the shifted parameters change at the known onset, defaults before it (*k* = number shifted) | bounded least squares on log multipliers from the defaults, to convergence |
-| `sensor` | on one calibrated sensor, applied to the default prediction: a scale step after an onset (every 10 d), or a linear drift (*k* = 2) | closed-form weighted least squares |
-| `influent` | a constant scale on each feed's logged mass in [0.5, 2] (*k* = number of feeds); and, on a cell with an injected unrecorded delivery, **the truth's own form**: one delivery of free mass on its known day and feed (*k* = 1) | least squares; a bounded scalar fit |
-| `state` | `biomass_scale` in [0.25, 4] (*k* = 1) | bounded scalar fit |
-| `structural` | one fitted extension left out (*k* = 0 each), or the declared active volume scaled in [0.6, 1.4] (*k* = 1) | enumeration, and a scalar fit |
+The grids are in `configs/eval.yaml` (`distinguishability`).
 
-Where a class has several forms, the best form is taken and the choice pays the search
-penalty (§3).
+**The truth's own fault is always a candidate of its class,** with its true onset,
+duration and magnitude, and for a fractionation redraw its own seed. That makes the
+bound optimistic: the truth class always contains the exact truth.
 
-### 2.1 The parameter subset
+A candidate whose onset falls after the calibration window changes nothing the analysis
+reads, and is not generated. A magnitude fitted on a grid is at best as good as the
+continuous optimum, so paying *k* = 1 for it is conservative.
 
-The six parameters of the constant form are fixed before any fit:
-- `k_hyd_ch` and `K_I_nh3`, the parameters the Level-5 faults shift;
-- `Y_ac`, `k_m_ac`, `k_m_h2` and `Y_h2`, the four P0 approved most often across the
-  78-cell sweep (on 55, 38, 27 and 26 cells).
+### 2.1 The one structural candidate the harness cannot run
 
-### 2.2 The truth's own form, and what no class can represent
+The plants' truth models carry four extensions. Three can be switched off through
+`simulate_truth`'s own settings: the analysis passes a harness configuration that seeds
+only the enabled extensions' states. The fourth, **`precipitation`, cannot**:
+`simulate_truth` always feeds dissolved calcium (`S_ca`) to the reactor
+(`sim/run/harness.py`), and a model without the extension refuses it.
+- Offering that candidate needs a change under `sim/`, which this PR does not make.
+- So the structural class offers three candidates. Every document names the fourth in
+  `structural_not_offered`.
+- No Level 0–5 truth is structural, so no cell's truth is affected. Only the structural
+  class's reach as an alternative is.
 
-With truth access, the truth's class gets its representable form: a Level-5 shift as a
-change point at its known onset (`distinguish/segments.py`, integrated in two segments
-with the harness's own helpers), and S3-02's injected delivery on its known day. Without
-that, a constant multiplier cannot represent a mid-record shift, a sensor step could
-absorb the cell, and the second score would credit the wrong answer.
-
-These truths are **not representable** by any class here:
-- a time-windowed fractionation change (S3-01);
-- a per-day solids change (S3-03);
-- a stagnant zone.
-
-For those cells the admissible score is **null, not credited**
-(`truth_representable: false`, with the limit named in `truth_class_limited`).
+**What no class represents.** The likelihood does not model which samples are missing.
+So `informative_missingness` (S4-02) is **not representable**. Its admissible score is
+**null, not credited** (`truth_representable: false`, with the limit named in
+`truth_class_limited`). Every other Level 1–5 fault is a candidate of its class.
 
 ## 3. The likelihood and the admissibility rule
 
-**The likelihood.**
-- **The data** are the cell's visible record, `runs/<id>/observations/sensors.json`,
-  **cut at the end of P0's calibration window**. That is `duration × (1 −
-  holdout_fraction)` with `holdout_fraction` from `configs/workflows/p0.yaml`, as the
-  ruling asked; the hold-out is never read.
-- **Which samples.** Only the sensors P0 calibrates are used, so temperature is left
-  out. Missing, saturated and flatlined samples are dropped for every class alike.
-- **The residual** is `(observed − predicted)/sd`. The sd is the declared
-  `sqrt((cv·v)² + sd_abs²)`, floored as P0 floors it. χ² is the sum of squared residuals.
-- **The truth store is read for the answer key's labels, the injected faults** (for the
-  truth's own form and the representability flag), and the fitted extensions. It is
-  never read for the data.
+**The data** are the cell's visible record, `runs/<id>/observations/sensors.json`, **cut
+at the end of P0's calibration window**. That is `duration × (1 − holdout_fraction)`, and
+the hold-out is never read. The sensors are those P0 calibrates, so temperature is left
+out.
 
-**The rule.** For every class *L*, AIC_L = χ²_L + 2 k_L + 2 ln N_L. N_L is the number of
-candidates the class chose its best from:
-- for `sensor`, every (sensor, onset or drift) candidate;
-- for `structural`, every alternative;
-- for a class with several forms, the number of forms.
+**The Gaussian term.** For each sensor, the residual `y − μ` is compared with the
+observation model's own noise at the declared σ, with **no dispersion rescaling**.
+- `μ` is the candidate's noiseless observation: the channel interpolated at the sample
+  times, with the candidate's sensor fault if it has one.
+- **The covariance** is white noise `(cv μ)² + sd_abs²` plus the sensor's random-walk
+  drift. The drift adds `sd √dt · z` at every sample of the sensor's grid and restarts
+  at each recalibration of the tier. Two samples of one recalibration interval share
+  `min(i, j) − start + 1` steps, and samples of different intervals share none. That is
+  the drift the model draws, which `tests/test_distinguish.py` checks against 3,000 of
+  its draws.
+- The white-noise level is taken at the reference prediction, so the covariance is the
+  same for every class and its determinant cancels.
+- **Which samples.** Missing, saturated, fouled and flatlined samples give no value.
 
-The last term is the **look-elsewhere correction**. Without it, the sensor class wins on
-pure noise. A label is **admissible** if AIC_L − min_M AIC_M ≤ `margin`.
-- **The margin** is set in `configs/eval.yaml` (`distinguishability.margin`: 2, the
-  "substantial support" margin of Burnham and Anderson). The set at
-  `sensitivity_margin` (10) is reported beside it.
+**The flag term.** Flatlined samples stay visible to the sensor class through their flags.
+A stuck sensor repeats its last reading, so a flatlined value carries no new information,
+but the flag does.
+- **The model.** The flags enter through the observation model's own flatline episode
+  model (hazard × dt per sample, episodes of the declared length), as −2 log P(flags).
+- **Missing samples.** A missing sample's flag is unobservable.
+- **The flatline candidate.** It says every sample in its window is flagged, as
+  `observe` flags an injected flatline. So its window must be flagged throughout, and
+  its flags then cost nothing.
+- **Why 2 d at least.** A one-sample hold is the sensor's own declared episode, not a
+  candidate fault. So candidate windows are at least 2 d.
+
+**The score.** For every class *L*, the score is the deviance (the Gaussian term plus the
+flag term, which is −2 log-likelihood up to a constant shared by every class) plus a
+penalty:
+
+  score_L = deviance_L + c(k_L) + 2 ln N_L
+
+- **The fitted knobs.** *c*(k) is the critical value of the alternative at α / m
+  (α = 0.05, m = 5 alternatives competing with `none`, Bonferroni).
+  - For *k* ≥ 1 it is the likelihood-ratio value χ²_k at 1 − α/m. That is 6.63 for
+    *k* = 1.
+  - A fixed alternative (*k* = 0: an extension left out, a flatline window) is a simple
+    hypothesis. Its gain over the null is `2 δ·w − |δ|²` for a fixed whitened shift δ.
+    That exceeds *c* with probability at most P(Z > √c), whatever |δ| is. So its critical
+    value is Φ⁻¹(1 − α/m)², which is 5.41.
+  - `none` pays nothing.
+- **The search.** 2 ln N is the look-elsewhere correction for a class's discrete search.
+
+A label is **admissible** if score_L − min_M score_M ≤ `margin`.
+- **The margin.** `distinguishability.margin` is 2, the "substantial support" margin of
+  Burnham and Anderson. The set at `sensitivity_margin` (10) is reported beside it.
 - **A multi-label truth** passes `truth_admissible` when any one of its labels is
-  admissible. No joint class is fitted.
+  admissible.
 
-**Calibration.** On pure white noise around the defaults (300 records of nine sensors),
-`none` must stay admissible against the sensor class at least `none_admissible_rate_min`
-(0.95) of the time. `tests/test_distinguish.py` checks it. Without the correction the
-rate is below one half, which reproduces the reviewer's finding. The rate on the
-Level-0 cells is reported with the results (`none_admissible` per cell).
+**The joint noise calibration, declared.** The records are drawn by the observation model
+itself: white noise, the recalibrated drift walk, pH fouling, flatline episodes and
+missingness, around a known truth. On each record every class competes with `none` at
+once.
+- **How each class is scored.** The sensor class runs its real closed form and flatline
+  search. Each simulated class is the linear-Gaussian surrogate of its search: the best
+  of *N* independent χ²₁ gains, the exact gain of a one-knob fit under the right
+  covariance and the worst case of independent directions. The four extensions are
+  given the same gain at *k* = 0, the worst case of a fixed alternative that points
+  along the noise. That is four, not the three offered, which is conservative.
+- **The rates.** On the model's own noise, `none` is admissible on **0.9825 of 400
+  records** (declared minimum `none_admissible_rate_min` = 0.95; the test checks it on
+  300).
+- **The limit is correlation the observation model does not have.** With the white noise
+  replaced by an AR(1) process of the same marginal sd, the rate is **0.9575 at
+  ρ = 0.3** and **0.785 at ρ = 0.6** (400 records each). The method's guarantee is for
+  the noise the benchmark draws, which has no such correlation. A real plant's record
+  might, and this analysis would then admit alternatives more often than α says. The
+  test checks that the rate falls with ρ.
 
-**Convergence.** The least-squares fits run to convergence, up to `lsq_max_nfev` function
-evaluations, and the scalar fits up to `scalar_max_iter` iterations. Each class reports
-`converged` and its status. A fit that stops short is reported, not hidden.
+## 4. The Level-0 requirement
 
-**Known caveat.** Drifting sensors (pH, CH4, H2) have a random-walk component that is not
-white noise, so a white-noise χ² over-penalises slow offsets on those channels. χ² per
-sensor is reported, so this can be checked.
+Before any sweep, `none` must be admissible on every Level-0 cell: S0-01 on Plants B and
+C, at Tiers A, B and C. The truth's class must also be admissible on S2-03 C/B, S2-02 C/B
+and one S5 cell. The results and the time per cell are in the PR (§6 below).
 
-## 4. Outputs
+## 5. Outputs
 
-- `truth_store/<id>/admissible.json`, per run (method version 2). It holds:
-  - per class: χ², *k*, the candidate count and search penalty, AIC, the convergence
-    status and the fitted knobs;
-  - the admissible sets at both margins;
-  - `n_admissible`, `chance_rate` (1/|A|) and `none_admissible`;
-  - `truth_admissible`, `truth_representable` and `truth_class_limited`.
+- `truth_store/<id>/admissible.json`, per run (method version 4). It holds:
+  - for each class: the deviance, *k*, the candidate count, the penalty, the score and
+    its distance from the best, the best candidate's knobs, and the deviance per sensor;
+  - the admissible sets at both margins, `n_admissible`, `chance_rate` and
+    `none_admissible`;
+  - `truth_admissible`, `truth_representable` and `truth_class_limited`;
+  - the reproduction check (`truth_reproduced_max_abs`), the truth candidate's own
+    deviance, and the simulation counts and time.
 
   It sits beside the answer key. A workflow can never read it.
-- `eval/` reads the file when it exists and adds the columns `admissible_set`,
-  `n_admissible`, `admissible_chance_rate`, `truth_admissible`, `truth_representable`,
-  `attribution_admissible` (primary label in *A* ∪ truth) and
-  `attribution_admissible_set` (every final label in *A* ∪ truth). Without the file these
-  columns are `None`, and every existing column is unchanged. `python -m eval` prints
-  the second score beside the exact one, stratified by |*A*| with the chance rate, so
-  that a broad answer cannot look good.
+- **The chance rate** of the second score is |A ∪ truth| / 6: what a uniform guess over
+  the six labels scores. The CLI stratifies by it.
+- `eval/` reads the file when its method version is the configured one. It adds the
+  columns `admissible_set`, `n_admissible`, `admissible_chance_rate`,
+  `truth_admissible`, `truth_representable`, `attribution_admissible` (primary label in
+  *A* ∪ truth) and `attribution_admissible_set` (every final label in *A* ∪ truth).
+  Without the file these columns are `None`, and every existing column is unchanged.
 - `reports/p0_distinguishability.{csv,json}`: the per-cell table, and the P0 sweep
   scored with both columns side by side.
 
-## 5. Where the code lives
+## 6. Compute
+
+The simulations are shared by the tiers of a (scenario, plant) pair. The fits are
+closed-form or grid look-ups, so they cost seconds per tier.
+- **Per pair.** On a 200-d cell a pair takes about 100 simulations. A 365-d Plant A
+  cell takes about 165, because the grids cover a longer calibration window. The 32
+  pairs of Levels 0–5 come to about 3,400 simulations.
+- **Timing.** Measured at 13–14 s each (200 d), that is about PLAN runner-hours, well
+  within one sweep (~100 runner-hours).
+- **Caching and failures.** `--cache-dir` keeps every simulation, so a re-analysis
+  integrates nothing. Every simulation has a 180 s timeout. A candidate that times out
+  or that the simulator refuses is reported (`simulation_failures`) and is not scored.
+
+## 7. Where the code lives
 
 `distinguish/` is a top-level package (listed in `pyproject.toml`), run outside every
 sandbox. The rule-1 checker forbids it to workflows, by import and by the
-`"distinguish..."` string form, and `eval/` reads its precomputed file without importing
+`"distinguish..."` string form. `eval/` reads its precomputed file without importing
 it.
-
-## 6. Compute
-
-The simulations of the classes that need no fit are shared across the tiers of a
-(scenario, plant) pair; the fits are per tier. Fitting to convergence costs more than the
-first draft estimated:
-
-| class | simulations per cell |
-|---|---|
-| `parameter` | up to about 40 × 7 |
-| `influent` | up to about 40 × 5, plus 25 |
-| `state` and the volume fit | about 25 each |
-
-That is a few hundred simulations per cell, at 14–25 s each. The analysis runs with
-checkpoints after the positive-control ladder, and its compute is reported. If it goes
-past about one sweep (~100 runner-hours), the pairs not run are listed rather than
-squeezed. Every simulation has a 120 s timeout, because of the recorded stiff pocket; a
-timed-out trial's residuals are set to 10³ and counted.

@@ -5786,3 +5786,90 @@ result was computed.
   versions 1 and 2 as well). The solver now works on u + 1, and a unit test recovers
   known log multipliers. The Level-0 check was rerun after the fix.
 
+
+## 2026-09-25 — Second re-review of PR #25: distinguishability method version 4 (the truth baseline)
+
+The coordinator relayed the second re-review of 36d0fde at ~01:00 UTC. It found that
+blocker A was not fixed:
+- `none` was inadmissible on the Level-0 cells C/B, B/B and C/C;
+- on S2-03 C/B the truth's sensor class was not admissible;
+- on S2-02 C/B the win was a spurious TAN step;
+- the compute estimate was about 150 runner-hours;
+- and the doc still carried version-2 text.
+
+**Decision (the coordinator's): the baseline is the truth.** It was taken before any
+result was computed.
+- For each cell, the reference for every class is the truth simulation: true
+  parameters, true influent, true initial state and the run's own seeds, through the
+  same observation operator (tier, channels, calibration window, noise model).
+- `none` is that truth with the injected fault removed. Each other class adds only its
+  own candidate perturbation from the fault library, fitted by its few fault knobs.
+- The residuals are compared with the declared noise, with no dispersion rescaling.
+  Each class's search is penalised as before.
+
+**This is an upper bound on distinguishability, optimistic by construction.** The
+analysis is given everything a workflow must estimate, and the truth's own fault is
+always a candidate of its class. The doc says so at the top. Removed with it: the
+calibrated baseline, the overdispersion, the least-squares fits and their
+configuration.
+
+How the session implemented it. Each choice is the smallest that meets the decision.
+- **The truth is rebuilt, not read.** `simulate_truth` is re-run with the scenario at
+  the plant's horizon and the run's seeds and target feed. The analysis stops unless the
+  rebuilt channels equal the stored `channels.npz` exactly. Every candidate is the same
+  call with the scenario's faults replaced, so a candidate is exactly what the library
+  would have generated.
+  - *Alternative:* perturb the stored channels. Rejected: the influent, state and
+    parameter faults act through the dynamics.
+- **The Level-1 nuisances stay in every class.** `sensor_noise` and `random_gaps` carry
+  no label and are part of the record's noise model, so "the injected fault removed"
+  removes only the label-bearing faults.
+- **The likelihood is the observation model's own.**
+  - White noise plus the recalibrated drift walk, whose covariance is modelled (the
+    reviewer's correlated-noise finding, item 2). The white-noise level is taken at the
+    reference prediction, so the covariance is shared and its determinant cancels.
+  - *Alternatives:* σ from the observed values (as P0 does), or P0's relative-sd floor.
+    Rejected: the floor is not the declared noise (it is 7× the declared pH sd), and a
+    shared covariance keeps the comparison between classes exact.
+- **Flatlined samples stay visible (item 1).**
+  - Their values are dropped, because a stuck sensor repeats its last reading. Their
+    flags enter through the observation model's flatline episode model.
+  - A flatline candidate requires its whole window flagged, as `observe` flags an
+    injected flatline.
+  - Candidate windows are at least 2 d: a one-sample hold is the sensor's own declared
+    episode. With 1-d windows, 13 of 400 noise records lost `none` to a natural gas-flow
+    hold.
+- **A fixed alternative pays the simple-hypothesis critical value.** This is the one
+  change to the penalty, and it is made for the declared rate.
+  - An extension switched off or a flatline window has no knob (*k* = 0), and had
+    paid only 2 ln N. Its gain over the null, `2 δ·w − |δ|²`, exceeds *c* with
+    probability at most P(Z > √c) whatever |δ| is. So its critical value at α/m is
+    Φ⁻¹(1 − α/m)² = 5.41.
+  - *Alternative:* keep 0. Rejected: the worst case then costs about 6 % of the joint
+    rate on its own.
+- **The declared joint rate (item 2).**
+  - **The records.** They are drawn by the observation model itself: drift, fouling,
+    flatline episodes and missingness. Every class competes with `none` at once. The
+    sensor class is exact; the simulated classes are worst-case linear-Gaussian
+    surrogates.
+  - **On the model's own noise,** `none` is admissible on 0.9825 of 400 records
+    (declared minimum 0.95).
+  - **With AR(1) white noise, which the model does not have,** the rate is 0.9575 at
+    ρ = 0.3 and 0.785 at ρ = 0.6. The reviewer saw 0.96 and 0.49 under version 3. This is
+    stated as the limit: the guarantee is for the benchmark's own noise.
+- **One structural candidate is not offered: `precipitation` switched off.**
+  - `sao` switched off needed only a harness setting: its initial state is dropped via
+    `simulate_truth`'s `harness=` argument.
+  - `precipitation` cannot be done that way: `simulate_truth` always feeds `S_ca` to the
+    reactor, and the model without the extension refuses it. Offering it needs a change
+    under `sim/`, which this PR does not make (flagged in the PR body).
+  - No Level 0–5 truth is structural.
+- **Representability.** Every Level 1–5 fault is now a candidate of its class. The one
+  exception is `informative_missingness`: the likelihood does not model which samples
+  are missing, so S4-02 stays not representable and its admissible score null.
+- **Compute.** About 100 simulations per 200-d pair and 165 per 365-d pair, shared by the
+  tiers, at 13–14 s each. The fits are closed-form or grid look-ups. Every simulation is
+  kept in a cache, so a re-analysis integrates nothing.
+- **The order (item 4).** No sweep until `none` is admissible on all six Level-0 cells,
+  and the truth's class on S2-03 C/B, S2-02 C/B and one S5 cell. The results and the
+  time per cell are reported in the PR.
