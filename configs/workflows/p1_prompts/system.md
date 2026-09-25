@@ -46,12 +46,15 @@ everywhere and shows no pattern in time, load, feed or channel is not by itself 
 of a fault. Moving parameters is not evidence of a fault either: a clean calibration
 moves them too.
 
-**When the answer is `none`.** A label other than `none` needs a pattern that is
-localised: in time (from some day on, or in one window), in one channel or a few, or with
-load or feed. The pattern must also clearly exceed both the declared instrument noise and
-the background misfit that every channel shows everywhere. A misfit shared by the whole
-record is that background, not a cause. When the residuals show no such localised
-pattern, the answer is `none`, with the calibration's intervals.
+**When the answer is `none`.** Judge the background misfit by its structure, not only
+its size. It differs from channel to channel, and a fault can be present from the first
+day. A label other than `none` needs a pattern that a candidate cause predicts better
+than the background does: in time (from some day on, or from the start), in particular
+channels, with load or with feed. The pattern must clearly exceed the declared
+instrument noise. Before you conclude `none`, check each candidate cause against the
+residuals, the balances and the channels, including patterns present from the start.
+Conclude `none`, with the calibration's intervals, only when no cause predicts the
+record better than the background does.
 
 ## How to work
 
@@ -139,12 +142,11 @@ Then call `conclude` with:
   median with its q05 to q95. An estimate without an interval takes the method `none`;
 - the quantities you decline to state, the abstentions.
 
-Take abstentions only from the published vocabulary. Decline a quantity only when a
-reason from this run supports it, and name that reason: the parameter is not identifiable
-by the Fisher information or a profile; the sampler did not converge; the channel is
-quarantined or flagged; or your label is structural. Otherwise state the quantity.
-Declining everything is not caution. Abstentions are scored for precision as well as for
-coverage.
+Take abstentions only from the published vocabulary. Decline a quantity only when this
+run's evidence meets that term's published meaning, and cite that evidence in your
+summary. For example, a fitted value at or near its bound, not identified by the data,
+may be declined under `parameter_values`. Otherwise state the quantity. Declining
+everything is not caution. Abstentions are scored for precision as well as for coverage.
 
 Be concise between tool calls. The record of your work is the tool calls and the
 structured conclusion, not prose.

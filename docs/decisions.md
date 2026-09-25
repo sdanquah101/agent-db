@@ -6172,3 +6172,33 @@ prompt, and generating or running the held-out variants.
 **Alternatives.**
 - Clipping `feed_loads` (rejected, see 3).
 - Closing P1's window to match P0 (rejected: the ruling asks for half-open).
+
+## 2026-09-25 — P1: prompt revision 1a (the re-review of `1624e4d`, item 4), prompt sha256 `f8e888f46147e88b013751f0918bffeaf9f9e0aa36c34279ba28b78404f24ef5`
+
+**Decision.** Revision 1 (`4e60c08`, sha256 `19f2d1a2…`) is amended in three places,
+written from the proposal, the card and the published vocabularies only (the P1 prompt
+rule).
+- **(a) When the answer is `none`.**
+  - The background misfit is judged by its structure, not only its size: it differs from
+    channel to channel, and a fault can be present from the first day.
+  - A label other than `none` needs a pattern that a candidate cause predicts better
+    than the background does.
+  - Before concluding `none`, the agent checks each candidate cause, including patterns
+    present from the start.
+  - "A clean calibration moves parameters too" stays.
+  - This answers the first cell's text, where revision 1's "a misfit shared by the whole
+    record is that background" could read as licence to call a from-the-start fault
+    background.
+- **(b) Abstentions.**
+  - "Decline a quantity only when this run's evidence meets that term's published
+    meaning, and cite that evidence in your summary."
+  - The example given: a fitted value at or near its bound, not identified by the data,
+    may be declined under `parameter_values`.
+  - This replaces revision 1's closed list of reasons, which left out the one the
+    vocabulary itself names.
+- **(c) The task prompt** says that the declared feed schedule (`feed_loads`, which
+  `simulate` integrates) covers the whole record. Every other record, note and tool
+  result is restricted to the calibration window. See the fixes entry above, item 3.
+
+**Not frozen.** `prompt_sha256` in `configs/workflows/p1.yaml` stays empty. Freezing
+waits for the lead's word.

@@ -7,8 +7,9 @@ Diagnose and calibrate this digester's model.
 - Calibration window: $calibration_window d. Frozen hold-out window: $holdout_window d.
   Your forecast is scored on the hold-out by the one validation the harness runs after
   `conclude`, and you are never shown that score.
-  Every tool you call, and every record and note you are shown, is restricted to the
-  calibration window.
+  Every record, note and tool result you are shown is restricted to the calibration
+  window, except the declared feed schedule: the loads `feed_loads` reports, which
+  `simulate` integrates, cover the whole record, because they are the model's input.
 
 ## The observation record (calibration window)
 
