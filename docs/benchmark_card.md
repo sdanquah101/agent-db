@@ -304,6 +304,27 @@ no number from the sweep should be quoted without them:
 `none` is P0's scripted verdict when no rule fires; it is not evidence that a fault is
 absent.
 
+### 4.3 P1, the single constrained agent (milestone 7; DEVELOPMENT, not frozen, not scored)
+
+P1 (`workflows/p1_single_agent/agent.py`, `configs/workflows/p1.yaml`, `docs/p1_design.md`)
+is §6.5's single agent. It has the same registry, budgets, record, jail and task-state
+schema as P0, and a language model chooses the next call, when to conclude and what to
+decline. The agent never holds a key or picks its model. Its turns go over the registry
+socket to a privileged-side gateway, and the gateway:
+- sends the frozen model settings;
+- refuses a turn over the run's turn or token budget;
+- logs every request and response verbatim beside the state (`llm_calls.jsonl`);
+- meters the tokens the runner reports.
+
+A harness turns sensor names and call indices into tool arguments. It gives the agent the
+calibration window only, keeping the hold-out for `validate`, and refuses the actions §6.5
+forbids, recording each refusal. The prompts are written from the proposal, this card, the
+registry documentation and the published vocabularies. They name no scenario and no P0
+rule, and a test enforces this. **Nothing about P1's performance is claimed yet.** It runs
+on development cells only until its prompts and settings are frozen and hashed, which
+happens before the held-out variants are generated. The current Claude models accept no
+temperature, so P1's run-to-run variance is a measured property, not a controlled one.
+
 ## 5. Anchoring status — read this before quoting any number
 
 | Plant | Anchoring | What that means |

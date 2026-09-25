@@ -5762,3 +5762,63 @@ The coordinator relayed an adversarial review (~17:40 UTC) with four points.
 workflow records would no longer match its log line's outcome, which the evaluator's
 trail requires, and it would change `state.provenance.Outcome` for every consumer).
 
+
+## 2026-09-25 — P1's architecture: the model gateway on the privileged side, a harness that plumbs, a model that decides (branch `claude/p1-single-agent`, draft PR #26)
+
+The P1 session was launched by the lead ("launch: p1-single-agent", relayed by the
+coordinator). Design: `docs/p1_design.md`. This entry records the interpretations taken.
+They are proposals for the coordinator and the lead; none is frozen.
+
+- **Model turns go through the registry socket to a privileged-side gateway**
+  (`tools/llm.py`; the `llm` op of `tools/server.py`; `tools.llm()` in the client stub).
+  - *Reason:* the key, the model id, the sampling settings, the turn and token budgets,
+    the verbatim log and the token meter must all be outside the agent's reach. The
+    registry's evaluation meter already sits on the privileged side for the same reason,
+    so this puts the token meter there too.
+  - *Alternatives:*
+    - running the loop on the privileged side (rejected: `sim` is importable there, and
+      §6.5 puts P1 in the same boundary as P0);
+    - network access and a key inside the jail (rejected: the key and the settings would
+      be the agent's to read and change).
+  - *What it touches in the registry:* one op on the server, one keyword on `launch` and
+    `RegistryServer`, and one reserved file name in `OutputSink`. No tool, schema, budget
+    rule or config of the frozen registry changes.
+- **The log is append-only and verbatim.** Every attempt is logged: the request as sent,
+  its sha256, and the response or the error. Messages are logged from the first one the
+  previous request lacked. `rebuild_requests` reassembles every request exactly (tested).
+  - *Alternative:* logging the full request each turn (rejected: quadratic in the turns,
+    for no information).
+- **The harness plumbs, the model decides.** The harness turns sensor names and call
+  indices into tool arguments, supplies seeds (base plus call index; rule 4), restricts
+  data to the calibration window (the hold-out is read by `validate` only), and summarises
+  long arrays.
+  - It refuses what §6.5's common constraints forbid:
+    - evidence with no published key or a call that did not return;
+    - an abstention outside the vocabulary;
+    - a posterior with no converged sampler;
+    - bounds changes without a justification;
+    - a flagged sensor in the objective.
+  - Refusals are recorded in `tool_failures` (`p1.<action>`) and
+    `plan.sizes.refused_actions`.
+  - It does *not* check that an evidence item cites the right tool for its keys; that
+    stays the evaluator's measurement.
+  - *Flagged:* these refusals never reach the registry, so the evaluator's
+    `invalid_actions` (logs only) does not count them.
+- **P1's evidence keys are the evaluator's registered claim sources** (`evidence_keys` in
+  `p1.yaml`, tested equal to `configs/eval.yaml`), and every P1 item carries `rule: p1`.
+  - *Reason:* ruling D3 holds P1 to the same definition; no key is added to the evaluator.
+- **Model settings.**
+  - `claude-opus-5`: the Claude API reference's recommended Opus-tier id; newer ids
+    exist and are flagged for the lead.
+  - `temperature: null`, never sent: the current models reject sampling parameters with a
+    400, so §10's "temperature 0 where possible" is not possible.
+  - Effort `high`; thinking at the model's default; prompt caching on; 16,000 max tokens.
+  - No server-side refusal fallback: a fallback would switch models mid-run. A refusal
+    ends the run unconcluded instead.
+- **The assays' public price list** (`configs/tools/assays.yaml`: name, channel, cost,
+  turnaround) is added to P1's sandbox configuration.
+  - *Reason:* §6.4's "declared cost and turnaround"; P0 carries its assay choice as a
+    configured preference list.
+  - P0's sandbox document is unchanged (tested).
+- **The filters are not offered.** `filter_enkf` and `filter_mhe` need a registered
+  state-space model, and a run registers none, so no workflow can call them.

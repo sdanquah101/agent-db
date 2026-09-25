@@ -47,7 +47,7 @@ from pydantic import ValidationError
 from scenarios.schema import Scenario, load_scenario
 from sim.run.layout import INDEX_FILE, RUNS_ROOT, RunPaths, truth_store_for
 from state.task_state import TaskState
-from tools.llm import AnthropicClient, ModelClient, ModelGateway
+from tools.llm import AnthropicClient, ModelClient, ModelGateway, RecordedClient
 from tools.privileged import SCENARIOS_DIR, open_registry
 from tools.registry import Registry
 from tools.sandbox import REPO_ROOT, SandboxError, launch
@@ -465,10 +465,12 @@ def batch(
     table: Path | None,
     sandbox_root: Path | None = None,
     keep_sandbox: bool = False,
+    model_client_factory: Any = None,
 ) -> list[dict[str, Any]]:
     """Run the workflow on every cell, writing the table after each.
 
-    A stopped batch keeps the rows it wrote.
+    A stopped batch keeps the rows it wrote. ``model_client_factory(run_id)``, for an LLM
+    workflow, gives each cell its model client (default: the provider's live client).
     """
     rows = []
     for cell in cells:
@@ -487,6 +489,7 @@ def batch(
                 sandbox_root=sandbox_root,
                 scenario=cell["scenario"],
                 keep_sandbox=keep_sandbox,
+                model_client=None if model_client_factory is None else model_client_factory(run_id),
             )
         except SandboxError as exc:
             print(f"  SANDBOX ERROR: {exc}", flush=True)
@@ -523,7 +526,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--table", type=Path, default=None, help="CSV to write rows to")
     parser.add_argument("--keep-sandbox", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--replay",
+        type=Path,
+        default=None,
+        help="an LLM workflow's llm_calls.jsonl to replay instead of calling the model "
+        "(one --run only)",
+    )
     args = parser.parse_args(argv)
+    if args.replay is not None and (not args.run or len(args.run) != 1):
+        parser.error("--replay replays one run: give exactly one --run")
 
     runs_root = Path(args.runs_root)
     store = truth_store_for(runs_root) if args.truth_store is None else Path(args.truth_store)
@@ -558,6 +570,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         table=table,
         sandbox_root=args.sandbox_root,
         keep_sandbox=args.keep_sandbox,
+        model_client_factory=(
+            None if args.replay is None else (lambda _run_id: RecordedClient(args.replay))
+        ),
     )
     done = sum(1 for r in rows if r["completed"])
     print(f"{done}/{len(rows)} cells completed; table at {table}")

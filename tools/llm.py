@@ -110,9 +110,7 @@ class AnthropicClient:
         try:
             import anthropic
         except ImportError as exc:  # pragma: no cover - depends on the environment
-            raise ModelError(
-                "the anthropic SDK is not installed (pip install -e '.[llm]')"
-            ) from exc
+            raise ModelError("the anthropic SDK is not installed (pip install anthropic)") from exc
         self._sdk = anthropic
         self._client = anthropic.Anthropic(max_retries=0, timeout=settings.request_timeout_s)
         self.name = f"anthropic:{settings.model_id}"

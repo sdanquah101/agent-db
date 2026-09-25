@@ -2483,3 +2483,41 @@ P0 rulings (step 1).
 **Next.** PR B (positive-control ladder, pre-registered in
 `docs/positive_control.md`) and PR C (distinguishability).
 
+
+## Milestone 7 — P1, the single constrained agent (weeks 21–25)
+
+### Session 2026-09-25 — P1 built and tested against the test double (`claude/p1-single-agent`, draft PR #26)
+
+**Done.**
+- **The agent** (`workflows/p1_single_agent/agent.py`). It runs in the same jail as P0,
+  against the same registry, budgets and record, and writes the same task state.
+- **The model gateway** (`tools/llm.py`), on the privileged side, reached through a new
+  `llm` op on the registry socket. It holds the model settings, the turn and token
+  budgets, the retry policy, a verbatim log (`llm_calls.jsonl`) and the token meter the
+  runner reports.
+- **Config and prompts, as a development draft:** `configs/workflows/p1.yaml` and the
+  prompts in `configs/workflows/p1_prompts/`.
+- **Tests without a network or a key:** a scripted double and a recorded double.
+  `tests/test_p1_agent.py` has 24 tests and runs through the jail in about 12 s. They
+  check that:
+  - every action names its log line;
+  - the evaluator scores the run with 0 unsupported claims;
+  - a transcript replay reproduces the state;
+  - a run that never concludes is recorded as incomplete.
+- **Docs:** `docs/p1_design.md`, a decisions entry, and benchmark card §4.3.
+
+**Blocked:**
+- **The live pilot on the development cells** (P0's ten pilot cells) is blocked:
+  `ANTHROPIC_API_KEY` is not set in this environment. When it is:
+  - add the `anthropic` SDK to `pyproject.toml`;
+  - generate the ten cells and run them;
+  - report tokens, dollars and wall time per cell against the budgets.
+- **Five questions for the coordinator**, listed in PR #26: the model id, temperature,
+  how harness refusals are counted, no refusal fallback, and approval of the pilot.
+
+**Not done, by instruction:** no sweep scoring, no P0 comparison, no prompt freeze or
+hash.
+
+**The next session starts on:** the live pilot once the key and the lead's answers are
+in; prompt development on development cells only; then the freeze before the held-out
+variants.
