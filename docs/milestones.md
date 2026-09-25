@@ -2521,3 +2521,39 @@ hash.
 **The next session starts on:** the live pilot once the key and the lead's answers are
 in; prompt development on development cells only; then the freeze before the held-out
 variants.
+
+### Session 2026-09-25 (continued) — two review rounds, the switch to OpenAI `gpt-5.6-luna`, the first live development cell
+
+**Done.**
+- The coordinator's review at `0528698` and re-review at `63b58b1` were applied, and the
+  lead's ruling made the prompt examples generic (decisions, 2026-09-25).
+- By the lead's direct instruction, P1 now runs on OpenAI `gpt-5.6-luna` through the
+  Responses API. A client translates the agent's history both ways, and every gateway
+  guarantee is checked on the translated request. The key reaches the runner's process
+  as `OPENAI_API_KEY` and is stored nowhere.
+- **The first live development cell: S0-01, plant B, tier B** (a P0 pilot cell), run on
+  `run_2b118014430e`, before the hold-out-quarantine fix.
+
+  | | used | budget |
+  |---|---|---|
+  | wall clock | 65.4 min (3,925 s; 3,798 s of it in tools) | 90 min |
+  | simulator evaluations | 298 | 450 |
+  | assay units | 2 | 2 |
+  | model turns | 14 (14 attempts, no retry) | 60 |
+  | tokens | 472,434 (42 input, 77,290 cache writes, 384,017 cache reads, 11,085 output) | 6,000,000 |
+  | cost at luna's rates | $0.036 | — |
+
+  - *The run:* completed, state valid. Three evidence items were refused: an
+    unpublished key, a value no cited call produced, and a declared bound misquoted.
+  - *The diagnostic score, development only:* 0 of 8 claims unsupported, 0 invalid
+    actions.
+  - *The label:* `state` with `sensor` secondary, where the truth is `none`.
+  - *The rest:* one false kinetic drift (`k_m_ac` at its bound, reported as a
+    method-`none` estimate) and 8 abstentions outside the answer key.
+  - *The hole it found:* the agent quarantined a hold-out day that `data_qc` had shown
+    it, which led to the quarantine and validation fix.
+  - Model latency took about 2 min of the 65.
+
+**Blocked:** nothing technical. The other nine development cells wait for the lead's
+word. **Next:** the other nine cells on the lead's word; prompt development on
+development cells only; the freeze and hash before the held-out variants.
