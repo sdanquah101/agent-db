@@ -6090,3 +6090,34 @@ has a well-formed negative control.
 
 **Also:** on a short record, the default balance window is capped to the calibration
 window. An explicit window longer than that is refused.
+
+## 2026-09-25 — RULING (the lead): the P1 development pilot plan
+
+**Ruling** (the lead, relayed by the coordinator ~15:40 UTC: "Yes, implement your
+recommendations"). The development pilot plan is approved, in this order:
+1. **Push** the fixes of the coordinator's re-review at `e4fc44a`. Done at `0e178d5`.
+2. **Baseline.** Run the other nine development (pilot) cells on the current prompt, at
+   that committed head, each recording the git commit and the prompt sha256 in
+   `summary.json`. The runs come from a worktree checked out at `0e178d5`, so each
+   records a clean commit. The coordinator's re-review runs in parallel; a finding that
+   changes the results means re-running the affected cells.
+3. **One prompt revision**, written from the proposal, the card, the registry
+   documentation and the published vocabularies only (the P1 prompt rule). It covers
+   five generic points:
+   - when to conclude `none`;
+   - a fitted value at its bound is a warning, not a change;
+   - a secondary label needs its own evidence;
+   - an abstention needs a named reason from the run;
+   - a budget reserve for the final fit, its Fisher call and the final simulate, with
+     Sobol optional.
+
+   It is committed separately with its sha256, and says which prompt text of the first
+   cell each change answers.
+4. **Re-run** the same nine cells plus S0-01 B/B on the revised prompt.
+5. **Report** one row per cell per prompt version (label against truth as a
+   development-only diagnostic, unsupported claims, invalid actions, extra abstentions,
+   kinetic-update errors, evaluations, wall clock, turns, tokens, cost at luna's rates),
+   with totals and the difference.
+
+Still forbidden without the lead's word: scoring the Level 0–5 sweep, freezing the
+prompt, and generating or running the held-out variants.
