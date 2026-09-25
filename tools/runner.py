@@ -153,7 +153,9 @@ def _fresh_sandbox(sandbox_root: Path | None, workflow: str) -> Path:
 def live_client(config: P1Config) -> ModelClient:
     """The provider's live client for the configuration's ``model`` block."""
     if config.model.provider == "openai":
-        return OpenAIResponsesClient(config.model)
+        return OpenAIResponsesClient(
+            config.model, system_sha256=system_digest(load_prompts(config)["system"])
+        )
     return AnthropicClient(config.model)
 
 

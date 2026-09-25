@@ -6012,3 +6012,26 @@ and quarantined it. That would change what its forecast is scored against. Now:
 - validation scores the hold-out as recorded.
 
 That first cell ran before this fix, and its report says so.
+
+## 2026-09-25 — P1: every gateway guarantee also holds on the translated OpenAI request
+
+The coordinator (~12:40 UTC) accepted the lead's switch to `gpt-5.6-luna` and asked that
+the gateway's guarantees hold on the request OpenAI actually receives.
+`tools/llm.py::check_responses_request` now runs inside the OpenAI client on every call,
+after translation and before sending. It refuses:
+- any parameter the frozen settings do not name (`tool_choice`, `parallel_tool_calls`,
+  `metadata`, `previous_response_id`, ...);
+- `store` other than False;
+- an include list other than the encrypted reasoning;
+- a model, response cap or effort other than the frozen ones;
+- `instructions` whose sha256 is not the committed system prompt's;
+- any tool but a plain function tool (web search, file search, code interpreter,
+  computer use, MCP, image generation, ...);
+- any input item but user or assistant text messages, function calls with their outputs,
+  and reasoning items carrying only what the model returned. A built-in tool call
+  planted in the history, for example inside a thinking block's signature, never reaches
+  OpenAI.
+
+The log now keeps the translated request verbatim beside the raw response. A replay of
+an OpenAI run is tested on a fake transport. Each refused form has a test, and each test
+has a well-formed negative control.

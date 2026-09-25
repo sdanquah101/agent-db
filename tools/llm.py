@@ -53,6 +53,7 @@ __all__ = [
     "RetryableModelError",
     "ScriptedClient",
     "check_agent_request",
+    "check_responses_request",
     "from_responses_output",
     "read_transcript",
     "rebuild_requests",
@@ -249,33 +250,137 @@ class OpenAIResponsesClient:
     API. The SDK's own retries are off, as for the Anthropic client.
     """
 
-    def __init__(self, settings: ModelSettings) -> None:
+    def __init__(
+        self,
+        settings: ModelSettings,
+        *,
+        system_sha256: str | None = None,
+        transport: Any = None,
+    ) -> None:
         """Build the SDK client.
+
+        Args:
+            settings: The frozen ``model`` block.
+            system_sha256: The committed system prompt's fingerprint; the ``instructions``
+                actually sent must carry it (checked on every call).
+            transport: A stand-in for the SDK client (tests): an object with
+                ``responses.create(**kwargs)``. With it, no SDK is imported.
 
         Raises:
             ModelError: If the SDK is not installed.
         """
-        try:
-            import openai
-        except ImportError as exc:  # pragma: no cover - depends on the environment
-            raise ModelError("the openai SDK is not installed (pip install openai)") from exc
-        self._sdk = openai
-        self._client = openai.OpenAI(max_retries=0, timeout=settings.request_timeout_s)
+        self._sdk: Any = None
+        if transport is None:
+            try:
+                import openai
+            except ImportError as exc:  # pragma: no cover - depends on the environment
+                raise ModelError("the openai SDK is not installed (pip install openai)") from exc
+            self._sdk = openai
+            transport = openai.OpenAI(max_retries=0, timeout=settings.request_timeout_s)
+        self._client = transport
+        self.settings = settings
+        self.system_sha256 = system_sha256
         self.name = f"openai:{settings.model_id}"
 
     def create(self, params: dict[str, Any]) -> dict[str, Any]:
-        """One Responses API call, translated both ways."""
-        sdk = self._sdk
+        """One Responses API call, translated both ways, checked before it is sent."""
         kwargs = to_responses_request(params)
+        check_responses_request(kwargs, self.settings, self.system_sha256)
+        sdk = self._sdk
         try:
             response = self._client.responses.create(**kwargs)
-        except (sdk.RateLimitError, sdk.APIConnectionError) as exc:  # includes timeouts
-            raise RetryableModelError(f"{type(exc).__name__}: {exc}") from exc
-        except sdk.APIStatusError as exc:
-            if exc.status_code >= 500:
+        except Exception as exc:
+            if sdk is not None and isinstance(exc, sdk.RateLimitError | sdk.APIConnectionError):
                 raise RetryableModelError(f"{type(exc).__name__}: {exc}") from exc
-            raise ModelError(f"{type(exc).__name__}: {exc}") from exc
-        return from_responses_output(response.to_dict(), kwargs)
+            if sdk is not None and isinstance(exc, sdk.APIStatusError):
+                if exc.status_code >= 500:
+                    raise RetryableModelError(f"{type(exc).__name__}: {exc}") from exc
+                raise ModelError(f"{type(exc).__name__}: {exc}") from exc
+            raise
+        raw = response if isinstance(response, dict) else response.to_dict()
+        return from_responses_output(raw, kwargs)
+
+
+_RESPONSES_KEYS = frozenset(
+    {"model", "instructions", "input", "max_output_tokens", "store", "include", "tools",
+     "reasoning", "temperature"}
+)  # fmt: skip
+_REASONING_ITEM_KEYS = frozenset(
+    {"type", "id", "summary", "encrypted_content", "content", "status"}
+)
+
+
+def check_responses_request(
+    kwargs: dict[str, Any], settings: ModelSettings, system_sha256: str | None
+) -> None:
+    """Every gateway guarantee, on the request as OpenAI will receive it.
+
+    The coordinator's check of the OpenAI path (2026-09-25):
+    - only the parameters the frozen settings name are sent. There is no ``tool_choice``,
+      ``parallel_tool_calls``, ``metadata`` or ``previous_response_id``;
+    - ``store`` is False and nothing else asks OpenAI to keep state. The include list is
+      exactly the encrypted reasoning;
+    - only plain function tools: no built-in tool (web search, file search, code
+      interpreter, computer use, MCP, image generation, ...);
+    - input items only of the kinds the translation makes. These are user and assistant
+      messages, function calls and their outputs, and reasoning items, so nothing
+      planted in the history can smuggle in a built-in tool call;
+    - the model, effort and response cap are the frozen ones, and the ``instructions``
+      are the committed system prompt.
+
+    Raises:
+        ModelError: Naming the first violation; nothing is sent.
+    """
+    extra = set(kwargs) - _RESPONSES_KEYS
+    if extra:
+        raise ModelError(f"parameters the frozen settings do not name: {sorted(extra)}")
+    if kwargs.get("store") is not False:
+        raise ModelError("store must be False: nothing is kept at OpenAI")
+    if list(kwargs.get("include") or []) != ["reasoning.encrypted_content"]:
+        raise ModelError("include is exactly the encrypted reasoning")
+    if kwargs.get("model") != settings.model_id:
+        raise ModelError(f"model {kwargs.get('model')!r} is not the frozen {settings.model_id!r}")
+    if kwargs.get("max_output_tokens") != settings.max_tokens:
+        raise ModelError("max_output_tokens is not the frozen response cap")
+    effort = (kwargs.get("reasoning") or {}).get("effort")
+    if effort != settings.effort or set(kwargs.get("reasoning") or {}) - {"effort"}:
+        raise ModelError("reasoning is exactly the frozen effort")
+    if ("temperature" in kwargs) != (settings.temperature is not None):
+        raise ModelError("temperature is sent only when the frozen settings name one")
+    instructions = kwargs.get("instructions")
+    if not isinstance(instructions, str):
+        raise ModelError("instructions must be the committed system prompt")
+    if system_sha256 is not None and system_digest(instructions) != system_sha256:
+        raise ModelError("the instructions sent are not the committed system prompt")
+    for tool in kwargs.get("tools") or []:
+        if tool.get("type") != "function" or set(tool) != {
+            "type",
+            "name",
+            "description",
+            "parameters",
+        }:
+            raise ModelError(f"only plain function tools are sent; got {tool.get('type')!r}")
+    for item in kwargs.get("input") or []:
+        kind = item.get("type")
+        if kind is None or kind == "message":
+            if item.get("role") not in ("user", "assistant"):
+                raise ModelError(f"input role {item.get('role')!r} is not accepted")
+            parts = item.get("content")
+            if isinstance(parts, list) and any(
+                part.get("type") not in ("input_text", "output_text") for part in parts
+            ):
+                raise ModelError("message content is text only")
+        elif kind == "function_call":
+            if set(item) != {"type", "call_id", "name", "arguments"}:
+                raise ModelError("a function_call carries exactly call_id, name, arguments")
+        elif kind == "function_call_output":
+            if set(item) != {"type", "call_id", "output"} or not isinstance(item["output"], str):
+                raise ModelError("a function_call_output carries exactly call_id and text")
+        elif kind == "reasoning":
+            if set(item) - _REASONING_ITEM_KEYS:
+                raise ModelError("a reasoning item carries only what the model returned")
+        else:
+            raise ModelError(f"input item type {kind!r} is not accepted")
 
 
 def to_responses_request(params: dict[str, Any]) -> dict[str, Any]:
@@ -376,9 +481,8 @@ def from_responses_output(raw: dict[str, Any], kwargs: dict[str, Any]) -> dict[s
     ``tool_use`` blocks. ``usage`` is mapped so the meter counts the same way for every
     provider: ``input_tokens`` uncached, ``cache_read_input_tokens`` cached,
     ``cache_creation_input_tokens`` cache writes, ``output_tokens`` including reasoning.
-    The raw response is kept under ``provider.response``; the request under
-    ``provider.request`` without its ``input``, which :func:`to_responses_request`
-    derives from the logged request, with its digest.
+    The raw response is kept under ``provider.response`` and the translated request,
+    verbatim, under ``provider.request``.
     """
     content: list[dict[str, Any]] = []
     for item in raw.get("output") or []:
@@ -428,8 +532,7 @@ def from_responses_output(raw: dict[str, Any], kwargs: dict[str, Any]) -> dict[s
     details = usage.get("input_tokens_details") or {}
     cached = int(details.get("cached_tokens") or 0)
     written = int(details.get("cache_write_tokens") or 0)
-    request = {k: v for k, v in kwargs.items() if k != "input"}
-    request["input_sha256"] = request_digest({"input": kwargs.get("input", [])})
+    request = dict(kwargs)  # the translated request, verbatim (the coordinator's check)
     return {
         "type": "message",
         "role": "assistant",
