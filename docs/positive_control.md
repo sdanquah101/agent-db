@@ -224,6 +224,45 @@ PR B's head with the hook off, and compared with the baseline outputs
 
 No difference traces to the hook, so the check passes and R3 runs.
 
+### 8.2 R3, the candidate set: verdict "not run", as the pre-registration defines it (2026-09-25)
+
+The 10 parameter cells ran at PR B's head from 14:21 to 20:40 UTC on 2026-09-24, and
+were scored after the coordinator cleared df2181f. The rows are in
+`reports/p0_positive_control.{csv,json}`, the verdict in
+`reports/p0_positive_control_summary.json`, and the forced lists and configurations in
+`reports/positive_control/`.
+
+**The verdict, computed by the committed code: "not run: forced parameters fitted on 8
+of 10".** §5.1 says anything less than 10 of 10 is reported as not run.
+
+**What happened on the two cells, stated plainly.**
+- The hook worked. On all 10 cells the forced parameters are in P0's approved subset.
+- On S5-01 A/C and S5-02 A/A, both Plant A, the enlarged subset made the least-squares
+  and DE designs larger than P0's wall-clock guard allowed at Plant A's measured rate
+  ("lsq: bound 61 at the measured rate"). No fitter ran, and the defaults stood, so the
+  forced parameters were never estimated.
+- §5.1 calls any shortfall "a bug in the hook". The cause here is P0's own time guard, not
+  the hook. **The criterion is left exactly as registered**; the coordinator decides
+  whether that wording matters (see the PR body).
+
+**What the 8 fitted cells show.** This is reported for the record, and is not the
+verdict:
+- No cell's attribution became exact where it was not before. S5-01 A/A and S5-02 C/A
+  were exact at baseline and stay exact.
+- The recovery move (every forced parameter within 25 % of its last-segment truth, or
+  covered by its interval) holds on 6 cells:
+  - 4 counted: S5-02 B/A, B/B, B/C and C/A;
+  - 2 not counted, because a wall-clock guard differed from the baseline (§10):
+    S5-01 A/A and A/B.
+- S5-02 C/B and C/C miss: `k_hyd_pr` is at its lower bound (0.25) outside its interval.
+- In the counted cells the hydrolysis multipliers are often at a bound (S5-02 B/A:
+  `k_hyd_ch` and `k_hyd_pr` at 0.25, `k_hyd_li` at 4.0). The intervals are wide enough to
+  cover the truth (0.6), so the recovery move is weak evidence of identification.
+
+**Plainly:** forcing the shifted parameter into P0's fit never changed its attribution on
+any of the 8 cells where the fit ran. Where it recovered the parameter, it did so mostly
+through wide intervals.
+
 ---
 
 ## 9. Amendment, 2026-09-24 ~17:30 UTC (review of PR #23)
