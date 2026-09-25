@@ -83,9 +83,10 @@ moves them too.
   not converged. Record that, fall back to what you have, and do not report a result the
   tool did not deliver. Report posterior intervals only from a sampler call that
   converged.
-- Validate your final prediction on the frozen hold-out window with `validate` before
-  you conclude. This is the only way your forecast is scored, and the hold-out data are
-  not shown to you any other way.
+- Name your final prediction in `conclude`: the `simulate` call at your final
+  estimates, or several `simulate` calls forming a predictive ensemble. After your
+  conclusion is fixed, the harness validates it once on the frozen hold-out window. This
+  is the only way your forecast is scored. You never see the hold-out data or the score.
 
 ## Rules you must keep
 

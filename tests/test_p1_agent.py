@@ -32,7 +32,7 @@ from eval.score import Scorer
 from state.provenance import read_calls
 from state.task_state import TaskState
 from tests.conftest import _short
-from tests.p1_support import clean_policy, dawdling_policy
+from tests.p1_support import adversarial_policy, clean_policy, dawdling_policy, slow
 from tests.test_truth_isolation import find_truth_references
 from tools.llm import (
     LLM_LOG_FILE,
@@ -44,7 +44,9 @@ from tools.llm import (
     ScriptedClient,
     read_transcript,
     rebuild_requests,
+    replay_digest,
     request_digest,
+    system_digest,
 )
 from tools.runner import WORKFLOWS, run_workflow
 from tools.server import OUTPUTS_DIR, OutputSink
@@ -68,13 +70,35 @@ def test_the_agent_passes_the_rule_one_checker():
     assert find_truth_references(AGENT) == []
 
 
+_FORBIDDEN_IN_PROMPTS = (re.compile(r"S\d-\d\d"), re.compile(r"R[1-6]"))
+
+
+def prompt_violations(texts: dict[str, str]) -> list[tuple[str, str]]:
+    """(where, match) for every scenario id or P0 rule id in the texts the model reads."""
+    return [
+        (where, m.group(0))
+        for where, text in texts.items()
+        for pattern in _FORBIDDEN_IN_PROMPTS
+        for m in pattern.finditer(text)
+    ]
+
+
+def model_facing_texts(prompt_dir=PROMPT_DIR) -> dict[str, str]:
+    """Every committed text the model reads, but the filled template (checked end to end).
+
+    The prompt files; every tool name, description and schema the agent sends; and the
+    harness's own source, which holds every notice and error message it writes.
+    """
+    texts = {str(p): p.read_text(encoding="utf-8") for p in sorted(prompt_dir.glob("*"))}
+    texts["tool specifications"] = json.dumps(agent.tool_specs())
+    texts[str(AGENT)] = AGENT.read_text(encoding="utf-8")
+    return texts
+
+
 def test_no_committed_prompt_names_a_scenario_or_a_p0_rule():
-    prompts = sorted(PROMPT_DIR.glob("*"))
-    assert {p.name for p in prompts} >= {"system.md", "task.md"}
-    for path in prompts:
-        text = path.read_text(encoding="utf-8")
-        assert not re.search(r"S\d-\d\d", text), path
-        assert not re.search(r"R[1-6]", text), path
+    texts = model_facing_texts()
+    assert {str(PROMPT_DIR / "system.md"), str(PROMPT_DIR / "task.md")} <= set(texts)
+    assert prompt_violations(texts) == []
     # the configuration names exactly these prompt files, and they load
     assert set(load_prompts(load_p1()).values()) == {
         (PROMPT_DIR / "system.md").read_text(encoding="utf-8"),
@@ -82,10 +106,15 @@ def test_no_committed_prompt_names_a_scenario_or_a_p0_rule():
     }
 
 
-def test_the_prompt_check_catches_what_it_is_for(tmp_path):
-    # negative control: the two patterns do match a scenario id and a rule id
-    for bad in ("as in S2-03", "rule R4 fires"):
-        assert re.search(r"S\d-\d\d", bad) or re.search(r"R[1-6]", bad)
+def test_the_prompt_check_fails_on_a_planted_file(tmp_path):
+    # negative control: the same scan, over a prompt directory with one planted file
+    for f in PROMPT_DIR.glob("*"):
+        (tmp_path / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+    assert prompt_violations(model_facing_texts(tmp_path)) == []
+    (tmp_path / "extra.md").write_text("Behave as on S2-03, where rule R4 fires.\n")
+    found = prompt_violations(model_facing_texts(tmp_path))
+    assert sorted(m for _, m in found) == ["R4", "S2-03"]
+    assert {w for w, _ in found} == {str(tmp_path / "extra.md")}
 
 
 def test_what_the_runner_hands_the_jail_carries_nothing_of_a_run_and_no_model_setting():
@@ -241,7 +270,7 @@ def test_the_log_reassembles_every_request_verbatim(tmp_path):
     )
     history = [{"role": "user", "content": "one"}]
     for k in range(3):
-        out = gw.complete({"system": "s", "messages": list(history), "tools": [{"name": "x"}]})
+        out = gw.complete({"system": "s", "messages": list(history), "tools": [_GOOD_TOOL]})
         history += [
             {"role": "assistant", "content": out["response"]["content"]},
             {"role": "user", "content": f"next {k}"},
@@ -263,6 +292,74 @@ def test_the_recorded_client_replays_and_refuses_a_different_request(tmp_path):
     other = _gateway(tmp_path / "o", RecordedClient(tmp_path / LLM_LOG_FILE))
     with pytest.raises(ModelError, match="differs from the recorded"):
         other.complete({"system": "changed", "messages": msg["messages"]})
+
+
+_GOOD_TOOL = {"name": "simulate", "description": "d", "input_schema": {"type": "object"}}
+
+
+@pytest.mark.parametrize(
+    ("request_", "match"),
+    [
+        ({"system": "s", "messages": [], "model": "x"}, "only system, messages and tools"),
+        (
+            {"system": "s", "messages": [], "tools": [
+                {"type": "code_execution_20260521", "name": "code_execution"}]},
+            "only custom tools",
+        ),
+        (
+            {"system": "s", "messages": [], "tools": [
+                {"type": "web_fetch_20260209", "name": "web_fetch"}]},
+            "only custom tools",
+        ),
+        ({"system": "s", "messages": [], "tools": [{"name": "x"}]}, "name and an input_schema"),
+        ({"system": "s", "messages": [], "tools": [_GOOD_TOOL, _GOOD_TOOL]}, "once"),
+        ({"system": "not the prompt", "messages": []}, "not the committed prompt"),
+        ({"system": "s", "messages": [{"role": "system", "content": "x"}]}, "role"),
+        (
+            {"system": "s", "messages": [{"role": "user", "content": [
+                {"type": "document", "source": {}}]}]},
+            "block type",
+        ),
+        (
+            {"system": "s", "messages": [{"role": "user", "content": [
+                {"type": "text", "text": "x", "cache_control": {"type": "ephemeral"}}]}]},
+            "carries exactly",
+        ),
+        (
+            {"system": "s", "messages": [{"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": "t", "content": [{"type": "image"}]}]}]},
+            "content is text",
+        ),
+    ],
+)  # fmt: skip
+def test_the_gateway_refuses_every_form_an_agent_may_not_send(tmp_path, request_, match):
+    sent = []
+    gw = _gateway(tmp_path, ScriptedClient(lambda p: sent.append(p) or _echo(p)))
+    gw.system_sha256 = system_digest("s")
+    with pytest.raises(ModelError, match=match):
+        gw.complete(request_)
+    assert sent == []  # nothing reached the client
+    # negative control: the well-formed request passes
+    ok = {
+        "system": "s",
+        "messages": [{"role": "user", "content": [{"type": "text", "text": "hi"}]}],
+        "tools": [_GOOD_TOOL],
+    }
+    gw.complete(ok)
+    assert len(sent) == 1
+
+
+def test_the_replay_digest_masks_the_wall_clock_and_nothing_else():
+    def request(clock: float, extra: str = "") -> dict:
+        body = json.dumps({"budget": {"wall_clock_min_left": clock}, "x": 1})
+        note = f"HARNESS: wall_clock_min_left={clock}{extra}"
+        return {"messages": [{"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "t", "content": body},
+            {"type": "text", "text": note}]}]}  # fmt: skip
+
+    assert request_digest(request(19.9)) != request_digest(request(12.3))
+    assert replay_digest(request(19.9)) == replay_digest(request(12.3))
+    assert replay_digest(request(19.9)) != replay_digest(request(19.9, " more"))
 
 
 def test_the_workflow_cannot_write_the_gateways_log(tmp_path):
@@ -301,8 +398,9 @@ def test_every_tool_the_agent_names_is_a_registry_tool_or_a_workspace_action():
     workspace = {"inspect_record", "set_sensor_status", "record_evidence", "conclude"}
     names = {s["name"] for s in agent.tool_specs()}
     assert names - workspace <= set(TOOL_INPUTS)
-    # the two state-space filters need a state-space model, and a run registers none
-    assert set(TOOL_INPUTS) - names == {"filter_enkf", "filter_mhe"}
+    # the two state-space filters need a state-space model, and a run registers none;
+    # `validate` is the harness's, once, after the conclusion (the review of PR #26, 1)
+    assert set(TOOL_INPUTS) - names == {"filter_enkf", "filter_mhe", "validate"}
 
 
 def test_long_arrays_are_summarised_and_short_ones_kept():
@@ -376,9 +474,26 @@ def test_the_agent_concludes_and_keeps_the_contract(p1_result):
     refused = [f for f in state.tool_failures if f.name == "p1.conclude"]
     assert len(refused) == 1 and "everything" in refused[0].message
     assert state.plan.sizes["refused_actions"] == 1
-    # the validation block names its call and the frozen window
+    # the validation block names its call and the frozen window; the harness made that
+    # call once, after the conclusion, and the model never saw it (the review of #26, 1)
     assert state.validation is not None and state.validation.holdout == (22.5, 30.0)
+    validates = [a for a in state.actions if a.name == "validate"]
+    assert len(validates) == 1 and state.actions[-1].name == "validate"
+    assert state.validation.calls == (validates[0].call_index,)
+    for metric in ("coverage_90", "interval_score", "crps", "nrmse"):
+        assert metric not in snap[LLM_LOG_FILE], metric
     assert state.residuals and "q_gas_stp_dry" in state.residuals
+
+
+def test_the_filled_task_prompt_names_no_scenario_or_p0_rule(p1_result):
+    _, _, _, snap = p1_result
+    first = rebuild_requests([json.loads(x) for x in snap[LLM_LOG_FILE].splitlines()])[0]
+    texts = {
+        "system (as sent)": first["system"],
+        "task (as filled)": first["messages"][0]["content"],
+    }
+    assert "$" not in texts["task (as filled)"].split("## The fitted model")[0]
+    assert prompt_violations(texts) == []
 
 
 def test_the_evaluator_scores_the_run_with_every_claim_supported(p1_result):
@@ -396,7 +511,7 @@ def test_the_evaluator_scores_the_run_with_every_claim_supported(p1_result):
 def test_the_runner_counts_tokens_from_the_gateway_and_the_log_is_verbatim(p1_result):
     _, _, result, snap = p1_result
     lines = [json.loads(x) for x in snap[LLM_LOG_FILE].splitlines()]
-    assert result.llm_turns == len(lines) == 7 and result.model_client == "scripted"
+    assert result.llm_turns == len(lines) == 6 and result.model_client == "scripted"
     assert result.tokens_used == sum(
         ln["usage"]["input_tokens"] + ln["usage"]["output_tokens"] for ln in lines
     )
@@ -426,21 +541,58 @@ def test_nothing_p1_wrote_carries_a_truth_side_token(p1_result):
             assert token not in text, (name, token)
 
 
-def test_a_replay_of_the_transcript_gives_the_same_state(p1_cell, p1_result, tmp_path):
-    run, scenario, _, snap = p1_result
-    transcript = tmp_path / "recorded.jsonl"
-    transcript.write_text(snap[LLM_LOG_FILE], encoding="utf-8")
+@pytest.fixture(scope="module")
+def slow_run(p1_cell):
+    """A live-like run: the double pauses 13 s before turn 2.
+
+    The clock readings the agent is shown then differ from any replay's (they are rounded
+    to 0.1 min, and 13 s always moves them).
+    """
+    run, scenario = p1_cell
+    result = run_workflow(
+        run.run_id,
+        "p1",
+        runs_root=run.paths.root.parent,
+        scenario=scenario,
+        model_client=ScriptedClient(slow(clean_policy, 2, 13.0)),
+        output_name="p1_slow",
+    )
+    log = run.paths.root / OUTPUTS_DIR / "p1_slow" / LLM_LOG_FILE
+    return run, scenario, result, log, log.read_bytes()
+
+
+def test_a_replay_reproduces_a_run_whose_clock_moved_and_keeps_its_source(slow_run):
+    run, scenario, result, log, recorded = slow_run
+    assert result.completed, result.stderr_tail
+    # replaying into the source's own directory would erase it: refused before anything runs
+    with pytest.raises(ValueError, match="would erase it"):
+        run_workflow(
+            run.run_id,
+            "p1",
+            runs_root=run.paths.root.parent,
+            scenario=scenario,
+            model_client=RecordedClient(log),
+            output_name="p1_slow",
+        )
+    assert log.read_bytes() == recorded
     again = run_workflow(
         run.run_id,
         "p1",
         runs_root=run.paths.root.parent,
         scenario=scenario,
-        model_client=RecordedClient(transcript),
+        model_client=RecordedClient(log),
+        output_name="p1_replay",
     )
     assert again.completed, again.stderr_tail
-    out_dir = run.paths.root / OUTPUTS_DIR / "p1"
-    first = json.loads(snap["state.json"])
-    second = json.loads((out_dir / "state.json").read_text(encoding="utf-8"))
+    assert log.read_bytes() == recorded  # the source transcript is untouched
+    out = run.paths.root / OUTPUTS_DIR
+    first_lines = read_transcript(log)
+    replay_lines = read_transcript(out / "p1_replay" / LLM_LOG_FILE)
+    # the clock readings differ, so the verbatim requests differ; the replay digests agree
+    assert [x["request_sha256"] for x in first_lines] != [x["request_sha256"] for x in replay_lines]
+    assert [x["replay_sha256"] for x in first_lines] == [x["replay_sha256"] for x in replay_lines]
+    first = json.loads((out / "p1_slow" / "state.json").read_text(encoding="utf-8"))
+    second = json.loads((out / "p1_replay" / "state.json").read_text(encoding="utf-8"))
     # the wall clock left is the one field a replay cannot reproduce; the log sequence
     # numbers continue on the same run's log (the replay's actions name the new lines)
     assert [a["seq"] for a in second["actions"]] != [a["seq"] for a in first["actions"]]
@@ -449,6 +601,39 @@ def test_a_replay_of_the_transcript_gives_the_same_state(p1_cell, p1_result, tmp
         for a in state["actions"]:
             a.pop("seq")
     assert first == second
+
+
+def test_every_refused_form_is_refused_and_recorded(p1_cell):
+    run, scenario = p1_cell
+    result = run_workflow(
+        run.run_id,
+        "p1",
+        runs_root=run.paths.root.parent,
+        scenario=scenario,
+        model_client=ScriptedClient(adversarial_policy),
+        output_name="p1_adversarial",
+    )
+    assert result.completed, result.stderr_tail
+    state = TaskState.model_validate_json(
+        (run.paths.root / OUTPUTS_DIR / "p1_adversarial" / "state.json").read_text("utf-8")
+    )
+    messages = [f.message for f in state.tool_failures if f.name.startswith("p1.")]
+    expected = [
+        "`bias_z` = 42.0 is not what the cited calls produced",  # fabricated number
+        "`bias_z` is a number; got 'huge'",  # a word for a number
+        "no tool 'validate'",  # the hold-out is not the agent's to read
+        "k_m_ac: no successful call of this run produced a fisher interval",
+        "k_dis: no successful call of this run produced a profile interval",
+        "`none` never stands beside another label",
+        "the run is concluded; nothing runs after it",  # a use after conclude, same turn
+    ]
+    for text in expected:
+        assert any(text in m for m in messages), (text, messages)
+    assert state.plan.sizes["refused_actions"] == 6  # the two intervals are one refusal
+    assert state.classification.evidence == ()  # neither fabricated item was kept
+    assert state.final.label == "none" and state.final.secondary_labels == ()
+    # the simulate after the conclusion never reached the registry
+    assert [a.name for a in state.actions].count("simulate") == 1
 
 
 def test_a_run_that_never_concludes_stops_at_the_limits_and_is_not_completed(p1_cell, tmp_path):

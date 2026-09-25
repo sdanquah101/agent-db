@@ -317,8 +317,10 @@ socket to a privileged-side gateway, and the gateway:
 - meters the tokens the runner reports.
 
 A harness turns sensor names and call indices into tool arguments. It gives the agent the
-calibration window only, keeping the hold-out for `validate`, and refuses the actions §6.5
-forbids, recording each refusal. The prompts are written from the proposal, this card, the
+calibration window only; the hold-out is validated once, after the conclusion, and the
+agent never sees the score. It refuses the actions §6.5 forbids, a cited number that no
+cited call produced among them, and records each refusal. Model latency counts against
+the same wall-clock allowance P0 has, so P1 gets less tool time: a known asymmetry. The prompts are written from the proposal, this card, the
 registry documentation and the published vocabularies. They name no scenario and no P0
 rule, and a test enforces this. **Nothing about P1's performance is claimed yet.** It runs
 on development cells only until its prompts and settings are frozen and hashed, which

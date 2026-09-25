@@ -533,18 +533,6 @@ def tool_specs() -> list[dict[str, Any]]:
             ("posterior", "day"),
         ),
         (
-            "validate",
-            "Hold-out forecast metrics on the frozen hold-out window: MAE, RMSE, bias, "
-            "coverage, interval score and CRPS per sensor. Give one prediction, or an "
-            "ensemble of simulate calls (predictive draws) for intervals.",
-            {
-                "prediction": _d(_INT, "Call index of a simulate"),
-                "ensemble": _d({"type": "array", "items": _INT}, "Call indices of simulates"),
-                "sensors": _SENSORS,
-            },
-            (),
-        ),
-        (
             "set_sensor_status",
             "Record your judgement of one sensor: status, whether it enters the objective, "
             "and windows to quarantine (their samples are dropped from every later tool "
@@ -578,8 +566,16 @@ def tool_specs() -> list[dict[str, Any]]:
         (
             "conclude",
             "Your final, structured conclusion. Ends the run. Parameter estimates are "
-            "multipliers with an interval and the method that produced it.",
+            "multipliers with an interval and the method that produced it. Name your final "
+            "prediction (a simulate call) or a predictive ensemble (several simulate calls): "
+            "after the conclusion is fixed, the harness validates it once on the frozen "
+            "hold-out window, and you do not see the result.",
             {
+                "prediction": _d(_INT, "Call index of the simulate that is your final prediction"),
+                "ensemble": _d(
+                    {"type": "array", "items": _INT, "minItems": 2},
+                    "Call indices of simulates forming a predictive ensemble",
+                ),
                 "label": _STR,
                 "secondary_labels": _STRS,
                 "confidence": _NUM,
@@ -676,6 +672,11 @@ class Workspace:
         self.sims: dict[int, Any] = {}
         self.fits: dict[int, Any] = {}
         self.posteriors: dict[int, Any] = {}
+        self.fishers: dict[int, Any] = {}
+        self.profiles: dict[int, Any] = {}
+        # the evidence values each call produced, by call index and evidence key: an
+        # evidence item may cite only these (§6.5: no fabricated values)
+        self.produced: dict[int, dict[str, list[Any]]] = {}
         self.residuals: dict[str, dict[str, Any]] = {}
         self.balance: dict[str, Any] = {}
         self.screening: dict[str, Any] = {"declared": list(self.params)}
@@ -864,10 +865,15 @@ class Workspace:
             "residual_diag": self.t_residual,
             "request_assay": self.t_assay,
             "voi_assay": self.t_voi,
-            "validate": self.t_validate,
             "set_sensor_status": self.t_status,
             "record_evidence": self.t_evidence,
         }
+
+    def produce(self, index: int, key: str, value: Any) -> None:
+        """Record a value a call produced under an evidence key."""
+        if value is None or (isinstance(value, float) and not math.isfinite(value)):
+            return
+        self.produced.setdefault(index, {}).setdefault(key, []).append(value)
 
     def _out(self, index: int | None, result: Any) -> dict[str, Any]:
         out: dict[str, Any] = {}
@@ -976,6 +982,13 @@ class Workspace:
         for r in out.results:
             if r.name in self.series:
                 self.series[r.name].flags = list(r.flags)
+                self.produce(index, "declared_bound", self.series[r.name].noise.get("drift_bound"))
+            self.produce(index, "slope_per_d", _f(r.drift_slope_per_d))
+            self.produce(index, "signal_to_noise", _f(r.drift_signal_to_noise))
+            self.produce(index, "event_missing_ratio", _f(r.event_missing_ratio))
+            for seg in r.flatlines:
+                self.produce(index, "start_d", float(seg.start))
+                self.produce(index, "end_d", float(seg.end))
         return self._out(index, out.model_dump(mode="json"))
 
     def t_balance(self, inp: dict[str, Any]) -> dict[str, Any]:
@@ -1029,6 +1042,9 @@ class Workspace:
             "charge_consistent": out.charge_consistent,
             "admissible": bool(out.admissible),
         }
+        for key in ("n_inadmissible", "cod_closure_mean", "charge_drift"):
+            source = "n_cod_inadmissible" if key == "n_inadmissible" else key
+            self.produce(index, key, self.balance[source])
         result = out.model_dump(mode="json")
         result["summary"] = {
             "n_inadmissible": self.balance["n_cod_inadmissible"],
@@ -1181,6 +1197,7 @@ class Workspace:
             parameters=list(inp["parameters"]),
             at=self._multipliers(inp.get("at"), "at"),
         )
+        self.fishers[index] = out
         rel: dict[str, float | None] = {}
         for n, sd in zip(out.parameters, out.crlb_sd, strict=True):
             width = self.upper[n] - self.lower[n]
@@ -1207,6 +1224,7 @@ class Workspace:
             if key in inp:
                 args[key] = inp[key]
         out, index = self.rec.call("profile_likelihood", "profile_likelihood", **args)
+        self.profiles[index] = out
         self.screening.setdefault("profiled", {})[out.parameter] = bool(out.identifiable)
         return self._out(index, out.model_dump(mode="json"))
 
@@ -1387,6 +1405,9 @@ class Workspace:
         }
         if summary["bias_z"] is not None and summary["rmse_z"] is not None:
             self.residuals[s.channel] = summary
+        for key in ("bias_z", "rmse_z", "step_z", "step_day", "early_bias_z", "late_bias_z"):
+            self.produce(index, key, stats[key])
+        self.produce(index, "most_explanatory", out.most_explanatory)
         result = out.model_dump(mode="json")
         result["standardised"] = {**stats, "prediction_call_index": int(inp["prediction"])}
         return self._out(index, result)
@@ -1400,6 +1421,7 @@ class Workspace:
         if inp.get("prediction") is not None:
             sim = self.stored(self.sims, inp["prediction"], "simulate")
         out, index = self.rec.call("request_assay", "request_assay", assay=inp["assay"], day=day)
+        self.produce(index, "assay", out.assay)
         result = out.model_dump(mode="json")
         for res, row in zip(out.results, result["results"], strict=True):
             pred = z = None
@@ -1414,6 +1436,7 @@ class Workspace:
                 z = (float(res.value) - pred) / float(res.sd) if float(res.sd) > 0 else None
             row["predicted"] = _f(pred)
             row["disagreement_z"] = _f(z)
+            self.produce(index, "disagreement_z", _f(z))
             self.assay_checks.append(
                 {
                     "assay": out.assay,
@@ -1448,24 +1471,27 @@ class Workspace:
         out, index = self.rec.call("voi_assay", "voi_assay", **args)
         return self._out(index, out.model_dump(mode="json"))
 
-    def t_validate(self, inp: dict[str, Any]) -> dict[str, Any]:
-        """Forecast metrics on the frozen hold-out window."""
-        indices = list(inp.get("ensemble") or [])
-        if not indices and inp.get("prediction") is not None:
-            indices = [inp["prediction"]]
+    def validate_final(self) -> None:
+        """Validate the concluded prediction once on the frozen hold-out (the review of #26, 1).
+
+        Called by the harness after ``conclude`` is accepted, never by the model: the
+        agent cannot choose among predictions by their hold-out score, as P0, which
+        validates once at the end, cannot. The result goes into the state only.
+        """
+        final = self.final or {}
+        indices = list(final.get("validate_calls") or [])
         if not indices:
-            raise ActionError("validate needs a prediction or an ensemble of simulate calls")
-        sims = [self.stored(self.sims, i, "simulate") for i in indices]
-        chosen = (
-            [self.sensor(n) for n in inp["sensors"]] if inp.get("sensors") else self.objective()
-        )
+            self.annotations.append("no final prediction named: no validation")
+            return
+        sims = [self.sims[i] for i in indices]
         observed = [
             s.observed(None)
-            for s in chosen
+            for s in self.objective()
             if s.channel in sims[0].outputs and s.n_observed(self.holdout) >= 1
         ]
         if not observed:
-            raise ActionError("no chosen sensor has a sample in the hold-out window")
+            self.annotations.append("no objective sensor has a hold-out sample: no validation")
+            return
         t_model = np.asarray(sims[0].t, dtype=float)
         if len(sims) >= 2:
             predicted = {
@@ -1478,14 +1504,19 @@ class Workspace:
             predicted = {
                 o["output"]: np.asarray(sims[0].outputs[o["output"]], dtype=float) for o in observed
             }
-        out, index = self.rec.call(
-            "validate",
-            "validate",
-            observed=observed,
-            t=t_model,
-            predicted=predicted,
-            holdout={"start": self.holdout[0], "end": self.holdout[1]},
-        )
+        try:
+            out, index = self.rec.call(
+                "validate",
+                "validate",
+                observed=observed,
+                t=t_model,
+                predicted=predicted,
+                holdout={"start": self.holdout[0], "end": self.holdout[1]},
+            )
+        except tools.ToolError as exc:
+            index = self.rec.actions[-1]["call_index"] if self.rec.actions else None
+            self.rec.failure("validate", "validate", "error", str(exc), "no validation", index)
+            return
         metrics, violations = {}, 0
         for m in out.results:
             metrics[m.output] = {
@@ -1508,7 +1539,7 @@ class Workspace:
             "constraint_violations": violations,
             "calls": [index],
         }
-        return self._out(index, out.model_dump(mode="json"))
+        self.steps.append("validate")
 
     def t_status(self, inp: dict[str, Any]) -> dict[str, Any]:
         """The agent's judgement of one sensor."""
@@ -1551,6 +1582,13 @@ class Workspace:
         missing = [i for i in calls if self.rec.ok_index(i) is None]
         if missing:
             raise ActionError(f"call index(es) {missing} name no call of this run that returned")
+        for key in ("sensor", "channel"):
+            if key in values:
+                known = set(self.series) if key == "sensor" else set(self.outputs)
+                if values[key] not in known:
+                    raise ActionError(f"{key} {values[key]!r} is not one of {sorted(known)}")
+        for key in sorted(set(values) & set(self.evidence_keys)):
+            self.check_value(key, values[key], calls)
         item = {
             "rule": RULE,
             "label": inp["label"],
@@ -1563,6 +1601,54 @@ class Workspace:
         }
         self.evidence.append(item)
         return {"evidence_id": len(self.evidence) - 1, "n_evidence": len(self.evidence)}
+
+    def check_value(self, key: str, value: Any, calls: list[int]) -> None:
+        """A cited value must be one the cited calls produced (§6.5: no fabricated values).
+
+        Numbers match to the five significant digits the agent is shown; strings exactly.
+
+        Raises:
+            ActionError: If no cited call produced that value under that key.
+        """
+        produced = [v for i in calls for v in self.produced.get(i, {}).get(key, [])]
+        if not produced:
+            raise ActionError(
+                f"no cited call produced a `{key}`; cite the call the number rests on"
+            )
+        numeric = [v for v in produced if not isinstance(v, str)]
+        if numeric:
+            if isinstance(value, bool) or not isinstance(value, int | float):
+                raise ActionError(f"`{key}` is a number; got {value!r:.40}")
+            if not any(
+                abs(float(value) - float(v)) <= 1e-3 * max(abs(float(v)), abs(float(value))) + 1e-9
+                for v in numeric
+            ):
+                shown = sorted({_round(float(v)) for v in numeric})[:8]
+                raise ActionError(
+                    f"`{key}` = {value!r} is not what the cited calls produced ({shown})"
+                )
+            return
+        if value not in produced:
+            raise ActionError(f"`{key}` = {value!r:.40} is not what the cited calls produced")
+
+    def interval_backed(self, name: str, method: str) -> bool:
+        """Whether a successful call of this run produced ``method``'s interval for ``name``."""
+        if method == "none":
+            return True
+        if method == "posterior":
+            return any(p.converged and name in p.parameters for p in self.posteriors.values())
+        if method == "profile":
+            return any(pr.parameter == name for pr in self.profiles.values())
+        # fisher: a Fisher-information call, or a fit's covariance, which is the Fisher
+        # information at the optimum (P0's intervals, design §3.3)
+        if any(name in f.parameters for f in self.fishers.values()):
+            return True
+        for fit in self.fits.values():
+            if fit.sd is not None and name in fit.parameters:
+                sd = list(fit.sd)[list(fit.parameters).index(name)]
+                if _f(sd) is not None:
+                    return True
+        return False
 
     def conclude(self, inp: dict[str, Any]) -> dict[str, Any]:
         """Validate the final conclusion and hold it.
@@ -1578,6 +1664,8 @@ class Workspace:
         bad = [x for x in secondary if x not in self.labels or x == label]
         if bad:
             problems.append(f"secondary labels {bad} are unknown or repeat the label")
+        if secondary and (label == self.lab["none"] or self.lab["none"] in secondary):
+            problems.append("`none` never stands beside another label")
         conf = float(inp["confidence"])
         if not 0.0 <= conf <= 1.0:
             problems.append("confidence must lie in [0, 1]")
@@ -1591,7 +1679,6 @@ class Workspace:
         unknown = [a for a in abst if a not in self.vocabulary]
         if unknown:
             problems.append(f"abstention(s) {unknown} are not in the published vocabulary")
-        converged = any(bool(p.converged) for p in self.posteriors.values())
         params: dict[str, dict[str, Any]] = {}
         for name, est in dict(inp.get("parameters") or {}).items():
             if name not in self.params:
@@ -1603,8 +1690,12 @@ class Workspace:
                 problems.append(f"{name}: estimate outside the declared bounds")
             if (lo is None) != (hi is None) or (lo is not None and not lo <= e <= hi):
                 problems.append(f"{name}: an interval is [lower, upper] around the estimate")
-            if method == "posterior" and not converged:
-                problems.append(f"{name}: no sampler call of this run converged")
+            if not self.interval_backed(name, method):
+                problems.append(
+                    f"{name}: no successful call of this run produced a {method} interval "
+                    "for it (posterior: a converged sampler; profile: its profile; fisher: "
+                    "Fisher information or a fit's covariance)"
+                )
             if method != "none" and lo is None:
                 problems.append(f"{name}: method {method} needs an interval")
             span = self.upper[name] - self.lower[name]
@@ -1617,8 +1708,14 @@ class Workspace:
                 "unit": self.units.get(name, ""),
             }
         interval = inp["interval_method"]
-        if interval == "posterior" and not converged:
-            problems.append("interval_method posterior: no sampler call of this run converged")
+        if interval != "none" and not any(p["method"] == interval for p in params.values()):
+            problems.append(f"interval_method {interval}: no estimate carries that method")
+        indices = list(inp.get("ensemble") or [])
+        if not indices and inp.get("prediction") is not None:
+            indices = [inp["prediction"]]
+        bad_sims = [i for i in indices if i not in self.sims]
+        if bad_sims:
+            problems.append(f"prediction/ensemble {bad_sims} name no simulate call of this run")
         if problems:
             raise ActionError("; ".join(problems))
         approved = [n for n in (inp.get("approved_parameters") or list(params)) if n in self.params]
@@ -1638,6 +1735,7 @@ class Workspace:
             "parameters": params,
             "interval_method": interval,
             "abstentions": abst,
+            "validate_calls": indices,
         }
         if inp.get("summary"):
             self.annotations.append(f"agent summary: {str(inp['summary'])[:800]}")
@@ -1799,7 +1897,7 @@ class Agent:
             "model": ws.model_text(),
             "budget": (
                 f"{budget['simulator_evals_left']} simulator evaluations, "
-                f"{budget['wall_clock_min_left']} wall-clock minutes, "
+                f"wall-clock minutes (wall_clock_min_left={budget['wall_clock_min_left']}), "
                 f"{budget['assay_units_left']} assay units."
             ),
             "max_turns": self.loop_cfg["max_turns"],
@@ -1852,9 +1950,10 @@ class Agent:
                     f"{left_turns} turns left"
                 )
             out.append(
-                f"HARNESS: limits nearly reached ({float(rem.wall_clock_min):.1f} wall-clock "
-                f"minutes, {left_uses} tool uses, {left_turns} turns left). Call `conclude` "
-                f"now; the run stops unconcluded after {self.grace} more turn(s)."
+                "HARNESS: limits nearly reached (wall-clock minutes left: "
+                f"wall_clock_min_left={float(rem.wall_clock_min):.1f}; {left_uses} tool uses, "
+                f"{left_turns} turns left). Call `conclude` now; the run stops unconcluded "
+                f"after {self.grace} more turn(s)."
             )
         return out
 
@@ -1882,11 +1981,7 @@ class Agent:
             self.ws.steps.append(name)
             return self._result(block, payload, False)
         except ActionError as exc:
-            self.state["refused"] += 1
-            self.ws.rec.failure(
-                name, f"p1.{name}", "error", str(exc), "refused by the harness", None
-            )
-            return self._result(block, {"error": f"refused: {exc}"}, True)
+            return self.refuse(block, str(exc))
         except tools.BudgetExceededError as exc:
             index = self.ws.rec.actions[-1]["call_index"] if self.ws.rec.actions else None
             self.ws.rec.failure(name, name, "budget_exceeded", str(exc), "nothing ran", index)
@@ -1897,6 +1992,13 @@ class Agent:
             index = self.ws.rec.actions[-1]["call_index"] if self.ws.rec.actions else None
             self.ws.rec.failure(name, name, "error", str(exc), "reported to the agent", index)
             return self._result(block, {"error": f"tool error: {exc}"}, True)
+
+    def refuse(self, block: dict[str, Any], reason: str) -> dict[str, Any]:
+        """Refuse one tool use: recorded under ``tool_failures``, returned as an error."""
+        name = str(block.get("name"))
+        self.state["refused"] += 1
+        self.ws.rec.failure(name, f"p1.{name}", "error", reason, "refused by the harness", None)
+        return self._result(block, {"error": f"refused: {reason}"}, True)
 
     @staticmethod
     def _result(block: dict[str, Any], payload: dict[str, Any], error: bool) -> dict[str, Any]:
@@ -1949,9 +2051,16 @@ class Agent:
                     self.state["guards"].append(f"no tool use at turn {self.state['turns']}")
                 self.write(completed=False)
                 continue
-            results = [self.execute(b) for b in uses]
+            results = []
+            for b in uses:
+                if self.ws.final is not None:
+                    # the conclusion ends the run: a later tool use of the same turn is refused
+                    results.append(self.refuse(b, "the run is concluded; nothing runs after it"))
+                else:
+                    results.append(self.execute(b))
             if self.ws.final is not None:
                 self.stop_reason = "concluded"
+                self.ws.validate_final()
                 self.write(completed=True)
                 return 0
             self.messages.append({"role": "user", "content": [*results, *self._notice_blocks()]})

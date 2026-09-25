@@ -52,9 +52,10 @@ def clean_policy(params: dict[str, Any]) -> dict[str, Any]:
     """A short, disciplined run on a clean cell, with one refused action on the way.
 
     Turn 0 checks quality and balances (two tool uses in one turn), turn 1 simulates at
-    the defaults, turn 2 examines two residuals, turn 3 validates on the hold-out, turn 4
-    records the evidence, turn 5 concludes with an abstention outside the vocabulary (the
-    harness refuses it), turn 6 concludes correctly.
+    the defaults, turn 2 examines two residuals, turn 3 records the evidence (its numbers
+    copied from the residual call's result), turn 4 concludes with an abstention outside
+    the vocabulary (the harness refuses it), turn 5 concludes correctly, naming the
+    simulate call as the final prediction the harness validates.
     """
     turn = turn_of(params)
     got = results(params)
@@ -72,14 +73,12 @@ def clean_policy(params: dict[str, Any]) -> dict[str, Any]:
             tool_use(2, 0, "residual_diag", {"sensor": "gas_flow", "prediction": sim}),
             tool_use(2, 1, "residual_diag", {"sensor": "ph", "prediction": sim}),
         )
-    if turn == 3:
-        return reply(tool_use(3, 0, "validate", {"prediction": sim}))
     rd = got["tu_2_0"]
-    if turn == 4:
+    if turn == 3:
         z = rd["result"]["standardised"]
         return reply(
             tool_use(
-                4,
+                3,
                 0,
                 "record_evidence",
                 {
@@ -90,7 +89,15 @@ def clean_policy(params: dict[str, Any]) -> dict[str, Any]:
                 },
             )
         )
-    conclusion = {
+    conclusion = conclusion_for(sim)
+    if turn == 4:
+        return reply(tool_use(4, 0, "conclude", {**conclusion, "abstentions": ["everything"]}))
+    return reply(tool_use(turn, 0, "conclude", conclusion))
+
+
+def conclusion_for(sim: int) -> dict[str, Any]:
+    """A valid conclusion on a clean cell, naming ``sim`` as the final prediction."""
+    return {
         "label": "none",
         "secondary_labels": [],
         "confidence": 0.6,
@@ -98,11 +105,72 @@ def clean_policy(params: dict[str, Any]) -> dict[str, Any]:
         "parameters": {"k_m_ac": {"estimate": 1.0, "lower": None, "upper": None, "method": "none"}},
         "interval_method": "none",
         "abstentions": [],
+        "prediction": sim,
         "summary": "No fault is supported.",
     }
-    if turn == 5:
-        return reply(tool_use(5, 0, "conclude", {**conclusion, "abstentions": ["everything"]}))
-    return reply(tool_use(turn, 0, "conclude", conclusion))
+
+
+def slow(policy: Policy, turn: int, seconds: float) -> Policy:
+    """``policy`` with a pause before answering ``turn``: the registry's clock moves on."""
+    import time
+
+    def wrapped(params: dict[str, Any]) -> dict[str, Any]:
+        if turn_of(params) == turn:
+            time.sleep(seconds)
+        return policy(params)
+
+    return wrapped
+
+
+def adversarial_policy(params: dict[str, Any]) -> dict[str, Any]:
+    """Every refused form of the review of PR #26, then a valid conclusion.
+
+    Turn 2 fabricates a residual z-score, gives a word for a number, and asks for the
+    hold-out validation; turn 3 claims a Fisher interval with no Fisher call and a
+    profile interval with no profile; turn 4 puts `none` beside a real label; turn 5
+    concludes validly and, in the same turn, asks for one more simulate.
+    """
+    turn = turn_of(params)
+    got = results(params)
+    if turn == 0:
+        return reply(tool_use(0, 0, "simulate", {}))
+    sim = got["tu_0_0"]["call_index"]
+    if turn == 1:
+        return reply(tool_use(1, 0, "residual_diag", {"sensor": "gas_flow", "prediction": sim}))
+    rd = got["tu_1_0"]["call_index"]
+    if turn == 2:
+        ev = {"label": "sensor", "statement": "a large bias", "calls": [sim, rd]}
+        return reply(
+            tool_use(2, 0, "record_evidence", {**ev, "values": {"bias_z": 42.0}}),
+            tool_use(2, 1, "record_evidence", {**ev, "values": {"bias_z": "huge"}}),
+            tool_use(2, 2, "validate", {"prediction": sim}),
+        )
+    base = conclusion_for(sim)
+    if turn == 3:
+        est = {"estimate": 1.0, "lower": 0.9, "upper": 1.1}
+        return reply(
+            tool_use(
+                3,
+                0,
+                "conclude",
+                {
+                    **base,
+                    "parameters": {
+                        "k_m_ac": {**est, "method": "fisher"},
+                        "k_dis": {**est, "method": "profile"},
+                    },
+                    "interval_method": "fisher",
+                },
+            )
+        )
+    if turn == 4:
+        return reply(
+            tool_use(4, 0, "conclude", {**base, "label": "sensor", "secondary_labels": ["none"]})
+        )
+    return reply(
+        tool_use(turn, 0, "conclude", base),
+        tool_use(turn, 1, "simulate", {"parameters": {"k_m_ac": 1.5}}),
+    )
 
 
 def dawdling_policy(params: dict[str, Any]) -> dict[str, Any]:

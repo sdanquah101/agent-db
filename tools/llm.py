@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -50,8 +51,12 @@ __all__ = [
     "RecordedClient",
     "RetryableModelError",
     "ScriptedClient",
+    "check_agent_request",
     "read_transcript",
+    "rebuild_requests",
+    "replay_digest",
     "request_digest",
+    "system_digest",
 ]
 
 LLM_LOG_FILE = "llm_calls.jsonl"
@@ -89,6 +94,104 @@ def request_digest(params: dict[str, Any]) -> str:
     """A fingerprint of a whole request (sorted-key JSON, sha256)."""
     blob = json.dumps(params, sort_keys=True, separators=(",", ":"), default=str)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+WALL_CLOCK_KEY = "wall_clock_min_left"
+"""The one tag under which the harness shows the agent a wall-clock reading. A reading is
+the one part of a request a replay cannot reproduce, so :func:`replay_digest` masks it."""
+
+_WALL_CLOCK = re.compile(WALL_CLOCK_KEY + r'([\\"]*\s*[:=]\s*)-?\d[0-9.eE+-]*')
+
+
+def replay_digest(params: dict[str, Any]) -> str:
+    """The fingerprint a replay compares: the request with its wall-clock readings masked.
+
+    Everything else must be byte-identical; a request whose *text* differs because the
+    clock crossed a threshold (a harness notice that appears in one run and not the other)
+    still differs, and the replay is refused.
+    """
+    blob = json.dumps(params, sort_keys=True, separators=(",", ":"), default=str)
+    blob = _WALL_CLOCK.sub(WALL_CLOCK_KEY + r"\1<masked>", blob)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def system_digest(system: str) -> str:
+    """The sha256 of a system prompt's text (the committed prompt's fingerprint)."""
+    return hashlib.sha256(system.encode("utf-8")).hexdigest()
+
+
+_BLOCK_FIELDS: dict[str, tuple[frozenset[str], frozenset[str]]] = {
+    # block type -> (required fields, allowed fields)
+    "text": (frozenset({"type", "text"}), frozenset({"type", "text"})),
+    "tool_use": (
+        frozenset({"type", "id", "name", "input"}),
+        frozenset({"type", "id", "name", "input"}),
+    ),
+    "tool_result": (
+        frozenset({"type", "tool_use_id", "content"}),
+        frozenset({"type", "tool_use_id", "content", "is_error"}),
+    ),
+    "thinking": (
+        frozenset({"type", "thinking", "signature"}),
+        frozenset({"type", "thinking", "signature"}),
+    ),
+    "redacted_thinking": (frozenset({"type", "data"}), frozenset({"type", "data"})),
+}
+
+
+def check_agent_request(request: dict[str, Any], system_sha256: str | None) -> None:
+    """Refuse any request form an agent may not send (rule 2; the review of PR #26, 5).
+
+    Only custom tools (a name, a description, an input schema: no ``type``, so no server
+    tool that runs code or reaches the network); only user and assistant turns made of
+    text, tool_use, tool_result and thinking blocks; and, when ``system_sha256`` is given,
+    exactly the committed system prompt.
+
+    Raises:
+        ModelError: Naming the first form refused.
+    """
+    extra = set(request) - {"system", "messages", "tools"}
+    if extra:
+        raise ModelError(
+            f"an agent request carries only system, messages and tools; got {sorted(extra)}"
+        )
+    system = request.get("system", "")
+    if not isinstance(system, str):
+        raise ModelError("the system prompt must be the committed text, as a string")
+    if system_sha256 is not None and system_digest(system) != system_sha256:
+        raise ModelError("the system prompt is not the committed prompt")
+    names: set[str] = set()
+    for tool in request.get("tools") or []:
+        if not isinstance(tool, dict) or set(tool) - {"name", "description", "input_schema"}:
+            raise ModelError(
+                "only custom tools (name, description, input_schema) are accepted; got "
+                f"{sorted(tool) if isinstance(tool, dict) else type(tool).__name__}"
+            )
+        schema = tool.get("input_schema")
+        if not isinstance(tool.get("name"), str) or not isinstance(schema, dict):
+            raise ModelError("a tool needs a name and an input_schema")
+        if schema.get("type") != "object" or tool["name"] in names:
+            raise ModelError(f"tool {tool['name']!r}: an object schema, once")
+        names.add(tool["name"])
+    for message in request.get("messages") or []:
+        if not isinstance(message, dict) or set(message) != {"role", "content"}:
+            raise ModelError("a message is exactly {role, content}")
+        if message["role"] not in ("user", "assistant"):
+            raise ModelError(f"role {message['role']!r} is not accepted")
+        content = message["content"]
+        if isinstance(content, str):
+            continue
+        if not isinstance(content, list):
+            raise ModelError("message content is a string or a list of blocks")
+        for block in content:
+            kind = block.get("type") if isinstance(block, dict) else None
+            if kind not in _BLOCK_FIELDS:
+                raise ModelError(f"block type {kind!r} is not accepted")
+            required, allowed = _BLOCK_FIELDS[kind]
+            if not required <= set(block) <= allowed:
+                raise ModelError(f"a {kind} block carries exactly {sorted(allowed)}")
+            if kind == "tool_result" and not isinstance(block["content"], str):
+                raise ModelError("a tool_result's content is text")
 
 
 # ------------------------------------------------------------------ clients
@@ -173,11 +276,15 @@ class RecordedClient:
     """Replays the successful responses of a logged run, in order.
 
     A request whose fingerprint differs from the one recorded at that position raises
-    :class:`ModelError`: the replay reproduces a run, it does not improvise one.
+    :class:`ModelError`: the replay reproduces a run, it does not improvise one. The
+    fingerprint is :func:`replay_digest`, which masks the wall-clock readings a replay
+    cannot reproduce. The transcript is read once, here, and never written: ``source``
+    names it so that the runner can refuse to log the replay over it.
     """
 
     def __init__(self, transcript: Path | list[dict[str, Any]], *, strict: bool = True) -> None:
         """Load the transcript's successful turns."""
+        self.source: Path | None = Path(transcript) if isinstance(transcript, Path) else None
         lines = read_transcript(transcript) if isinstance(transcript, Path) else transcript
         self._turns = [line for line in lines if line.get("response") is not None]
         self._next = 0
@@ -189,7 +296,7 @@ class RecordedClient:
         if self._next >= len(self._turns):
             raise ModelError("the recorded transcript has no further turn")
         line = self._turns[self._next]
-        if self._strict and line.get("request_sha256") != request_digest(params):
+        if self._strict and line.get("replay_sha256") != replay_digest(params):
             raise ModelError(
                 f"turn {self._next}: the request differs from the recorded one; replay refused"
             )
@@ -234,15 +341,26 @@ class ModelGateway:
     max_turns: int
     max_total_tokens: int
     sleep: Callable[[float], None] = time.sleep
+    system_sha256: str | None = None
     meter: TokenMeter = field(default_factory=TokenMeter)
     _previous: dict[str, Any] | None = field(default=None, init=False, repr=False)
     _fixed_digest: str | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        """Start a fresh log (a re-run of the workflow on the run replaces the old one)."""
+        """Start a fresh log (a re-run of the workflow on the run replaces the old one).
+
+        Raises:
+            ValueError: If the client replays the very file this log would overwrite.
+        """
         self.log_dir = Path(self.log_dir)
-        self.log_dir.mkdir(parents=True, exist_ok=True)
         self.log_path = self.log_dir / LLM_LOG_FILE
+        source = getattr(self.client, "source", None)
+        if source is not None and Path(source).resolve() == self.log_path.resolve():
+            raise ValueError(
+                f"the replay's transcript is {self.log_path}; logging the replay there would "
+                "erase it (write the replay to another output directory)"
+            )
+        self.log_dir.mkdir(parents=True, exist_ok=True)
         self.log_path.write_text("", encoding="utf-8")
 
     # -- what the runner reads -------------------------------------------------------
@@ -271,13 +389,10 @@ class ModelGateway:
         """The request as sent: the agent's content and the frozen settings.
 
         Raises:
-            ModelError: If the agent's request carries anything but system, messages, tools.
+            ModelError: If the request carries a form an agent may not send
+                (:func:`check_agent_request`).
         """
-        extra = set(request) - {"system", "messages", "tools"}
-        if extra:
-            raise ModelError(
-                f"an agent request carries only system, messages and tools; got {sorted(extra)}"
-            )
+        check_agent_request(request, self.system_sha256)
         s = self.settings
         params: dict[str, Any] = {
             "model": s.model_id,
@@ -360,6 +475,7 @@ class ModelGateway:
             "attempt": attempt,
             "client": self.client.name,
             "request_sha256": request_digest(params),
+            "replay_sha256": replay_digest(params),
             "n_messages": len(messages),
             "messages_from": start,
             "messages": messages[start:],

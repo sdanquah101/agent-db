@@ -5,8 +5,10 @@ Diagnose and calibrate this digester's model.
 - Plant $plant, instrumentation tier $tier; a record of $duration_days days.
 - Declared geometry: liquid volume $volume_m3 m³, temperature set point $t_op_k K.
 - Calibration window: $calibration_window d. Frozen hold-out window: $holdout_window d.
-  The hold-out is read only by `validate`. Every other tool that takes data works on the
-  calibration window.
+  Your forecast is scored on the hold-out by the one validation the harness runs after
+  `conclude`, and you are never shown that score.
+  `data_qc` and `mass_balance` read the whole record; every other tool you call works
+  on the calibration window.
 
 ## The observation record (calibration window)
 
@@ -46,9 +48,11 @@ Abstentions: the only terms `conclude` accepts; each with its meaning.
 $abstentions
 
 Evidence value keys: the keys `record_evidence` accepts, each with the tool(s) whose
-output such a number rests on. An item must cite at least one of those calls.
+output such a number rests on. An item must cite at least one of those calls, and each
+number must be one that a cited call returned (to the digits shown).
 
 $evidence_keys
 
 Tool results carry a `call_index`. Cite it in evidence and when a tool asks for an
-earlier result (`prediction`, `posterior`, `ensemble`, `from_fit`).
+earlier result (`prediction`, `posterior`, `from_fit`), and in `conclude` (`prediction`,
+`ensemble`).

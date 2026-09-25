@@ -5822,3 +5822,58 @@ They are proposals for the coordinator and the lead; none is frozen.
   - P0's sandbox document is unchanged (tested).
 - **The filters are not offered.** `filter_enkf` and `filter_mhe` need a registered
   state-space model, and a run registers none, so no workflow can call them.
+
+## 2026-09-25 — P1: the coordinator's adversarial review of PR #26 at `0528698`, fixes applied
+
+The coordinator relayed an independent review (~09:35 UTC). The design held. Fixes were
+needed before any live pilot:
+
+1. **The hold-out was peekable (high).** `validate` returned hold-out metrics to the
+   model on every call, so the agent could pick among predictions by their hold-out
+   score, which P0, validating once, cannot.
+   - *Fix:* `validate` is no longer an agent tool. `conclude` names the final prediction
+     or ensemble. The harness validates it once, after the conclusion is fixed, and the
+     result goes into the state only.
+   - *Alternative:* one validate per run whose result is withheld until conclude
+     (rejected: it adds a state to manage for nothing).
+2. **Replay could not reproduce a live run, and erased its source (high).**
+   - The wall-clock readings in tool results entered the request digest, so a replay
+     refused at turn 1. Now every reading carries one tag (`wall_clock_min_left`), and
+     the replay compares a digest with the readings masked (`replay_digest`). Both
+     digests are logged.
+   - `--replay` pointed the gateway's truncating log at the source. Now a replay writes
+     to its own output directory (`output_name`, `p1_replay` on the command line), and
+     a gateway refuses to log over the transcript its client replays.
+   - Tested with a double that sleeps 13 s.
+3. **Fabricated numbers passed (medium).** The harness now keeps the evidence values each
+   call produced, under the evaluator's keys. It refuses a value that differs beyond the
+   shown rounding, or a word for a number.
+4. **Interval methods (medium).** Each estimate's method needs a successful call of its
+   tool for that parameter:
+   - `posterior`: a converged sampler;
+   - `profile`: its profile;
+   - `fisher`: a Fisher-information call, or a fit's covariance, which is the Fisher
+     information at the optimum, P0's own interval.
+   A non-`none` `interval_method` needs an estimate that carries it.
+5. **The gateway forwarded any tool list and system prompt (medium).** Now it accepts
+   only:
+   - custom tools, so no server tool: no code execution, no web access;
+   - user and assistant turns of text, tool_use, tool_result and thinking blocks;
+   - exactly the committed system prompt, by its sha256.
+   Each forbidden form has a test, with a well-formed negative control.
+6. **The prompt test (low).** It now scans:
+   - the prompt files;
+   - every tool specification;
+   - the harness source, which holds every notice;
+   - the task prompt as filled on a real cell.
+   Its negative control plants a file and shows the scan fails.
+7. **Labels and ordering (low).** `none` beside another label is refused, and a tool use
+   after `conclude` in the same turn is refused and recorded.
+8. **A known asymmetry, recorded (low).** Model latency counts against the scenario's
+   wall-clock allowance, which the registry measures from its opening. P1 therefore gets
+   less tool time than P0 within the same budget. This follows from "the same budgets"
+   (§7) and is reported, not compensated.
+
+**Held for the lead, unchanged:** the fault-class examples of `system.md`'s label list
+(the coordinator's question on whether to make them generic). The prompt edits in this
+round touch only the validation and evidence sentences.

@@ -47,12 +47,18 @@ from pydantic import ValidationError
 from scenarios.schema import Scenario, load_scenario
 from sim.run.layout import INDEX_FILE, RUNS_ROOT, RunPaths, truth_store_for
 from state.task_state import TaskState
-from tools.llm import AnthropicClient, ModelClient, ModelGateway, RecordedClient
+from tools.llm import (
+    AnthropicClient,
+    ModelClient,
+    ModelGateway,
+    RecordedClient,
+    system_digest,
+)
 from tools.privileged import SCENARIOS_DIR, open_registry
 from tools.registry import Registry
 from tools.sandbox import REPO_ROOT, SandboxError, launch
 from tools.server import OUTPUTS_DIR
-from tools.workflow_config import P1Config, load_workflow_config, sandbox_config
+from tools.workflow_config import P1Config, load_prompts, load_workflow_config, sandbox_config
 
 __all__ = ["WORKFLOWS", "WorkflowResult", "batch", "main", "run_workflow", "write_table"]
 
@@ -114,6 +120,7 @@ class WorkflowResult:
     fallbacks: list[str] = field(default_factory=list)
     tool_failures: list[str] = field(default_factory=list)
     state_valid: bool = False
+    output_name: str = ""
     error: str = ""
     stderr_tail: str = ""
 
@@ -154,6 +161,7 @@ def run_workflow(
     keep_sandbox: bool = False,
     config_path: Path | None = None,
     model_client: ModelClient | None = None,
+    output_name: str | None = None,
 ) -> WorkflowResult:
     """Run one workflow on one generated run.
 
@@ -171,6 +179,9 @@ def run_workflow(
         config_path: A different workflow configuration (tests).
         model_client: For an LLM workflow, the client its gateway calls (a test double in
             CI); by default the provider's client from the configuration's ``model`` block.
+        output_name: The directory under ``runs/<id>/workflows/`` the outputs go to
+            (default: the workflow's name). A replay writes to its own
+            (``p1_replay``), never over the transcript it replays.
 
     Returns:
         The result; ``summary.json`` is written beside the workflow's outputs.
@@ -184,6 +195,7 @@ def run_workflow(
     store = truth_store_for(runs_root) if truth_store is None else Path(truth_store)
     paths = RunPaths.for_run(run_id, runs_root, store)
     config = load_workflow_config(workflow, config_path)
+    out_name = output_name or workflow
     registry = open_registry(run_id, runs_root=runs_root, truth_store=store, scenario=scenario)
     if timeout_s is None:
         timeout_s = (registry.budget.wall_clock_min + config.runner.timeout_margin_min) * 60.0
@@ -197,9 +209,10 @@ def run_workflow(
         gateway = ModelGateway(
             settings=config.model,
             client=model_client if model_client is not None else AnthropicClient(config.model),
-            log_dir=paths.root / OUTPUTS_DIR / workflow,
+            log_dir=paths.root / OUTPUTS_DIR / out_name,
             max_turns=config.loop.max_turns,
             max_total_tokens=config.loop.max_total_tokens,
+            system_sha256=system_digest(load_prompts(config)["system"]),
         )
     started = time.perf_counter()
     returncode: int | None = None
@@ -212,7 +225,7 @@ def run_workflow(
             sandbox=box,
             run_dir=paths.root,
             timeout_s=timeout_s,
-            workflow=workflow,
+            workflow=out_name,
             model_gateway=gateway,
         )
         returncode, stderr = result.returncode, result.stderr
@@ -227,7 +240,9 @@ def run_workflow(
         wall_s = time.perf_counter() - started
         if not keep_sandbox:
             shutil.rmtree(box, ignore_errors=True)
-    summary = _summarise(paths, workflow, wall_s, returncode, error, stderr, registry=registry)
+    summary = _summarise(
+        paths, workflow, wall_s, returncode, error, stderr, registry=registry, output_name=out_name
+    )
     if gateway is not None:
         meter = gateway.meter
         summary.tokens_used = meter.total
@@ -240,7 +255,7 @@ def run_workflow(
         summary.llm_cost_usd = round(gateway.cost_usd(), 6)
         summary.model_id = gateway.settings.model_id
         summary.model_client = gateway.client.name
-    out_dir = paths.root / OUTPUTS_DIR / workflow
+    out_dir = paths.root / OUTPUTS_DIR / out_name
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "summary.json").write_text(
         json.dumps(summary.as_dict(), indent=1, sort_keys=True) + "\n", encoding="utf-8"
@@ -257,13 +272,14 @@ def _summarise(
     stderr: str,
     *,
     registry: Registry,
+    output_name: str | None = None,
 ) -> WorkflowResult:
     """The summary of one launch: the meter's cost, the state's conclusion.
 
     The cost fields come from ``registry`` (its meter, on this side of the socket) whatever
     the state says; the state supplies the conclusion and its own counts as a self-report.
     """
-    state_path = paths.root / OUTPUTS_DIR / workflow / "state.json"
+    state_path = paths.root / OUTPUTS_DIR / (output_name or workflow) / "state.json"
     metered = registry.remaining()
     result = WorkflowResult(
         run_id=paths.root.name,
@@ -278,6 +294,7 @@ def _summarise(
         wall_clock_min_total=float(metered.wall_clock_min_total),
         n_calls=int(metered.n_calls),
         label=None,
+        output_name=output_name or workflow,
         error=error,
         stderr_tail=stderr[-2000:],
     )
@@ -411,7 +428,7 @@ def table_row(cell: dict[str, Any], paths: RunPaths, result: WorkflowResult) -> 
         "recovery": "",
     }
     # parameter recovery where scored: Levels 0-5 only, never Level 6 (§6.7 A)
-    state_path = paths.root / OUTPUTS_DIR / result.workflow / "state.json"
+    state_path = paths.root / OUTPUTS_DIR / (result.output_name or result.workflow) / "state.json"
     if scenario.level <= 5 and state_path.is_file() and result.state_valid:
         state = TaskState.model_validate_json(state_path.read_text(encoding="utf-8"))
         truth = _truth_multipliers(paths)
@@ -466,6 +483,7 @@ def batch(
     sandbox_root: Path | None = None,
     keep_sandbox: bool = False,
     model_client_factory: Any = None,
+    output_name: str | None = None,
 ) -> list[dict[str, Any]]:
     """Run the workflow on every cell, writing the table after each.
 
@@ -490,6 +508,7 @@ def batch(
                 scenario=cell["scenario"],
                 keep_sandbox=keep_sandbox,
                 model_client=None if model_client_factory is None else model_client_factory(run_id),
+                output_name=output_name,
             )
         except SandboxError as exc:
             print(f"  SANDBOX ERROR: {exc}", flush=True)
@@ -573,6 +592,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         model_client_factory=(
             None if args.replay is None else (lambda _run_id: RecordedClient(args.replay))
         ),
+        output_name=None if args.replay is None else f"{args.workflow}_replay",
     )
     done = sum(1 for r in rows if r["completed"])
     print(f"{done}/{len(rows)} cells completed; table at {table}")
