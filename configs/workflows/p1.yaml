@@ -49,32 +49,34 @@ defaults:
                               # of the calibration window and the rest)
 
 # The model and how it is called. PRIVILEGED side only (tools/llm.py::ModelGateway).
+# Provider and model set by the lead in the P1 session on 2026-09-25 ("Instead of
+# anthropic, use ChatGPT. Use GPT 5.6"); the key reaches the runner's environment as
+# OPENAI_API_KEY and is never written anywhere. The account serves three GPT-5.6
+# variants (luna, sol, terra) and no plain gpt-5.6; the lead chose luna.
 model:
-  provider: anthropic
-  model_id: claude-opus-5     # the exact id sent; the most capable generally recommended
-                              # Opus-tier id in the Claude API reference of 2026-06-24
-                              # (docs/decisions.md, 2026-09-25)
-  max_tokens: 16000           # DESIGN  per response; non-streaming requests
-  temperature: null           # NOT SENT: the current Claude models reject sampling
-                              # parameters (a 400). §10's "temperature 0 where possible" is
-                              # not possible; LLM variance is measured across seeds instead.
-  effort: high                # DESIGN  output_config.effort; thinking is the model's
-                              # default (adaptive), never configured per request
-  prompt_caching: true        # DESIGN  top-level cache_control on every request: the
-                              # history is append-only, so each turn reads the last one's prefix
+  provider: openai
+  model_id: gpt-5.6-luna      # the exact id sent (the Responses API: the GPT-5.6 models
+                              # refuse function tools with reasoning on Chat Completions)
+  max_tokens: 16000           # DESIGN  per response (max_output_tokens), reasoning included
+  temperature: null           # NOT SENT: reasoning models take no sampling parameters;
+                              # LLM variance is measured across seeds instead
+  effort: high                # DESIGN  reasoning.effort
+  prompt_caching: true        # DESIGN  the history is append-only; OpenAI caches prompt
+                              # prefixes automatically, so nothing is sent for it
   request_timeout_s: 600      # DESIGN  s per attempt
   retry:
     max_attempts: 4           # DESIGN  per turn, first attempt included; every attempt is logged
     backoff_s: 2.0            # DESIGN  s before the second attempt, doubled each time
     max_backoff_s: 30.0       # DESIGN  s
-    # retried: rate limit (429), overload and server errors (>= 500), connection errors
-    # and timeouts; anything else (a 400, an authentication error) ends the run
-  pricing_usd_per_mtok:       # for REPORTING cost only; never read by the agent. Anthropic
-                              # first-party rates of the Claude API reference (2026-06-24)
-    input: 5.0
-    output: 25.0
-    cache_write: 6.25         # 1.25 x input (5-minute cache)
-    cache_read: 0.5           # 0.1 x input
+    # retried: rate limit (429), server errors (>= 500), connection errors and timeouts;
+    # anything else (a 400, an authentication error) ends the run
+  pricing_usd_per_mtok:       # for REPORTING cost only; never read by the agent. OpenAI's
+                              # published Standard, short-context rates for gpt-5.6-luna
+                              # (developers.openai.com/api/docs/pricing, read 2026-09-25)
+    input: 0.20
+    output: 1.20              # reasoning tokens are billed as output
+    cache_write: 0.20         # no separate cache-write price is listed: charged as input
+    cache_read: 0.02          # "cached input"
 
 # The loop's limits, enforced where the agent cannot move them: turns and tokens in the
 # gateway (privileged), tool uses in the harness. The registry's budgets (evaluations,

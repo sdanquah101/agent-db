@@ -285,6 +285,16 @@ class Series:
             return np.ones(self.t.shape, dtype=bool)
         return (self.t >= window[0]) & (self.t <= window[1])
 
+    def recorded(self) -> dict[str, Any]:
+        """The whole record as recorded, no quarantine applied (what validation scores)."""
+        return {
+            "output": self.channel,
+            "t": self.t,
+            "value": self.raw,
+            "sd": self.sd,
+            "unit": self.unit,
+        }
+
     def observed(self, window: tuple[float, float] | None) -> dict[str, Any]:
         """An ``ObservedSeries`` payload restricted to ``window``, quarantines applied."""
         keep = self.mask(window)
@@ -1485,7 +1495,7 @@ class Workspace:
             return
         sims = [self.sims[i] for i in indices]
         observed = [
-            s.observed(None)
+            s.recorded()
             for s in self.objective()
             if s.channel in sims[0].outputs and s.n_observed(self.holdout) >= 1
         ]
@@ -1550,10 +1560,18 @@ class Workspace:
             raise ActionError(f"a {status} sensor never enters the objective")
         if in_obj and s.channel not in self.outputs:
             raise ActionError(f"{s.name} observes nothing the model outputs")
-        for pair in inp.get("quarantine") or []:
-            start, end = float(pair[0]), float(pair[1])
+        windows = [(float(a), float(b)) for a, b in inp.get("quarantine") or []]
+        for start, end in windows:
             if end < start:
                 raise ActionError(f"quarantine window [{start}, {end}] is reversed")
+            if end > self.cal[1]:
+                # the hold-out's record is what the forecast is scored against; it is not
+                # the agent's to edit (found on the first live cell, 2026-09-25)
+                raise ActionError(
+                    f"quarantine window [{start}, {end}] reaches into the hold-out window "
+                    f"(after {self.cal[1]:g} d), which is not yours to edit"
+                )
+        for start, end in windows:
             s.quarantine(start, end)
         s.status, s.in_objective = status, in_obj
         s.reason = str(inp["reason"])[:300]

@@ -5915,3 +5915,45 @@ scans every committed prompt surface for the library-shaped phrases: the prompt 
 the tool specifications and the harness source. A negative control shows the pre-ruling
 wording is caught. The published abstention vocabulary, shown in the filled task prompt,
 is not scanned; it is the shared contract of ruling A3.
+
+## 2026-09-25 — The lead in the P1 session: P1 runs on OpenAI's GPT-5.6 (`gpt-5.6-luna`), not on Claude
+
+**Instruction** (the lead, directly in the P1 session, 2026-09-25): "Instead of anthropic,
+use ChatGPT. Use GPT 5.6 for this work. Go." The lead supplied an OpenAI key in the
+session.
+
+**What was done.**
+- *The model.* This account serves three GPT-5.6 variants (`gpt-5.6-luna`, `-sol`,
+  `-terra`) and no plain `gpt-5.6`. All three passed a tool round trip, and the lead
+  chose `gpt-5.6-luna`.
+  - OpenAI's published Standard short-context rates, read 2026-09-25, per million
+    tokens:
+    - luna: $0.20 input, $0.02 cached input, $1.20 output;
+    - sol: $4, $0.80, $30;
+    - terra: $4, $0.40, $18.
+  - Luna is the least expensive, and its rates are recorded in `p1.yaml` for cost
+    reporting only.
+- *The API.* The GPT-5.6 models refuse function tools with reasoning on Chat
+  Completions (a 400). P1 therefore uses the Responses API, through a new client
+  (`tools/llm.py::OpenAIResponsesClient`).
+- *The translation.* The client translates both ways between the agent's
+  Messages-shaped history and the Responses API:
+  - the agent, the gateway's checks, the verbatim log and the replay are unchanged
+    and provider-neutral;
+  - reasoning is carried across turns encrypted (`store=False`,
+    `reasoning.encrypted_content`) inside a thinking block's signature;
+  - the raw provider response is logged verbatim.
+  - *Alternative:* an OpenAI-shaped agent history (rejected: it would fork the agent,
+    the gateway checks and the log per provider).
+- *Settings.*
+  - `temperature` stays null: reasoning models take no sampling parameters.
+  - Effort `high` maps to `reasoning.effort`.
+  - OpenAI caches prompt prefixes automatically, so `cache_control` is not sent.
+- *The key.* It is kept outside the repository and passed to the runner's process as
+  `OPENAI_API_KEY`. It is in no file, commit, run directory or log.
+  - The lead is advised to rotate it: it was pasted into a session transcript.
+- *The questions superseded.* The coordinator's relay said to wait for an
+  `ANTHROPIC_API_KEY` in the environment. The lead's direct instruction supersedes it,
+  and the coordinator's model-id question is answered.
+- *The pilot.* The lead chose to run one development cell first (S0-01, plant B,
+  tier B) and to decide on the other nine after its report.

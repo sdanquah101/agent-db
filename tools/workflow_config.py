@@ -302,7 +302,7 @@ class Pricing(_Frozen):
 class ModelSettings(_Frozen):
     """The model and how it is called: privileged side only (``tools.llm``)."""
 
-    provider: Literal["anthropic"]
+    provider: Literal["anthropic", "openai"]
     model_id: str = Field(min_length=1)
     max_tokens: _PosInt
     temperature: Annotated[float, Field(ge=0.0, le=1.0)] | None
@@ -310,7 +310,10 @@ class ModelSettings(_Frozen):
     prompt_caching: bool
     request_timeout_s: _Pos
     retry: Retry
-    pricing_usd_per_mtok: Pricing
+    pricing_usd_per_mtok: Pricing | None = Field(
+        description="USD per million tokens; null when no published price is recorded "
+        "(the cost is then reported as unknown, never guessed)"
+    )
 
 
 class Loop(_Frozen):

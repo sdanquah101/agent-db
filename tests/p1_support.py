@@ -125,10 +125,12 @@ def slow(policy: Policy, turn: int, seconds: float) -> Policy:
 def adversarial_policy(params: dict[str, Any]) -> dict[str, Any]:
     """Every refused form of the review of PR #26, then a valid conclusion.
 
-    Turn 2 fabricates a residual z-score, gives a word for a number, and asks for the
-    hold-out validation; turn 3 claims a Fisher interval with no Fisher call and a
-    profile interval with no profile; turn 4 puts `none` beside a real label; turn 5
-    concludes validly and, in the same turn, asks for one more simulate.
+    Turn 2 fabricates a residual z-score, gives a word for a number, asks for the hold-out
+    validation, and quarantines a window of the hold-out (with one of the calibration
+    window in the same call, which must not be applied either); turn 3 claims a Fisher
+    interval with no Fisher call and a profile interval with no profile; turn 4 puts
+    `none` beside a real label; turn 5 concludes validly and, in the same turn, asks for
+    one more simulate.
     """
     turn = turn_of(params)
     got = results(params)
@@ -144,6 +146,18 @@ def adversarial_policy(params: dict[str, Any]) -> dict[str, Any]:
             tool_use(2, 0, "record_evidence", {**ev, "values": {"bias_z": 42.0}}),
             tool_use(2, 1, "record_evidence", {**ev, "values": {"bias_z": "huge"}}),
             tool_use(2, 2, "validate", {"prediction": sim}),
+            tool_use(
+                2,
+                3,
+                "set_sensor_status",
+                {
+                    "sensor": "gas_flow",
+                    "status": "quarantined",
+                    "in_objective": True,
+                    "quarantine": [[10, 12], [25, 26]],
+                    "reason": "a spike in the hold-out",
+                },
+            ),
         )
     base = conclusion_for(sim)
     if turn == 3:

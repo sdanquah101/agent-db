@@ -324,8 +324,9 @@ the same wall-clock allowance P0 has, so P1 gets less tool time: a known asymmet
 registry documentation and the published vocabularies. They name no scenario and no P0
 rule, and a test enforces this. **Nothing about P1's performance is claimed yet.** It runs
 on development cells only until its prompts and settings are frozen and hashed, which
-happens before the held-out variants are generated. The current Claude models accept no
-temperature, so P1's run-to-run variance is a measured property, not a controlled one.
+happens before the held-out variants are generated. The model is OpenAI's `gpt-5.6-luna`
+(the lead's choice, 2026-09-25), a reasoning model that accepts no temperature, so P1's
+run-to-run variance is a measured property, not a controlled one.
 
 ## 5. Anchoring status — read this before quoting any number
 

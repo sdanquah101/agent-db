@@ -55,8 +55,18 @@ privileged side, a `ModelGateway` does five things:
   the attempts and the cost at the declared prices. The meter is the privileged side's
   count, like the registry's evaluation meter, never the agent's self-report.
 
-**Clients.** `AnthropicClient` is the live Messages API through the `anthropic` SDK, which
-is imported only when that client is built. Two deterministic doubles run the whole loop in
+**Clients.** The live client is chosen by the `model` block's `provider`.
+- `OpenAIResponsesClient` (the provider chosen by the lead on 2026-09-25) calls OpenAI's
+  Responses API through the `openai` SDK. It translates the agent's Messages-shaped request
+  and the reply both ways (`to_responses_request`, `from_responses_output`, tested), so the
+  agent, the gateway checks, the log and the replay are the same for every provider. The
+  model's reasoning items are carried across turns encrypted (`store=False`), inside a
+  thinking block's `signature`. The raw provider response is logged verbatim beside the
+  translated one. The GPT-5.6 models refuse function tools with reasoning on Chat
+  Completions, hence the Responses API.
+- `AnthropicClient` calls the Messages API through the `anthropic` SDK.
+
+Each SDK is imported only when its client is built. Two deterministic doubles run the whole loop in
 CI with no network and no key:
 - `ScriptedClient(policy)` answers with a pure function of the request (the test policies
   are in `tests/p1_support.py`);
@@ -160,16 +170,25 @@ not instructions.
 ## 5. The frozen settings (to be frozen)
 
 `configs/workflows/p1.yaml`, `model` block:
-- `claude-opus-5`, the Claude API reference's recommended Opus-tier id;
-- `max_tokens` 16000;
-- effort `high`;
-- thinking at the model's default (adaptive);
-- prompt caching on;
-- `temperature` **null, not sent**: the current models reject sampling parameters, so
+- **OpenAI `gpt-5.6-luna`**, by the lead's instruction in the P1 session on 2026-09-25
+  ("use ChatGPT, GPT 5.6"). The account serves three GPT-5.6 variants and no plain
+  `gpt-5.6`; the lead chose luna. It is the least expensive of the three:
+  - luna: $0.20 input, $0.02 cached input, $1.20 output per million tokens;
+  - sol: $4, $0.80 and $30;
+  - terra: $4, $0.40 and $18.
+
+  These are OpenAI's published Standard, short-context rates, read 2026-09-25, and are
+  recorded in `p1.yaml` for cost reporting only;
+- `max_tokens` (`max_output_tokens`) 16000, reasoning included;
+- reasoning effort `high`;
+- prompt caching: automatic at OpenAI (the history is append-only, so every turn reuses
+  the last one's prefix), nothing sent for it;
+- `temperature` **null, not sent**: reasoning models take no sampling parameters, so
   §10's "temperature 0 where possible" is not possible here, and LLM variance is measured
   across seeds;
-- no server-side refusal fallback: a fallback would change the model mid-run. A refusal
-  ends the run unconcluded instead.
+- no fallback model: a refusal ends the run unconcluded;
+- the key reaches the runner's environment as `OPENAI_API_KEY` and is never written to
+  the repository, a run directory or a log.
 
 Loop: 60 turns, 90 tool uses, 6 M tokens, a 6-minute wall-clock reserve, 3 grace turns.
 
@@ -184,7 +203,8 @@ the model's share can be read per cell.
 
 ## 7. Open points (in the PR for the coordinator)
 
-1. The model id: `claude-opus-5` against a newer or larger model.
+1. The model: `gpt-5.6-luna` is the lead's choice. Whether a larger GPT-5.6 variant
+   should be frozen instead is the lead's call.
 2. Invalid actions the harness refuses never reach the registry, so the evaluator's
    `invalid_actions` (read from logs) does not count them. They are in `tool_failures` and
    `plan.sizes.refused_actions`.

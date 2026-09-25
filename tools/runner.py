@@ -51,6 +51,7 @@ from tools.llm import (
     AnthropicClient,
     ModelClient,
     ModelGateway,
+    OpenAIResponsesClient,
     RecordedClient,
     system_digest,
 )
@@ -149,6 +150,13 @@ def _fresh_sandbox(sandbox_root: Path | None, workflow: str) -> Path:
     return box
 
 
+def live_client(config: P1Config) -> ModelClient:
+    """The provider's live client for the configuration's ``model`` block."""
+    if config.model.provider == "openai":
+        return OpenAIResponsesClient(config.model)
+    return AnthropicClient(config.model)
+
+
 def run_workflow(
     run_id: str,
     workflow: str = "p0",
@@ -208,7 +216,7 @@ def run_workflow(
     if isinstance(config, P1Config):
         gateway = ModelGateway(
             settings=config.model,
-            client=model_client if model_client is not None else AnthropicClient(config.model),
+            client=model_client if model_client is not None else live_client(config),
             log_dir=paths.root / OUTPUTS_DIR / out_name,
             max_turns=config.loop.max_turns,
             max_total_tokens=config.loop.max_total_tokens,
@@ -252,7 +260,8 @@ def run_workflow(
         summary.tokens_cache_read = meter.cache_read
         summary.llm_turns = meter.requests
         summary.llm_attempts = meter.attempts
-        summary.llm_cost_usd = round(gateway.cost_usd(), 6)
+        cost = gateway.cost_usd()
+        summary.llm_cost_usd = None if cost is None else round(cost, 6)
         summary.model_id = gateway.settings.model_id
         summary.model_client = gateway.client.name
     out_dir = paths.root / OUTPUTS_DIR / out_name

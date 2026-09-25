@@ -48,15 +48,18 @@ __all__ = [
     "ModelClient",
     "ModelError",
     "ModelGateway",
+    "OpenAIResponsesClient",
     "RecordedClient",
     "RetryableModelError",
     "ScriptedClient",
     "check_agent_request",
+    "from_responses_output",
     "read_transcript",
     "rebuild_requests",
     "replay_digest",
     "request_digest",
     "system_digest",
+    "to_responses_request",
 ]
 
 LLM_LOG_FILE = "llm_calls.jsonl"
@@ -232,6 +235,220 @@ class AnthropicClient:
         return message.to_dict()
 
 
+class OpenAIResponsesClient:
+    """OpenAI's Responses API through the ``openai`` SDK; the key comes from the environment.
+
+    The agent and the gateway speak one request shape, the Messages API's (content blocks,
+    ``tool_use`` / ``tool_result``), so the log and the replay are the same for every
+    provider. This client translates that shape to the Responses API and the reply back
+    (:func:`to_responses_request`, :func:`from_responses_output`). The reasoning items the
+    model returns are carried across turns encrypted (``store=False`` with
+    ``reasoning.encrypted_content``), inside the ``signature`` of a thinking block. The
+    provider's raw response is kept verbatim under ``provider``. The GPT-5.6 models
+    refuse function tools with reasoning on Chat Completions, so this uses the Responses
+    API. The SDK's own retries are off, as for the Anthropic client.
+    """
+
+    def __init__(self, settings: ModelSettings) -> None:
+        """Build the SDK client.
+
+        Raises:
+            ModelError: If the SDK is not installed.
+        """
+        try:
+            import openai
+        except ImportError as exc:  # pragma: no cover - depends on the environment
+            raise ModelError("the openai SDK is not installed (pip install openai)") from exc
+        self._sdk = openai
+        self._client = openai.OpenAI(max_retries=0, timeout=settings.request_timeout_s)
+        self.name = f"openai:{settings.model_id}"
+
+    def create(self, params: dict[str, Any]) -> dict[str, Any]:
+        """One Responses API call, translated both ways."""
+        sdk = self._sdk
+        kwargs = to_responses_request(params)
+        try:
+            response = self._client.responses.create(**kwargs)
+        except (sdk.RateLimitError, sdk.APIConnectionError) as exc:  # includes timeouts
+            raise RetryableModelError(f"{type(exc).__name__}: {exc}") from exc
+        except sdk.APIStatusError as exc:
+            if exc.status_code >= 500:
+                raise RetryableModelError(f"{type(exc).__name__}: {exc}") from exc
+            raise ModelError(f"{type(exc).__name__}: {exc}") from exc
+        return from_responses_output(response.to_dict(), kwargs)
+
+
+def to_responses_request(params: dict[str, Any]) -> dict[str, Any]:
+    """A Messages-API-shaped request as Responses API arguments.
+
+    - the system prompt becomes ``instructions``;
+    - a user turn's text becomes a user message, its ``tool_result`` blocks become
+      ``function_call_output`` items (an error result says so in the output text);
+    - an assistant turn's text becomes an assistant message, its ``tool_use`` blocks
+      ``function_call`` items, and its thinking blocks the reasoning items their
+      signatures carry;
+    - tools become function tools; the effort becomes ``reasoning.effort``;
+      ``max_tokens`` becomes ``max_output_tokens``;
+    - ``cache_control`` is dropped: OpenAI caches prompt prefixes automatically.
+
+    ``temperature`` is passed through only if the settings sent one.
+    """
+    items: list[dict[str, Any]] = []
+    for message in params.get("messages") or []:
+        role, content = message["role"], message["content"]
+        if isinstance(content, str):
+            items.append({"role": role, "content": content})
+            continue
+        texts: list[str] = []
+
+        def flush(role: str = role, texts: list[str] = texts) -> None:
+            if texts:
+                kind = "input_text" if role == "user" else "output_text"
+                items.append(
+                    {
+                        "type": "message",
+                        "role": role,
+                        "content": [{"type": kind, "text": t} for t in texts],
+                    }
+                )
+                texts.clear()
+
+        for block in content:
+            kind = block.get("type")
+            if kind == "text":
+                texts.append(str(block["text"]))
+                continue
+            flush()
+            if kind == "tool_result":
+                output = str(block["content"])
+                if block.get("is_error"):
+                    output = "ERROR: " + output
+                items.append(
+                    {
+                        "type": "function_call_output",
+                        "call_id": block["tool_use_id"],
+                        "output": output,
+                    }
+                )
+            elif kind == "tool_use":
+                items.append(
+                    {
+                        "type": "function_call",
+                        "call_id": block["id"],
+                        "name": block["name"],
+                        "arguments": json.dumps(block["input"], sort_keys=True),
+                    }
+                )
+            elif kind == "thinking" and block.get("signature"):
+                items.append(json.loads(block["signature"]))
+        flush()
+    kwargs: dict[str, Any] = {
+        "model": params["model"],
+        "instructions": params.get("system", ""),
+        "input": items,
+        "max_output_tokens": params["max_tokens"],
+        "store": False,
+        "include": ["reasoning.encrypted_content"],
+    }
+    if params.get("tools"):
+        kwargs["tools"] = [
+            {
+                "type": "function",
+                "name": t["name"],
+                "description": t.get("description", ""),
+                "parameters": t["input_schema"],
+            }
+            for t in params["tools"]
+        ]
+    effort = (params.get("output_config") or {}).get("effort")
+    if effort is not None:
+        kwargs["reasoning"] = {"effort": effort}
+    if params.get("temperature") is not None:
+        kwargs["temperature"] = params["temperature"]
+    return kwargs
+
+
+def from_responses_output(raw: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any]:
+    """A Responses API response as a Messages-API-shaped response.
+
+    Reasoning items become thinking blocks whose ``signature`` is the item itself (so the
+    next turn hands it back unchanged), messages become text blocks, function calls
+    ``tool_use`` blocks. ``usage`` is mapped so the meter counts the same way for every
+    provider: ``input_tokens`` uncached, ``cache_read_input_tokens`` cached,
+    ``cache_creation_input_tokens`` cache writes, ``output_tokens`` including reasoning.
+    The raw response is kept under ``provider.response``; the request under
+    ``provider.request`` without its ``input``, which :func:`to_responses_request`
+    derives from the logged request, with its digest.
+    """
+    content: list[dict[str, Any]] = []
+    for item in raw.get("output") or []:
+        kind = item.get("type")
+        if kind == "reasoning":
+            summary = " ".join(
+                str(part.get("text", "")) for part in item.get("summary") or []
+            ).strip()
+            content.append({"type": "thinking", "thinking": summary, "signature": json.dumps(item)})
+        elif kind == "message":
+            for part in item.get("content") or []:
+                if part.get("type") == "output_text":
+                    content.append({"type": "text", "text": str(part.get("text", ""))})
+                elif part.get("type") == "refusal":
+                    content.append({"type": "text", "text": str(part.get("refusal", ""))})
+        elif kind == "function_call":
+            try:
+                arguments = json.loads(item.get("arguments") or "{}")
+            except json.JSONDecodeError:
+                arguments = {"_unparseable_arguments": str(item.get("arguments"))}
+            if not isinstance(arguments, dict):
+                arguments = {"_unparseable_arguments": str(item.get("arguments"))}
+            content.append(
+                {
+                    "type": "tool_use",
+                    "id": item["call_id"],
+                    "name": item["name"],
+                    "input": arguments,
+                }
+            )
+    refused = any(
+        part.get("type") == "refusal"
+        for item in raw.get("output") or []
+        if item.get("type") == "message"
+        for part in item.get("content") or []
+    )
+    incomplete = (raw.get("incomplete_details") or {}).get("reason")
+    if any(b["type"] == "tool_use" for b in content):
+        stop = "tool_use"
+    elif refused or incomplete == "content_filter":
+        stop = "refusal"
+    elif incomplete == "max_output_tokens":
+        stop = "max_tokens"
+    else:
+        stop = "end_turn"
+    usage = raw.get("usage") or {}
+    details = usage.get("input_tokens_details") or {}
+    cached = int(details.get("cached_tokens") or 0)
+    written = int(details.get("cache_write_tokens") or 0)
+    request = {k: v for k, v in kwargs.items() if k != "input"}
+    request["input_sha256"] = request_digest({"input": kwargs.get("input", [])})
+    return {
+        "type": "message",
+        "role": "assistant",
+        "model": raw.get("model", kwargs.get("model")),
+        "content": content,
+        "stop_reason": stop,
+        "usage": {
+            "input_tokens": max(int(usage.get("input_tokens") or 0) - cached - written, 0),
+            "output_tokens": int(usage.get("output_tokens") or 0),
+            "cache_read_input_tokens": cached,
+            "cache_creation_input_tokens": written,
+            "reasoning_tokens": int(
+                (usage.get("output_tokens_details") or {}).get("reasoning_tokens") or 0
+            ),
+        },
+        "provider": {"api": "openai.responses", "request": request, "response": raw},
+    }
+
+
 class ScriptedClient:
     """A deterministic test double: ``policy(request) -> response``.
 
@@ -364,9 +581,11 @@ class ModelGateway:
         self.log_path.write_text("", encoding="utf-8")
 
     # -- what the runner reads -------------------------------------------------------
-    def cost_usd(self) -> float:
-        """The run's cost at the declared prices."""
+    def cost_usd(self) -> float | None:
+        """The run's cost at the declared prices; None when no price is declared."""
         p = self.settings.pricing_usd_per_mtok
+        if p is None:
+            return None
         m = self.meter
         return (
             m.input * p.input

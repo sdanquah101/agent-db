@@ -42,11 +42,14 @@ from tools.llm import (
     RecordedClient,
     RetryableModelError,
     ScriptedClient,
+    check_agent_request,
+    from_responses_output,
     read_transcript,
     rebuild_requests,
     replay_digest,
     request_digest,
     system_digest,
+    to_responses_request,
 )
 from tools.runner import WORKFLOWS, run_workflow
 from tools.server import OUTPUTS_DIR, OutputSink
@@ -164,8 +167,10 @@ def test_what_the_runner_hands_the_jail_carries_nothing_of_a_run_and_no_model_se
 
 def test_the_frozen_settings_are_the_contract_of_the_pr():
     config = load_p1()
-    assert config.model.provider == "anthropic" and config.model.model_id == "claude-opus-5"
-    assert config.model.temperature is None  # the current models reject sampling parameters
+    # the lead's choice in the session of 2026-09-25: OpenAI, gpt-5.6-luna
+    assert config.model.provider == "openai" and config.model.model_id == "gpt-5.6-luna"
+    assert config.model.temperature is None  # reasoning models take no sampling parameters
+    assert config.model.pricing_usd_per_mtok is not None
     assert config.model.retry.max_attempts >= 1 and config.loop.max_tool_calls > 0
     assert config.loop.max_turns > 0 and config.loop.max_total_tokens > 0
 
@@ -217,7 +222,7 @@ def test_the_gateway_sends_the_frozen_settings_and_nothing_the_agent_chose(tmp_p
     gw = _gateway(tmp_path, ScriptedClient(lambda p: seen.append(p) or _echo(p)))
     gw.complete({"system": "s", "messages": [{"role": "user", "content": "hi"}], "tools": []})
     sent = seen[0]
-    assert sent["model"] == "claude-opus-5" and sent["max_tokens"] == 16000
+    assert sent["model"] == "gpt-5.6-luna" and sent["max_tokens"] == 16000
     assert "temperature" not in sent  # null in the configuration: never sent
     assert sent["output_config"] == {"effort": "high"}
     assert sent["cache_control"] == {"type": "ephemeral"}
@@ -287,7 +292,7 @@ def test_the_turn_and_token_budgets_refuse_before_sending(tmp_path):
     with pytest.raises(GatewayRefusal, match="1000 tokens"):
         gw2.complete(msg)
     assert gw2.status()["tokens_left"] == 0
-    assert gw2.cost_usd() == pytest.approx((600 * 5.0 + 500 * 25.0) / 1e6)
+    assert gw2.cost_usd() == pytest.approx((600 * 0.20 + 500 * 1.20) / 1e6)
 
 
 def test_the_log_reassembles_every_request_verbatim(tmp_path):
@@ -387,6 +392,81 @@ def test_the_replay_digest_masks_the_wall_clock_and_nothing_else():
     assert request_digest(request(19.9)) != request_digest(request(12.3))
     assert replay_digest(request(19.9)) == replay_digest(request(12.3))
     assert replay_digest(request(19.9)) != replay_digest(request(19.9, " more"))
+
+
+def test_the_openai_translation_carries_every_block_both_ways():
+    reasoning = {"type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": "enc"}
+    params = {
+        "model": "gpt-5.6-luna",
+        "max_tokens": 16000,
+        "system": "the prompt",
+        "cache_control": {"type": "ephemeral"},
+        "output_config": {"effort": "high"},
+        "tools": [_GOOD_TOOL],
+        "messages": [
+            {"role": "user", "content": "task"},
+            {"role": "assistant", "content": [
+                {"type": "thinking", "thinking": "", "signature": json.dumps(reasoning)},
+                {"type": "text", "text": "checking"},
+                {"type": "tool_use", "id": "call_1", "name": "simulate", "input": {"a": 1}},
+            ]},
+            {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": "call_1", "content": "{}", "is_error": True},
+                {"type": "text", "text": "HARNESS: note"},
+            ]},
+        ],
+    }  # fmt: skip
+    kw = to_responses_request(params)
+    assert kw["instructions"] == "the prompt" and kw["reasoning"] == {"effort": "high"}
+    assert kw["max_output_tokens"] == 16000 and kw["store"] is False
+    assert "cache_control" not in kw and "temperature" not in kw
+    assert kw["tools"] == [{"type": "function", "name": "simulate", "description": "d",
+                            "parameters": {"type": "object"}}]  # fmt: skip
+    assert kw["input"] == [
+        {"role": "user", "content": "task"},
+        reasoning,  # handed back unchanged
+        {"type": "message", "role": "assistant",
+         "content": [{"type": "output_text", "text": "checking"}]},
+        {"type": "function_call", "call_id": "call_1", "name": "simulate", "arguments": '{"a": 1}'},
+        {"type": "function_call_output", "call_id": "call_1", "output": "ERROR: {}"},
+        {"type": "message", "role": "user",
+         "content": [{"type": "input_text", "text": "HARNESS: note"}]},
+    ]  # fmt: skip
+    raw = {
+        "model": "gpt-5.6-luna",
+        "output": [
+            reasoning,
+            {"type": "message", "content": [{"type": "output_text", "text": "next"}]},
+            {"type": "function_call", "call_id": "call_2", "name": "fisher_info",
+             "arguments": '{"parameters": ["k_m_ac"]}'},
+        ],
+        "usage": {"input_tokens": 1000, "output_tokens": 50,
+                  "input_tokens_details": {"cached_tokens": 800, "cache_write_tokens": 0},
+                  "output_tokens_details": {"reasoning_tokens": 30}},
+    }  # fmt: skip
+    out = from_responses_output(raw, kw)
+    assert out["stop_reason"] == "tool_use"
+    assert out["content"] == [
+        {"type": "thinking", "thinking": "", "signature": json.dumps(reasoning)},
+        {"type": "text", "text": "next"},
+        {"type": "tool_use", "id": "call_2", "name": "fisher_info",
+         "input": {"parameters": ["k_m_ac"]}},
+    ]  # fmt: skip
+    assert out["usage"]["input_tokens"] == 200 and out["usage"]["cache_read_input_tokens"] == 800
+    assert out["provider"]["response"] == raw and "input" not in out["provider"]["request"]
+    # the blocks go back into the next request unchanged, and the gateway accepts them
+    check_agent_request(
+        {"system": "s", "messages": [{"role": "assistant", "content": out["content"]}]}, None
+    )
+    # a truncated reply and a refusal map to the stop reasons the agent reads
+    assert (
+        from_responses_output(
+            {"output": [], "incomplete_details": {"reason": "max_output_tokens"}}, kw
+        )["stop_reason"]
+        == "max_tokens"
+    )
+    refusal = {"output": [{"type": "message", "content": [{"type": "refusal", "refusal": "no"}]}]}
+    assert from_responses_output(refusal, kw)["stop_reason"] == "refusal"
 
 
 def test_the_workflow_cannot_write_the_gateways_log(tmp_path):
@@ -544,7 +624,7 @@ def test_the_runner_counts_tokens_from_the_gateway_and_the_log_is_verbatim(p1_re
     )
     requests = rebuild_requests(lines)
     assert [request_digest(r) for r in requests] == [ln["request_sha256"] for ln in lines]
-    assert requests[0]["model"] == "claude-opus-5"
+    assert requests[0]["model"] == "gpt-5.6-luna"
     # each request extends the last one: history is append-only
     for a, b in itertools.pairwise(requests):
         assert b["messages"][: len(a["messages"])] == a["messages"]
@@ -649,6 +729,7 @@ def test_every_refused_form_is_refused_and_recorded(p1_cell):
         "`bias_z` = 42.0 is not what the cited calls produced",  # fabricated number
         "`bias_z` is a number; got 'huge'",  # a word for a number
         "no tool 'validate'",  # the hold-out is not the agent's to read
+        "reaches into the hold-out window",  # nor its to edit
         "k_m_ac: no successful call of this run produced a fisher interval",
         "k_dis: no successful call of this run produced a profile interval",
         "`none` never stands beside another label",
@@ -656,7 +737,9 @@ def test_every_refused_form_is_refused_and_recorded(p1_cell):
     ]
     for text in expected:
         assert any(text in m for m in messages), (text, messages)
-    assert state.plan.sizes["refused_actions"] == 6  # the two intervals are one refusal
+    assert state.plan.sizes["refused_actions"] == 7  # the two intervals are one refusal
+    # the refused quarantine applied none of its windows
+    assert state.data_quality["gas_flow"].quarantined_windows == ()
     assert state.classification.evidence == ()  # neither fabricated item was kept
     assert state.final.label == "none" and state.final.secondary_labels == ()
     # the simulate after the conclusion never reached the registry
