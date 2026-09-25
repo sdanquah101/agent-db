@@ -106,6 +106,33 @@ def test_no_committed_prompt_names_a_scenario_or_a_p0_rule():
     }
 
 
+# Examples that track the scenario library and its correct-action column: the lead's
+# ruling of 2026-09-25 made the prompt's examples generic, and none may come back. The
+# published abstention vocabulary (in the filled task prompt) is not scanned here.
+_LIBRARY_EXAMPLES = re.compile(
+    r"gas[- ]meter|scale error|estimate the factor|holds one value|never (been )?logged"
+    r"|unrecorded deliver|unlogged|wetter|drier|acclimat|particle size|that parameter only"
+    r"|mislabel|electrode|mis-?initiali[sz]ed|syntrophic|precipitat|imperfect mixing"
+    r"|inhibition shift|overload|foaming",
+    re.IGNORECASE,
+)
+
+
+def library_examples(texts: dict[str, str]) -> list[tuple[str, str]]:
+    """(where, match) for every library-shaped example in the committed prompt surfaces."""
+    return [(w, m.group(0)) for w, t in texts.items() for m in _LIBRARY_EXAMPLES.finditer(t)]
+
+
+def test_no_prompt_surface_reintroduces_the_librarys_examples(tmp_path):
+    assert library_examples(model_facing_texts()) == []
+    # negative control: the pre-ruling wording is caught
+    (tmp_path / "old.md").write_text(
+        "Examples are a gas meter with a scale error, or feed that has become wetter.\n"
+    )
+    found = {m.lower() for _, m in library_examples({"old.md": (tmp_path / "old.md").read_text()})}
+    assert found == {"gas meter", "scale error", "wetter"}
+
+
 def test_the_prompt_check_fails_on_a_planted_file(tmp_path):
     # negative control: the same scan, over a prompt directory with one planted file
     for f in PROMPT_DIR.glob("*"):

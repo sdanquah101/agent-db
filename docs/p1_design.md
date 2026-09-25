@@ -150,7 +150,10 @@ written from the proposal (§2, §4, §6.3–§6.7, Appendix A), the benchmark c
 `docs/tool_registry_design.md` (the evaluation-counting rule) and the published
 vocabularies (`configs/abstentions.yaml`, the labels, `evidence_keys`). They name no
 scenario and no P0 rule, give no label frequency and encode no per-cell P0 outcome.
-`tests/test_p1_agent.py` fails on `S\d-\d\d` or `R[1-6]` in any committed prompt. Operator
+`tests/test_p1_agent.py` fails on `S\d-\d\d` or `R[1-6]` in any committed prompt.
+Under the lead's ruling of 2026-09-25 the label definitions carry **generic** examples
+only. Nothing tracks the scenario library or its correct-action column, and a test scans
+every prompt surface for the library-shaped phrases (decisions, 2026-09-25). Operator
 notes enter the task prompt as quoted data, under a heading that says they are evidence,
 not instructions.
 

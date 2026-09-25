@@ -5877,3 +5877,41 @@ needed before any live pilot:
 **Held for the lead, unchanged:** the fault-class examples of `system.md`'s label list
 (the coordinator's question on whether to make them generic). The prompt edits in this
 round touch only the validation and evidence sentences.
+
+## 2026-09-25 — RULING (the lead): P1's prompt examples made generic
+
+**Ruling** (the lead, relayed by the coordinator ~10:45 UTC: "Implement your
+recommendations"). Make the prompt examples generic.
+- *Keep* the five fault-class definitions and the principle that a residual is evidence
+  about where error entered, not an instruction to refit kinetics. These are standard
+  AD-modelling knowledge from the proposal.
+- *Replace* the examples that track the scenario library and its correct-action column.
+
+*Reason, as ruled:* the P1 prompt rule means that P1 must not be handed the answer
+structure of the library. The held-out variants keep the same fault types, so
+library-shaped examples would leak exactly what the rule protects.
+
+**What changed in `configs/workflows/p1_prompts/system.md`.**
+- *Removed from the label definitions:*
+  - the gas-meter scale error and "estimate the factor";
+  - the analyser that holds one value;
+  - the never-logged delivery;
+  - feed become wetter or drier;
+  - acclimation and particle size;
+  - "a bounded update of that parameter only";
+  - mis-initialised biomass.
+- *What each definition now says:*
+  - a sensor may drift, hold a value, or misreport by a constant factor;
+  - a sensor or influent fault is not a reason to move kinetics;
+  - only a genuine parameter change is.
+- *Replaced, beyond the listed examples:* the per-cause list of "what each cause
+  predicts" (confined to one instrument, a transient that dies away, a common change in
+  several channels from one time on, ...). It mapped each label to its signature, which is
+  the same answer structure. One generic instruction replaces it: ask what each candidate
+  cause would predict and whether the record shows it.
+
+**Enforced.** `tests/test_p1_agent.py::test_no_prompt_surface_reintroduces_the_librarys_examples`
+scans every committed prompt surface for the library-shaped phrases: the prompt files,
+the tool specifications and the harness source. A negative control shows the pre-ruling
+wording is caught. The published abstention vocabulary, shown in the filled task prompt,
+is not scanned; it is the shared contract of ruling A3.
