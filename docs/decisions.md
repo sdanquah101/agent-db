@@ -5762,3 +5762,443 @@ The coordinator relayed an adversarial review (~17:40 UTC) with four points.
 workflow records would no longer match its log line's outcome, which the evaluator's
 trail requires, and it would change `state.provenance.Outcome` for every consumer).
 
+
+## 2026-09-25 — P1's architecture: the model gateway on the privileged side, a harness that plumbs, a model that decides (branch `claude/p1-single-agent`, draft PR #26)
+
+The P1 session was launched by the lead ("launch: p1-single-agent", relayed by the
+coordinator). Design: `docs/p1_design.md`. This entry records the interpretations taken.
+They are proposals for the coordinator and the lead; none is frozen.
+
+- **Model turns go through the registry socket to a privileged-side gateway**
+  (`tools/llm.py`; the `llm` op of `tools/server.py`; `tools.llm()` in the client stub).
+  - *Reason:* the key, the model id, the sampling settings, the turn and token budgets,
+    the verbatim log and the token meter must all be outside the agent's reach. The
+    registry's evaluation meter already sits on the privileged side for the same reason,
+    so this puts the token meter there too.
+  - *Alternatives:*
+    - running the loop on the privileged side (rejected: `sim` is importable there, and
+      §6.5 puts P1 in the same boundary as P0);
+    - network access and a key inside the jail (rejected: the key and the settings would
+      be the agent's to read and change).
+  - *What it touches in the registry:* one op on the server, one keyword on `launch` and
+    `RegistryServer`, and one reserved file name in `OutputSink`. No tool, schema, budget
+    rule or config of the frozen registry changes.
+- **The log is append-only and verbatim.** Every attempt is logged: the request as sent,
+  its sha256, and the response or the error. Messages are logged from the first one the
+  previous request lacked. `rebuild_requests` reassembles every request exactly (tested).
+  - *Alternative:* logging the full request each turn (rejected: quadratic in the turns,
+    for no information).
+- **The harness plumbs, the model decides.** The harness turns sensor names and call
+  indices into tool arguments, supplies seeds (base plus call index; rule 4), restricts
+  data to the calibration window (the hold-out is read by `validate` only), and summarises
+  long arrays.
+  - It refuses what §6.5's common constraints forbid:
+    - evidence with no published key or a call that did not return;
+    - an abstention outside the vocabulary;
+    - a posterior with no converged sampler;
+    - bounds changes without a justification;
+    - a flagged sensor in the objective.
+  - Refusals are recorded in `tool_failures` (`p1.<action>`) and
+    `plan.sizes.refused_actions`.
+  - It does *not* check that an evidence item cites the right tool for its keys; that
+    stays the evaluator's measurement.
+  - *Flagged:* these refusals never reach the registry, so the evaluator's
+    `invalid_actions` (logs only) does not count them.
+- **P1's evidence keys are the evaluator's registered claim sources** (`evidence_keys` in
+  `p1.yaml`, tested equal to `configs/eval.yaml`), and every P1 item carries `rule: p1`.
+  - *Reason:* ruling D3 holds P1 to the same definition; no key is added to the evaluator.
+- **Model settings.**
+  - `claude-opus-5`: the Claude API reference's recommended Opus-tier id; newer ids
+    exist and are flagged for the lead.
+  - `temperature: null`, never sent: the current models reject sampling parameters with a
+    400, so §10's "temperature 0 where possible" is not possible.
+  - Effort `high`; thinking at the model's default; prompt caching on; 16,000 max tokens.
+  - No server-side refusal fallback: a fallback would switch models mid-run. A refusal
+    ends the run unconcluded instead.
+- **The assays' public price list** (`configs/tools/assays.yaml`: name, channel, cost,
+  turnaround) is added to P1's sandbox configuration.
+  - *Reason:* §6.4's "declared cost and turnaround"; P0 carries its assay choice as a
+    configured preference list.
+  - P0's sandbox document is unchanged (tested).
+- **The filters are not offered.** `filter_enkf` and `filter_mhe` need a registered
+  state-space model, and a run registers none, so no workflow can call them.
+
+## 2026-09-25 — P1: the coordinator's adversarial review of PR #26 at `0528698`, fixes applied
+
+The coordinator relayed an independent review (~09:35 UTC). The design held. Fixes were
+needed before any live pilot:
+
+1. **The hold-out was peekable (high).** `validate` returned hold-out metrics to the
+   model on every call, so the agent could pick among predictions by their hold-out
+   score, which P0, validating once, cannot.
+   - *Fix:* `validate` is no longer an agent tool. `conclude` names the final prediction
+     or ensemble. The harness validates it once, after the conclusion is fixed, and the
+     result goes into the state only.
+   - *Alternative:* one validate per run whose result is withheld until conclude
+     (rejected: it adds a state to manage for nothing).
+2. **Replay could not reproduce a live run, and erased its source (high).**
+   - The wall-clock readings in tool results entered the request digest, so a replay
+     refused at turn 1. Now every reading carries one tag (`wall_clock_min_left`), and
+     the replay compares a digest with the readings masked (`replay_digest`). Both
+     digests are logged.
+   - `--replay` pointed the gateway's truncating log at the source. Now a replay writes
+     to its own output directory (`output_name`, `p1_replay` on the command line), and
+     a gateway refuses to log over the transcript its client replays.
+   - Tested with a double that sleeps 13 s.
+3. **Fabricated numbers passed (medium).** The harness now keeps the evidence values each
+   call produced, under the evaluator's keys. It refuses a value that differs beyond the
+   shown rounding, or a word for a number.
+4. **Interval methods (medium).** Each estimate's method needs a successful call of its
+   tool for that parameter:
+   - `posterior`: a converged sampler;
+   - `profile`: its profile;
+   - `fisher`: a Fisher-information call, or a fit's covariance, which is the Fisher
+     information at the optimum, P0's own interval.
+   A non-`none` `interval_method` needs an estimate that carries it.
+5. **The gateway forwarded any tool list and system prompt (medium).** Now it accepts
+   only:
+   - custom tools, so no server tool: no code execution, no web access;
+   - user and assistant turns of text, tool_use, tool_result and thinking blocks;
+   - exactly the committed system prompt, by its sha256.
+   Each forbidden form has a test, with a well-formed negative control.
+6. **The prompt test (low).** It now scans:
+   - the prompt files;
+   - every tool specification;
+   - the harness source, which holds every notice;
+   - the task prompt as filled on a real cell.
+   Its negative control plants a file and shows the scan fails.
+7. **Labels and ordering (low).** `none` beside another label is refused, and a tool use
+   after `conclude` in the same turn is refused and recorded.
+8. **A known asymmetry, recorded (low).** Model latency counts against the scenario's
+   wall-clock allowance, which the registry measures from its opening. P1 therefore gets
+   less tool time than P0 within the same budget. This follows from "the same budgets"
+   (§7) and is reported, not compensated.
+
+**Held for the lead, unchanged:** the fault-class examples of `system.md`'s label list
+(the coordinator's question on whether to make them generic). The prompt edits in this
+round touch only the validation and evidence sentences.
+
+## 2026-09-25 — RULING (the lead): P1's prompt examples made generic
+
+**Ruling** (the lead, relayed by the coordinator ~10:45 UTC: "Implement your
+recommendations"). Make the prompt examples generic.
+- *Keep* the five fault-class definitions and the principle that a residual is evidence
+  about where error entered, not an instruction to refit kinetics. These are standard
+  AD-modelling knowledge from the proposal.
+- *Replace* the examples that track the scenario library and its correct-action column.
+
+*Reason, as ruled:* the P1 prompt rule means that P1 must not be handed the answer
+structure of the library. The held-out variants keep the same fault types, so
+library-shaped examples would leak exactly what the rule protects.
+
+**What changed in `configs/workflows/p1_prompts/system.md`.**
+- *Removed from the label definitions:*
+  - the gas-meter scale error and "estimate the factor";
+  - the analyser that holds one value;
+  - the never-logged delivery;
+  - feed become wetter or drier;
+  - acclimation and particle size;
+  - "a bounded update of that parameter only";
+  - mis-initialised biomass.
+- *What each definition now says:*
+  - a sensor may drift, hold a value, or misreport by a constant factor;
+  - a sensor or influent fault is not a reason to move kinetics;
+  - only a genuine parameter change is.
+- *Replaced, beyond the listed examples:* the per-cause list of "what each cause
+  predicts" (confined to one instrument, a transient that dies away, a common change in
+  several channels from one time on, ...). It mapped each label to its signature, which is
+  the same answer structure. One generic instruction replaces it: ask what each candidate
+  cause would predict and whether the record shows it.
+
+**Enforced.** `tests/test_p1_agent.py::test_no_prompt_surface_reintroduces_the_librarys_examples`
+scans every committed prompt surface for the library-shaped phrases: the prompt files,
+the tool specifications and the harness source. A negative control shows the pre-ruling
+wording is caught. The published abstention vocabulary, shown in the filled task prompt,
+is not scanned; it is the shared contract of ruling A3.
+
+## 2026-09-25 — The lead in the P1 session: P1 runs on OpenAI's GPT-5.6 (`gpt-5.6-luna`), not on Claude
+
+**Instruction** (the lead, directly in the P1 session, 2026-09-25): "Instead of anthropic,
+use ChatGPT. Use GPT 5.6 for this work. Go." The lead supplied an OpenAI key in the
+session.
+
+**What was done.**
+- *The model.* This account serves three GPT-5.6 variants (`gpt-5.6-luna`, `-sol`,
+  `-terra`) and no plain `gpt-5.6`. All three passed a tool round trip, and the lead
+  chose `gpt-5.6-luna`.
+  - OpenAI's published Standard short-context rates, read 2026-09-25, per million
+    tokens:
+    - luna: $0.20 input, $0.02 cached input, $1.20 output;
+    - sol: $4, $0.80, $30;
+    - terra: $4, $0.40, $18.
+  - Luna is the least expensive, and its rates are recorded in `p1.yaml` for cost
+    reporting only.
+- *The API.* The GPT-5.6 models refuse function tools with reasoning on Chat
+  Completions (a 400). P1 therefore uses the Responses API, through a new client
+  (`tools/llm.py::OpenAIResponsesClient`).
+- *The translation.* The client translates both ways between the agent's
+  Messages-shaped history and the Responses API:
+  - the agent, the gateway's checks, the verbatim log and the replay are unchanged
+    and provider-neutral;
+  - reasoning is carried across turns encrypted (`store=False`,
+    `reasoning.encrypted_content`) inside a thinking block's signature;
+  - the raw provider response is logged verbatim.
+  - *Alternative:* an OpenAI-shaped agent history (rejected: it would fork the agent,
+    the gateway checks and the log per provider).
+- *Settings.*
+  - `temperature` stays null: reasoning models take no sampling parameters.
+  - Effort `high` maps to `reasoning.effort`.
+  - OpenAI caches prompt prefixes automatically, so `cache_control` is not sent.
+- *The key.* It is kept outside the repository and passed to the runner's process as
+  `OPENAI_API_KEY`. It is in no file, commit, run directory or log.
+  - The lead is advised to rotate it: it was pasted into a session transcript.
+- *The questions superseded.* The coordinator's relay said to wait for an
+  `ANTHROPIC_API_KEY` in the environment. The lead's direct instruction supersedes it,
+  and the coordinator's model-id question is answered.
+- *The pilot.* The lead chose to run one development cell first (S0-01, plant B,
+  tier B) and to decide on the other nine after its report.
+
+## 2026-09-25 — P1: the coordinator's re-review of PR #26 at `63b58b1`, fixes applied
+
+The coordinator's re-review (~12:20 UTC) confirmed every fix of the first round under
+direct probes, then asked for one more push:
+
+1. **Reported intervals were not checked against the call that produced them
+   (medium).** A Fisher interval of [0.999, 1.001] was accepted after any Fisher call.
+   - Every reported estimate and interval must now equal, within the declared relative
+     tolerance (`uncertainty.rel_tolerance`, 1e-3, against five shown digits), one that
+     a successful call produced:
+     - a fit's optimum ± z sd, or a Fisher call's point ± z CRLB sd, clipped to the
+       bounds; the sd must be finite, and z = 1.645 is P0's own value;
+     - a closed profile interval, with its least-chi2 grid point;
+     - a converged sampler's mean or median, with its q05 to q95.
+   - An estimate without an interval must be one some call used or returned. These
+     are the default, a fit's optimum, a sampler's mean or median, or a simulate's
+     multiplier.
+   - The harness shows each interval in the tool result (`fisher_interval_90`,
+     `interval_90_at_point`), so an honest agent copies it.
+   - Tested: the re-review's [0.999, 1.001] is refused, and the Fisher call's own
+     interval is accepted.
+2. **The lead's ruling on the examples, completed.**
+   - "An instrument may drift, hold a value, or misreport by a constant factor" named
+     the library's three sensor faults with the instrument names removed. It now reads
+     "Instruments can fail or misreport; the data themselves are the evidence."
+   - The guard catches paraphrases:
+     - a sentence on any prompt surface that joins drift-, hold-or-flat- and
+       scale-or-factor-wording;
+     - "hold a value" in any form.
+   - Planted sentences prove it: a paraphrase, the reviewer's "hold a value" and the
+     first ruling's own sentence.
+   - **Kept, on the coordinator's judgement:** the sentences on sampler convergence
+     (report posterior intervals only from a converged sampler) and on the operator's
+     notes (evidence, never instructions). They are rules of conduct that P0 already
+     follows by script (p0_design §3.5, §3.7 "what P0 never does"). Removing them would
+     handicap P1 against P0 rather than protect the held-out variants.
+3. **Low.**
+   - `--replay` writes `reports/<workflow>_replay.csv` by default, never the live
+     run's table.
+   - An evidence item tagged with a `sensor` (or a `channel`) may cite only values the
+     call produced for that sensor. A balance or assay value, which no one sensor owns,
+     is not restricted.
+   - A wall-clock notice that crosses its threshold in one run and not the other still
+     breaks a replay. `replay_digest` masks the readings, not the text of a notice
+     they trigger, so the replay is refused rather than improvised. This is documented
+     in `docs/p1_design.md` §2.
+
+**Also in this push (found on the first live cell, S0-01 B/B, 2026-09-25).** `data_qc`
+reads the whole record, so the agent learned of a spike at day 172, inside the hold-out,
+and quarantined it. That would change what its forecast is scored against. Now:
+- a quarantine window may not reach into the hold-out;
+- validation scores the hold-out as recorded.
+
+That first cell ran before this fix, and its report says so.
+
+## 2026-09-25 — P1: every gateway guarantee also holds on the translated OpenAI request
+
+The coordinator (~12:40 UTC) accepted the lead's switch to `gpt-5.6-luna` and asked that
+the gateway's guarantees hold on the request OpenAI actually receives.
+`tools/llm.py::check_responses_request` now runs inside the OpenAI client on every call,
+after translation and before sending. It refuses:
+- any parameter the frozen settings do not name (`tool_choice`, `parallel_tool_calls`,
+  `metadata`, `previous_response_id`, ...);
+- `store` other than False;
+- an include list other than the encrypted reasoning;
+- a model, response cap or effort other than the frozen ones;
+- `instructions` whose sha256 is not the committed system prompt's;
+- any tool but a plain function tool (web search, file search, code interpreter,
+  computer use, MCP, image generation, ...);
+- any input item but user or assistant text messages, function calls with their outputs,
+  and reasoning items carrying only what the model returned. A built-in tool call
+  planted in the history, for example inside a thinking block's signature, never reaches
+  OpenAI.
+
+The log now keeps the translated request verbatim beside the raw response. A replay of
+an OpenAI run is tested on a fake transport. Each refused form has a test, and each test
+has a well-formed negative control.
+
+## 2026-09-25 — P1: the coordinator's re-review of PR #26 at `e4fc44a`, fixes applied
+
+1. **The hold-out is not readable (medium; the coordinator's ruling, within the frozen
+   hold-out of §6.7 A).** For P1 the following see the calibration window `[0, 0.75 T]`
+   only:
+   - `data_qc`, including its event windows;
+   - `mass_balance`: windows, loads and observations;
+   - record inspection;
+   - the operator's notes: a note from a hold-out day is not shown.
+
+   `system.md` and `task.md` now say so. The hold-out is scored once, by the validation
+   after `conclude`, and never shown. The feed log, the model's *input* over the whole
+   record, is still what `simulate` integrates; it is not an observation of the plant.
+   Tested: a probe of each tool at a hold-out day gets nothing.
+
+   **A known P0/P1 asymmetry that favours P0:** P0's QC and balance read the whole
+   record. P1 therefore sees less than P0, which is the conservative direction (rule 5).
+2. **An estimate must be one an estimator returned (medium).**
+   - A method-`none` estimate must be a fit's optimum or a converged sampler's mean or
+     median. It cannot be a simulate input or the default.
+   - A Fisher call's interval backs an estimate only at such a point: a Fisher call at
+     a point the agent chose (the re-review's `k_m_ac` 1.37) backs nothing.
+
+   Tested both ways: the chosen point is refused, and the fit's optimum is accepted.
+3. **The prompt guard is widened, and it is a backstop (medium).** It now also catches:
+   - ids in any spelling (`S2_03`, `S203`, `R 4`);
+   - fault synonyms (stick, frozen, ratio, percentage, calibration error, under-read)
+     and any two of the three sensor-fault kinds, in one sentence or two adjacent ones;
+   - frequency words near a label;
+   - the influent and structural mechanism words.
+
+   Sixteen planted paraphrases are each caught, and the real surfaces pass. **The guard
+   is a backstop, not the defence:** the defence is the lead's read of the prompts at
+   freeze time and the committed prompt hash (item 4).
+4. **Provenance (low).**
+   - `summary.json` and every `llm_calls.jsonl` record carry `system_sha256`,
+     `task_sha256`, `prompt_sha256`, `tools_sha256` and the git commit (`-dirty` when
+     the tree had changes).
+   - `p1.yaml` gains `prompt_sha256`, empty until the freeze. Once set, the runner
+     refuses prompts that do not hash to it (tested).
+5. **Gateway tidiness (low).**
+   - The tool list must be the agent's committed specification, pinned by hash, and a
+     description must be a string.
+   - A response item or message part the translation does not handle raises and is
+     logged; it is never dropped.
+   - The temperature *value* must be the frozen one.
+   - A bad signature is a logged `ModelError`.
+   - The recorded client also checks the logged translated request (wall clock masked).
+   - A failed attempt logs the provider request it tried to send.
+
+   Each has a test.
+
+**Also:** on a short record, the default balance window is capped to the calibration
+window. An explicit window longer than that is refused.
+
+## 2026-09-25 — RULING (the lead): the P1 development pilot plan
+
+**Ruling** (the lead, relayed by the coordinator ~15:40 UTC: "Yes, implement your
+recommendations"). The development pilot plan is approved, in this order:
+1. **Push** the fixes of the coordinator's re-review at `e4fc44a`. Done at `0e178d5`.
+2. **Baseline.** Run the other nine development (pilot) cells on the current prompt, at
+   that committed head, each recording the git commit and the prompt sha256 in
+   `summary.json`. The runs come from a worktree checked out at `0e178d5`, so each
+   records a clean commit. The coordinator's re-review runs in parallel; a finding that
+   changes the results means re-running the affected cells.
+3. **One prompt revision**, written from the proposal, the card, the registry
+   documentation and the published vocabularies only (the P1 prompt rule). It covers
+   five generic points:
+   - when to conclude `none`;
+   - a fitted value at its bound is a warning, not a change;
+   - a secondary label needs its own evidence;
+   - an abstention needs a named reason from the run;
+   - a budget reserve for the final fit, its Fisher call and the final simulate, with
+     Sobol optional.
+
+   It is committed separately with its sha256, and says which prompt text of the first
+   cell each change answers.
+4. **Re-run** the same nine cells plus S0-01 B/B on the revised prompt.
+5. **Report** one row per cell per prompt version (label against truth as a
+   development-only diagnostic, unsupported claims, invalid actions, extra abstentions,
+   kinetic-update errors, evaluations, wall clock, turns, tokens, cost at luna's rates),
+   with totals and the difference.
+
+Still forbidden without the lead's word: scoring the Level 0–5 sweep, freezing the
+prompt, and generating or running the held-out variants.
+
+## 2026-09-25 — P1: the fixes of the coordinator's re-review at `1624e4d`
+
+**Decision.**
+1. **Every statistic comes from calibration-window samples only.** The noise floor used
+   the median of the whole record; it now uses the calibration samples. Loads, feeds and
+   temperature used as residual covariates, event windows, assays and notes are all cut
+   at the calibration end too. A regression test
+   (`test_tool_outputs_do_not_depend_on_hold_out_values`) runs one scripted agent on two
+   copies of a cell that differ only in hold-out sensor values. Every request the gateway
+   logs must have the same replay digest, and the hold-out validation, which runs after
+   `conclude` and is never shown, must differ. That last check is the negative control.
+2. **The window is half-open, `t < cal_end`**, in every P1 mask. A sample on the boundary
+   day belongs to the hold-out only.
+   - **P0 limitation, recorded but not changed.** P0's `Series.mask` is closed
+     (`start <= t <= end`), so P0 counts a sample exactly at `cal_end` in both windows.
+   - P0 is frozen (rule 5), so this is a note for the P0/P1 comparison, not a P0 change.
+3. **`feed_loads` is not clipped.** Instead, the task prompt says that the declared feed
+   schedule covers the whole record.
+   - The declared loads are the model's input: `simulate` integrates them over the whole
+     horizon, and P0 uses the same schedule.
+   - Clipping `feed_loads` alone would hide nothing that a `simulate` call does not
+     already imply.
+   - The feed *log* (`inspect_record`) and the feed assays stay clipped, because they
+     are observations.
+   - The sentence ships in prompt revision 1a (below).
+4. **Only converged fits are estimates.** `estimated_optima`, `estimated_points` and the
+   fit branch of `interval_sources` accept only a fit with `converged: true`. A fit that
+   stops early returns its start, and that start is a point the agent chose.
+5. **A Fisher call backs an interval only at a whole optimum.** That means every one of
+   its `at` coordinates must equal one qualifying optimum: a converged fit, or a
+   converged sampler's mean or median. A call that matches the optimum in the named
+   parameter but sets another coordinate by choice (or leaves it at the default) does not
+   qualify. Unit tests (`test_a_fisher_call_backs_an_interval_only_at_a_whole_optimum`,
+   `test_only_a_converged_fit_is_an_estimate`) pin both rules, each with a negative
+   control. The e2e test `chosen_point_policy` exercises them in a real run.
+   - In that short cell, the mixed call's interval is clipped to the full bounds, so it
+     equals the fit's own interval. It is then accepted, correctly, because the fit
+     backs it.
+6. **The prompt guard is wider, and still a backstop.**
+   - Its co-occurrence window is now three sentences.
+   - It adds wording about water and dilution (more water, more dilute) and solids (not
+     stirred).
+   - The listed items are planted in the guard's own tests.
+   - The defence is still the P1 prompt rule and review of the prompt text.
+7. **An unhandled response item keeps the raw response in the log** (`provider_response`),
+   next to the translated request, so the item can be read back.
+
+**Alternatives.**
+- Clipping `feed_loads` (rejected, see 3).
+- Closing P1's window to match P0 (rejected: the ruling asks for half-open).
+
+## 2026-09-25 — P1: prompt revision 1a (the re-review of `1624e4d`, item 4), prompt sha256 `f8e888f46147e88b013751f0918bffeaf9f9e0aa36c34279ba28b78404f24ef5`
+
+**Decision.** Revision 1 (`4e60c08`, sha256 `19f2d1a2…`) is amended in three places,
+written from the proposal, the card and the published vocabularies only (the P1 prompt
+rule).
+- **(a) When the answer is `none`.**
+  - The background misfit is judged by its structure, not only its size: it differs from
+    channel to channel, and a fault can be present from the first day.
+  - A label other than `none` needs a pattern that a candidate cause predicts better
+    than the background does.
+  - Before concluding `none`, the agent checks each candidate cause, including patterns
+    present from the start.
+  - "A clean calibration moves parameters too" stays.
+  - This answers the first cell's text, where revision 1's "a misfit shared by the whole
+    record is that background" could read as licence to call a from-the-start fault
+    background.
+- **(b) Abstentions.**
+  - "Decline a quantity only when this run's evidence meets that term's published
+    meaning, and cite that evidence in your summary."
+  - The example given: a fitted value at or near its bound, not identified by the data,
+    may be declined under `parameter_values`.
+  - This replaces revision 1's closed list of reasons, which left out the one the
+    vocabulary itself names.
+- **(c) The task prompt** says that the declared feed schedule (`feed_loads`, which
+  `simulate` integrates) covers the whole record. Every other record, note and tool
+  result is restricted to the calibration window. See the fixes entry above, item 3.
+
+**Not frozen.** `prompt_sha256` in `configs/workflows/p1.yaml` stays empty. Freezing
+waits for the lead's word.

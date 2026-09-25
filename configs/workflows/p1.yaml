@@ -1,0 +1,148 @@
+# P1 — the single constrained agent (proposal §6.5; docs/p1_design.md). One LLM agent
+# with the SAME tool registry, budgets, data and stopping actions as P0. Every setting P1
+# uses is here and nowhere in workflows/p1_single_agent/agent.py (CLAUDE.md conventions;
+# rule 4: every stochastic tool call takes a seed derived from `seeds.base`). The runner
+# (tools/runner.py) hands this file to the jailed agent as p1_config.json, with the same
+# declared sensor noise, plant geometry and abstention vocabulary P0 receives, plus the
+# prompt texts. The `model` block is read on the PRIVILEGED side only (tools/llm.py): the
+# jailed agent never chooses its model, its sampling settings or its retry policy.
+# Schema: tools/workflow_config.py::P1Config.
+#
+# STATUS: DEVELOPMENT (2026-09-25). Not frozen, not hashed: the prompts and this file are
+# frozen, and their hash committed, on the lead's word before the held-out variants of §7
+# are generated (the P1 prompt rule of 2026-09-24). Every value is DESIGN unless marked.
+version: 1
+workflow: p1
+workflow_version: "0.1"
+
+# The uncertainty classes of §6.3 as the evaluator spells them (read from here for the
+# same reason as P0: the rule-1 checker forbids the bare token of a forbidden module name
+# in workflow code, and one class shares its name with the `state` package).
+labels:
+  sensor: sensor
+  influent: influent
+  initial_state: state
+  parameter: parameter
+  structural: structural
+  none: none
+
+windows:
+  calibration_start_d: 0.0    # DESIGN  d; as P0
+  holdout_fraction: 0.25      # DESIGN  -; the frozen hold-out [T (1 - f), T] of §6.7 A,
+                              # equal to configs/eval.yaml windows.holdout_fraction (tested).
+                              # Fits, screening, residuals and record inspection see the
+                              # calibration window only; `validate` alone reads the hold-out.
+
+calibration:
+  # How the harness weights a sample when it builds an observed series for a tool:
+  # sd = sqrt((cv |v|)^2 + sd_abs^2) from the DECLARED noise, floored. The same weighting
+  # convention as P0 (a data convention, not an attribution rule).
+  min_relative_sd: 0.02       # DESIGN  -
+  sd_floor_abs: 1.0e-6        # DESIGN  in the channel unit
+
+defaults:
+  event_load_quantile: 0.90   # DESIGN  -; data_qc's event windows when the agent names none:
+                              # days above this quantile of the declared COD load
+  balance_window_d: 30.0      # DESIGN  d; mass_balance's window width when the agent names none
+  transient_d: 30.0           # DESIGN  d; the residual summary's early/late split
+                              # (early_bias_z / late_bias_z are the first transient_d days
+                              # of the calibration window and the rest)
+
+# The model and how it is called. PRIVILEGED side only (tools/llm.py::ModelGateway).
+# Provider and model set by the lead in the P1 session on 2026-09-25 ("Instead of
+# anthropic, use ChatGPT. Use GPT 5.6"); the key reaches the runner's environment as
+# OPENAI_API_KEY and is never written anywhere. The account serves three GPT-5.6
+# variants (luna, sol, terra) and no plain gpt-5.6; the lead chose luna.
+model:
+  provider: openai
+  model_id: gpt-5.6-luna      # the exact id sent (the Responses API: the GPT-5.6 models
+                              # refuse function tools with reasoning on Chat Completions)
+  max_tokens: 16000           # DESIGN  per response (max_output_tokens), reasoning included
+  temperature: null           # NOT SENT: reasoning models take no sampling parameters;
+                              # LLM variance is measured across seeds instead
+  effort: high                # DESIGN  reasoning.effort
+  prompt_caching: true        # DESIGN  the history is append-only; OpenAI caches prompt
+                              # prefixes automatically, so nothing is sent for it
+  request_timeout_s: 600      # DESIGN  s per attempt
+  retry:
+    max_attempts: 4           # DESIGN  per turn, first attempt included; every attempt is logged
+    backoff_s: 2.0            # DESIGN  s before the second attempt, doubled each time
+    max_backoff_s: 30.0       # DESIGN  s
+    # retried: rate limit (429), server errors (>= 500), connection errors and timeouts;
+    # anything else (a 400, an authentication error) ends the run
+  pricing_usd_per_mtok:       # for REPORTING cost only; never read by the agent. OpenAI's
+                              # published Standard, short-context rates for gpt-5.6-luna
+                              # (developers.openai.com/api/docs/pricing, read 2026-09-25)
+    input: 0.20
+    output: 1.20              # reasoning tokens are billed as output
+    cache_write: 0.20         # no separate cache-write price is listed: charged as input
+    cache_read: 0.02          # "cached input"
+
+# The loop's limits, enforced where the agent cannot move them: turns and tokens in the
+# gateway (privileged), tool uses in the harness. The registry's budgets (evaluations,
+# wall clock, assay units) are the scenario's and are enforced in the registry as for P0.
+loop:
+  max_turns: 60               # DESIGN  model requests per run
+  max_tool_calls: 90          # DESIGN  tool uses the agent may make (registry and workspace)
+  max_total_tokens: 6000000   # DESIGN  input + cache + output tokens per run, all turns
+  wall_clock_reserve_min: 6.0 # DESIGN  min; below this much wall clock left, the harness
+                              # tells the agent to conclude now
+  conclude_grace_turns: 3     # DESIGN  turns after that notice (or after either cap is
+                              # near) before the harness stops the run unconcluded
+  max_points_shown: 200       # DESIGN  samples one record inspection returns at most
+  array_preview: 12           # DESIGN  elements of a long array shown before it is summarised
+
+uncertainty:
+  # The half-width of a Fisher (Cramer-Rao) interval in sd units: the central 90 % of a
+  # normal, P0's own value (configs/workflows/p0.yaml uncertainty.z). A reported interval
+  # must be one a call of the run produced (the coordinator's re-review of PR #26, 1):
+  # a fit's estimate +/- z sd or a Fisher call's point +/- z CRLB sd, clipped to the
+  # bounds; a profile's interval; a converged sampler's q05-q95. The harness shows each.
+  z: 1.645                    # DESIGN  -
+  rel_tolerance: 1.0e-3       # DESIGN  -; a reported number matches a produced one to
+                              # this relative tolerance (the agent is shown five digits)
+
+seeds:
+  base: 20260925              # rule 4: a stochastic call's seed is base + its call index
+
+# The evidence value keys the agent may cite, and the tools whose output each number
+# rests on (ruling D3). They are the keys configs/eval.yaml registers under
+# claim_sources.by_value_key, with the same tools (tested equal): an evidence item whose
+# keys are listed here and whose calls include one of the tools can be traced by the
+# evaluator. The harness refuses an item with no listed key; it does NOT check that the
+# cited calls are of the right tool, which the evaluator scores.
+evidence_keys:
+  bias_z: [residual_diag]
+  step_z: [residual_diag]
+  step_day: [residual_diag]
+  early_bias_z: [residual_diag]
+  late_bias_z: [residual_diag]
+  rmse_z: [residual_diag]
+  most_explanatory: [residual_diag]
+  n_inadmissible: [mass_balance]
+  cod_closure_mean: [mass_balance]
+  charge_drift: [mass_balance]
+  slope_per_d: [data_qc]
+  signal_to_noise: [data_qc]
+  declared_bound: [data_qc]
+  start_d: [data_qc]
+  end_d: [data_qc]
+  event_missing_ratio: [data_qc]
+  assay: [request_assay]
+  disagreement_z: [request_assay, simulate]
+
+# The prompts, as files beside this one. Written from the proposal, the benchmark card,
+# the registry documentation and the published vocabularies only (the P1 prompt rule of
+# 2026-09-24): no scenario id, no P0 rule id, no label frequency, no per-cell P0 outcome
+# (tests/test_p1_agent.py fails on the first two).
+prompts:
+  system: p1_prompts/system.md
+  task: p1_prompts/task.md
+prompt_sha256: ""             # the prompts' fingerprint (tools/workflow_config.py::
+                              # prompt_digest), committed at the freeze on the lead's word;
+                              # empty until then. Once set, the runner refuses any prompt
+                              # that does not hash to it.
+
+runner:
+  timeout_margin_min: 10.0    # DESIGN  min past the cell's wall-clock allowance before the
+                              # jail is killed (model latency counts on the registry clock)

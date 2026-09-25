@@ -2483,3 +2483,85 @@ P0 rulings (step 1).
 **Next.** PR B (positive-control ladder, pre-registered in
 `docs/positive_control.md`) and PR C (distinguishability).
 
+
+## Milestone 7 — P1, the single constrained agent (weeks 21–25)
+
+### Session 2026-09-25 — P1 built and tested against the test double (`claude/p1-single-agent`, draft PR #26)
+
+**Done.**
+- **The agent** (`workflows/p1_single_agent/agent.py`). It runs in the same jail as P0,
+  against the same registry, budgets and record, and writes the same task state.
+- **The model gateway** (`tools/llm.py`), on the privileged side, reached through a new
+  `llm` op on the registry socket. It holds the model settings, the turn and token
+  budgets, the retry policy, a verbatim log (`llm_calls.jsonl`) and the token meter the
+  runner reports.
+- **Config and prompts, as a development draft:** `configs/workflows/p1.yaml` and the
+  prompts in `configs/workflows/p1_prompts/`.
+- **Tests without a network or a key:** a scripted double and a recorded double.
+  `tests/test_p1_agent.py` has 24 tests and runs through the jail in about 12 s. They
+  check that:
+  - every action names its log line;
+  - the evaluator scores the run with 0 unsupported claims;
+  - a transcript replay reproduces the state;
+  - a run that never concludes is recorded as incomplete.
+- **Docs:** `docs/p1_design.md`, a decisions entry, and benchmark card §4.3.
+
+**Blocked:**
+- **The live pilot on the development cells** (P0's ten pilot cells) is blocked:
+  `ANTHROPIC_API_KEY` is not set in this environment. When it is:
+  - add the `anthropic` SDK to `pyproject.toml`;
+  - generate the ten cells and run them;
+  - report tokens, dollars and wall time per cell against the budgets.
+- **Five questions for the coordinator**, listed in PR #26: the model id, temperature,
+  how harness refusals are counted, no refusal fallback, and approval of the pilot.
+
+**Not done, by instruction:** no sweep scoring, no P0 comparison, no prompt freeze or
+hash.
+
+**The next session starts on:** the live pilot once the key and the lead's answers are
+in; prompt development on development cells only; then the freeze before the held-out
+variants.
+
+### Session 2026-09-25 (continued) — two review rounds, the switch to OpenAI `gpt-5.6-luna`, the first live development cell
+
+**Done.**
+- The coordinator's review at `0528698` and re-review at `63b58b1` were applied, and the
+  lead's ruling made the prompt examples generic (decisions, 2026-09-25).
+- By the lead's direct instruction, P1 now runs on OpenAI `gpt-5.6-luna` through the
+  Responses API. A client translates the agent's history both ways, and every gateway
+  guarantee is checked on the translated request. The key reaches the runner's process
+  as `OPENAI_API_KEY` and is stored nowhere.
+- **The first live development cell: S0-01, plant B, tier B** (a P0 pilot cell), run on
+  `run_2b118014430e`, before the hold-out-quarantine fix.
+
+  | | used | budget |
+  |---|---|---|
+  | wall clock | 65.4 min (3,925 s; 3,798 s of it in tools) | 90 min |
+  | simulator evaluations | 298 | 450 |
+  | assay units | 2 | 2 |
+  | model turns | 14 (14 attempts, no retry) | 60 |
+  | tokens | 472,434 (42 input, 77,290 cache writes, 384,017 cache reads, 11,085 output) | 6,000,000 |
+  | cost at luna's rates | $0.036 | — |
+
+  - *The run:* completed, state valid. Three evidence items were refused: an
+    unpublished key, a value no cited call produced, and a declared bound misquoted.
+  - *The diagnostic score, development only:* 0 of 8 claims unsupported, 0 invalid
+    actions.
+  - *The label:* `state` with `sensor` secondary, where the truth is `none`.
+  - *The rest:* one false kinetic drift (`k_m_ac` at its bound, reported as a
+    method-`none` estimate) and 8 abstentions outside the answer key.
+  - *The hole it found:* the agent quarantined a hold-out day that `data_qc` had shown
+    it, which led to the quarantine and validation fix.
+  - Model latency took about 2 min of the 65.
+
+**Blocked:** nothing technical. The other nine development cells wait for the lead's
+word. **Next:** the other nine cells on the lead's word; prompt development on
+development cells only; the freeze and hash before the held-out variants.
+
+**Note on the first live cell (the coordinator's re-review of `e4fc44a`).** The S0-01
+B/B cell ran on a working tree with uncommitted changes, between `4859bc5` and
+`7096fbc`. It is development evidence only. It predates both the hold-out quarantine fix
+and the calibration-window restriction on QC, balance and notes. Its figures show cost,
+wall time and mechanics, not P1's behaviour at any committed head. From the commit that
+fixes the re-review of `e4fc44a` on, every run records its commit, and its prompt and tool hashes, in `summary.json` and the
+model log.

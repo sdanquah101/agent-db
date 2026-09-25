@@ -47,15 +47,33 @@ from pydantic import ValidationError
 from scenarios.schema import Scenario, load_scenario
 from sim.run.layout import INDEX_FILE, RUNS_ROOT, RunPaths, truth_store_for
 from state.task_state import TaskState
+from tools.llm import (
+    AnthropicClient,
+    ModelClient,
+    ModelGateway,
+    OpenAIResponsesClient,
+    RecordedClient,
+    system_digest,
+    tools_digest,
+)
 from tools.privileged import SCENARIOS_DIR, open_registry
 from tools.registry import Registry
 from tools.sandbox import REPO_ROOT, SandboxError, launch
 from tools.server import OUTPUTS_DIR
-from tools.workflow_config import load_p0, sandbox_config
+from tools.workflow_config import (
+    P1Config,
+    check_prompt_hash,
+    load_prompts,
+    load_workflow_config,
+    sandbox_config,
+)
 
 __all__ = ["WORKFLOWS", "WorkflowResult", "batch", "main", "run_workflow", "write_table"]
 
-WORKFLOWS: dict[str, Path] = {"p0": REPO_ROOT / "workflows" / "p0_scripted" / "pipeline.py"}
+WORKFLOWS: dict[str, Path] = {
+    "p0": REPO_ROOT / "workflows" / "p0_scripted" / "pipeline.py",
+    "p1": REPO_ROOT / "workflows" / "p1_single_agent" / "agent.py",
+}
 """The workflow scripts the runner knows, by name."""
 
 REPORTS_DIR = REPO_ROOT / "reports"
@@ -70,7 +88,8 @@ class WorkflowResult:
     launch -- never from the workflow's task state, which is its self-report (the evaluation
     session, 2026-09-22, on follow-up (d) of milestone 5: rule 3 says evaluation reads logs
     only). The self-reported counts are kept beside them, so the evaluator can score a
-    misreport; ``tokens_used`` is the field an LLM workflow's runner fills.
+    misreport; ``tokens_used`` is the field an LLM workflow's runner fills, from the model
+    gateway's meter (:class:`tools.llm.ModelGateway`) on this side, never from the state.
     """
 
     run_id: str
@@ -90,6 +109,20 @@ class WorkflowResult:
     self_reported_assay_units_used: int | None = None
     self_reported_n_calls: int | None = None
     tokens_used: int | None = None
+    tokens_input: int | None = None
+    tokens_output: int | None = None
+    tokens_cache_write: int | None = None
+    tokens_cache_read: int | None = None
+    llm_turns: int | None = None
+    llm_attempts: int | None = None
+    llm_cost_usd: float | None = None
+    model_id: str | None = None
+    model_client: str | None = None
+    system_sha256: str | None = None
+    task_sha256: str | None = None
+    prompt_sha256: str | None = None
+    tools_sha256: str | None = None
+    git_commit: str | None = None
     secondary_labels: list[str] = field(default_factory=list)
     confidence: float | None = None
     flag_sensor: str | None = None
@@ -100,6 +133,7 @@ class WorkflowResult:
     fallbacks: list[str] = field(default_factory=list)
     tool_failures: list[str] = field(default_factory=list)
     state_valid: bool = False
+    output_name: str = ""
     error: str = ""
     stderr_tail: str = ""
 
@@ -128,6 +162,60 @@ def _fresh_sandbox(sandbox_root: Path | None, workflow: str) -> Path:
     return box
 
 
+def git_commit() -> str:
+    """The repository's commit, marked ``-dirty`` when the tree has changes."""
+    try:
+        head = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    return head + ("-dirty" if dirty else "")
+
+
+def p1_provenance(config: P1Config) -> dict[str, str]:
+    """What a P1 run was made of: the prompts' and the tools' fingerprints, the commit.
+
+    Written into ``summary.json`` and every ``llm_calls.jsonl`` record (the coordinator's
+    re-review of e4fc44a, 4). The tool list is the agent's own committed specification,
+    and the gateway refuses any other.
+
+    Raises:
+        ValueError: If the configuration's ``prompt_sha256`` is set and the prompts on
+            disk do not hash to it.
+    """
+    import hashlib
+
+    from workflows.p1_single_agent.agent import tool_specs
+
+    prompts = load_prompts(config)
+    return {
+        "prompt_sha256": check_prompt_hash(config),
+        "system_sha256": system_digest(prompts["system"]),
+        "task_sha256": hashlib.sha256(prompts["task"].encode("utf-8")).hexdigest(),
+        "tools_sha256": tools_digest(tool_specs()),
+        "git_commit": git_commit(),
+    }
+
+
+def live_client(config: P1Config) -> ModelClient:
+    """The provider's live client for the configuration's ``model`` block."""
+    if config.model.provider == "openai":
+        return OpenAIResponsesClient(
+            config.model, system_sha256=system_digest(load_prompts(config)["system"])
+        )
+    return AnthropicClient(config.model)
+
+
 def run_workflow(
     run_id: str,
     workflow: str = "p0",
@@ -139,6 +227,8 @@ def run_workflow(
     scenario: Scenario | None = None,
     keep_sandbox: bool = False,
     config_path: Path | None = None,
+    model_client: ModelClient | None = None,
+    output_name: str | None = None,
 ) -> WorkflowResult:
     """Run one workflow on one generated run.
 
@@ -153,7 +243,12 @@ def run_workflow(
             plus ``runner.timeout_margin_min``).
         scenario: The run's scenario, if the caller holds it (else the truth-side index).
         keep_sandbox: Leave the sandbox directory behind for inspection.
-        config_path: A different ``p0.yaml`` (tests).
+        config_path: A different workflow configuration (tests).
+        model_client: For an LLM workflow, the client its gateway calls (a test double in
+            CI); by default the provider's client from the configuration's ``model`` block.
+        output_name: The directory under ``runs/<id>/workflows/`` the outputs go to
+            (default: the workflow's name). A replay writes to its own
+            (``p1_replay``), never over the transcript it replays.
 
     Returns:
         The result; ``summary.json`` is written beside the workflow's outputs.
@@ -166,15 +261,31 @@ def run_workflow(
         raise KeyError(f"unknown workflow {workflow!r}; known: {sorted(WORKFLOWS)}")
     store = truth_store_for(runs_root) if truth_store is None else Path(truth_store)
     paths = RunPaths.for_run(run_id, runs_root, store)
-    config = load_p0() if config_path is None else load_p0(config_path)
+    config = load_workflow_config(workflow, config_path)
+    out_name = output_name or workflow
+    provenance: dict[str, str] = {}
+    if isinstance(config, P1Config):
+        provenance = p1_provenance(config)  # refuses a post-freeze prompt change
     registry = open_registry(run_id, runs_root=runs_root, truth_store=store, scenario=scenario)
     if timeout_s is None:
         timeout_s = (registry.budget.wall_clock_min + config.runner.timeout_margin_min) * 60.0
     box = _fresh_sandbox(sandbox_root, workflow)
     (box / "cwd").mkdir(exist_ok=True)
-    (box / "cwd" / "p0_config.json").write_text(
+    (box / "cwd" / f"{workflow}_config.json").write_text(
         json.dumps(sandbox_config(config), indent=1, sort_keys=True), encoding="utf-8"
     )
+    gateway: ModelGateway | None = None
+    if isinstance(config, P1Config):
+        gateway = ModelGateway(
+            settings=config.model,
+            client=model_client if model_client is not None else live_client(config),
+            log_dir=paths.root / OUTPUTS_DIR / out_name,
+            max_turns=config.loop.max_turns,
+            max_total_tokens=config.loop.max_total_tokens,
+            system_sha256=provenance["system_sha256"],
+            tools_sha256=provenance["tools_sha256"],
+            provenance=provenance,
+        )
     started = time.perf_counter()
     returncode: int | None = None
     error = ""
@@ -186,7 +297,8 @@ def run_workflow(
             sandbox=box,
             run_dir=paths.root,
             timeout_s=timeout_s,
-            workflow=workflow,
+            workflow=out_name,
+            model_gateway=gateway,
         )
         returncode, stderr = result.returncode, result.stderr
         if returncode != 0:
@@ -200,8 +312,25 @@ def run_workflow(
         wall_s = time.perf_counter() - started
         if not keep_sandbox:
             shutil.rmtree(box, ignore_errors=True)
-    summary = _summarise(paths, workflow, wall_s, returncode, error, stderr, registry=registry)
-    out_dir = paths.root / OUTPUTS_DIR / workflow
+    summary = _summarise(
+        paths, workflow, wall_s, returncode, error, stderr, registry=registry, output_name=out_name
+    )
+    if gateway is not None:
+        meter = gateway.meter
+        summary.tokens_used = meter.total
+        summary.tokens_input = meter.input
+        summary.tokens_output = meter.output
+        summary.tokens_cache_write = meter.cache_write
+        summary.tokens_cache_read = meter.cache_read
+        summary.llm_turns = meter.requests
+        summary.llm_attempts = meter.attempts
+        cost = gateway.cost_usd()
+        summary.llm_cost_usd = None if cost is None else round(cost, 6)
+        summary.model_id = gateway.settings.model_id
+        summary.model_client = gateway.client.name
+        for key, value in provenance.items():
+            setattr(summary, key, value)
+    out_dir = paths.root / OUTPUTS_DIR / out_name
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "summary.json").write_text(
         json.dumps(summary.as_dict(), indent=1, sort_keys=True) + "\n", encoding="utf-8"
@@ -218,13 +347,14 @@ def _summarise(
     stderr: str,
     *,
     registry: Registry,
+    output_name: str | None = None,
 ) -> WorkflowResult:
     """The summary of one launch: the meter's cost, the state's conclusion.
 
     The cost fields come from ``registry`` (its meter, on this side of the socket) whatever
     the state says; the state supplies the conclusion and its own counts as a self-report.
     """
-    state_path = paths.root / OUTPUTS_DIR / workflow / "state.json"
+    state_path = paths.root / OUTPUTS_DIR / (output_name or workflow) / "state.json"
     metered = registry.remaining()
     result = WorkflowResult(
         run_id=paths.root.name,
@@ -239,6 +369,7 @@ def _summarise(
         wall_clock_min_total=float(metered.wall_clock_min_total),
         n_calls=int(metered.n_calls),
         label=None,
+        output_name=output_name or workflow,
         error=error,
         stderr_tail=stderr[-2000:],
     )
@@ -372,7 +503,7 @@ def table_row(cell: dict[str, Any], paths: RunPaths, result: WorkflowResult) -> 
         "recovery": "",
     }
     # parameter recovery where scored: Levels 0-5 only, never Level 6 (§6.7 A)
-    state_path = paths.root / OUTPUTS_DIR / result.workflow / "state.json"
+    state_path = paths.root / OUTPUTS_DIR / (result.output_name or result.workflow) / "state.json"
     if scenario.level <= 5 and state_path.is_file() and result.state_valid:
         state = TaskState.model_validate_json(state_path.read_text(encoding="utf-8"))
         truth = _truth_multipliers(paths)
@@ -426,10 +557,13 @@ def batch(
     table: Path | None,
     sandbox_root: Path | None = None,
     keep_sandbox: bool = False,
+    model_client_factory: Any = None,
+    output_name: str | None = None,
 ) -> list[dict[str, Any]]:
     """Run the workflow on every cell, writing the table after each.
 
-    A stopped batch keeps the rows it wrote.
+    A stopped batch keeps the rows it wrote. ``model_client_factory(run_id)``, for an LLM
+    workflow, gives each cell its model client (default: the provider's live client).
     """
     rows = []
     for cell in cells:
@@ -448,6 +582,8 @@ def batch(
                 sandbox_root=sandbox_root,
                 scenario=cell["scenario"],
                 keep_sandbox=keep_sandbox,
+                model_client=None if model_client_factory is None else model_client_factory(run_id),
+                output_name=output_name,
             )
         except SandboxError as exc:
             print(f"  SANDBOX ERROR: {exc}", flush=True)
@@ -484,7 +620,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--table", type=Path, default=None, help="CSV to write rows to")
     parser.add_argument("--keep-sandbox", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--replay",
+        type=Path,
+        default=None,
+        help="an LLM workflow's llm_calls.jsonl to replay instead of calling the model "
+        "(one --run only)",
+    )
     args = parser.parse_args(argv)
+    if args.replay is not None and (not args.run or len(args.run) != 1):
+        parser.error("--replay replays one run: give exactly one --run")
 
     runs_root = Path(args.runs_root)
     store = truth_store_for(runs_root) if args.truth_store is None else Path(args.truth_store)
@@ -510,7 +655,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     table = args.table
     if table is None:
-        table = REPORTS_DIR / f"{args.workflow}_pilot.csv"
+        # a replay writes its own table, never over the live run's row (the coordinator's
+        # re-review of PR #26, 3)
+        suffix = "replay" if args.replay is not None else "pilot"
+        table = REPORTS_DIR / f"{args.workflow}_{suffix}.csv"
     rows = batch(
         cells,
         args.workflow,
@@ -519,6 +667,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         table=table,
         sandbox_root=args.sandbox_root,
         keep_sandbox=args.keep_sandbox,
+        model_client_factory=(
+            None if args.replay is None else (lambda _run_id: RecordedClient(args.replay))
+        ),
+        output_name=None if args.replay is None else f"{args.workflow}_replay",
     )
     done = sum(1 for r in rows if r["completed"])
     print(f"{done}/{len(rows)} cells completed; table at {table}")
