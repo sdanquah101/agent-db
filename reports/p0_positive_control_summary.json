@@ -1,0 +1,24 @@
+{
+ "method": "docs/positive_control.md \u00a75 and \u00a79",
+ "rungs": {
+  "R1x3": {
+   "parameter_moves": 0,
+   "sensor_state_moves": 0,
+   "timing_moves_not_counted": 0,
+   "cells_run": [
+    10,
+    4
+   ],
+   "verdict": "fail"
+  },
+  "R3": {
+   "mechanical_check": "8 of 10",
+   "moves": 4,
+   "moves_exact": 0,
+   "moves_recovery": 4,
+   "timing_moves_not_counted": 2,
+   "cells_run": 10,
+   "verdict": "not run: forced parameters fitted on 8 of 10"
+  }
+ }
+}
