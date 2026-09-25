@@ -51,13 +51,47 @@ way when named explicitly.
   the fraction beside it. `abstention_applicable` marks a structural or compound truth;
   a run with `abstain_on` outside that set (S8-01's `posterior_intervals`) is scored and
   flagged. Names must match exactly: the answer key's vocabulary and the workflow's are a
-  shared contract (`scenarios/*.yaml` `abstain_on` vs `docs/p0_design.md` §3.8).
+  shared contract (`configs/abstentions.yaml`, ruling A3).
+- **Earned abstentions** (the lead's ruling D2, 2026-09-24; tightened after the review of
+  PR #24). A term listed under `earned_abstentions` in `eval.yaml` counts as declined only
+  when the run's **logs** show the failure it rests on. Today the only such term is
+  `posterior_intervals`, and it works as follows:
+  - The evidence is the last logged `bayes_mcmc` call that ran. A budget refusal runs
+    nothing, so it is not that call.
+  - That call failed if its outcome, on the visible or the truth-side line, is `error`
+    or `injected_failure`, or if its line's `detail` is `not_converged`.
+  - The registry writes `not_converged` into the detail of an `ok` line whose result
+    reports `converged=False`. It writes the same note on the visible line of an injected
+    failure, so that line cannot be told from a genuine one.
+  - The workflow's own `tool_failures` are never evidence.
+  - These earn nothing: a plan-level skip (no sampler call); a converged last call; an
+    error followed by a converged call, since a posterior then exists.
+
+  S8-01's answer key is unchanged: declining the posterior after the sampler failed *is*
+  the correct conclusion, and the ruling makes the credit earned.
+- **Over-abstention** (the lead's ruling D1, 2026-09-24). `abstention_correct` is
+  unchanged. Beside it, on every run with a state:
+  - `abstention_extra`, the count of declared abstentions outside `abstain_on`;
+  - `abstention_precision`, the declared terms that are in `abstain_on` **and credited**,
+    divided by all declared terms, or null when nothing is declared. The numerator counts
+    credited terms, not merely declared ones, so an unearned `posterior_intervals` gives
+    precision 0 with extra 0.
+
+  A run that declines every vocabulary term scores `abstention_correct` True with
+  precision near 0 and a large extra count. The aggregate reports both columns as means
+  per cell.
 - **Unsupported claims** (`unsupported_claim_rate`): the claims are the evidence items of
   the structured classification (`classification.evidence`). An item is unsupported when
   it names no call, when a named `call_index` does not map through `actions` to a visible
   log line with the same name and argument hash and outcome `ok`, or when none of the
   resolved calls is a tool that returns the claimed quantity (`claim_sources` in
-  `eval.yaml`: by the item's value keys, by its rule where no key is mapped). An item
+  `eval.yaml`: by the item's value keys, by its rule where no key is mapped).
+  **"Returns the claimed quantity" means the call the number rests on** (the lead's ruling
+  D3, 2026-09-24): the call whose output the number is computed from, not only a call
+  that returned the number verbatim. For example, P0's `bias_z` and `step_z` are its own
+  arithmetic on `residual_diag`'s residual series, so they rest on `residual_diag` and
+  on the prediction the residual was taken against. P1 and P2 are held to the same
+  definition. An item
   whose value keys **and** rule are all unregistered in `claim_sources` cannot be checked
   against "returned the claimed quantity" and scores as `unmapped_claim` declares —
   unsupported by default (the conservative reading of Appendix A; PR #19 review, B2).

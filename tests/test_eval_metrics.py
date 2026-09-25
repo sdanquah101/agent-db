@@ -214,6 +214,19 @@ def test_correct_abstention_is_binary_and_from_the_structured_state(scorer, tmp_
     key8 = {"abstain_on": ["posterior_intervals"]}
     build_run(root, truth_label=("sensor",), level=8, correct_conclusion=key8, state=state)
     row, _ = _score(scorer, root)
+    # scored and flagged; since the lead's ruling D2 (2026-09-24) the credit must be earned:
+    # no bayes_mcmc call is logged here, so the declined posterior earns nothing
+    assert row["abstention_applicable"] is False and row["abstention_correct"] is False
+
+    root = tmp_path / "level8_earned"  # the same, after a logged sampler call that failed
+    calls = [{"name": "bayes_mcmc", "args": {"walkers": 4}, "outcome": "injected_failure"}]
+    state = _state_with_calls(
+        root, "run_000000000001", calls, final={"abstentions": ["posterior_intervals"]}
+    )
+    build_run(
+        root, truth_label=("sensor",), level=8, correct_conclusion=key8, state=state, calls=calls
+    )
+    row, _ = _score(scorer, root)
     assert row["abstention_applicable"] is False and row["abstention_correct"] is True
 
 

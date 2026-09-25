@@ -50,6 +50,7 @@ from tools.models import (
 from tools.schemas import RemainingBudget, ToolInput, ToolOutput
 
 __all__ = [
+    "NOT_CONVERGED",
     "Budget",
     "BudgetExceededError",
     "CallOutcome",
@@ -62,6 +63,9 @@ __all__ = [
     "UnknownToolError",
     "stream_key",
 ]
+
+NOT_CONVERGED = "not_converged"
+"""The ``detail`` of an ``ok`` log line whose result reports ``converged=False``."""
 
 
 class ToolError(Exception):
@@ -476,7 +480,11 @@ class Registry:
                     charged(),
                 )
                 raise ToolError(f"{name}: {exc}") from exc
-            self._log(name, version, hashed, started, "injected_failure", "", charged())
+            # the same note a genuine non-convergence gets, so the visible line of an
+            # injected failure cannot be told from a real one (the truth side keeps
+            # `injected_failure` as its outcome)
+            note = NOT_CONVERGED if getattr(output, "converged", None) is False else ""
+            self._log(name, version, hashed, started, "injected_failure", note, charged())
             return output
 
         try:
@@ -499,7 +507,12 @@ class Registry:
         if spec.assay_cost is not None:
             units = int(spec.assay_cost(inp, context))
             self._assay_units_used += units
-        self._log(name, version, hashed, started, "ok", "", charged(), units)
+        # a result that says it did not converge is recorded as such on its log line, so
+        # the evaluator can tell a failed sampler from a delivered posterior by the log
+        # alone (the lead's ruling D2, 2026-09-24); the outcome stays `ok` (the tool ran
+        # and returned), and the workflow is told nothing it does not already see
+        note = NOT_CONVERGED if getattr(output, "converged", None) is False else ""
+        self._log(name, version, hashed, started, "ok", note, charged(), units)
         return output
 
     def call_json(self, name: str, args: Mapping[str, Any]) -> dict[str, Any]:
