@@ -349,10 +349,45 @@ def test_one_short_cell_end_to_end(tiny_cell, monkeypatch, tmp_path: Path):
     assert doc["n_admissible"] == len(doc["admissible_set"]) and doc["truth_representable"]
     assert doc["classes"]["sensor"]["n_candidates"] > 1
     # precipitation cannot be switched off without a change under sim/ (declared)
-    assert doc["classes"]["structural"]["n_candidates"] == 3
+    structural = doc["classes"]["structural"]
+    hidden = structural["knobs"].get("not_visible", [])
+    assert structural["n_candidates"] + len(hidden) == 3 or structural["score"] is None
+    assert all(h["visibility"] < CFG.structural_min_visibility for h in hidden)
     assert set(doc["structural_not_offered"]) == {"precipitation"}
     assert doc["simulation_failures"] == []
     # the simulations are kept: a second analysis integrates nothing
     again = analyse_pair(runs, scenario=scenario, cache_dir=tmp_path / "cache", log=str)
     assert again[run.run_id]["simulations_pair"] == 0
     assert again[run.run_id]["admissible_set"] == doc["admissible_set"]
+
+
+def test_an_invisible_structural_candidate_is_left_out():
+    """An alternative that moves the record by less than the noise is no alternative."""
+    from distinguish.analysis import _best_ode
+
+    t = np.arange(0.0, 50.0)
+    mu = np.full(t.size, 10.0)
+    s = _series(t, mu.copy(), 0.1)
+    prepare([s], {"gas_flow": mu})
+
+    class _Ch:
+        def __init__(self, shift: float) -> None:
+            self.t, self.v = t, mu + shift
+
+        def __getitem__(self, name: str) -> np.ndarray:
+            return self.v
+
+    class _Sim:
+        def run(self, faults: Any, extensions: Any = None) -> Any:
+            return _Ch({"a": 1e-6, "b": 0.5}[extensions[0]])
+
+    options = [
+        {"form": "extension off", "group": (x,), "k": 0, "faults": [], "base": [],
+         "extensions": (x,), "extension_off": x}
+        for x in ("a", "b")
+    ]  # fmt: skip
+    fit = _best_ode("structural", options, _Sim(), [s], 0.0, mu_ref={"gas_flow": mu},
+                    min_visible=1.0)  # fmt: skip
+    assert fit.n_candidates == 1 and fit.knobs["extension_off"] == "b"
+    assert [h["extension_off"] for h in fit.knobs["not_visible"]] == ["a"]
+    assert math.isfinite(fit.deviance)

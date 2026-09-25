@@ -5967,6 +5967,22 @@ How the session implemented it. Each choice is the smallest that meets the decis
 - **Compute.** About 100 simulations per 200-d pair and 165 per 365-d pair, shared by the
   tiers, at 13–14 s each. The fits are closed-form or grid look-ups. Every simulation is
   kept in a cache, so a re-analysis integrates nothing.
+- **The re-review of 28368fa (relayed ~08:05 UTC) passed on the cells it reproduced,**
+  and asked for four things before the sweep. Done:
+  - **The S5 check is committed** (`reports/p0_distinguishability_check.{csv,json}`).
+    `parameter` is admissible, and alone, on S5-01 A at all three tiers. On S5-02 B
+    and C (six cells) it is not: even the exact truth gains only about 4 in deviance
+    over `none` by day 150, 30 days after the onset.
+  - **§6 now carries measured figures,** both this session's and the reviewer's. The
+    plan is 19–32 runner-hours.
+  - **Structural candidates must be visible.** `sao` off moved Plant C's channels by
+    about 1e-6 relative and tied `none`. A structural candidate now enters the search,
+    and its *N*, only if it moves the visible record by at least 1 (the whitened squared
+    distance from the reference). Otherwise it is named in `not_visible`.
+    - *Alternative:* keep it and declare it. Rejected: an invisible alternative is a
+      free structural explanation of every clean record.
+  - **S2-02's off-grid window is declared** as part of the optimistic bound. The grid
+    alone also wins there, by 37.7 and 36.6.
 - **The order (item 4).** No sweep until `none` is admissible on all six Level-0 cells,
   and the truth's class on S2-03 C/B, S2-02 C/B and one S5 cell. The results and the
   time per cell are reported in the PR.

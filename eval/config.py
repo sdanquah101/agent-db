@@ -131,6 +131,7 @@ class DistinguishabilityConfig(_Frozen):
     biomass_multipliers: tuple[float, ...]
     parameter_onset_every_d: Annotated[float, Field(gt=0.0)]
     parameter_multipliers: tuple[float, ...]
+    structural_min_visibility: Annotated[float, Field(ge=0.0)]
 
 
 class EvalConfig(_Frozen):

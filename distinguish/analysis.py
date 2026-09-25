@@ -65,6 +65,7 @@ __all__ = [
     "sensor_candidates",
     "sensor_deviance",
     "truth_representable",
+    "visibility",
 ]
 
 METHOD_VERSION = 4
@@ -729,50 +730,90 @@ def class_limited(faults: Sequence[Mapping[str, Any]]) -> list[str]:
     return truth_representable(faults)[1]
 
 
+def visibility(
+    record: Sequence[SensorData], mu: Mapping[str, np.ndarray], mu_ref: Mapping[str, np.ndarray]
+) -> float:
+    """How far a prediction moves the visible record from the reference, in noise units.
+
+    The whitened squared distance ``sum |L^-1 (mu - mu_ref)|^2`` over the kept samples,
+    with the reference covariance: the most deviance the candidate could gain over the
+    reference on any record.
+    """
+    total = 0.0
+    for s in record:
+        w = whiten(s, mu[s.sensor] - mu_ref[s.sensor])
+        total += float(w @ w) if np.all(np.isfinite(w)) else float("inf")
+    return total
+
+
 def _best_ode(
     label: str,
     options: Sequence[dict[str, Any]],
     sim: TruthSimulator,
     record: Sequence[SensorData],
     flags0: float,
-    extensions: Sequence[str] | None = None,
+    *,
+    mu_ref: Mapping[str, np.ndarray] | None = None,
+    min_visible: float | None = None,
 ) -> Candidate:
-    """The best candidate of a simulated class; N counts the class's groups."""
-    groups = {tuple(o["group"]) for o in options}
-    n = max(len(groups), 1)
-    best: Candidate | None = None
-    failed = 0
+    """The best candidate of a simulated class; N counts the class's groups.
+
+    With ``min_visible``, a candidate that moves the visible record by less than that
+    (:func:`visibility`) is not a distinguishable alternative: it is left out of the
+    search, and out of N, and named in the class's knobs.
+    """
+    scored: list[tuple[dict[str, Any], dict[str, float]]] = []
+    failed, invisible = 0, []
     for o in options:
-        ch = sim.run([*o["base"], *o["faults"]], o.get("extensions", extensions))
+        ch = sim.run([*o["base"], *o["faults"]], o.get("extensions"))
         if ch is None:
             failed += 1
             continue
-        per = gaussian_terms(record, predict(ch, record))
-        dev = sum(per.values()) + flags0
+        mu = predict(ch, record)
+        if min_visible is not None and mu_ref is not None:
+            v = visibility(record, mu, mu_ref)
+            if v < min_visible:
+                invisible.append({"form": o["form"], **_describe(o), "visibility": v})
+                continue
+        scored.append((o, gaussian_terms(record, mu)))
+    n = max(len({tuple(o["group"]) for o, _ in scored}), 1)
+    best: Candidate | None = None
+    for o, per in scored:
         c = Candidate(
             label,
-            dev,
+            sum(per.values()) + flags0,
             int(o["k"]),
             n_candidates=n,
             per_sensor=per,
-            knobs={
-                "form": o["form"],
-                **(
-                    {"faults": [f.model_dump(mode="json") for f in o["faults"]]}
-                    if o["faults"]
-                    else {}
-                ),
-                **({"extension_off": o["extension_off"]} if "extension_off" in o else {}),
-            },
+            knobs={"form": o["form"], **_describe(o)},
         )
         if best is None or c.score < best.score:
             best = c
     if best is None:
-        return Candidate(label, float("inf"), 0, n_candidates=n, note="every candidate failed")
+        note = (
+            "no candidate moves the visible record beyond the noise"
+            if invisible and not failed
+            else "every candidate failed"
+        )
+        best = Candidate(label, float("inf"), 0, n_candidates=n, note=note)
     best.failed = failed
+    notes = [best.note] if best.note else []
     if failed:
-        best.note = f"{failed} of {len(options)} candidate simulations failed"
+        notes.append(f"{failed} of {len(options)} candidate simulations failed")
+    if invisible:
+        best.knobs["not_visible"] = invisible
+        notes.append(f"{len(invisible)} candidate(s) below the visibility threshold")
+    best.note = "; ".join(dict.fromkeys(notes))
     return best
+
+
+def _describe(o: Mapping[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    if o["faults"]:
+        out["faults"] = [f.model_dump(mode="json") for f in o["faults"]]
+    if "extension_off" in o:
+        out["extension_off"] = o["extension_off"]
+    return out
 
 
 def _finite(x: float) -> float | None:
@@ -892,7 +933,15 @@ def analyse_pair(
         fits["sensor"] = sensor_candidates(record, mu0, flags, onsets, windows)
         for label in ("influent", "state", "parameter"):
             fits[label] = _best_ode(label, ode[label], sim, record, flags0)
-        fits["structural"] = _best_ode("structural", structural, sim, record, flags0)
+        fits["structural"] = _best_ode(
+            "structural",
+            structural,
+            sim,
+            record,
+            flags0,
+            mu_ref=mu0,
+            min_visible=float(cfg.structural_min_visibility),
+        )
 
         # the truth class's own candidate, scored alone: the reproducibility check of the
         # upper bound (on a Level-0 cell it is `none`)

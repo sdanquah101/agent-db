@@ -152,6 +152,10 @@ distinguishability:
   biomass_multipliers: [0.1, 0.25, 0.5, 2.0, 4.0]   # DESIGN  on every biomass state at t = 0
   parameter_onset_every_d: 40.0           # DESIGN  d; change points (0 = from the start)
   parameter_multipliers: [0.2, 0.5, 2.0, 5.0]        # DESIGN  on K_I_nh3, or on k_hyd_*
+  # A structural candidate (an extension switched off) that moves the visible record by
+  # less than this, as the whitened squared distance from the reference, is not a
+  # distinguishable alternative and is left out of the class's search (and its N).
+  structural_min_visibility: 1.0   # DESIGN  noise units (chi2 scale)
 
 # ---------------------------------------------------------------- family C: efficiency
 efficiency:

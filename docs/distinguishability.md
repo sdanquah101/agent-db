@@ -54,13 +54,19 @@ operator exactly as a scenario applies them:
 | `influent` | an unrecorded delivery (every 20 d; 1, 3 or 10 median deliveries); a fractionation redraw (`feed_mislabelled`; onset every 40 d, 30 or 60 d, concentration 5 or 50); a solids ramp (`moisture_drift`; onset every 40 d, 60 or 150 d, ±30 %) | the magnitude, on its grid (*k* = 1) | every (form, onset[, duration]) |
 | `state` | every biomass state at t = 0 × 0.1, 0.25, 0.5, 2 or 4 (`biomass_misinitialised`) | the multiplier, on its grid (*k* = 1) | 1 |
 | `parameter` | a change point on `K_I_nh3`, or on the three `k_hyd`, from an onset every 40 d (0 = from the start), × 0.2, 0.5, 2 or 5 | the multiplier, on its grid (*k* = 1) | every (group, onset) |
-| `structural` | one truth extension switched off: `sao`, `ionic_strength` or `carbonate` (§2.1) | none (*k* = 0) | 3 |
+| `structural` | one truth extension switched off: `sao`, `ionic_strength` or `carbonate` (§2.1), if it moves the visible record by at least the noise (§2.2) | none (*k* = 0) | the visible ones, at most 3 |
 
 The grids are in `configs/eval.yaml` (`distinguishability`).
 
 **The truth's own fault is always a candidate of its class,** with its true onset,
 duration and magnitude, and for a fractionation redraw its own seed. That makes the
 bound optimistic: the truth class always contains the exact truth.
+- **S2-02, for example.** The sensor class won with the injected flatline's own window,
+  [90, 96]. That window is off the grid, whose windows run 2, 4, 8 or 16 d from an
+  onset every 10 d. It is part of the optimistic bound.
+- **The grid alone also wins there.** Its best candidate is [90, 94] (the flags of
+  days 94 and 95 left unexplained). It still beats every other class by 37.7 on C/B and
+  36.6 on C/C, against 65.3 and 64.2 with the truth's own window.
 
 A candidate whose onset falls after the calibration window changes nothing the analysis
 reads, and is not generated. A magnitude fitted on a grid is at best as good as the
@@ -78,6 +84,21 @@ only the enabled extensions' states. The fourth, **`precipitation`, cannot**:
   `structural_not_offered`.
 - No Level 0–5 truth is structural, so no cell's truth is affected. Only the structural
   class's reach as an alternative is.
+
+### 2.2 A structural candidate must be visible
+
+An extension switched off can leave the record all but unchanged. `sao` off moves Plant
+C's channels by about 1e-6 relative, so it ties `none` and would count as a structural
+explanation of any clean record.
+- **The test.** A structural candidate enters the class's search, and its *N*, only
+  if it moves the visible record by at least `structural_min_visibility` (1, in noise
+  units). That is the whitened squared distance between its prediction and the
+  reference, over the tier's kept samples, and the most deviance it could gain over the
+  reference on any record.
+- **What is reported.** The candidates left out are named, with their distance, in
+  the class's `not_visible`.
+- **When none is left.** The class has no alternative on that tier and is not
+  admissible.
 
 **What no class represents.** The likelihood does not model which samples are missing.
 So `informative_missingness` (S4-02) is **not representable**. Its admissible score is
@@ -198,8 +219,22 @@ closed-form or grid look-ups, so they cost seconds per tier.
 - **Per pair.** On a 200-d cell a pair takes about 100 simulations. A 365-d Plant A
   cell takes about 165, because the grids cover a longer calibration window. The 32
   pairs of Levels 0–5 come to about 3,400 simulations.
-- **Timing.** Measured at 13–14 s each (200 d), that is about PLAN runner-hours, well
-  within one sweep (~100 runner-hours).
+- **Timing, measured on the check pairs.** These ran beside the three processes of the
+  positive-control ladder on four cores.
+  - A 200-d pair took 1,277–1,361 s for 97–98 simulations, that is 13.0–13.9 s per
+    simulation and about 22 min per pair (six pairs).
+  - S5-01 on Plant A took 3,760 s for 164 simulations, 22.9 s each and 63 min for the
+    pair.
+  - The fits add seconds per tier, and up to 7 min on a Tier-C Plant A cell (14
+    sensors, each candidate scored with its own covariance).
+- **The plan.** 22 pairs of 200 d and 10 of Plant A (365 d).
+  - **At the rates measured here,** that is 22 × 22 min + 10 × 63 min ≈ **19
+    runner-hours**.
+  - **At the independent reviewer's measured rate,** about 24 s per simulation and
+    38 min per 200-d pair, scaled for Plant A, it is about 22 × 38 min + 10 × 110 min ≈
+    **32 runner-hours**.
+  - Either is well within one sweep (~100 runner-hours). The seven check pairs are
+    already cached, which leaves 25.
 - **Caching and failures.** `--cache-dir` keeps every simulation, so a re-analysis
   integrates nothing. Every simulation has a 180 s timeout. A candidate that times out
   or that the simulator refuses is reported (`simulation_failures`) and is not scored.
