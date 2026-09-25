@@ -54,12 +54,19 @@ from tools.llm import (
     OpenAIResponsesClient,
     RecordedClient,
     system_digest,
+    tools_digest,
 )
 from tools.privileged import SCENARIOS_DIR, open_registry
 from tools.registry import Registry
 from tools.sandbox import REPO_ROOT, SandboxError, launch
 from tools.server import OUTPUTS_DIR
-from tools.workflow_config import P1Config, load_prompts, load_workflow_config, sandbox_config
+from tools.workflow_config import (
+    P1Config,
+    check_prompt_hash,
+    load_prompts,
+    load_workflow_config,
+    sandbox_config,
+)
 
 __all__ = ["WORKFLOWS", "WorkflowResult", "batch", "main", "run_workflow", "write_table"]
 
@@ -111,6 +118,11 @@ class WorkflowResult:
     llm_cost_usd: float | None = None
     model_id: str | None = None
     model_client: str | None = None
+    system_sha256: str | None = None
+    task_sha256: str | None = None
+    prompt_sha256: str | None = None
+    tools_sha256: str | None = None
+    git_commit: str | None = None
     secondary_labels: list[str] = field(default_factory=list)
     confidence: float | None = None
     flag_sensor: str | None = None
@@ -148,6 +160,51 @@ def _fresh_sandbox(sandbox_root: Path | None, workflow: str) -> Path:
             f"sandbox root {box.parent} is too deep for a Unix socket path; give a shorter one"
         )
     return box
+
+
+def git_commit() -> str:
+    """The repository's commit, marked ``-dirty`` when the tree has changes."""
+    try:
+        head = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    return head + ("-dirty" if dirty else "")
+
+
+def p1_provenance(config: P1Config) -> dict[str, str]:
+    """What a P1 run was made of: the prompts' and the tools' fingerprints, the commit.
+
+    Written into ``summary.json`` and every ``llm_calls.jsonl`` record (the coordinator's
+    re-review of e4fc44a, 4). The tool list is the agent's own committed specification,
+    and the gateway refuses any other.
+
+    Raises:
+        ValueError: If the configuration's ``prompt_sha256`` is set and the prompts on
+            disk do not hash to it.
+    """
+    import hashlib
+
+    from workflows.p1_single_agent.agent import tool_specs
+
+    prompts = load_prompts(config)
+    return {
+        "prompt_sha256": check_prompt_hash(config),
+        "system_sha256": system_digest(prompts["system"]),
+        "task_sha256": hashlib.sha256(prompts["task"].encode("utf-8")).hexdigest(),
+        "tools_sha256": tools_digest(tool_specs()),
+        "git_commit": git_commit(),
+    }
 
 
 def live_client(config: P1Config) -> ModelClient:
@@ -206,6 +263,9 @@ def run_workflow(
     paths = RunPaths.for_run(run_id, runs_root, store)
     config = load_workflow_config(workflow, config_path)
     out_name = output_name or workflow
+    provenance: dict[str, str] = {}
+    if isinstance(config, P1Config):
+        provenance = p1_provenance(config)  # refuses a post-freeze prompt change
     registry = open_registry(run_id, runs_root=runs_root, truth_store=store, scenario=scenario)
     if timeout_s is None:
         timeout_s = (registry.budget.wall_clock_min + config.runner.timeout_margin_min) * 60.0
@@ -222,7 +282,9 @@ def run_workflow(
             log_dir=paths.root / OUTPUTS_DIR / out_name,
             max_turns=config.loop.max_turns,
             max_total_tokens=config.loop.max_total_tokens,
-            system_sha256=system_digest(load_prompts(config)["system"]),
+            system_sha256=provenance["system_sha256"],
+            tools_sha256=provenance["tools_sha256"],
+            provenance=provenance,
         )
     started = time.perf_counter()
     returncode: int | None = None
@@ -266,6 +328,8 @@ def run_workflow(
         summary.llm_cost_usd = None if cost is None else round(cost, 6)
         summary.model_id = gateway.settings.model_id
         summary.model_client = gateway.client.name
+        for key, value in provenance.items():
+            setattr(summary, key, value)
     out_dir = paths.root / OUTPUTS_DIR / out_name
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "summary.json").write_text(

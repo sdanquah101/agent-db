@@ -56,6 +56,15 @@ _STATUSES = ("ok", "quarantined", "excluded", "flagged")
 _METHODS = ("posterior", "profile", "fisher", "none")
 
 
+def visible_notes(notes: list[dict[str, Any]], cal_end: float) -> list[dict[str, Any]]:
+    """The operator's notes of the calibration window only.
+
+    A note from a hold-out day is part of the hold-out record (the coordinator's ruling of
+    2026-09-25, re-review 3).
+    """
+    return [n for n in notes if float(n.get("day", 0)) <= cal_end]
+
+
 class ActionError(Exception):
     """An action the harness refuses before it reaches the registry."""
 
@@ -661,7 +670,8 @@ class Workspace:
         }
         self.feed_log = tools.run.feed_log()
         self.feed_assays = tools.run.feed_assays()
-        self.notes = tools.run.operator_notes()
+        self._all_notes = tools.run.operator_notes()
+        self.notes = visible_notes(self._all_notes, self.cal[1])
         desc, _ = self.rec.call("read", "describe_model", model=MODEL)
         self.params = list(desc.parameter_names)
         self.lower = {n: float(v) for n, v in zip(desc.parameter_names, desc.lower, strict=True)}
@@ -971,8 +981,12 @@ class Workspace:
         if not 0.0 < float(quantile) < 1.0:
             raise ActionError("event_load_quantile must lie in (0, 1)")
         loads = self.need_loads(step)
-        load = np.asarray(loads.cod_kg_d, dtype=float)
-        t = np.asarray(loads.t, dtype=float)
+        t_all = np.asarray(loads.t, dtype=float)
+        keep = t_all <= self.cal[1]
+        load = np.asarray(loads.cod_kg_d, dtype=float)[keep]
+        t = t_all[keep]
+        if not load.size:
+            return []
         high = load > np.quantile(load, float(quantile))
         windows, i = [], 0
         while i < high.size:
@@ -980,19 +994,28 @@ class Workspace:
                 j = i
                 while j + 1 < high.size and high[j + 1]:
                     j += 1
-                windows.append({"start": float(t[i]), "end": float(t[j]) + 1.0})
+                end = min(float(t[j]) + 1.0, self.cal[1])
+                if end > float(t[i]):
+                    windows.append({"start": float(t[i]), "end": end})
                 i = j + 1
             else:
                 i += 1
         return windows
 
     def t_qc(self, inp: dict[str, Any]) -> dict[str, Any]:
-        """Quality checks over the whole record (as P0: QC reads every sample)."""
+        """Quality checks on the calibration window.
+
+        The hold-out record is not the agent's to read (the coordinator's ruling of
+        2026-09-25); P0's QC reads the whole record.
+        """
         names = inp.get("sensors") or sorted(self.series)
         chosen = [self.sensor(n) for n in names]
         q = inp.get("event_load_quantile", self.cfg["defaults"]["event_load_quantile"])
         windows = self.event_windows(q, "data_qc")
-        payload = [{"name": s.name, "t": s.t, "value": s.value, "unit": s.unit} for s in chosen]
+        payload = []
+        for s in chosen:
+            m = s.mask(self.cal)
+            payload.append({"name": s.name, "t": s.t[m], "value": s.value[m], "unit": s.unit})
         out, index = self.rec.call("data_qc", "data_qc", series=payload, event_windows=windows)
         for r in out.results:
             if r.name in self.series:
@@ -1009,34 +1032,42 @@ class Workspace:
         return self._out(index, out.model_dump(mode="json"))
 
     def t_balance(self, inp: dict[str, Any]) -> dict[str, Any]:
-        """COD, N and charge closure over the whole record."""
-        width = float(inp.get("window_d", self.cfg["defaults"]["balance_window_d"]))
-        if not 1.0 <= width <= self.T:
-            raise ActionError(f"window_d must lie in [1, {self.T}] d")
-        windows, start = [], 0.0
-        while start + width <= self.T + 1e-9:
+        """COD, N and charge closure over the calibration window.
+
+        The coordinator's ruling of 2026-09-25; P0's balance reads the whole record.
+        """
+        end_d = self.cal[1]
+        # the declared default, capped to the calibration window on a short record
+        default = min(float(self.cfg["defaults"]["balance_window_d"]), end_d - self.cal[0])
+        width = float(inp.get("window_d", default))
+        if not 1.0 <= width <= end_d:
+            raise ActionError(f"window_d must lie in [1, {end_d:g}] d (the calibration window)")
+        windows, start = [], self.cal[0]
+        while start + width <= end_d + 1e-9:
             windows.append({"start": start, "end": start + width})
             start += width
         loads = self.need_loads("mass_balance")
         geometry = self.cfg["plant_geometry"][str(self.manifest["plant"])]
         temp = self.series.get("temperature")
         t_op = float(geometry["T_op_K"])
-        if temp is not None and np.isfinite(temp.value).any():
-            t_op = float(np.nanmean(temp.value))
+        if temp is not None and np.isfinite(temp.value[temp.mask(self.cal)]).any():
+            t_op = float(np.nanmean(temp.value[temp.mask(self.cal)]))
+        lt = np.asarray(loads.t, dtype=float)
+        lk = lt <= end_d
 
         def obs(name: str) -> dict[str, Any] | None:
             s = self.series.get(name)
-            return None if s is None else s.observed(None)
+            return None if s is None else s.observed(self.cal)
 
         out, index = self.rec.call(
             "mass_balance",
             "mass_balance",
             windows=windows,
-            t=np.asarray(loads.t),
-            q_in_m3_d=np.asarray(loads.q_m3_d),
-            cod_in_kg_d=np.asarray(loads.cod_kg_d),
-            tkn_in_kg_n_d=np.asarray(loads.tkn_kg_n_d),
-            charge_in_keq_d=np.asarray(loads.charge_keq_d),
+            t=lt[lk],
+            q_in_m3_d=np.asarray(loads.q_m3_d)[lk],
+            cod_in_kg_d=np.asarray(loads.cod_kg_d)[lk],
+            tkn_in_kg_n_d=np.asarray(loads.tkn_kg_n_d)[lk],
+            charge_in_keq_d=np.asarray(loads.charge_keq_d)[lk],
             gas_flow=obs("gas_flow"),
             ch4_fraction=obs("ch4_fraction"),
             cod_out=obs("cod_total"),
@@ -1711,8 +1742,11 @@ class Workspace:
         - fisher: a fit's optimum +/- z sd (its covariance is the Fisher information at
           the optimum, P0's intervals) or a Fisher call's point +/- z CRLB sd, clipped to
           the bounds, where that sd is finite;
-        - none: an estimate some call used or returned (1.0 the default, a fit's optimum,
-          a sampler's mean or median, a simulate's multiplier), with no interval.
+        - fisher from a Fisher call: only at a point this run estimated (a fit optimum or
+          a converged sampler's mean or median);
+        - none: an estimate a call of this run estimated (a fit's optimum, a converged
+          sampler's mean or median), with no interval; never a simulate input or the
+          default.
         """
         out: list[tuple[list[float], Any, Any]] = []
         if method == "posterior":
@@ -1741,29 +1775,42 @@ class Workspace:
                     iv = self.fisher_interval(name, theta, list(fit.sd)[i])
                     if iv is not None:
                         out.append(([theta], iv[0], iv[1]))
+            estimated = self.estimated_points(name)
             for index, fisher in self.fishers.items():
                 if name in fisher.parameters:
                     i = list(fisher.parameters).index(name)
                     point = float(self.fisher_at.get(index, {}).get(name, 1.0))
+                    # a Fisher call's interval backs an estimate only at a point this run
+                    # estimated, never at one the agent chose (the re-review of e4fc44a, 2)
+                    if not any(self._close(point, x) for x in estimated):
+                        continue
                     iv = self.fisher_interval(name, point, list(fisher.crlb_sd)[i])
                     if iv is not None:
                         out.append(([point], iv[0], iv[1]))
         else:
-            ests = [1.0]
-            for fit in self.fits.values():
-                if name in fit.parameters:
-                    ests.append(float(list(fit.theta)[list(fit.parameters).index(name)]))
-            for post in self.posteriors.values():
-                if name in post.parameters:
-                    i = list(post.parameters).index(name)
-                    ests.append(float(list(post.mean)[i]))
-                    q50 = dict(post.quantiles).get("q50")
-                    if q50 is not None:
-                        ests.append(float(list(q50)[i]))
-            for used in self.sim_params.values():
-                if name in used:
-                    ests.append(float(used[name]))
-            out.append((ests, None, None))
+            estimated = self.estimated_points(name)
+            if estimated:
+                out.append((estimated, None, None))
+        return out
+
+    def estimated_points(self, name: str) -> list[float]:
+        """The values an estimator of this run returned for ``name``.
+
+        These are a fit's optimum and a converged sampler's mean or median. They exclude
+        a simulate's input and the default: an estimate is what a call estimated, never
+        a value the agent chose (the re-review of e4fc44a, 2).
+        """
+        out: list[float] = []
+        for fit in self.fits.values():
+            if name in fit.parameters:
+                out.append(float(list(fit.theta)[list(fit.parameters).index(name)]))
+        for post in self.posteriors.values():
+            if post.converged and name in post.parameters:
+                i = list(post.parameters).index(name)
+                out.append(float(list(post.mean)[i]))
+                q50 = dict(post.quantiles).get("q50")
+                if q50 is not None:
+                    out.append(float(list(q50)[i]))
         return out
 
     def interval_problem(self, name: str, e: float, lo: Any, hi: Any, method: str) -> str | None:

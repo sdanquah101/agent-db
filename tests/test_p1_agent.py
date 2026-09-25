@@ -32,7 +32,14 @@ from eval.score import Scorer
 from state.provenance import read_calls
 from state.task_state import TaskState
 from tests.conftest import _short
-from tests.p1_support import adversarial_policy, clean_policy, dawdling_policy, slow
+from tests.p1_support import (
+    adversarial_policy,
+    chosen_point_policy,
+    clean_policy,
+    dawdling_policy,
+    peeking_policy,
+    slow,
+)
 from tests.test_truth_isolation import find_truth_references
 from tools.llm import (
     LLM_LOG_FILE,
@@ -52,11 +59,13 @@ from tools.llm import (
     request_digest,
     system_digest,
     to_responses_request,
+    tools_digest,
 )
-from tools.runner import WORKFLOWS, run_workflow
+from tools.runner import WORKFLOWS, p1_provenance, run_workflow
 from tools.server import OUTPUTS_DIR, OutputSink
 from tools.workflow_config import (
     WORKFLOW_CONFIG_DIR,
+    check_prompt_hash,
     load_p1,
     load_prompts,
     sandbox_config,
@@ -75,7 +84,12 @@ def test_the_agent_passes_the_rule_one_checker():
     assert find_truth_references(AGENT) == []
 
 
-_FORBIDDEN_IN_PROMPTS = (re.compile(r"S\d-\d\d"), re.compile(r"R[1-6]"))
+# Scenario and P0 rule ids in any spelling (the re-review of e4fc44a, 3): S2-03, S2_03,
+# S203, S 2-03; R4, R 4.
+_FORBIDDEN_IN_PROMPTS = (
+    re.compile(r"\bS\s?\d[\s_\-]?\d\d\b"),
+    re.compile(r"\bR\s?[1-6]\b"),
+)
 
 
 def prompt_violations(texts: dict[str, str]) -> list[tuple[str, str]]:
@@ -111,67 +125,123 @@ def test_no_committed_prompt_names_a_scenario_or_a_p0_rule():
     }
 
 
-# Examples that track the scenario library and its correct-action column: the lead's
-# ruling of 2026-09-25 made the prompt's examples generic, and none may come back. The
-# published abstention vocabulary (in the filled task prompt) is not scanned here.
+# The guard below is a BACKSTOP, not the defence (decisions, 2026-09-25): the defence is
+# the lead's read of the prompts at freeze time and the committed prompt hash. It catches
+# what the library would leak if it crept back: its examples and their paraphrases, its
+# mechanisms, and its label frequencies.
+#
+# Examples and mechanism words that track the library and its correct-action column (the
+# lead's ruling of 2026-09-25). The published abstention vocabulary, shown in the filled
+# task prompt, is not scanned: it is the shared contract of ruling A3.
 _LIBRARY_EXAMPLES = re.compile(
     r"gas[- ]meter|scale error|estimate the factor|holds one value|never (been )?logged"
-    r"|unrecorded deliver|unlogged|wetter|drier|acclimat|particle size|that parameter only"
-    r"|mislabel|electrode|mis-?initiali[sz]ed|syntrophic|precipitat|imperfect mixing"
-    r"|inhibition shift|overload|foaming",
+    r"|unrecorded deliver|unlogged|wetter|drier|moisture|acclimat|particle size"
+    r"|that parameter only|mislabel|electrode|mis-?initiali[sz]ed|syntroph|acetate oxidation"
+    r"|precipitat|calcite|imperfect mixing|poor mixing|dead zone|short-circuit"
+    r"|bypass (flow|fraction|zone|stream)"
+    r"|ammonia inhibition|inhibition shift|overload|foaming|frozen signal|calibration error"
+    r"|under-?read|over-?read",
     re.IGNORECASE,
 )
 
 
-# Paraphrases of the library's three sensor faults (the coordinator's re-review of PR #26,
-# 2): a sentence that names a drift, a stuck or flat reading and a scale or factor error
-# together enumerates them whatever the words, and "hold a value" alone names one.
+# Paraphrases of the library's three sensor faults (the re-reviews of PR #26): any two of
+# drift-, stuck-or-flat- and scale-or-factor-wording in one sentence or two adjacent
+# sentences name them whatever the words; "hold a value" alone names one. Applied to the
+# prompt files; the QC tool's own description names its detectors (flatlines, drift) and
+# is registry documentation, so the tool specifications and the harness source are held
+# to the phrase, id and frequency checks only.
 _FAULT_GROUPS = (
     re.compile(r"drift|wander|creep", re.IGNORECASE),
-    re.compile(r"\bhold|\bheld\b|stuck|frozen|freez|flat|same (value|reading)", re.IGNORECASE),
-    re.compile(r"scale|factor|multipl|\bgain\b|proportional", re.IGNORECASE),
-)
+    re.compile(r"\bhold(?!-out)|\bheld\b|\bstick|stuck|frozen (?!hold-out)|freez|flat"
+               r"|same (value|reading)", re.IGNORECASE),
+    re.compile(r"scale|factor|\bratio|percent|multipl|\bgain\b|proportional|off by",
+               re.IGNORECASE),
+)  # fmt: skip
 _HOLD_A_VALUE = re.compile(
     r"\b(hold|holds|holding|held|stuck at|freezes? (at|on))\s+(a|one|its|the same|a single|"
     r"a constant)\s+(single\s+|constant\s+)?(value|reading)",
     re.IGNORECASE,
 )
 _SENTENCE = re.compile(r"(?<=[.;:!?])\s+|\n\s*\n|\n\s*[-*]\s")
+# Label frequencies: a frequency word within a few words of a label, either order.
+_LABEL = r"(sensor|influent|state|parameter|structural)"
+_FREQUENCY = (
+    r"(about|roughly|approximately|around|most of|many|few|half|third|quarter|fifth|majority"
+    r"|minority|often|rarely|seldom|usually|typically|commonly|frequent\w*|common|rare"
+    r"|likely|unlikely|\d+\s?%|\d+ (?:of|in|out of) \d+|one in \w+)"
+)
+_LABEL_FREQUENCY = re.compile(
+    rf"\b{_FREQUENCY}\b(?:\W+\w+){{0,8}}\W+{_LABEL}\b"
+    rf"|\b{_LABEL}\b(?:\W+\w+){{0,6}}\W+{_FREQUENCY}\b",
+    re.IGNORECASE,
+)
 
 
-def library_examples(texts: dict[str, str]) -> list[tuple[str, str]]:
+def library_examples(texts: dict[str, str], *, paraphrases: bool = True) -> list[tuple[str, str]]:
     """(where, match) for every library-shaped example in the committed prompt surfaces.
 
-    The old phrases, "hold a value" in any form, and any sentence that names all three
-    sensor-fault kinds together.
+    The old phrases and mechanism words, "hold a value" in any form, label frequencies,
+    and, when ``paraphrases``, two sensor-fault kinds named in one or two adjacent
+    sentences.
     """
     found = [(w, m.group(0)) for w, t in texts.items() for m in _LIBRARY_EXAMPLES.finditer(t)]
     for where, text in texts.items():
         found += [(where, m.group(0)) for m in _HOLD_A_VALUE.finditer(text)]
-        for sentence in _SENTENCE.split(text):
-            if all(g.search(sentence) for g in _FAULT_GROUPS):
-                found.append((where, " ".join(sentence.split())[:120]))
+        found += [(where, m.group(0)) for m in _LABEL_FREQUENCY.finditer(text)]
+        if not paraphrases:
+            continue
+        sentences = [x for x in _SENTENCE.split(text) if x and x.strip()]
+        for i in range(len(sentences)):
+            window = " ".join(sentences[i : i + 2])
+            if sum(bool(g.search(window)) for g in _FAULT_GROUPS) >= 2:
+                found.append((where, " ".join(window.split())[:120]))
     return found
 
 
+def committed_surfaces_found() -> list[tuple[str, str]]:
+    """The guard over every committed surface: prompt files in full, the rest in part."""
+    texts = model_facing_texts()
+    prompt_files = {k: v for k, v in texts.items() if k.startswith(str(PROMPT_DIR))}
+    others = {k: v for k, v in texts.items() if k not in prompt_files}
+    return library_examples(prompt_files) + library_examples(others, paraphrases=False)
+
+
 def test_no_prompt_surface_reintroduces_the_librarys_examples(tmp_path):
-    assert library_examples(model_facing_texts()) == []
+    assert committed_surfaces_found() == []
     # negative control: the pre-ruling wording is caught
-    (tmp_path / "old.md").write_text(
-        "Examples are a gas meter with a scale error, or feed that has become wetter.\n"
-    )
-    found = {m.lower() for _, m in library_examples({"old.md": (tmp_path / "old.md").read_text()})}
+    old = "Examples are a gas meter with a scale error, or feed that has become wetter.\n"
+    found = {m.lower() for _, m in library_examples({"old.md": old}, paraphrases=False)}
     assert found == {"gas meter", "scale error", "wetter"}
-    # paraphrases: the three sensor faults in other words, and "hold a value" alone
-    planted = {
-        "paraphrase.md": "An instrument can creep over time, freeze on the same value, or "
-        "read high by a fixed multiplier.",
-        "reviewer.md": "- **sensor**: an instrument may hold a value while the plant moves.",
-        "first_ruling.md": "An instrument may drift, hold a value, or misreport by a "
-        "constant factor.",
-    }
-    caught = {w for w, _ in library_examples(planted)}
-    assert caught == set(planted)
+
+
+# Every paraphrase the reviews planted, one per file: each must be caught.
+_PLANTED = {
+    "first_ruling.md": "An instrument may drift, hold a value, or misreport by a constant factor.",
+    "paraphrase.md": "An instrument can creep over time, freeze on the same value, or read "
+    "high by a fixed multiplier.",
+    "reviewer_hold.md": "- **sensor**: an instrument may hold a value while the plant moves.",
+    "ratio.md": "Instruments drift, stick, or read off by a fixed ratio.",
+    "split.md": "An instrument may slowly drift away. It may also read off by a constant factor.",
+    "two_of_three.md": "Watch for instruments that drift or freeze.",
+    "frozen_calibration.md": "Look for a frozen signal or a calibration error.",
+    "frequency.md": "About a third of the cells carry a sensor fault.",
+    "underscore_id.md": "Treat this like S2_03.",
+    "bare_id.md": "Treat this like S203.",
+    "spaced_rule.md": "Apply rule R 4 when the steps align.",
+    "percentage.md": "A meter may under-read by a fixed percentage.",
+    "influent_unlogged.md": "Consider unlogged deliveries.",
+    "influent_wetter.md": "Consider that the feed may have become wetter.",
+    "structural_mixing.md": "Poor mixing leaves a load-dependent residual.",
+    "structural_ammonia.md": "Ammonia inhibition may have changed.",
+}  # fmt: skip
+
+
+@pytest.mark.parametrize("name", sorted(_PLANTED))
+def test_every_planted_paraphrase_is_caught(name):
+    texts = {name: _PLANTED[name]}
+    caught = library_examples(texts) + prompt_violations(texts)
+    assert caught, name
 
 
 def test_the_prompt_check_fails_on_a_planted_file(tmp_path):
@@ -903,7 +973,8 @@ def test_every_refused_form_is_refused_and_recorded(p1_cell):
         "no cited call produced a `bias_z` for ['ph']",  # another sensor's value
         "no tool 'validate'",  # the hold-out is not the agent's to read
         "reaches into the hold-out window",  # nor its to edit
-        "k_m_ac: estimate 1.0 with interval [0.999, 1.001] is not what a fisher call",
+        # a Fisher call at the default point backs nothing: the default is not an estimate
+        "k_m_ac: no successful call of this run produced a fisher interval",
         "k_dis: no successful call of this run produced a profile interval",
         "`none` never stands beside another label",
         "the run is concluded; nothing runs after it",  # a use after conclude, same turn
@@ -945,3 +1016,210 @@ def test_a_run_that_never_concludes_stops_at_the_limits_and_is_not_completed(p1_
     assert state["final"]["completed"] is False and state["classification"]["rule"] == "unconcluded"
     assert state["plan"]["guards_tripped"] and result.llm_turns <= 6
     assert any("run ended" in a for a in state["annotations"])
+
+
+# ------------------------------------------------------------------ the re-review of e4fc44a
+
+
+def _results_of(run, output_name: str) -> dict[str, dict]:
+    """Every tool result the agent was shown, by tool_use id, from the verbatim log."""
+    lines = read_transcript(run.paths.root / OUTPUTS_DIR / output_name / LLM_LOG_FILE)
+    last = rebuild_requests(lines)[-1]
+    out = {}
+    for message in last["messages"]:
+        if message["role"] == "user" and isinstance(message["content"], list):
+            for block in message["content"]:
+                if block.get("type") == "tool_result":
+                    out[block["tool_use_id"]] = json.loads(block["content"])
+    return out
+
+
+def test_no_tool_reads_a_hold_out_day(p1_cell):
+    # the coordinator's ruling of 2026-09-25: data_qc, mass_balance, record inspection
+    # and the notes see the calibration window only
+    from state.run_view import open_run
+
+    run, scenario = p1_cell
+    result = run_workflow(
+        run.run_id,
+        "p1",
+        runs_root=run.paths.root.parent,
+        scenario=scenario,
+        model_client=ScriptedClient(peeking_policy),
+        output_name="p1_peek",
+    )
+    assert result.completed, result.stderr_tail
+    cal_end = 22.5
+    got = _results_of(run, "p1_peek")
+    sensors = open_run(run.paths.root).sensors()["sensors"]
+    for r in got["tu_0_0"]["result"]["results"]:  # data_qc
+        in_cal = sum(1 for t in sensors[r["name"]]["sample_t_d"] if t <= cal_end)
+        assert r["n_samples"] == in_cal, r["name"]
+    windows = got["tu_0_1"]["result"]["windows"]  # mass_balance at one-day windows
+    assert windows and all(w["window"]["end"] <= cal_end for w in windows)
+    assert got["tu_0_2"]["t"] == [] and got["tu_0_2"]["value"] == []  # sensor inspection
+    assert all(v["day"] == [] for v in got["tu_0_3"]["feeds"].values())  # feed log
+    assert got["tu_0_4"]["n"] == 0  # feed assays
+
+
+def test_notes_of_hold_out_days_are_not_shown():
+    notes = [{"day": 3, "text": "a"}, {"day": 22, "text": "b"}, {"day": 25, "text": "c"}]
+    assert [n["text"] for n in agent.visible_notes(notes, 22.5)] == ["a", "b"]
+
+
+def test_an_estimate_must_be_one_an_estimator_returned(p1_cell):
+    run, scenario = p1_cell
+    result = run_workflow(
+        run.run_id,
+        "p1",
+        runs_root=run.paths.root.parent,
+        scenario=scenario,
+        model_client=ScriptedClient(chosen_point_policy),
+        output_name="p1_chosen",
+    )
+    assert result.completed, result.stderr_tail
+    state = TaskState.model_validate_json(
+        (run.paths.root / OUTPUTS_DIR / "p1_chosen" / "state.json").read_text("utf-8")
+    )
+    refused = [f.message for f in state.tool_failures if f.name == "p1.conclude"]
+    # a Fisher call at a chosen point, and the chosen point with method none (it was only
+    # a simulate input): both refused
+    assert len(refused) == 2, refused
+    assert all(m.startswith("k_m_ac:") for m in refused), refused
+    # the fit's own optimum is accepted
+    got = _results_of(run, "p1_chosen")
+    theta = got["tu_3_0"]["result"]["theta"]["k_m_ac"]
+    assert state.final.parameters["k_m_ac"].estimate == pytest.approx(theta, rel=1e-3)
+
+
+def test_provenance_is_in_the_summary_and_every_model_record(p1_result):
+    _, _, _, snap = p1_result
+    expected = p1_provenance(load_p1())
+    summary = json.loads(snap["summary.json"])
+    for key in ("system_sha256", "task_sha256", "prompt_sha256", "tools_sha256"):
+        assert summary[key] == expected[key], key
+    assert summary["git_commit"]
+    for line in (json.loads(x) for x in snap[LLM_LOG_FILE].splitlines()):
+        assert line["provenance"]["system_sha256"] == expected["system_sha256"]
+        assert line["provenance"]["git_commit"] == summary["git_commit"]
+
+
+def test_a_committed_prompt_hash_refuses_changed_prompts():
+    config = load_p1()
+    assert config.prompt_sha256 == ""  # not frozen yet
+    digest = check_prompt_hash(config)
+    assert check_prompt_hash(config.model_copy(update={"prompt_sha256": digest})) == digest
+    with pytest.raises(ValueError, match="do not match the committed prompt_sha256"):
+        check_prompt_hash(config.model_copy(update={"prompt_sha256": "0" * 64}))
+
+
+def test_the_gateway_accepts_only_the_committed_tool_list(tmp_path):
+    specs = agent.tool_specs()
+    sent = []
+    gw = _gateway(tmp_path, ScriptedClient(lambda p: sent.append(p) or _echo(p)))
+    gw.tools_sha256 = tools_digest(specs)
+    msg = [{"role": "user", "content": "hi"}]
+    gw.complete({"system": "s", "messages": msg, "tools": specs})  # negative control
+    renamed = [dict(specs[0], name="web_search"), *specs[1:]]
+    for tools in (renamed, specs[:-1], [*specs, _GOOD_TOOL]):
+        with pytest.raises(ModelError, match="committed tool specifications"):
+            gw.complete({"system": "s", "messages": msg, "tools": tools})
+    no_description = [{k: v for k, v in _GOOD_TOOL.items() if k != "description"}]
+    with pytest.raises(ModelError, match="description is a string"):
+        check_agent_request({"system": "s", "messages": msg, "tools": no_description}, None)
+    assert len(sent) == 1
+
+
+def test_an_unhandled_response_item_raises_and_is_logged(tmp_path):
+    kw = {"model": "gpt-5.6-luna"}
+    for raw in (
+        {"output": [{"type": "web_search_call", "id": "ws_1"}]},
+        {"output": [{"type": "message", "content": [{"type": "output_audio"}]}]},
+    ):
+        with pytest.raises(ModelError, match="unhandled"):
+            from_responses_output(raw, kw)
+    # through the gateway: the attempt is logged with the request it tried to send
+    gw, _ = _openai_gateway(tmp_path, [{"output": [{"type": "code_interpreter_call"}]}])
+    request = {
+        "system": "the prompt",
+        "messages": [{"role": "user", "content": "x"}],
+        "tools": [_GOOD_TOOL],
+    }
+    with pytest.raises(ModelError, match="unhandled response item type"):
+        gw.complete(request)
+    line = read_transcript(tmp_path / LLM_LOG_FILE)[-1]
+    assert "unhandled" in line["error"] and line["provider_request"]["store"] is False
+
+
+def test_a_bad_signature_is_a_logged_model_error(tmp_path):
+    gw, transport = _openai_gateway(tmp_path, [])
+    thinking = {"type": "thinking", "thinking": "", "signature": "not json"}
+    history = [
+        {"role": "user", "content": "task"},
+        {"role": "assistant", "content": [thinking]},
+        {"role": "user", "content": "go on"},
+    ]
+    with pytest.raises(ModelError, match="signature is not a JSON item"):
+        gw.complete({"system": "the prompt", "messages": history, "tools": [_GOOD_TOOL]})
+    assert transport.responses.sent == []
+    assert "signature" in read_transcript(tmp_path / LLM_LOG_FILE)[-1]["error"]
+
+
+def test_the_temperature_value_is_the_frozen_one():
+    settings = load_p1().model.model_copy(update={"temperature": 0.2})
+    kw = to_responses_request(
+        {
+            "model": settings.model_id,
+            "max_tokens": settings.max_tokens,
+            "system": "p",
+            "output_config": {"effort": settings.effort},
+            "temperature": 0.2,
+            "messages": [{"role": "user", "content": "x"}],
+        }
+    )
+    check_responses_request(kw, settings, None)  # negative control
+    kw["temperature"] = 0.3
+    with pytest.raises(ModelError, match="temperature"):
+        check_responses_request(kw, settings, None)
+
+
+class _Down:
+    def create(self, **kwargs: object):
+        raise RetryableModelError("503")
+
+
+class _DownTransport:
+    responses = _Down()
+
+
+def test_a_failed_attempt_logs_the_translated_request(tmp_path):
+    config = load_p1()
+    client = OpenAIResponsesClient(config.model, transport=_DownTransport())
+    gw = ModelGateway(
+        settings=config.model,
+        client=client,
+        log_dir=tmp_path,
+        max_turns=5,
+        max_total_tokens=10**9,
+        sleep=lambda s: None,
+    )
+    with pytest.raises(ModelError, match="attempts failed"):
+        gw.complete({"system": "p", "messages": [{"role": "user", "content": "x"}]})
+    lines = read_transcript(tmp_path / LLM_LOG_FILE)
+    assert len(lines) == config.model.retry.max_attempts
+    assert all(ln["provider_request"]["store"] is False for ln in lines)
+
+
+def test_the_replay_checks_the_logged_translated_request(tmp_path):
+    gw, _ = _openai_gateway(tmp_path, [_raw(None, "done")])
+    request = {
+        "system": "the prompt",
+        "messages": [{"role": "user", "content": "task"}],
+        "tools": [_GOOD_TOOL],
+    }
+    gw.complete(request)
+    lines = read_transcript(tmp_path / LLM_LOG_FILE)
+    _gateway(tmp_path / "ok", RecordedClient(lines)).complete(request)  # negative control
+    lines[0]["response"]["provider"]["request"]["instructions"] = "tampered"
+    with pytest.raises(ModelError, match="translated request differs"):
+        _gateway(tmp_path / "bad", RecordedClient(lines)).complete(request)

@@ -2557,3 +2557,11 @@ variants.
 **Blocked:** nothing technical. The other nine development cells wait for the lead's
 word. **Next:** the other nine cells on the lead's word; prompt development on
 development cells only; the freeze and hash before the held-out variants.
+
+**Note on the first live cell (the coordinator's re-review of `e4fc44a`).** The S0-01
+B/B cell ran on a working tree with uncommitted changes, between `4859bc5` and
+`7096fbc`. It is development evidence only. It predates both the hold-out quarantine fix
+and the calibration-window restriction on QC, balance and notes. Its figures show cost,
+wall time and mechanics, not P1's behaviour at any committed head. From the commit that
+fixes the re-review of `e4fc44a` on, every run records its commit, and its prompt and tool hashes, in `summary.json` and the
+model log.

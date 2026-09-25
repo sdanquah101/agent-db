@@ -61,6 +61,7 @@ __all__ = [
     "request_digest",
     "system_digest",
     "to_responses_request",
+    "tools_digest",
 ]
 
 LLM_LOG_FILE = "llm_calls.jsonl"
@@ -143,7 +144,14 @@ _BLOCK_FIELDS: dict[str, tuple[frozenset[str], frozenset[str]]] = {
 }
 
 
-def check_agent_request(request: dict[str, Any], system_sha256: str | None) -> None:
+def tools_digest(tools: list[dict[str, Any]]) -> str:
+    """The fingerprint of a tool list (the agent's committed tool specifications)."""
+    return request_digest({"tools": list(tools)})
+
+
+def check_agent_request(
+    request: dict[str, Any], system_sha256: str | None, tools_sha256: str | None = None
+) -> None:
     """Refuse any request form an agent may not send (rule 2; the review of PR #26, 5).
 
     Only custom tools (a name, a description, an input schema: no ``type``, so no server
@@ -164,6 +172,8 @@ def check_agent_request(request: dict[str, Any], system_sha256: str | None) -> N
         raise ModelError("the system prompt must be the committed text, as a string")
     if system_sha256 is not None and system_digest(system) != system_sha256:
         raise ModelError("the system prompt is not the committed prompt")
+    if tools_sha256 is not None and tools_digest(request.get("tools") or []) != tools_sha256:
+        raise ModelError("the tool list is not the agent's committed tool specifications")
     names: set[str] = set()
     for tool in request.get("tools") or []:
         if not isinstance(tool, dict) or set(tool) - {"name", "description", "input_schema"}:
@@ -174,6 +184,8 @@ def check_agent_request(request: dict[str, Any], system_sha256: str | None) -> N
         schema = tool.get("input_schema")
         if not isinstance(tool.get("name"), str) or not isinstance(schema, dict):
             raise ModelError("a tool needs a name and an input_schema")
+        if not isinstance(tool.get("description"), str):
+            raise ModelError(f"tool {tool['name']!r}: a description is a string")
         if schema.get("type") != "object" or tool["name"] in names:
             raise ModelError(f"tool {tool['name']!r}: an object schema, once")
         names.add(tool["name"])
@@ -280,11 +292,14 @@ class OpenAIResponsesClient:
         self._client = transport
         self.settings = settings
         self.system_sha256 = system_sha256
+        self.last_request = None
         self.name = f"openai:{settings.model_id}"
 
     def create(self, params: dict[str, Any]) -> dict[str, Any]:
         """One Responses API call, translated both ways, checked before it is sent."""
+        self.last_request: dict[str, Any] | None = None
         kwargs = to_responses_request(params)
+        self.last_request = kwargs
         check_responses_request(kwargs, self.settings, self.system_sha256)
         sdk = self._sdk
         try:
@@ -345,8 +360,10 @@ def check_responses_request(
     effort = (kwargs.get("reasoning") or {}).get("effort")
     if effort != settings.effort or set(kwargs.get("reasoning") or {}) - {"effort"}:
         raise ModelError("reasoning is exactly the frozen effort")
-    if ("temperature" in kwargs) != (settings.temperature is not None):
-        raise ModelError("temperature is sent only when the frozen settings name one")
+    if kwargs.get("temperature") != settings.temperature or (
+        ("temperature" in kwargs) != (settings.temperature is not None)
+    ):
+        raise ModelError("temperature is exactly the frozen one, sent only when it is named")
     instructions = kwargs.get("instructions")
     if not isinstance(instructions, str):
         raise ModelError("instructions must be the committed system prompt")
@@ -445,7 +462,15 @@ def to_responses_request(params: dict[str, Any]) -> dict[str, Any]:
                     }
                 )
             elif kind == "thinking" and block.get("signature"):
-                items.append(json.loads(block["signature"]))
+                try:
+                    item = json.loads(block["signature"])
+                except (TypeError, ValueError) as exc:
+                    raise ModelError(
+                        f"a thinking block's signature is not a JSON item: {exc}"
+                    ) from exc
+                if not isinstance(item, dict):
+                    raise ModelError("a thinking block's signature is not a JSON object")
+                items.append(item)
         flush()
     kwargs: dict[str, Any] = {
         "model": params["model"],
@@ -498,6 +523,8 @@ def from_responses_output(raw: dict[str, Any], kwargs: dict[str, Any]) -> dict[s
                     content.append({"type": "text", "text": str(part.get("text", ""))})
                 elif part.get("type") == "refusal":
                     content.append({"type": "text", "text": str(part.get("refusal", ""))})
+                else:
+                    raise ModelError(f"unhandled message part type {part.get('type')!r}")
         elif kind == "function_call":
             try:
                 arguments = json.loads(item.get("arguments") or "{}")
@@ -513,6 +540,10 @@ def from_responses_output(raw: dict[str, Any], kwargs: dict[str, Any]) -> dict[s
                     "input": arguments,
                 }
             )
+        else:
+            # never dropped silently: an item the translation does not know (a hosted tool
+            # call, an unknown kind) ends the attempt, and the gateway logs it
+            raise ModelError(f"unhandled response item type {kind!r}")
     refused = any(
         part.get("type") == "refusal"
         for item in raw.get("output") or []
@@ -620,6 +651,17 @@ class RecordedClient:
             raise ModelError(
                 f"turn {self._next}: the request differs from the recorded one; replay refused"
             )
+        provider = (line.get("response") or {}).get("provider") or {}
+        # the translated request, too, must be the one that was sent (wall clock masked)
+        if (
+            self._strict
+            and provider.get("api") == "openai.responses"
+            and replay_digest(to_responses_request(params)) != replay_digest(provider["request"])
+        ):
+            raise ModelError(
+                f"turn {self._next}: the translated request differs from the logged one; "
+                "replay refused"
+            )
         self._next += 1
         return dict(line["response"])
 
@@ -662,6 +704,8 @@ class ModelGateway:
     max_total_tokens: int
     sleep: Callable[[float], None] = time.sleep
     system_sha256: str | None = None
+    tools_sha256: str | None = None
+    provenance: dict[str, str] = field(default_factory=dict)
     meter: TokenMeter = field(default_factory=TokenMeter)
     _previous: dict[str, Any] | None = field(default=None, init=False, repr=False)
     _fixed_digest: str | None = field(default=None, init=False, repr=False)
@@ -714,7 +758,7 @@ class ModelGateway:
             ModelError: If the request carries a form an agent may not send
                 (:func:`check_agent_request`).
         """
-        check_agent_request(request, self.system_sha256)
+        check_agent_request(request, self.system_sha256, self.tools_sha256)
         s = self.settings
         params: dict[str, Any] = {
             "model": s.model_id,
@@ -805,6 +849,13 @@ class ModelGateway:
         if fixed_digest != self._fixed_digest:
             line["request_fixed"] = fixed
             self._fixed_digest = fixed_digest
+        if self.provenance:
+            line["provenance"] = dict(self.provenance)
+        if response is None:
+            # a failed attempt keeps the provider request it tried to send, if any
+            provider_request = getattr(self.client, "last_request", None)
+            if provider_request is not None:
+                line["provider_request"] = provider_request
         line["response"] = response
         line["error"] = error
         if response is not None:

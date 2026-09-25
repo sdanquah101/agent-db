@@ -102,7 +102,7 @@ def conclusion_for(sim: int) -> dict[str, Any]:
         "secondary_labels": [],
         "confidence": 0.6,
         "kinetic_update": False,
-        "parameters": {"k_m_ac": {"estimate": 1.0, "lower": None, "upper": None, "method": "none"}},
+        "parameters": {},
         "interval_method": "none",
         "abstentions": [],
         "prediction": sim,
@@ -192,20 +192,8 @@ def adversarial_policy(params: dict[str, Any]) -> dict[str, Any]:
         return reply(
             tool_use(4, 0, "conclude", {**base, "label": "sensor", "secondary_labels": ["none"]})
         )
-    final = dict(base)
-    interval = got["tu_1_1"]["result"]["interval_90_at_point"].get("k_m_ac")
-    if interval is not None:  # the Fisher call's own interval, as shown: accepted
-        final["parameters"] = {
-            "k_m_ac": {
-                "estimate": 1.0,
-                "lower": interval[0],
-                "upper": interval[1],
-                "method": "fisher",
-            }
-        }
-        final["interval_method"] = "fisher"
     return reply(
-        tool_use(turn, 0, "conclude", final),
+        tool_use(turn, 0, "conclude", base),
         tool_use(turn, 1, "simulate", {"parameters": {"k_m_ac": 1.5}}),
     )
 
@@ -214,3 +202,70 @@ def dawdling_policy(params: dict[str, Any]) -> dict[str, Any]:
     """Never concludes: inspects the record every turn (the run must stop unconcluded)."""
     turn = turn_of(params)
     return reply(tool_use(turn, 0, "inspect_record", {"what": "sensor", "name": "ph"}))
+
+
+def peeking_policy(params: dict[str, Any]) -> dict[str, Any]:
+    """Tries to read the hold-out through every tool that takes the record, then concludes.
+
+    The re-review of e4fc44a, item 1: data_qc, mass_balance at one-day windows, and record
+    inspection of hold-out days, each of which must return nothing from the hold-out.
+    """
+    turn = turn_of(params)
+    if turn == 0:
+        return reply(
+            tool_use(0, 0, "data_qc", {}),
+            tool_use(0, 1, "mass_balance", {"window_d": 1}),
+            tool_use(0, 2, "inspect_record",
+                     {"what": "sensor", "name": "gas_flow", "start_d": 23, "end_d": 30}),
+            tool_use(0, 3, "inspect_record", {"what": "feed_log", "start_d": 23, "end_d": 30}),
+            tool_use(0, 4, "inspect_record",
+                     {"what": "feed_assays", "start_d": 23, "end_d": 30}),
+        )  # fmt: skip
+    final = {k: v for k, v in conclusion_for(0).items() if k != "prediction"}
+    return reply(tool_use(turn, 0, "conclude", final))
+
+
+def chosen_point_policy(params: dict[str, Any]) -> dict[str, Any]:
+    """Reports a point it chose as an estimate, then a fit's own optimum.
+
+    The re-review of e4fc44a, item 2. A Fisher call at a chosen point (k_m_ac 1.37,
+    never fitted) is offered as a Fisher-backed estimate, then the same point with
+    method none after a simulate at it: both refused. Then a one-start fit, whose optimum
+    is reported with the fit's own Fisher interval where finite (else method none):
+    accepted.
+    """
+    turn = turn_of(params)
+    got = results(params)
+    if turn == 0:
+        return reply(
+            tool_use(0, 0, "simulate", {"parameters": {"k_m_ac": 1.37}}),
+            tool_use(0, 1, "fisher_info",
+                     {"parameters": ["k_m_ac"], "sensors": ["gas_flow"], "at": {"k_m_ac": 1.37}}),
+        )  # fmt: skip
+    sim = got["tu_0_0"]["call_index"]
+    base = conclusion_for(sim)
+    if turn == 1:
+        iv = got["tu_0_1"]["result"]["interval_90_at_point"]["k_m_ac"] or [0.33, 3.0]
+        chosen = {"estimate": 1.37, "lower": iv[0], "upper": iv[1], "method": "fisher"}
+        return reply(
+            tool_use(1, 0, "conclude", {**base, "parameters": {"k_m_ac": chosen},
+                                        "interval_method": "fisher"})
+        )  # fmt: skip
+    if turn == 2:
+        chosen = {"estimate": 1.37, "lower": None, "upper": None, "method": "none"}
+        return reply(tool_use(2, 0, "conclude", {**base, "parameters": {"k_m_ac": chosen}}))
+    if turn == 3:
+        return reply(
+            tool_use(3, 0, "fit_lsq", {"parameters": ["k_m_ac"], "sensors": ["gas_flow"],
+                                       "n_starts": 1, "max_nfev_per_start": 3})
+        )  # fmt: skip
+    fit = got["tu_3_0"]["result"]
+    theta = fit["theta"]["k_m_ac"]
+    iv = fit["fisher_interval_90"]["k_m_ac"]
+    if iv is not None:
+        est = {"estimate": theta, "lower": iv[0], "upper": iv[1], "method": "fisher"}
+        final = {**base, "parameters": {"k_m_ac": est}, "interval_method": "fisher"}
+    else:
+        est = {"estimate": theta, "lower": None, "upper": None, "method": "none"}
+        final = {**base, "parameters": {"k_m_ac": est}}
+    return reply(tool_use(turn, 0, "conclude", final))

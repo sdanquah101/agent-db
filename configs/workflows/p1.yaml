@@ -138,6 +138,10 @@ evidence_keys:
 prompts:
   system: p1_prompts/system.md
   task: p1_prompts/task.md
+prompt_sha256: ""             # the prompts' fingerprint (tools/workflow_config.py::
+                              # prompt_digest), committed at the freeze on the lead's word;
+                              # empty until then. Once set, the runner refuses any prompt
+                              # that does not hash to it.
 
 runner:
   timeout_margin_min: 10.0    # DESIGN  min past the cell's wall-clock allowance before the

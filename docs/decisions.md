@@ -6035,3 +6035,58 @@ after translation and before sending. It refuses:
 The log now keeps the translated request verbatim beside the raw response. A replay of
 an OpenAI run is tested on a fake transport. Each refused form has a test, and each test
 has a well-formed negative control.
+
+## 2026-09-25 — P1: the coordinator's re-review of PR #26 at `e4fc44a`, fixes applied
+
+1. **The hold-out is not readable (medium; the coordinator's ruling, within the frozen
+   hold-out of §6.7 A).** For P1 the following see the calibration window `[0, 0.75 T]`
+   only:
+   - `data_qc`, including its event windows;
+   - `mass_balance`: windows, loads and observations;
+   - record inspection;
+   - the operator's notes: a note from a hold-out day is not shown.
+
+   `system.md` and `task.md` now say so. The hold-out is scored once, by the validation
+   after `conclude`, and never shown. The feed log, the model's *input* over the whole
+   record, is still what `simulate` integrates; it is not an observation of the plant.
+   Tested: a probe of each tool at a hold-out day gets nothing.
+
+   **A known P0/P1 asymmetry that favours P0:** P0's QC and balance read the whole
+   record. P1 therefore sees less than P0, which is the conservative direction (rule 5).
+2. **An estimate must be one an estimator returned (medium).**
+   - A method-`none` estimate must be a fit's optimum or a converged sampler's mean or
+     median. It cannot be a simulate input or the default.
+   - A Fisher call's interval backs an estimate only at such a point: a Fisher call at
+     a point the agent chose (the re-review's `k_m_ac` 1.37) backs nothing.
+
+   Tested both ways: the chosen point is refused, and the fit's optimum is accepted.
+3. **The prompt guard is widened, and it is a backstop (medium).** It now also catches:
+   - ids in any spelling (`S2_03`, `S203`, `R 4`);
+   - fault synonyms (stick, frozen, ratio, percentage, calibration error, under-read)
+     and any two of the three sensor-fault kinds, in one sentence or two adjacent ones;
+   - frequency words near a label;
+   - the influent and structural mechanism words.
+
+   Sixteen planted paraphrases are each caught, and the real surfaces pass. **The guard
+   is a backstop, not the defence:** the defence is the lead's read of the prompts at
+   freeze time and the committed prompt hash (item 4).
+4. **Provenance (low).**
+   - `summary.json` and every `llm_calls.jsonl` record carry `system_sha256`,
+     `task_sha256`, `prompt_sha256`, `tools_sha256` and the git commit (`-dirty` when
+     the tree had changes).
+   - `p1.yaml` gains `prompt_sha256`, empty until the freeze. Once set, the runner
+     refuses prompts that do not hash to it (tested).
+5. **Gateway tidiness (low).**
+   - The tool list must be the agent's committed specification, pinned by hash, and a
+     description must be a string.
+   - A response item or message part the translation does not handle raises and is
+     logged; it is never dropped.
+   - The temperature *value* must be the frozen one.
+   - A bad signature is a logged `ModelError`.
+   - The recorded client also checks the logged translated request (wall clock masked).
+   - A failed attempt logs the provider request it tried to send.
+
+   Each has a test.
+
+**Also:** on a short record, the default balance window is capped to the calibration
+window. An explicit window longer than that is refused.

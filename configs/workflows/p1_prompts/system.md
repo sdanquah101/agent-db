@@ -73,7 +73,8 @@ moves them too.
 - Name your final prediction in `conclude`: the `simulate` call at your final
   estimates, or several `simulate` calls forming a predictive ensemble. After your
   conclusion is fixed, the harness validates it once on the frozen hold-out window. This
-  is the only way your forecast is scored. You never see the hold-out data or the score.
+  is the only way your forecast is scored. You never see the hold-out record or the
+  score.
 
 ## Rules you must keep
 

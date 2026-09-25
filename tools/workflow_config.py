@@ -26,10 +26,12 @@ __all__ = [
     "ModelSettings",
     "P0Config",
     "P1Config",
+    "check_prompt_hash",
     "load_p0",
     "load_p1",
     "load_prompts",
     "load_workflow_config",
+    "prompt_digest",
     "sandbox_config",
 ]
 
@@ -364,6 +366,11 @@ class P1Config(_Frozen):
     seeds: P1Seeds
     evidence_keys: dict[str, tuple[str, ...]] = Field(min_length=1)
     prompts: Prompts
+    prompt_sha256: str = Field(
+        default="",
+        description="The prompts' fingerprint (prompt_digest), committed at the freeze; "
+        "empty until then. When set, the runner refuses prompts that do not match it",
+    )
     runner: Runner
 
 
@@ -381,6 +388,30 @@ def load_prompts(config: P1Config, root: Path = WORKFLOW_CONFIG_DIR) -> dict[str
         role: (Path(root) / rel).read_text(encoding="utf-8")
         for role, rel in config.prompts.model_dump().items()
     }
+
+
+def prompt_digest(prompts: dict[str, str]) -> str:
+    """The fingerprint of the prompt texts: sha256 of their sorted-key JSON."""
+    import hashlib
+    import json
+
+    blob = json.dumps(prompts, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def check_prompt_hash(config: P1Config) -> str:
+    """The prompts' fingerprint, refused when a committed one does not match it.
+
+    Raises:
+        ValueError: If ``prompt_sha256`` is set and differs from the prompts on disk.
+    """
+    digest = prompt_digest(load_prompts(config))
+    if config.prompt_sha256 and config.prompt_sha256 != digest:
+        raise ValueError(
+            f"the prompts do not match the committed prompt_sha256 ({config.prompt_sha256}); "
+            f"they hash to {digest}: a post-freeze prompt change invalidates the runs"
+        )
+    return digest
 
 
 def load_workflow_config(workflow: str, path: Path | None = None) -> P0Config | P1Config:

@@ -90,15 +90,21 @@ The model decides; the harness does what a JSON argument cannot.
   (`sd = sqrt((cv·|v|)² + sd_abs²)`, floored), which is P0's convention. A call index
   becomes the prediction, the fit or the posterior that call returned. The feed loads are
   fetched once, when a tool first needs them, and that call is logged like any other.
-- **Windows.** Fits, screening, Fisher, profiles, the sampler, residuals, assays and record
-  inspection work on the calibration window `[0, 0.75 T]`. QC and the mass balance read
-  the whole record, as P0's do. **The hold-out is not the agent's to read** (the review of
-  PR #26, 1). `validate` is not among the agent's tools. `conclude` names the final
-  prediction, or an ensemble of simulate calls. Once the conclusion is fixed, the harness
-  validates that prediction **once** on the frozen hold-out `[0.75 T, T]` (the
-  evaluator's own, tested equal). The result goes into the state only, never back to the
-  model. P0 also validates once, at its end, so neither workflow can choose among
-  predictions by their hold-out score.
+- **Windows.** Every tool that takes the record works on the calibration window
+  `[0, 0.75 T]`, and so does everything the agent is shown: the task prompt's record, the
+  notes, `data_qc` with its event windows, `mass_balance`, record inspection, fits,
+  screening, Fisher, profiles, the sampler, residuals and assays (the coordinator's
+  ruling of 2026-09-25). **The hold-out is not the agent's to read, edit or score:**
+  - `validate` is not among its tools;
+  - `conclude` names the final prediction or an ensemble, and after the conclusion the
+    harness validates it **once** on the frozen hold-out `[0.75 T, T]` (the evaluator's
+    own, tested equal), as recorded;
+  - the score goes into the state only;
+  - a quarantine window may not reach into the hold-out.
+
+  P0 also validates once, so neither workflow can choose a prediction by its hold-out
+  score. P0's QC and balance do read the whole record, so P1 sees less than P0: a known
+  asymmetry that favours P0 (rule 5).
 - **Seeds** (rule 4). A stochastic call's seed is `seeds.base` plus its registry call index,
   so the same sequence of calls gives the same seeds.
 - **Readable results.** An array longer than `loop.array_preview` is summarised (n, missing,
