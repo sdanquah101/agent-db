@@ -2743,3 +2743,96 @@ and no held-out variants without the lead's word.
 
 **Open.** `bayes_mcmc` also accepts narrowed bounds; a rule for a posterior run inside a
 narrow box is left for the coordinator (decisions, 2026-09-28).
+
+### Session 2026-09-28 (continued) — revision 1b complete; the lead's ruling on two new arms; revision 2 running
+
+**Done.**
+- **Revision 1b, ten development cells, at `4ef57c0`** (one run per cell; the old-prompt
+  and 1a runs at `c1e5829` stand as the baseline, decisions 2026-09-28). Rows and
+  summaries are in `reports/p1_pilot.csv` and `reports/p1_pilot/summaries/1b_*`.
+- **Two 1b runs were killed by the runner** (S0-01 B/C at 100.1 of 90 min, S3-01 C/B at
+  130.1 of 120 min: the allowance plus the runner's 10-minute margin) and left no
+  conclusion. Their `state.json` is the harness's interim write, whose placeholder label
+  is `none` with confidence 0 and no evidence. **The evaluator scored that placeholder**
+  (S0-01 B/C as an exact `none`). By the coordinator's answer 2 of 2026-09-28 a run
+  that ends without a conclusion is a failed run and an attribution miss, so the tables
+  below count both that way; the CSV keeps the evaluator's raw columns beside a
+  `run_failed` flag. Two things follow, both raised in PR #26:
+  - the evaluator reads an interim state as a conclusion; scoring a run whose summary
+    says `completed: false` as a miss would close that;
+  - the cause of the kills. Both cells ran while this session's test suites ran on the
+    same 4-core container (one full suite at nice 5); the 1b arm's wall clock (890 min
+    against 664 for 1a, on fewer evaluations) is inflated by that contention, which the
+    earlier arms did not have. The coordinator is asked whether the two cells are re-run
+    alone at `4ef57c0`, the killed rows staying as labelled failures.
+- **Report columns added** (decisions, 2026-09-28): harness refusals counted from the
+  gateway's verbatim log, and the evidence behind each label, *n (t, c)*: items, of
+  which *t* cite a time-localising key or a direct measurement and *c* a sensor or
+  channel tag only.
+
+**Revision 1b (`4b8f830a…`), runs at `4ef57c0`.** Development diagnostics only.
+
+| cell | labels (truth) | evidence per label: n (t, c) | unsupp. | invalid | refused | extra abst. | kin. err. | kin. drift | evals | wall min | turns | tokens | USD |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| S0-01 B/A | sensor (none) | sensor 1 (t 1, c 0) | 0/1 | 1 | 0 | 5 | None | True | 284/450 | 90.6/90.0 | 8 | 222567 | 0.020937 |
+| S0-01 B/B | influent+sensor (none) | influent 2 (t 0, c 0); sensor 1 (t 1, c 0) | 0/5 | 0 | 1 | 16 | None | False | 194/450 | 83.2/90.0 | 14 | 642553 | 0.039381 |
+| S0-01 B/C | KILLED, no conclusion; placeholder none (none) | (no conclusion; the interim state's placeholder) | 0/0 | 0 | 0 | 0 | None | False | 309/450 | 100.1/90.0 | 6 | 131320 | 0.00987 |
+| S1-01 B/B | sensor+structural (none) | sensor 4 (t 3, c 1); structural 2 (t 2, c 0) | 0/6 | 0 | 2 | 9 | None | False | 222/450 | 72.2/90.0 | 11 | 347751 | 0.022856 |
+| S2-01 B/B | sensor+influent+state (sensor) | sensor 4 (t 4, c 0); influent 1 (t 1, c 0); state 1 (t 1, c 0) | 0/6 | 0 | 2 | 6 | False | False | 225/450 | 75.1/90.0 | 15 | 765763 | 0.046937 |
+| S3-01 C/B | KILLED, no conclusion; placeholder none (influent) | (no conclusion; the interim state's placeholder) | 0/0 | 0 | 0 | 0 | False | False | 410/600 | 130.1/120.0 | 9 | 317774 | 0.018378 |
+| S4-01 B/B | influent+sensor (state) | influent 4 (t 3, c 0); sensor 1 (t 1, c 0) | 0/5 | 0 | 0 | 2 | False | False | 200/600 | 64.8/120.0 | 14 | 566435 | 0.031751 |
+| S5-01 A/A | state+sensor (parameter) | state 3 (t 3, c 0); sensor 1 (t 0, c 1) | 0/6 | 0 | 7 | 5 | None | None | 134/300 | 79.7/120.0 | 13 | 256288 | 0.023196 |
+| S6-02 B/B | influent+state+sensor+structural (structural) | influent 2 (t 1, c 0); state 1 (t 1, c 0); sensor 1 (t 1, c 0); structural 2 (t 1, c 0) | 0/6 | 0 | 2 | 22 | False | False | 204/750 | 66.3/150.0 | 13 | 522440 | 0.03661 |
+| S8-01 B/B | sensor (sensor) | sensor 3 (t 2, c 0) | 0/3 | 1 | 1 | 6 | False | False | 231/750 | 128.0/150.0 | 19 | 1009135 | 0.056111 |
+
+**Totals, old / 1a / 1b, with the pairwise differences.** One run per cell; a difference
+of a cell or two is noise. The two killed 1b runs count as misses in every label row.
+
+| total | old | 1a | 1b | 1a − old | 1b − old | 1b − 1a |
+|---|---|---|---|---|---|---|
+| cells | 10 | 10 | 10 | +0 | +0 | +0 |
+| failed runs (killed, no conclusion) | 0 | 0 | 2 | +0 | +2 | +2 |
+| exact attribution | 0 | 0 | 1 | +0 | +1 | +1 |
+| primary label = truth | 1 | 1 | 2 | +0 | +1 | +1 |
+| truth among the labels given | 3 | 4 | 3 | +1 | +0 | -1 |
+| `none` reached on `none` cells | 0 | 0 | 0 | +0 | +0 | +0 |
+| labels given | 24 | 23 | 17 | -1 | -7 | -6 |
+| labels without localised evidence | 2 | 3 | 1 | +1 | -1 | -2 |
+| unsupported claims | 0 | 0 | 0 | +0 | +0 | +0 |
+| invalid actions (evaluator) | 2 | 1 | 2 | -1 | +0 | +1 |
+| harness refusals (verbatim log) | 34 | 23 | 15 | -11 | -19 | -8 |
+| extra abstentions | 166 | 101 | 71 | -65 | -95 | -30 |
+| kinetic-update errors | 0 | 0 | 0 | +0 | +0 | +0 |
+| kinetic drift (cells) | 4 | 4 | 1 | +0 | -3 | -3 |
+| simulator evaluations | 2867 | 3208 | 2413 | +341 | -454 | -795 |
+| wall clock, min | 590.4 | 664.1 | 890.1 | +73.7 | +299.7 | +226.0 |
+| turns | 168 | 172 | 122 | +4 | -46 | -50 |
+| tokens | 6153437 | 7603988 | 4782026 | +1450551 | -1371411 | -2821962 |
+| cost at luna's rates, USD | 0.348 | 0.429 | 0.306 | +0.081 | -0.042 | -0.123 |
+
+**Reading.**
+- Revision 1b did not reach `none` on any of the four `none` cells either; the one
+  `none` in the raw scores was the killed run's placeholder.
+- Its one exact attribution is S8-01 B/B (`sensor`), and the primary label matched on
+  S4-01 B/B as well. It gave fewer labels (17 over 8 concluded runs) with fewer resting
+  on whole-record figures only (1).
+- Extra abstentions and harness refusals fell again (71 and 15). No unsupported claim
+  and no kinetic-update error in any arm.
+- Wall clock and cost are not comparable to the earlier arms because of the contention
+  above.
+
+**The lead's ruling of 2026-09-28** (decisions): a scoring-rule statement (revision 2)
+and an expert-brief arm, the freeze after both on the lead's word.
+- **Revision 2** (`f467963`, prompt sha256 `c80a3752…`): 1b plus one paragraph stating
+  the evaluator's rules from `docs/eval_design.md`. **Running now** on the ten cells at
+  `996825c`, rows committed as they land (`reports/p1_pilot/summaries/rev2_*`).
+- **The expert brief** (`996825c`, brief sha256 `81b89186…`): `expert_brief.md`, from
+  cited literature only, appended to the system text in the arm
+  `configs/workflows/p1_expert_brief.yaml`; `prompt_sha256` is shared with revision 2
+  and `brief_sha256` is the brief's own. The guard's failure-mode patterns are waived
+  for the brief; ids, label frequencies and P0 outcomes still apply, with a test that
+  the waiver applies only to the brief. **No run of this arm until the lead has read
+  the brief.**
+
+**Blocked:** the expert-brief runs wait for the lead's read. **Next:** the revision-2
+rows; then, on the lead's word, the brief arm; then the five-column report.
