@@ -84,6 +84,11 @@ only the enabled extensions' states. The fourth, **`precipitation`, cannot**:
   `structural_not_offered`.
 - No Level 0–5 truth is structural, so no cell's truth is affected. Only the structural
   class's reach as an alternative is.
+- **The reported structural deltas are for three of the four extensions,** so they
+  overstate the class's real margin. The reviewer scored the missing candidate on five
+  cells with scratch-only patches (decisions, 2026-09-28): it never entered the margin
+  of 2 and never beat the truth class. With it, S5-02 B/B's structural delta would be
+  11.6 instead of 172.6. No admissible set changes.
 
 ### 2.2 A structural candidate must be visible
 
@@ -93,8 +98,12 @@ explanation of any clean record.
 - **The test.** A structural candidate enters the class's search, and its *N*, only
   if it moves the visible record by at least `structural_min_visibility` (1, in noise
   units). That is the whitened squared distance between its prediction and the
-  reference, over the tier's kept samples, and the most deviance it could gain over the
-  reference on any record.
+  reference, over the tier's kept samples, under the reference covariance. It bounds the
+  expected deviance the candidate loses against the reference under that covariance. It
+  is not a bound on the candidate's gain under its own covariance: the log-determinant
+  term can still move a near-invisible candidate (on S5-01 A/A the `ionic_strength`-off
+  candidate has visibility 0.106 and gains 5.95 over `none` through it, and the gate
+  excludes it). That term is what the measured joint rate (0.9825, §3) covers.
 - **What is reported.** The candidates left out are named, with their distance, in
   the class's `not_visible`.
 - **When none is left.** The class has no alternative on that tier and is not
@@ -253,7 +262,9 @@ The per-cell table is `reports/p0_distinguishability.{csv,json}`; the full docum
 
 **Every admissible set is a single label.** No cell has two admissible labels at the
 margin of 2. So the second score never credits a broad answer here: it credits exactly
-one label per cell, which is either the truth or `none`.
+one label per cell, which is either the truth or `none`. This is a result of this sweep,
+not a property of the method, and on two cells it has little slack: on S1-01 B/B the
+state class is 2.88 behind `none`, and on S2-02 C/A the parameter class is 3.07 behind.
 
 **The truth is admissible on 60 of 78 cells.** The 18 others, and why:
 - **S2-02 at Tier A (3 cells): {none}.** Tier A carries no CH4 analyser, so the record
@@ -284,7 +295,8 @@ the 18 above.
 | parameter (S5-01, S5-02) | 10 | 3 (S5-01 A) | 7 (S5-02) |
 
 **P0's second score beside its exact score** (`reports/p0_sweep_scored_admissible.csv`,
-from `python -m eval --all`, over the 71 representable cells):
+the 78 sweep cells in the order of `reports/p0_sweep_scored.csv`, scored with the
+admissible columns; over the 71 representable cells):
 - **exact attribution: 17 of 71; admissible attribution: 25 of 71.**
 - Stratified by the chance rate |A ∪ truth| / 6: **17 of 60** where A is the truth
   (chance 1/6), and **8 of 11** where A ≠ truth (chance 2/6).

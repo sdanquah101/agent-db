@@ -6008,3 +6008,27 @@ results are in `docs/distinguishability.md` §7. Decisions taken on them:
   says a workflow could not be expected to name the truth on these 18 from the
   calibration window alone; on the other 53 faulted cells it could.
 - **Compute:** about 19.7 runner-hours, within the 19–32 planned.
+
+## 2026-09-28 — Review of PR #25 at 4a6b45d: four small items, and the precipitation candidate scored
+
+The coordinator's fresh-context review re-derived every admissible set, delta, chance
+rate and best label from the bundled documents with no mismatch, regenerated S5-02 B/B
+and S4-01 C/C from scratch bit for bit, and matched the scored table to `main`'s on every
+shared column. Four small items, done in one push:
+- **The scored-admissible tables carry the 78 sweep cells only,** in `main`'s row order.
+  `python -m eval --all` had also picked up the two P0 pilot runs still in `runs/`
+  (S6-02 B/B and S8-01 B/B), with empty admissible columns. No number changed.
+- **The visibility wording is corrected.** The distance bounds the expected deviance a
+  candidate loses against the reference under the reference covariance; it is not a
+  bound on its gain under its own covariance, where the log-determinant can move a
+  near-invisible candidate (S5-01 A/A: visibility 0.106, gain 5.95). The gate excludes
+  such a candidate anyway, and the measured joint rate covers the term.
+- **The precipitation-off candidate, scored by the reviewer.** With scratch-only patches
+  in both forms (the extension kept with `k_prec_caco3` = 0; the extension off with
+  `S_ca` stripped), on five cells: it never entered the margin of 2, never beat the truth
+  class, and on the none-only cell was 4.8–7.7 worse than `none` before the penalty. Its
+  omission changes no admissible set. The reported structural deltas therefore overstate
+  the class's margin (S5-02 B/B: 11.6 with it, 172.6 without), which §2.1 now says.
+  The change under `sim/` is still not made here.
+- **The singleton result is declared a result of this sweep,** with its slack named:
+  S1-01 B/B (state 2.88 behind `none`) and S2-02 C/A (parameter 3.07 behind).
