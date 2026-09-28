@@ -191,7 +191,7 @@ once.
 
 Before any sweep, `none` must be admissible on every Level-0 cell: S0-01 on Plants B and
 C, at Tiers A, B and C. The truth's class must also be admissible on S2-03 C/B, S2-02 C/B
-and one S5 cell. The results and the time per cell are in the PR (§6 below).
+and one S5 cell. The results and the time per cell are in §7 and in the PR.
 
 ## 5. Outputs
 
@@ -242,7 +242,66 @@ closed-form or grid look-ups, so they cost seconds per tier.
   integrates nothing. Every simulation has a 180 s timeout. A candidate that times out
   or that the simulator refuses is reported (`simulation_failures`) and is not scored.
 
-## 7. Where the code lives
+## 7. Results: the Level 0–5 sweep (2026-09-25/26)
+
+The sweep ran as cleared, from 08:36 UTC on 2026-09-25 to 01:20 UTC on 2026-09-26, on one
+niced process beside the positive-control ladder. Every one of the 32 pairs (78 cells)
+reproduced its stored truth exactly, and no candidate simulation failed or timed out.
+The per-cell table is `reports/p0_distinguishability.{csv,json}`; the full documents
+(every class's deviance, penalty, knobs and per-sensor terms) are bundled in
+`reports/p0_distinguishability_documents.json`, because `truth_store/` is not committed.
+
+**Every admissible set is a single label.** No cell has two admissible labels at the
+margin of 2. So the second score never credits a broad answer here: it credits exactly
+one label per cell, which is either the truth or `none`.
+
+**The truth is admissible on 60 of 78 cells.** The 18 others, and why:
+- **S2-02 at Tier A (3 cells): {none}.** Tier A carries no CH4 analyser, so the record
+  cannot show the flatline. At Tiers B and C the truth wins on both plants.
+- **S3-02 A/A: {none}.** On Plant A at Tier A the unrecorded delivery is not
+  distinguishable from noise (the influent class is 10.9 behind `none`); on Plants B
+  and C it is decisive at every tier.
+- **S5-02, all 7 cells: {none}.** The hydrolysis shift at day 120 is not visible by the
+  end of the calibration window (day 150), even from the exact truth: the parameter
+  class trails `none` by 3.9–11.2. S5-01 on Plant A, whose window runs to day 274, is
+  decisive at every tier.
+- **S4-02, all 7 cells: not representable.** Its `informative_missingness` truth is
+  outside every class (§2), so its score is null, not credited. The record itself reads
+  as clean (A = {none}).
+
+So `none` is admissible on 30 cells: the 12 whose truth is `none` (S0-01 and S1-01), and
+the 18 above.
+
+**Per level and label.**
+
+| truth | cells | A = truth | A = {none} |
+|---|---|---|---|
+| none (S0-01, S1-01) | 12 | 12 | — |
+| sensor (S2-01, S2-02, S2-03) | 21 | 18 | 3 (S2-02 at Tier A) |
+| influent (S3-01, S3-02, S3-03) | 21 | 20 | 1 (S3-02 A/A) |
+| state (S4-01) | 7 | 7 | — |
+| state+sensor (S4-02) | 7 | not representable | (7) |
+| parameter (S5-01, S5-02) | 10 | 3 (S5-01 A) | 7 (S5-02) |
+
+**P0's second score beside its exact score** (`reports/p0_sweep_scored_admissible.csv`,
+from `python -m eval --all`, over the 71 representable cells):
+- **exact attribution: 17 of 71; admissible attribution: 25 of 71.**
+- Stratified by the chance rate |A ∪ truth| / 6: **17 of 60** where A is the truth
+  (chance 1/6), and **8 of 11** where A ≠ truth (chance 2/6).
+- The 8 cells credited by the second score and not the first: 7 where P0 answered `none`
+  and the record admits only `none` (S2-02 at Tier A on all three plants; S5-02 A/A, B/B,
+  B/C and C/B), and S2-02 B/C, where P0's primary label `sensor` is the truth but its
+  label set added `structural`, so the exact set score is false while the primary label
+  is credited (`attribution_admissible_set` is false there too).
+- Where the record was decisive and P0 missed (43 cells), the second score gives no
+  credit: those misses are P0's.
+
+**Compute, measured.** About 3,800 simulations in all (3,039 in the sweep's documents
+plus about 750 for the seven check pairs, taken from the cache), 16.8 h of pair wall time
+in the sweep plus about 2.9 h for the check pairs: **about 19.7 runner-hours**, against
+the plan of 19–32 (§6).
+
+## 8. Where the code lives
 
 `distinguish/` is a top-level package (listed in `pyproject.toml`), run outside every
 sandbox. The rule-1 checker forbids it to workflows, by import and by the

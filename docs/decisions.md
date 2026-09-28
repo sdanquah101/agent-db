@@ -5987,3 +5987,24 @@ How the session implemented it. Each choice is the smallest that meets the decis
   and the truth's class on S2-03 C/B, S2-02 C/B and one S5 cell. The results and the
   time per cell are reported in the PR.
 
+## 2026-09-26 — The distinguishability sweep (Levels 0–5, 78 cells): results and what they change
+
+Cleared by the coordinator after the re-review of 15cf78d (~13:10 UTC, 2026-09-25). The
+results are in `docs/distinguishability.md` §7. Decisions taken on them:
+- **Nothing in the method changed after the sweep.** The grids, the penalty, the margin
+  and the visibility rule are as committed before it.
+- **The admissible sets are committed as reports,** not in `truth_store/` (which is not
+  under version control): the per-cell table and a bundle of the 78 documents
+  (`reports/p0_distinguishability_documents.json`). The evaluator still reads
+  `truth_store/<id>/admissible.json`; a fresh store can be re-analysed from the same code
+  and grids.
+- **Every admissible set is a singleton,** so the second score credits one label per
+  cell. It credits P0 on 25 of 71 representable cells against 17 exact. All 8 gains are
+  cells where the record admits only `none` and P0 said `none`, plus one cell where P0's
+  primary label is the truth and its set is too broad.
+- **The 18 cells where the truth is not admissible are declared, not excluded:**
+  S2-02 at Tier A (no CH4 analyser), S3-02 A/A, all of S5-02 (the shift is not visible
+  by day 150, even from the exact truth) and S4-02 (not representable). The upper bound
+  says a workflow could not be expected to name the truth on these 18 from the
+  calibration window alone; on the other 53 faulted cells it could.
+- **Compute:** about 19.7 runner-hours, within the 19–32 planned.
