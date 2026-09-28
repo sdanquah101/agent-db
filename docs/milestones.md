@@ -2836,3 +2836,98 @@ and an expert-brief arm, the freeze after both on the lead's word.
 
 **Blocked:** the expert-brief runs wait for the lead's read. **Next:** the revision-2
 rows; then, on the lead's word, the brief arm; then the five-column report.
+
+### Session 2026-09-28 (continued) — revision 2 complete; the finding on killed runs
+
+**Done.**
+- **Revision 2 (`c80a3752…`), ten development cells at `996825c`**, one run per cell.
+  Five concluded. **Three were killed at the runner's margin** (S0-01 B/A, S0-01 B/C,
+  S3-01 C/B) and **two ended on connection errors** (S5-01 A/A on turn 3, S6-02 B/B
+  on turn 4: four `APIConnectionError` attempts each, between about 19:00 and 19:35
+  UTC, around this session's infrastructure restart). All five count as failed runs
+  (attribution misses; the coordinator's answer 2). Rows in `reports/p1_pilot.csv`,
+  summaries in `reports/p1_pilot/summaries/rev2_*`.
+
+**Revision 2, per cell.** Development diagnostics only.
+
+| cell | labels (truth) | evidence per label: n (t, c) | unsupp. | invalid | refused | extra abst. | kin. err. | kin. drift | evals | wall min | turns | tokens | USD |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| S0-01 B/A | KILLED, no conclusion; placeholder none (none) | (no conclusion; the interim state's placeholder) | 0/1 | 0 | 3 | 0 | None | False | 337/450 | 100.1/90.0 | 7 | 209380 | 0.012774 |
+| S0-01 B/B | influent+sensor (none) | influent 4 (t 3, c 0); sensor 1 (t 1, c 0) | 0/5 | 0 | 2 | 19 | None | False | 183/450 | 70.6/90.0 | 16 | 687642 | 0.042902 |
+| S0-01 B/C | KILLED, no conclusion; placeholder none (none) | (no conclusion; the interim state's placeholder) | 0/0 | 0 | 0 | 0 | None | False | 314/450 | 100.1/90.0 | 6 | 236645 | 0.015586 |
+| S1-01 B/B | structural+sensor+influent (none) | structural 2 (t 2, c 0); sensor 1 (t 0, c 1); influent 1 (t 0, c 1) | 0/4 | 0 | 0 | 10 | None | True | 254/450 | 81.7/90.0 | 12 | 524896 | 0.041144 |
+| S2-01 B/B | influent+sensor (sensor) | influent 2 (t 2, c 0); sensor 2 (t 2, c 0) | 0/4 | 0 | 1 | 16 | False | False | 131/450 | 43.3/90.0 | 14 | 439392 | 0.028651 |
+| S3-01 C/B | KILLED, no conclusion; placeholder none (influent) | (no conclusion; the interim state's placeholder) | 0/0 | 0 | 0 | 0 | False | False | 431/600 | 130.1/120.0 | 6 | 197239 | 0.014789 |
+| S4-01 B/B | sensor+state (state) | sensor 1 (t 1, c 0); state 1 (t 1, c 0) | 0/2 | 0 | 1 | 11 | False | False | 292/600 | 92.1/120.0 | 15 | 757719 | 0.05718 |
+| S5-01 A/A | KILLED, no conclusion; placeholder none (parameter) | (no conclusion; the interim state's placeholder) | 0/0 | 0 | 0 | 0 | None | None | 63/300 | 36.7/120.0 | 3 | 69105 | 0.006831 |
+| S6-02 B/B | KILLED, no conclusion; placeholder none (structural) | (no conclusion; the interim state's placeholder) | 0/1 | 0 | 5 | 0 | False | False | 98/750 | 70.8/150.0 | 4 | 107530 | 0.014909 |
+| S8-01 B/B | sensor+influent (sensor) | sensor 2 (t 2, c 0); influent 2 (t 1, c 0) | 0/4 | 1 | 3 | 5 | False | True | 383/750 | 157.1/150.0 | 14 | 532119 | 0.042888 |
+
+**Totals, old / 1a / 1b / rev2, with the pairwise differences.** Failed runs are misses
+in every label row; wall clock, evaluations and cost are not comparable across the
+contended arms (below).
+
+| total | old | 1a | 1b | rev2 | 1a − old | 1b − old | 1b − 1a | rev2 − old | rev2 − 1a | rev2 − 1b |
+|---|---|---|---|---|---|---|---|---|---|---|
+| cells | 10 | 10 | 10 | 10 | +0 | +0 | +0 | +0 | +0 | +0 |
+| failed runs (killed, no conclusion) | 0 | 0 | 2 | 5 | +0 | +2 | +2 | +5 | +5 | +3 |
+| exact attribution | 0 | 0 | 1 | 0 | +0 | +1 | +1 | +0 | +0 | -1 |
+| primary label = truth | 1 | 1 | 2 | 1 | +0 | +1 | +1 | +0 | +0 | -1 |
+| truth among the labels given | 3 | 4 | 3 | 3 | +1 | +0 | -1 | +0 | -1 | +0 |
+| `none` reached on `none` cells | 0 | 0 | 0 | 0 | +0 | +0 | +0 | +0 | +0 | +0 |
+| labels given | 24 | 23 | 17 | 11 | -1 | -7 | -6 | -13 | -12 | -6 |
+| labels without localised evidence | 2 | 3 | 1 | 0 | +1 | -1 | -2 | -2 | -3 | -1 |
+| unsupported claims | 0 | 0 | 0 | 0 | +0 | +0 | +0 | +0 | +0 | +0 |
+| invalid actions (evaluator) | 2 | 1 | 2 | 1 | -1 | +0 | +1 | -1 | +0 | -1 |
+| harness refusals (verbatim log) | 34 | 23 | 15 | 15 | -11 | -19 | -8 | -19 | -8 | +0 |
+| extra abstentions | 166 | 101 | 71 | 61 | -65 | -95 | -30 | -105 | -40 | -10 |
+| kinetic-update errors | 0 | 0 | 0 | 0 | +0 | +0 | +0 | +0 | +0 | +0 |
+| kinetic drift (cells) | 4 | 4 | 1 | 2 | +0 | -3 | -3 | -2 | -2 | +1 |
+| simulator evaluations | 2867 | 3208 | 2413 | 2486 | +341 | -454 | -795 | -381 | -722 | +73 |
+| wall clock, min | 590.4 | 664.1 | 890.1 | 882.6 | +73.7 | +299.7 | +226.0 | +292.2 | +218.5 | -7.5 |
+| turns | 168 | 172 | 122 | 97 | +4 | -46 | -50 | -71 | -75 | -25 |
+| tokens | 6153437 | 7603988 | 4782026 | 3761667 | +1450551 | -1371411 | -2821962 | -2391770 | -3842321 | -1020359 |
+| cost at luna's rates, USD | 0.348 | 0.429 | 0.306 | 0.278 | +0.081 | -0.042 | -0.123 | -0.07 | -0.151 | -0.028 |
+
+**Reading (five concluded revision-2 runs, so weaker still than the other arms).**
+- No exact attribution; the primary matched on S8-01 B/B; the truth was among the
+  labels on three of the five. Neither concluded `none` cell (S0-01 B/B, S1-01 B/B)
+  reached `none`.
+- Fewer labels per run (11 over five runs) and none resting on whole-record figures
+  only; extra abstentions 61 over five runs, refusals 15. No unsupported claim, no
+  kinetic-update error, in any arm.
+- The 1b → revision 2 difference is meant to isolate the scoring statement; with eight
+  and five concluded runs it isolates little. The statement did not change the label
+  behaviour visibly.
+
+**The finding: how the killed runs die** (from the truth-side call logs, which carry
+runtimes and timestamps; the visible log carries neither).
+- Every killed run, under 1b and under revision 2, died inside one `fit_lsq` of 200–320
+  evaluations that the agent started with 30–60 min of allowance left and that ran
+  77–134 min. The registry checks the wall clock when a call starts, so one call can
+  run through the whole allowance; the runner kills the jail at allowance + 10 min.
+- The killed call keeps running: the registry server is a daemon thread of the driver
+  process, and the orphaned fit computed on for 29–84 min after each kill, inside the
+  lane that was already running its next cell.
+- Contention doubled the cost of an evaluation. Median seconds per simulator
+  evaluation: old 11.4, 1a 11.5, 1b 21.2, revision 2 19.8 (max 34.6). The 1b and
+  revision-2 arms ran while this session's test suites ran on the same 4-core container
+  (about 2.5 h, one at nice 5), and then under their own orphaned fits. The two
+  uncontended arms had neither.
+- The same two cells (S0-01 B/C, S3-01 C/B) died the same way under both prompts,
+  each on a fit sized at roughly the cell's whole allowance: the kills are an artefact
+  of load plus a harness gap, not of the prompts.
+
+**Proposals, in PR #26 for the coordinator** (nothing applied): a per-call duration
+guard in P1's harness (estimate a fit, GSA, profile or sampler call from its requested
+evaluations and the run's measured seconds per evaluation, refuse what does not fit in
+the wall clock left); the runner stopping the registry's in-flight call on a kill, or
+one process per cell in the batch driver; re-runs of the failed cells, or not, at the
+coordinator's discretion.
+
+**Operating rule from here (this session's own):** no test suite runs beside live
+cells. The suites run before a batch or after it.
+
+**Blocked:** the expert-brief arm waits for the lead's read; the proposals and re-runs
+for the coordinator. **Next:** on the coordinator's word, the guard and the re-runs;
+on the lead's word, the brief arm; then the five-column report.

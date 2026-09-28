@@ -6736,3 +6736,39 @@ committed (the coordinator's order of work).
    scoring. Literature thresholds are cited by author rather than quoted as numbers.
 6. **No run of this arm** until the lead has read the brief and the coordinator relays
    the lead's word. The revision-2 arm runs meanwhile.
+
+## 2026-09-28 — P1: killed runs, orphaned calls and contention (a finding; nothing changed)
+
+**Finding** (the truth-side call logs of the 1b and revision-2 arms).
+- A run is killed when one long call outruns the allowance. The registry checks the
+  wall clock only when a call starts (`tools/registry.py`), so a `fit_lsq` of 200–320
+  evaluations started with 30–60 min left runs 77–134 min; the runner kills the jail
+  at allowance + `timeout_margin_min`, and the state it leaves is the harness's interim
+  write with the placeholder label `none`.
+- The killed call keeps computing on the registry server's daemon thread, inside the
+  driver process, for 29–84 min after the kill.
+- Contention roughly doubled the cost of an evaluation in the 1b and revision-2 arms
+  (median 21 and 20 s against 11.5 s in the uncontended arms): this session's test
+  suites ran beside the cells, and orphaned fits ran beside the next cells.
+- Two revision-2 runs ended on four `APIConnectionError` attempts each (a model-side
+  failure: a miss, by the coordinator's answer 2 of 2026-09-28), around the session's
+  infrastructure restart. A minimal request afterwards is the check that the key and
+  the route still work.
+
+**Decisions.**
+1. **Failed runs are reported as failures**, never as their placeholder label: the
+   tables count every unconcluded run as an attribution miss, `reports/p1_pilot*.csv`
+   carry a `run_failed` flag beside the evaluator's raw columns.
+2. **No test suite beside live cells**, from now on, in this session.
+3. **Nothing in the harness or the runner changes without the coordinator's word.**
+   The proposals are in PR #26: a P1-side per-call duration guard (a refusal of a
+   fit, GSA, profile or sampler call whose estimated duration, from the requested
+   evaluations and the run's measured seconds per evaluation, exceeds the wall clock
+   left less the reserve); stopping the registry's in-flight call on a kill, or one
+   process per cell in the batch driver; and whether the failed cells are re-run.
+   Each changes what a run does, so each would be a new head, named in the report.
+
+**Alternatives.** Rewriting the prompt to tell the agent to size its fits to the clock
+was rejected: the reserve rule is already in the prompt, the agent still sized the fits
+for an uncontended container, and a harness rule is the only one that holds under any
+load.
