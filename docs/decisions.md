@@ -6616,3 +6616,80 @@ it), and an interior optimum is still determined by the data.
    - This is a reading of the record, not a significance test: citing `step_z` means the
      item uses the step statistic, not that the step is significant.
    - No prompt change comes with it.
+
+## 2026-09-28 — RULING (the lead): the scoring-rule statement and the expert-brief arm
+
+**Ruling** (the lead, relayed by the coordinator ~14:30 UTC: "Add the expert-brief arm
+and scoring-rule statement, yes"). This supersedes the coordinator's "no further prompt
+revision after 1b"; the freeze now comes after these two arms, on the lead's word. The
+coordinator's implementation design, recorded as given:
+1. **Revision 2 = revision 1b + a scoring-rule statement**: one paragraph in
+   `system.md`, written from `docs/eval_design.md` and the benchmark card only, in plain
+   terms, using the evaluator's actual rules and inventing none. Nothing else changes.
+   Committed with its sha256; the ten development cells run on it.
+2. **The expert brief, a separate arm ("P1 + expert brief")**: a new file
+   `configs/workflows/p1_prompts/expert_brief.md`, appended to the system prompt in this
+   arm only, with its own sha256 (`brief_sha256` in `p1.yaml`, empty until the freeze).
+   - *Sources:* cited literature only (the ADM1 papers and the IWA STR, process
+     monitoring and early-warning reviews, plant operation, instrument maintenance).
+     Every substantive claim carries a citation. Nothing from the scenario library, the
+     truth store, `configs/faults*`, `configs/observation*`, or any per-cell result.
+   - *Content:* how upsets look across the standard channels and in what order the
+     channels respond; how feed characterisation errors show in the balances versus in
+     the kinetics; how instruments fail in practice and how each failure shows against
+     the other channels and the balances; what a mass balance can and cannot decide;
+     background versus cause. Generic diagnostic reasoning, not a decision tree keyed to
+     this library.
+   - *Forbidden:* scenario or rule ids; any statement of how often a cause occurs; the
+     library's magnitudes, onset days, durations, or the tier-specific instrument
+     inventory; anything from a per-cell outcome; scoring beyond the revision-2
+     statement.
+   - *The guard:* the brief is checked by the scenario-id, rule-id, frequency and
+     P0-outcome patterns. The failure-mode co-occurrence pattern is waived for the
+     brief, because describing failure modes from the literature is its purpose; the
+     lead's read of the brief is the defence. A test checks that the waiver applies only
+     to `expert_brief.md`.
+   - *Before any run:* push the brief and stop; the lead reads it; runs start only on
+     the lead's word, relayed by the coordinator.
+3. **The report:** five column sets (old / 1a / 1b / rev2 / rev2+brief), the same
+   columns plus the evidence behind each label, totals and pairwise differences
+   (1b→rev2 isolates the scoring statement; rev2→rev2+brief isolates the brief).
+   Development diagnostics only, one run per cell; differences of a cell or two are
+   noise. Cost and wall clock per arm.
+
+Still forbidden without the lead's word: the freeze, the Level 0–5 sweep scoring, the
+held-out variants.
+
+## 2026-09-28 — P1: prompt revision 2 (revision 1b + the scoring-rule statement)
+
+**Decision.** One paragraph, "How your conclusion is scored", is added to `system.md`
+after the abstention paragraph. Nothing else changes from revision 1b. Each sentence is
+one rule of `docs/eval_design.md` §2, stated plainly:
+- the label *set* (primary plus secondaries) against the truth set, exact
+  (`attribution_exact`), the overlap as partial credit (`attribution_partial`), and
+  whether the primary alone is true (`primary_in_truth`); an extra untrue label makes
+  the set wrong;
+- abstentions for coverage (`abstention_correct`: every `abstain_on` term appears) and
+  precision (`abstention_extra`, `abstention_precision`: each unexpected term counts
+  against);
+- `posterior_intervals` is an earned abstention: credited only when the logs show the
+  sampler failed or did not converge (ruling D2);
+- an unsupported claim is an evidence item whose calls do not resolve to a logged `ok`
+  line of a tool that returns the claimed quantity (`unsupported_claim_rate`, ruling
+  D3);
+- a kinetic update where the key forbids it (`false_kinetic_update`), and, on a run
+  whose truth is not `parameter`, a kinetic estimate outside the central part of the
+  declared box prior (`false_kinetic_drift`; the evaluator's cut is the central 90 % of
+  the declared uniform box, which the paragraph calls "the central part" so as not to
+  put a number beside the word *parameter*, which the guard reads as a frequency);
+- a run without a valid state is an attribution miss.
+
+**Why the statement is allowed under the P1 prompt rule.** The rule bars scenario ids,
+rule ids, label frequencies and per-cell P0 outcomes: knowledge of the *library*. The
+scoring rules are the evaluator's published contract (`docs/eval_design.md`, the card
+§7), which P0 satisfies by construction because its author wrote it against that
+contract. Stating the contract to P1 gives it what P0 already has, and nothing about
+what the cells contain (the coordinator's design under the lead's ruling).
+
+**Runs.** The ten development cells run on revision 2 once the ten revision-1b rows are
+committed (the coordinator's order of work).

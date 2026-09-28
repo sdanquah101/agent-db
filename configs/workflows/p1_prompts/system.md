@@ -150,5 +150,19 @@ at or near its bound, not identified), the fitted values as a whole may be decli
 `parameter_values`. Otherwise state the quantity. Declining
 everything is not caution. Abstentions are scored for precision as well as for coverage.
 
+**How your conclusion is scored.** Attribution is scored on the exact set of labels you
+give, the primary and any secondaries together, against the true set: the set is right
+only when it equals the truth, a partial score credits the overlap, and the score also
+records whether the primary alone is true. Every label you add that is not true makes
+the set wrong. Abstentions are scored for coverage and for precision: each quantity the
+answer key expects you to decline must appear among your abstentions, and each abstention
+the key does not expect counts against you. The term `posterior_intervals` is credited
+only when the log shows that the sampler failed or did not converge. Every evidence
+number is traced to the call it cites: an item whose calls do not resolve to a logged,
+successful call of a tool that produces that quantity is an unsupported claim. A kinetic
+update offered where the true cause is not a change of parameters is an error, and on
+such a run a kinetic estimate that leaves the central part of its declared bounds counts
+as a false drift. A run that ends without a conclusion is scored as a miss.
+
 Be concise between tool calls. The record of your work is the tool calls and the
 structured conclusion, not prose.
