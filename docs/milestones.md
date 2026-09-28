@@ -2483,3 +2483,20 @@ P0 rulings (step 1).
 **Next.** PR B (positive-control ladder, pre-registered in
 `docs/positive_control.md`) and PR C (distinguishability).
 
+### Session 2026-09-24/26 — the distinguishability analysis (`claude/distinguishability`, draft PR #25)
+
+**Done.** Method version 4 (the truth baseline, the coordinator's decision after two
+re-reviews), cleared to sweep after an independent re-review, and swept over all 78
+Level 0–5 cells.
+- Every admissible set is a single label; the truth is admissible on 60 of 78.
+- The 18 others are declared: S2-02 at Tier A, S3-02 A/A, all of S5-02, and S4-02 (not
+  representable).
+- P0's second score: 25 of 71 against 17 exact, all gains where the record admits only
+  `none`.
+- About 19.7 runner-hours.
+
+**Flagged for the coordinator:** `precipitation` switched off needs a change under
+`sim/` to be a structural candidate.
+
+**Blocked:** nothing. **The next session starts on:** whatever the lead rules on the
+results (`docs/distinguishability.md` §7).
