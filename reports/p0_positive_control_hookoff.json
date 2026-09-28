@@ -1,0 +1,159 @@
+{
+ "cells": [
+  {
+   "cell": [
+    "S0-01",
+    "B",
+    "A"
+   ],
+   "baseline_run_id": "run_13ba3147ca82",
+   "run_id": "run_816cec08ae34",
+   "state.json_bytes_equal": false,
+   "summary.json_bytes_equal": false,
+   "report.md_bytes_equal": false,
+   "normalised_state_equal": true
+  },
+  {
+   "cell": [
+    "S0-01",
+    "B",
+    "B"
+   ],
+   "baseline_run_id": "run_d233c4c46286",
+   "run_id": "run_a48a1b66662e",
+   "state.json_bytes_equal": false,
+   "summary.json_bytes_equal": false,
+   "report.md_bytes_equal": false,
+   "normalised_state_equal": false,
+   "differing_keys": [
+    "actions",
+    "budget",
+    "plan",
+    "tool_failures"
+   ],
+   "plan_a": {
+    "guards_tripped": [
+     "mcmc: bound 88 at the measured rate"
+    ],
+    "fallbacks": [
+     "mcmc: 10 steps do not fit"
+    ],
+    "steps_skipped": {
+     "mcmc": "skipped: no size fitted the plan",
+     "profiles": "the plan does not allow a profile"
+    }
+   },
+   "plan_b": {
+    "guards_tripped": [],
+    "fallbacks": [],
+    "steps_skipped": {
+     "profiles": "the plan does not allow a profile"
+    }
+   }
+  },
+  {
+   "cell": [
+    "S0-01",
+    "B",
+    "C"
+   ],
+   "baseline_run_id": "run_2e5a6407a4a8",
+   "run_id": "run_a26d5f00e5d0",
+   "state.json_bytes_equal": false,
+   "summary.json_bytes_equal": false,
+   "report.md_bytes_equal": false,
+   "normalised_state_equal": true
+  },
+  {
+   "cell": [
+    "S1-01",
+    "B",
+    "B"
+   ],
+   "baseline_run_id": "run_b34ba6f1fdfd",
+   "run_id": "run_953af0a6fd28",
+   "state.json_bytes_equal": false,
+   "summary.json_bytes_equal": false,
+   "report.md_bytes_equal": false,
+   "normalised_state_equal": true
+  },
+  {
+   "cell": [
+    "S2-01",
+    "B",
+    "B"
+   ],
+   "baseline_run_id": "run_9cfe5c728fb2",
+   "run_id": "run_34e60ee4d2ab",
+   "state.json_bytes_equal": false,
+   "summary.json_bytes_equal": false,
+   "report.md_bytes_equal": false,
+   "normalised_state_equal": false,
+   "differing_keys": [
+    "actions",
+    "budget",
+    "plan",
+    "tool_failures"
+   ],
+   "plan_a": {
+    "guards_tripped": [
+     "mcmc: bound 88 at the measured rate"
+    ],
+    "fallbacks": [
+     "mcmc: 10 steps do not fit"
+    ],
+    "steps_skipped": {
+     "mcmc": "skipped: no size fitted the plan",
+     "profiles": "the plan does not allow a profile"
+    }
+   },
+   "plan_b": {
+    "guards_tripped": [],
+    "fallbacks": [],
+    "steps_skipped": {
+     "profiles": "the plan does not allow a profile"
+    }
+   }
+  },
+  {
+   "cell": [
+    "S3-01",
+    "C",
+    "B"
+   ],
+   "baseline_run_id": "run_badfd19ad874",
+   "run_id": "run_6948aa04620b",
+   "state.json_bytes_equal": false,
+   "summary.json_bytes_equal": false,
+   "report.md_bytes_equal": false,
+   "normalised_state_equal": true
+  },
+  {
+   "cell": [
+    "S4-01",
+    "B",
+    "B"
+   ],
+   "baseline_run_id": "run_1354d1f71117",
+   "run_id": "run_9de93497e6a3",
+   "state.json_bytes_equal": false,
+   "summary.json_bytes_equal": false,
+   "report.md_bytes_equal": false,
+   "normalised_state_equal": true
+  },
+  {
+   "cell": [
+    "S5-01",
+    "A",
+    "A"
+   ],
+   "baseline_run_id": "run_b23978401022",
+   "run_id": "run_109eba7c4a1c",
+   "state.json_bytes_equal": false,
+   "summary.json_bytes_equal": false,
+   "report.md_bytes_equal": false,
+   "normalised_state_equal": true
+  }
+ ],
+ "all_normalised_equal": false
+}

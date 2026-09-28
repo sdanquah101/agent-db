@@ -115,6 +115,48 @@ attribution:
       balance: [mass_balance]
       assay: [request_assay]
 
+# ---------------------------------------------------------------- distinguishability
+# The admissible label set per cell (docs/distinguishability.md; the review of PR #25 moved
+# these out of the code, and they are committed before the analysis runs).
+distinguishability:
+  method_version: 4           # the evaluator reads admissible.json only at this version
+  margin: 2.0                 # DESIGN  score units; a label within this of the best is admissible
+  sensitivity_margin: 10.0    # DESIGN  reported beside it
+  # Method version 4 (coordinator's decision on the second re-review of PR #25): every
+  # class is the TRUTH simulation (true parameters, influent, initial state and seeds) with
+  # the injected fault removed, plus that class's own candidate perturbation, seen through
+  # the same observation operator and compared with the declared noise (white noise plus
+  # the sensor's own recalibrated drift; no dispersion rescaling). An upper bound on
+  # distinguishability, optimistic by construction.
+  #
+  # A class's penalty is the likelihood-ratio critical value of its k fitted knobs at
+  # lr_alpha / n_alternatives (Bonferroni over the classes competing with `none`), plus
+  # 2 ln N for a best-of-N search over its discrete candidates when look_elsewhere is on.
+  lr_alpha: 0.05
+  n_alternatives: 5
+  look_elsewhere: true
+  none_admissible_rate_min: 0.95   # declared; checked by the joint noise test
+  sim_timeout_s: 180.0        # DESIGN  s; a candidate simulation past this is reported, not scored
+  # --- the candidate grids. Each class also carries the truth's own fault (onset,
+  # duration and magnitude) as one more candidate when the truth is of that class.
+  sensor_onset_every_d: 10.0  # DESIGN  d; onsets of a sensor step, scale, drift or flatline
+  # a one-sample hold is the sensor's own declared episode, not a candidate fault
+  flatline_durations_d: [2.0, 4.0, 8.0, 16.0]   # DESIGN  d
+  delivery_every_d: 20.0      # DESIGN  d; days of an unrecorded delivery
+  delivery_multiples: [1.0, 3.0, 10.0]   # DESIGN  multiples of the feed's median delivery
+  window_onset_every_d: 40.0  # DESIGN  d; onsets of a fractionation or solids window
+  mislabel_durations_d: [30.0, 60.0]      # DESIGN  d
+  mislabel_concentrations: [5.0, 50.0]    # DESIGN  Dirichlet concentration of the redraw
+  moisture_durations_d: [60.0, 150.0]     # DESIGN  d
+  moisture_changes: [-0.3, 0.3]           # DESIGN  relative change in the feed's solids
+  biomass_multipliers: [0.1, 0.25, 0.5, 2.0, 4.0]   # DESIGN  on every biomass state at t = 0
+  parameter_onset_every_d: 40.0           # DESIGN  d; change points (0 = from the start)
+  parameter_multipliers: [0.2, 0.5, 2.0, 5.0]        # DESIGN  on K_I_nh3, or on k_hyd_*
+  # A structural candidate (an extension switched off) that moves the visible record by
+  # less than this, as the whitened squared distance from the reference, is not a
+  # distinguishable alternative and is left out of the class's search (and its N).
+  structural_min_visibility: 1.0   # DESIGN  noise units (chi2 scale)
+
 # ---------------------------------------------------------------- family C: efficiency
 efficiency:
   clock_record: registry.open   # the truth-side record the wall clock runs from

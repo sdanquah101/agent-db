@@ -696,6 +696,14 @@ class Pipeline:
                 )[: int(scr["min_subset"])]
                 dropped = [n for n in sobol_kept if n not in ok]
             approved = [n for n in sobol_kept if n in ok]
+        # the positive-control hook (docs/positive_control.md, rung R3): absent from the
+        # frozen configuration, so this is a no-op on every baseline run. The forced names
+        # show in `approved` only; the ladder driver logs the variant that named them
+        forced = [n for n in scr.get("force_include", ()) if n not in approved]
+        unknown = [n for n in forced if n not in params]
+        if unknown:
+            raise ValueError(f"force_include names undeclared parameters {unknown}")
+        approved = approved + forced
         self.screening.update(
             {
                 "fisher_dropped": dropped,

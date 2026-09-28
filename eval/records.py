@@ -13,6 +13,8 @@ A :class:`RunRecords` is loaded from exactly these files:
 ``runs/<id>/workflows/<wf>/state.json``     the §6.6 task state
 ``runs/<id>/workflows/<wf>/summary.json``   what the runner recorded from its side
 ``truth_store/index.jsonl``                 the map from run id to its cell (optional)
+``truth_store/<id>/admissible.json``        the distinguishability analysis's admissible
+                                            label set (optional; docs/distinguishability.md)
 ==========================================  ==============================================
 
 Nothing here imports :mod:`workflows`, reads a scenario file or a plant, or evaluates a
@@ -63,6 +65,8 @@ class RunRecords:
     truth_calls: tuple[CallRecord, ...]
     problems: tuple[str, ...] = field(default=())
     """Why a record is missing or unusable, in words; empty for a complete run."""
+    admissible: dict[str, Any] | None = None
+    """``admissible.json`` when the distinguishability analysis has run on this cell."""
 
     @property
     def launched(self) -> bool:
@@ -168,6 +172,7 @@ def load_records(
         visible_calls=visible,
         truth_calls=truth_calls,
         problems=tuple(problems),
+        admissible=_json(paths.truth / "admissible.json"),
     )
 
 

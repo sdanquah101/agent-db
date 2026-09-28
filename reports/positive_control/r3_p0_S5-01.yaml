@@ -1,0 +1,113 @@
+version: 1
+workflow: p0
+workflow_version: '1.0'
+labels:
+  sensor: sensor
+  influent: influent
+  initial_state: state
+  parameter: parameter
+  structural: structural
+  none: none
+windows:
+  calibration_start_d: 0.0
+  holdout_fraction: 0.25
+calibration:
+  channels:
+  - gas_flow
+  - ch4_fraction
+  - ph
+  - alkalinity
+  - vfa_total
+  - tan
+  - cod_total
+  - vfa_ac
+  - vfa_pro
+  - vfa_bu
+  - vfa_va
+  - h2_offgas
+  - digestate_vs
+  - digestate_ts
+  primary_channel: gas_flow
+  min_relative_sd: 0.02
+  sd_floor_abs: 1.0e-06
+qc:
+  event_load_quantile: 0.9
+  flatline_flag_d: 3.0
+  drift_bound_factor: 1.0
+  min_samples: 8
+mass_balance:
+  window_d: 30.0
+gsa:
+  morris_trajectories: 4
+  sobol_samples: 8
+  summary: mean
+screening:
+  morris_min_relative: 0.1
+  morris_keep: 4
+  sobol_min_total: 0.05
+  min_subset: 2
+  force_include:
+  - K_I_nh3
+identifiability:
+  max_relative_crlb: 0.5
+  profile_grid: 5
+  profile_starts: 1
+fit:
+  lsq_starts: 1
+  lsq_max_nfev_per_start: 40
+  de_popsize: 4
+  de_generations: 2
+  second_pass: true
+mcmc:
+  walkers: 8
+  steps: 10
+  likelihood: gaussian
+uncertainty:
+  z: 1.645
+assays:
+  max_requests: 2
+  disagreement_z: 3.0
+  preference:
+  - vfa_speciation
+  - alkalinity
+  - tan
+validation:
+  ensemble_size: 8
+attribution:
+  sensor_bias_z: 3.0
+  sensor_step_z: 3.0
+  clean_bias_z: 1.5
+  balance_windows_min: 3
+  feed_eta2_min: 0.15
+  structural_channels_min: 2
+  structural_rmse_z_min: 2.0
+  parameter_step_z: 3.0
+  parameter_channels_min: 2
+  step_day_tolerance_d: 30.0
+  transient_d: 30.0
+  state_bias_z: 3.0
+  confidence:
+    single: 0.8
+    multiple: 0.5
+    none: 0.6
+plan:
+  eval_seconds_assumed: 12.0
+  step_share: 0.75
+  profile_share: 0.15
+  profile_evals_per_point: 60
+  morris_min_trajectories: 4
+  sobol_min_samples: 8
+  de_min_generations: 2
+  mcmc_min_steps: 10
+  ensemble_min: 2
+  wall_clock_reserve_min: 2.0
+seeds:
+  morris: 101
+  sobol: 102
+  profile: 103
+  lsq: 104
+  de: 105
+  mcmc: 106
+  ensemble: 107
+runner:
+  timeout_margin_min: 5.0

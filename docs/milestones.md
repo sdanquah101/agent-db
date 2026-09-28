@@ -2483,6 +2483,43 @@ P0 rulings (step 1).
 **Next.** PR B (positive-control ladder, pre-registered in
 `docs/positive_control.md`) and PR C (distinguishability).
 
+### Session 2026-09-24/25 — the positive-control ladder for P0 (`claude/positive-control`, draft PR #23)
+
+**Done.** Pre-registered in `docs/positive_control.md` (688d00d, before any code), then
+built and run within the cap: the R3 hook (`screening.force_include`, off by default),
+the driver, and every rung.
+- Hook-off check: passed (regenerated cells byte-identical; P0's normalised state
+  identical on 6 of 8, 2 differing only on a wall-clock path).
+- R3, candidate set: "not run: 8 of 10 fitted", as registered; P0's own time guard
+  refused the fit on two Plant A cells. On the 8 fitted cells, forcing the shifted
+  parameter changed no attribution.
+- R1 at 3×: fail, as predicted (0 of 14 moved; the allowance removed the fallbacks on 6
+  cells and changed nothing on the other 8).
+- R2, true feed: fail (0 of 4 S3-02 cells moved, 0 of 4 controls).
+- R1 at 10×: neither cell moved.
+- 65.7 runner-hours summed over runs (55.2 without the hook-off check), against the §6
+  estimate of about 65 and a cap of about 100; about 22 h elapsed.
+
+**Blocked:** nothing. **The next session starts on:** whatever the lead rules on the
+ladder's reading (§8.6): the remaining explanations are P0's attribution rule, the feed's
+composition, and the record's distinguishability (PR #25).
+### Session 2026-09-24/26 — the distinguishability analysis (`claude/distinguishability`, draft PR #25)
+
+**Done.** Method version 4 (the truth baseline, the coordinator's decision after two
+re-reviews), cleared to sweep after an independent re-review, and swept over all 78
+Level 0–5 cells.
+- Every admissible set is a single label; the truth is admissible on 60 of 78.
+- The 18 others are declared: S2-02 at Tier A, S3-02 A/A, all of S5-02, and S4-02 (not
+  representable).
+- P0's second score: 25 of 71 against 17 exact, all gains where the record admits only
+  `none`.
+- About 19.7 runner-hours.
+
+**Flagged for the coordinator:** `precipitation` switched off needs a change under
+`sim/` to be a structural candidate.
+
+**Blocked:** nothing. **The next session starts on:** whatever the lead rules on the
+results (`docs/distinguishability.md` §7).
 
 ## Milestone 7 — P1, the single constrained agent (weeks 21–25)
 

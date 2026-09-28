@@ -43,6 +43,7 @@ llm = [
 [tool.setuptools]
 packages = [
     "anchor",
+    "distinguish",
     "eval",
     "scenarios",
     "sim",
