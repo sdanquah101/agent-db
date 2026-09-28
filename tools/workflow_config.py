@@ -106,6 +106,15 @@ class Screening(_Frozen):
     morris_keep: _PosInt
     sobol_min_total: _Frac
     min_subset: _PosInt
+    force_include: tuple[str, ...] = Field(
+        default=(),
+        description="Parameters added to the approved subset after the Fisher step, so "
+        "they are always fitted. OFF (empty) in configs/workflows/p0.yaml and in every "
+        "baseline run. Only the positive-control ladder's rung R3 sets it, as a "
+        "declared experimenter variant (docs/positive_control.md). An empty value is "
+        "left out of the sandbox's p0_config.json, so the jail sees the same bytes as "
+        "before the key existed.",
+    )
 
 
 class Identifiability(_Frozen):
@@ -285,6 +294,8 @@ def sandbox_config(config: P0Config) -> dict[str, Any]:
         g = declared_geometry(load_plant_config(plant_id))
         geometry[plant_id] = {"V_liq_m3": float(g.V_liq), "T_op_K": float(g.T_op)}
     payload = config.model_dump(mode="json")
+    if not payload["screening"].get("force_include"):
+        payload["screening"].pop("force_include", None)
     payload["sensor_noise"] = noise
     payload["plant_geometry"] = geometry
     payload["abstentions"] = abstention_vocabulary()
