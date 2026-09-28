@@ -2483,3 +2483,20 @@ P0 rulings (step 1).
 **Next.** PR B (positive-control ladder, pre-registered in
 `docs/positive_control.md`) and PR C (distinguishability).
 
+### Session 2026-09-24/25 — the positive-control ladder for P0 (`claude/positive-control`, draft PR #23)
+
+**Done.** Pre-registered in `docs/positive_control.md` (688d00d, before any code), then
+built and run within the cap: the R3 hook (`screening.force_include`, off by default),
+the driver, and every rung.
+- Hook-off check: passed (8 pilot cells byte-identical).
+- R3, candidate set: "not run: 8 of 10 fitted", as registered; P0's own time guard
+  refused the fit on two Plant A cells. On the 8 fitted cells, forcing the shifted
+  parameter changed no attribution.
+- R1 at 3×: fail, as predicted (0 of 14 moved; 17–41 % of the tripled budget used).
+- R2, true feed: fail (0 of 4 S3-02 cells moved, 0 of 4 controls).
+- R1 at 10×: neither cell moved.
+- About 27 runner-hours against a cap of about 100.
+
+**Blocked:** nothing. **The next session starts on:** whatever the lead rules on the
+ladder's reading (§8.6): the remaining explanations are P0's attribution rule, the feed's
+composition, and the record's distinguishability (PR #25).

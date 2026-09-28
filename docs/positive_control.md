@@ -299,6 +299,72 @@ and were scored with the earlier rungs. The rows are in
 concluded. Its misses on these cells are not a budget shortage. R1 at 10× (two cells) runs
 after R2 and tests the same thing with nothing able to bind.
 
+### 8.4 R2, the true feed: verdict "fail" (2026-09-25)
+
+The 8 cells ran from about 14:20 to 17:00 UTC on 2026-09-25, after R1 at 3×. The rows are
+in `reports/p0_positive_control.{csv,json}`, the verdict in
+`reports/p0_positive_control_summary.json`, and the launch records in
+`reports/positive_control/r2_variants.jsonl`.
+
+**The verdict, computed by the committed code: "fail".** No S3-02 cell moved (0 of 4), and
+no control cell moved (0 of 4). §5.1 calls R2 a fail when no S3-02 cell moves.
+
+**What happened, stated plainly.**
+- **The variant was as registered.** Every regenerated cell's truth and observations were
+  identical to the baseline's (`identity.json`), and every feed log was then rewritten to
+  the true delivered mass less the injected delivery (§9), so `exact_feed` is true on all
+  8 rows.
+- **Every cell gave the same final label as at baseline.** On the S3-02 cells: B/B and B/C
+  stay `none`, C/C stays `sensor`, and C/B stays `sensor+structural`. On the controls
+  (S3-01 and S3-03 at Tier C): B/C stays `none` on both scenarios, C/C stays `sensor`
+  on S3-01 and `none` on S3-03.
+- **No time-dependent path was involved.** No wall-clock guard fired on any of the 8
+  cells (no fallbacks, no timing flag).
+- **The controls behaved as predicted.** Their faults are in the feed's composition,
+  which an exact mass log cannot repair, and they did not move.
+
+**Plainly:** giving P0 the true delivered feed mass, with the unrecorded delivery removed,
+changed nothing it concluded on the four S3-02 cells. Its misses there are not a
+feed-log limitation of the kind R2 can repair. A composition-exact variant (§4, "not
+attempted") would be needed to test S3-01 and S3-03, and it is not built here.
+
+### 8.5 R1 at 10×, the two cells: no move (2026-09-25)
+
+The two cells fixed in §4 (S5-01 A/B and S5-02 B/B) ran last, from about 14:20 to 17:01
+UTC on 2026-09-25, at ten times the simulator and wall-clock budget. The launch records
+are in `reports/positive_control/r1x10_variants.jsonl`.
+
+- **Neither cell moved.** Both stay `none`, as at baseline.
+- **P0 used 323 and 319 evaluations** of budgets of 3,000 and 6,000: about 11 % and 5 %.
+  That is what it used at 1× and at 3×.
+- **The reading, as registered in §5.1:** the 10× cells would have shown "budget-limited
+  above 3×" had they moved while 3× did not. They did not move, so the R1 verdict "fail"
+  stands with nothing able to bind.
+
+### 8.6 The ladder, in one place
+
+| rung | verdict | plain reading |
+|---|---|---|
+| hook-off check (§8.1) | passed | with the hook off, P0 is byte-identical to the baseline |
+| R3, candidate set (§8.2) | not run: 8 of 10 fitted | the hook worked on 10 of 10; P0's own time guard refused the fit on two Plant A cells. On the 8 fitted cells, forcing the shifted parameter changed no attribution |
+| R1 at 3×, budget (§8.3) | fail | 0 of 14 cells moved; P0 used 17–41 % of the tripled budget |
+| R2, true feed (§8.4) | fail | 0 of 4 S3-02 cells moved, 0 of 4 controls moved |
+| R1 at 10× (§8.5) | no move | both cells stay as at baseline; 5–11 % of the budget used |
+
+**What the ladder says about P0's misses on Levels 2–5.** None of the three levers this
+ladder pulls changed P0's final label on any cell where the fit ran: not three or ten
+times the budget, not the true feed mass, and not the shifted parameter forced into the
+candidate set. Where R3 recovered a parameter, it did so through wide intervals and
+without changing the label. The pre-registered prediction for R1 (§5.1) held. The
+remaining explanations are the ones this ladder cannot test: P0's attribution rule, the
+feed's composition (a composition-exact variant is not built here), and the record's own
+distinguishability, which is PR C's question.
+
+**Compute.** The whole ladder took about 27 runner-hours on three processes: R3 about 6 h
+of wall time, R1 at 3× about 12.5 h, R2 about 2.7 h and R1 at 10× about 2.3 h, all
+beside other work on the same four cores. The §6 estimate was about 65 runner-hours, and
+the cap of about 100 was not approached.
+
 ---
 
 ## 9. Amendment, 2026-09-24 ~17:30 UTC (review of PR #23)

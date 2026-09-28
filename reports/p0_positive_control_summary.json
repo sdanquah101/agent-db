@@ -11,6 +11,22 @@
    ],
    "verdict": "fail"
   },
+  "R1x10": {
+   "moves": 0,
+   "timing_moves_not_counted": 0,
+   "cells_run": 2,
+   "complete": true
+  },
+  "R2": {
+   "s3_02_moves": 0,
+   "control_moves": 0,
+   "timing_moves_not_counted": 0,
+   "cells_run": [
+    4,
+    4
+   ],
+   "verdict": "fail"
+  },
   "R3": {
    "mechanical_check": "8 of 10",
    "moves": 4,
