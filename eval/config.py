@@ -108,6 +108,32 @@ class AggregateConfig(_Frozen):
     bootstrap: BootstrapConfig
 
 
+class DistinguishabilityConfig(_Frozen):
+    """The admissible-set analysis (docs/distinguishability.md, method version 4)."""
+
+    method_version: Annotated[int, Field(ge=1)]
+    margin: Annotated[float, Field(gt=0.0)]
+    sensitivity_margin: Annotated[float, Field(gt=0.0)]
+    lr_alpha: _Frac
+    n_alternatives: Annotated[int, Field(ge=1)]
+    look_elsewhere: bool
+    none_admissible_rate_min: _Frac
+    sim_timeout_s: Annotated[float, Field(gt=0.0)]
+    sensor_onset_every_d: Annotated[float, Field(gt=0.0)]
+    flatline_durations_d: tuple[Annotated[float, Field(gt=0.0)], ...]
+    delivery_every_d: Annotated[float, Field(gt=0.0)]
+    delivery_multiples: tuple[float, ...]
+    window_onset_every_d: Annotated[float, Field(gt=0.0)]
+    mislabel_durations_d: tuple[Annotated[float, Field(gt=0.0)], ...]
+    mislabel_concentrations: tuple[float, ...]
+    moisture_durations_d: tuple[Annotated[float, Field(gt=0.0)], ...]
+    moisture_changes: tuple[float, ...]
+    biomass_multipliers: tuple[float, ...]
+    parameter_onset_every_d: Annotated[float, Field(gt=0.0)]
+    parameter_multipliers: tuple[float, ...]
+    structural_min_visibility: Annotated[float, Field(ge=0.0)]
+
+
 class EvalConfig(_Frozen):
     """``configs/eval.yaml``."""
 
@@ -115,6 +141,7 @@ class EvalConfig(_Frozen):
     windows: WindowsConfig
     prediction: PredictionConfig
     attribution: AttributionConfig
+    distinguishability: DistinguishabilityConfig
     efficiency: EfficiencyConfig
     reliability: ReliabilityConfig
     aggregate: AggregateConfig
