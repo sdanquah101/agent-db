@@ -6267,3 +6267,49 @@ it), and an interior optimum is still determined by the data.
     declined under that term.
 
 **Not frozen.** `prompt_sha256` in `configs/workflows/p1.yaml` stays empty.
+
+## 2026-09-28 — COORDINATOR DECISIONS: the three P1 questions of PR #26
+
+**Decisions** (the coordinator, ~08:40 UTC, recorded here as asked).
+1. **Harness refusals are not folded into `invalid_actions`.** That would change the
+   definition of a column P0 is scored on. The P1 pilot report keeps `harness_refusals`
+   as its own column, counted from the gateway's verbatim log, not from state
+   self-reports. The count is the tool results the agent received whose error begins
+   `refused:`. Whether the evaluator gains a refusals column is the lead's call; the
+   coordinator will raise it.
+   - On all 20 runs at `c1e5829`, the log-based count equals the count of `p1.*` entries
+     in `tool_failures`.
+2. **Model-side failure ends the run; a harness refusal does not.**
+   - A provider refusal, or a model error that survives the retries, ends the run
+     unconcluded. Such a run counts as a failed run: an attribution miss in the
+     denominator (the evaluator ruling of 2026-09-22).
+   - A harness refusal never ends the run: the agent gets the refusal text and
+     continues.
+   - Recorded in `docs/p1_design.md` §5.
+3. **The old-prompt runs at `c1e5829` stand as the baseline; revision 1b runs on the same
+   ten cells.**
+   - `ef55ed5` changed no tool output, only three things: the conclude validation of
+     laundered estimates, two tool descriptions (and so `tools_sha256`), and a hidden
+     state field. The `c1e5829` old and 1a runs therefore need no re-run.
+   - The report has three column sets (old / 1a / 1b) with totals and differences, and
+     notes the head difference.
+   - After 1b there is **no further prompt revision without the lead's word**. Still
+     forbidden: no freeze, no sweep scoring, no held-out variants.
+   - **Where the 1b runs run.** The coordinator named `acf681b`. They run at `4ef57c0`,
+     because one had already finished there and `acf681b` differs from `4ef57c0` only
+     in `docs/` and `reports/` (`git diff --name-only 4ef57c0 acf681b`).
+   - **Stopped runs.** The old-prompt re-runs that had started at `4ef57c0` were
+     stopped when this decision arrived: two mid-run, one just started, none finished.
+     They are not reported.
+4. **A new report column: the evidence behind each label.** For each label the agent
+   gave, the column reports:
+   - *n*, its accepted `record_evidence` items;
+   - *t*, how many of those cite a time-localising key or a direct measurement
+     (`step_z`, `step_day`, `early_bias_z`, `late_bias_z`, `start_d`, `end_d`,
+     `slope_per_d`, `event_missing_ratio`, `assay` or `disagreement_z`);
+   - *c*, how many more are tagged to a sensor or channel only.
+
+   A label with t + c = 0 rests on whole-record figures only.
+   - This is a reading of the record, not a significance test: citing `step_z` means the
+     item uses the step statistic, not that the step is significant.
+   - No prompt change comes with it.

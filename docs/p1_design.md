@@ -206,7 +206,11 @@ not instructions.
 - `temperature` **null, not sent**: reasoning models take no sampling parameters, so
   §10's "temperature 0 where possible" is not possible here, and LLM variance is measured
   across seeds;
-- no fallback model: a refusal ends the run unconcluded;
+- no fallback model. A provider refusal, or a model error that survives the retries,
+  ends the run unconcluded, and such a run counts as a failed run: an attribution miss in
+  the denominator (the evaluator ruling of 2026-09-22; the coordinator's answer of
+  2026-09-28). A *harness* refusal never ends the run: the agent receives the refusal
+  text as the tool result and continues;
 - the key reaches the runner's environment as `OPENAI_API_KEY` and is never written to
   the repository, a run directory or a log.
 
