@@ -2565,3 +2565,104 @@ and the calibration-window restriction on QC, balance and notes. Its figures sho
 wall time and mechanics, not P1's behaviour at any committed head. From the commit that
 fixes the re-review of `e4fc44a` on, every run records its commit, and its prompt and tool hashes, in `summary.json` and the
 model log.
+
+### Session 2026-09-25/28 — the development pilot: both prompts on ten cells at `c1e5829`
+
+**Done.**
+- The coordinator's re-review at `1624e4d` was applied at `8207ed6`, and prompt revision
+  1a was committed on its own at `c1e5829` (decisions, 2026-09-25).
+- **The development pilot (the lead's plan, as amended by that re-review).** Ten
+  development cells were run once per prompt version, both at `c1e5829`, from a clean
+  worktree:
+  - *old:* `0e178d5`'s `system.md` and `task.md`, prompt sha256
+    `b0b43e80f62350991014855d44332cb8eedc63e807d347461576c69657b17a4a`;
+  - *new:* revision 1a, prompt sha256
+    `f8e888f46147e88b013751f0918bffeaf9f9e0aa36c34279ba28b78404f24ef5`.
+
+  Every row's `summary.json` records commit `c1e5829` and its version's prompt hash, and
+  the report refused any row whose hash differed. Three lanes ran on a 4-core container.
+  Within each lane the two versions of a cell ran back to back, with the order
+  alternating. All 20 runs completed. The per-cell rows are in `reports/p1_pilot.csv`,
+  and each run's summary is in `reports/p1_pilot/summaries/`.
+- **These are development diagnostics only.** The label is compared with the truth on
+  development cells; this is not a sweep score and is never set beside P0.
+- **Column notes:**
+  - *refused* counts harness refusals (`p1.*` in `tool_failures`); the evaluator's
+    *invalid* count does not include them (question 1 in the PR).
+  - *kin. update err.* is `None` where the cell has no kinetic answer.
+  - Cost is at luna's rates as recorded in `p1.yaml`.
+
+**Old prompt (`b0b43e80…`):**
+
+| cell | label (truth) | exact | unsupported | invalid | refused | extra abst. | kin. update err. | kin. drift | evals | wall min | turns | tokens | USD |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| S0-01 B/A | sensor (none) | False | 0/6 | 0 | 2 | 11 | None | False | 103/450 | 21.1/90 | 20 | 524982 | 0.02557 |
+| S0-01 B/B | structural+influent (none) | False | 0/6 | 0 | 2 | 17 | None | True | 340/450 | 70.6/90 | 14 | 442309 | 0.026023 |
+| S0-01 B/C | sensor+influent (none) | False | 0/5 | 1 | 1 | 7 | None | False | 450/450 | 83.8/90 | 11 | 577671 | 0.04372 |
+| S1-01 B/B | structural+sensor+influent (none) | False | 0/9 | 0 | 2 | 15 | None | False | 228/450 | 44.9/90 | 15 | 469975 | 0.026259 |
+| S2-01 B/B | influent+sensor+structural (sensor) | False | 0/6 | 0 | 4 | 20 | False | True | 366/450 | 71.1/90 | 18 | 972121 | 0.049067 |
+| S3-01 C/B | sensor+influent (influent) | False | 0/9 | 0 | 10 | 24 | False | True | 179/600 | 36.6/120 | 17 | 665794 | 0.036565 |
+| S4-01 B/B | influent+sensor (state) | False | 0/5 | 1 | 0 | 19 | False | True | 330/600 | 65.2/120 | 17 | 740590 | 0.041702 |
+| S5-01 A/A | state+structural+sensor (parameter) | False | 0/7 | 0 | 6 | 15 | None | None | 151/300 | 52.1/120 | 22 | 714541 | 0.034471 |
+| S6-02 B/B | influent+sensor+state (structural) | False | 0/10 | 0 | 4 | 18 | False | False | 253/750 | 50.2/150 | 16 | 387197 | 0.024715 |
+| S8-01 B/B | sensor+influent+state (sensor) | False | 0/9 | 0 | 3 | 20 | False | False | 467/750 | 94.8/150 | 18 | 658257 | 0.039605 |
+| **total (10 cells)** | exact 0/10 | | 0 | | | 166 | | | | 590.4 | | 6153437 | 0.3477 |
+
+**Revision 1a (`f8e888f4…`):**
+
+| cell | label (truth) | exact | unsupported | invalid | refused | extra abst. | kin. update err. | kin. drift | evals | wall min | turns | tokens | USD |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| S0-01 B/A | sensor (none) | False | 0/4 | 0 | 2 | 9 | None | False | 302/450 | 57.4/90 | 14 | 522054 | 0.0274 |
+| S0-01 B/B | sensor+influent (none) | False | 0/5 | 0 | 0 | 2 | None | False | 204/450 | 43.5/90 | 20 | 1014701 | 0.054365 |
+| S0-01 B/C | influent+sensor+state (none) | False | 0/5 | 1 | 2 | 3 | None | True | 450/450 | 84.5/90 | 12 | 845794 | 0.06242 |
+| S1-01 B/B | sensor+influent+structural (none) | False | 0/4 | 0 | 4 | 9 | None | True | 303/450 | 60.3/90 | 16 | 694384 | 0.043083 |
+| S2-01 B/B | influent+sensor (sensor) | False | 0/6 | 0 | 4 | 16 | False | False | 450/450 | 85.1/90 | 15 | 564246 | 0.04364 |
+| S3-01 C/B | structural+sensor (influent) | False | 0/5 | 0 | 1 | 27 | False | True | 228/600 | 46.3/120 | 16 | 537848 | 0.033721 |
+| S4-01 B/B | influent+state (state) | False | 0/5 | 0 | 2 | 10 | False | False | 433/600 | 80.6/120 | 29 | 1572721 | 0.062513 |
+| S5-01 A/A | state+sensor+structural (parameter) | False | 0/6 | 0 | 2 | 8 | None | None | 253/300 | 86.7/120 | 16 | 418790 | 0.027646 |
+| S6-02 B/B | sensor+influent+structural (structural) | False | 0/4 | 0 | 4 | 11 | False | False | 261/750 | 52.1/150 | 16 | 726900 | 0.035031 |
+| S8-01 B/B | sensor+state (sensor) | False | 0/4 | 0 | 2 | 6 | False | True | 324/750 | 67.6/150 | 18 | 706550 | 0.038975 |
+| **total (10 cells)** | exact 0/10 | | 0 | | | 101 | | | | 664.2 | | 7603988 | 0.4288 |
+
+**Totals and the difference (after − before):**
+
+| total | before | after | after - before |
+|---|---|---|---|
+| cells | 10 | 10 | +0 |
+| exact | 0 | 0 | +0 |
+| unsupported | 0 | 0 | +0 |
+| invalid | 2 | 1 | -1 |
+| refused | 34 | 23 | -11 |
+| extra | 166 | 101 | -65 |
+| kin_err | 0 | 0 | +0 |
+| kin_drift | 4 | 4 | +0 |
+| evals | 2867 | 3208 | +341 |
+| wall | 590.4 | 664.2 | +73.8 |
+| turns | 168 | 172 | +4 |
+| tokens | 6153437 | 7603988 | +1450551 |
+| USD | 0.3477 | 0.4288 | +0.0811 |
+
+Two further label diagnostics come from `reports/p1_pilot.csv`:
+- the primary label equals the truth in 1 of 10 cells on both prompts (S8-01 B/B);
+- the truth is among the labels given in 3 of 10 cells on the old prompt and 4 of 10 on
+  revision 1a.
+
+**Reading (development only, one run per cell, so differences of a cell or two are
+noise):**
+- Revision 1a cut extra abstentions (166 → 101) and harness refusals (34 → 23). Neither
+  prompt produced an unsupported claim or a kinetic-update error.
+- Neither prompt concluded `none` on any of the four `none` cells (S0-01 B/A, B/B, B/C
+  and S1-01 B/B). Revision 1a's `none` criterion did not change that: each of those runs
+  names at least one cause for the background misfit.
+- The agent almost always gives two or three labels (24 and 23 labels over 10 cells), so
+  `attribution_exact` is 0 of 10 on both prompts.
+- Revision 1a used more of the budget: +341 evaluations, +74 min of wall clock, +1.45 M
+  tokens, +$0.08 over ten cells. The total cost is $0.35 for the old prompt and $0.43 for
+  1a.
+- The earlier `0e178d5` cells (four finished before that baseline was stopped) are
+  extra development evidence only and are not in this table.
+
+**Blocked:** nothing technical. The coordinator's fresh re-review at `c1e5829` is under
+way; if it changes tool outputs, the affected cells are re-run at the fix head.
+**Next:** the lead's reading of this table. The prompt stays unfrozen; no sweep scoring
+and no held-out variants without the lead's word.
