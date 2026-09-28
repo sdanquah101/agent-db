@@ -286,12 +286,18 @@ and were scored with the earlier rungs. The rows are in
 - **Every cell gave the same final label as at baseline.** The two parameter cells that
   were exact at baseline (S5-01 A/A and S5-02 C/A) stay exact. Every miss stays the
   same miss.
-- **P0 did not use the extra allowance.** It spent 301–371 simulator evaluations, 17–41 %
-  of the tripled budget. That is no more than the baseline sweep's 227–362 of the
-  original budget.
+- **On the 8 cells whose baseline had no fallback, P0's run is identical to the count:**
+  304, 319, 362, 328, 309, 359, 354 and 335 evaluations at 3× as at 1×. The tripled
+  allowance changed nothing there, which is also direct evidence that P0 is deterministic.
+- **On the 6 cells whose baseline had a fallback** (S5-01 A/A, A/B, A/C; S5-02 A/A;
+  S2-01 B/B; S2-03 C/B), **P0 used 26–63 % more evaluations at 3×** (243→321, 242→323,
+  227→371, 239→301, 251→337, 284→357; 371 exceeds the baseline's maximum of 362) and
+  44–85 % more wall clock, and it tripped no fallback. That is the predicted mechanism,
+  and the stronger result: the allowance removed the fallbacks, the full design ran,
+  and no label changed.
 - **This is the pre-registered prediction.** P0's plan starts from fixed step sizes and
-  only shrinks them when the budget is short, so a larger allowance buys no bigger
-  design.
+  only shrinks them when the budget is short, so a larger allowance removes fallbacks
+  but buys no bigger design.
 - **No time-dependent path was excluded.** On a rung that changes the budget, a
   wall-clock difference is the rung's own lever (§10), and the timing flag is never set.
 
@@ -301,7 +307,8 @@ after R2 and tests the same thing with nothing able to bind.
 
 ### 8.4 R2, the true feed: verdict "fail" (2026-09-25)
 
-The 8 cells ran from about 14:20 to 17:00 UTC on 2026-09-25, after R1 at 3×. The rows are
+The 8 cells ran from 10:16 to 14:40 UTC on 2026-09-25, three at a time, after R1 at 3×
+(the chain's log). The rows are
 in `reports/p0_positive_control.{csv,json}`, the verdict in
 `reports/p0_positive_control_summary.json`, and the launch records in
 `reports/positive_control/r2_variants.jsonl`.
@@ -311,9 +318,11 @@ no control cell moved (0 of 4). §5.1 calls R2 a fail when no S3-02 cell moves.
 
 **What happened, stated plainly.**
 - **The variant was as registered.** Every regenerated cell's truth and observations were
-  identical to the baseline's (`identity.json`), and every feed log was then rewritten to
-  the true delivered mass less the injected delivery (§9), so `exact_feed` is true on all
-  8 rows.
+  identical to the baseline's, and every feed log was then rewritten to the true
+  delivered mass less the injected delivery (§9), so `exact_feed` is true on all 8 rows.
+  `reports/positive_control/r2_identity.json` makes this auditable from the repository:
+  per cell, the sha256 of every baseline observation file, of the regenerated tree with
+  the pre-rewrite feed log, and of the rewritten feed log.
 - **Every cell gave the same final label as at baseline.** On the S3-02 cells: B/B and B/C
   stay `none`, C/C stays `sensor`, and C/B stays `sensor+structural`. On the controls
   (S3-01 and S3-03 at Tier C): B/C stays `none` on both scenarios, C/C stays `sensor`
@@ -330,13 +339,14 @@ attempted") would be needed to test S3-01 and S3-03, and it is not built here.
 
 ### 8.5 R1 at 10×, the two cells: no move (2026-09-25)
 
-The two cells fixed in §4 (S5-01 A/B and S5-02 B/B) ran last, from about 14:20 to 17:01
-UTC on 2026-09-25, at ten times the simulator and wall-clock budget. The launch records
+The two cells fixed in §4 (S5-01 A/B and S5-02 B/B) ran last, from 14:40 to 17:01 UTC on
+2026-09-25, two at a time, at ten times the simulator and wall-clock budget. The launch records
 are in `reports/positive_control/r1x10_variants.jsonl`.
 
 - **Neither cell moved.** Both stay `none`, as at baseline.
 - **P0 used 323 and 319 evaluations** of budgets of 3,000 and 6,000: about 11 % and 5 %.
-  That is what it used at 1× and at 3×.
+  On S5-01 A/B that is the 3× figure (242 at 1×, where a fallback tripped, 323 at 3× and
+  at 10×); on S5-02 B/B it is 319 at all three budgets.
 - **The reading, as registered in §5.1:** the 10× cells would have shown "budget-limited
   above 3×" had they moved while 3× did not. They did not move, so the R1 verdict "fail"
   stands with nothing able to bind.
@@ -345,9 +355,9 @@ are in `reports/positive_control/r1x10_variants.jsonl`.
 
 | rung | verdict | plain reading |
 |---|---|---|
-| hook-off check (§8.1) | passed | with the hook off, P0 is byte-identical to the baseline |
+| hook-off check (§8.1) | passed | with the hook off, the regenerated cells are byte-identical to the baseline and P0's normalised state is identical on 6 of 8 (2 differ only on a wall-clock path, §9.4) |
 | R3, candidate set (§8.2) | not run: 8 of 10 fitted | the hook worked on 10 of 10; P0's own time guard refused the fit on two Plant A cells. On the 8 fitted cells, forcing the shifted parameter changed no attribution |
-| R1 at 3×, budget (§8.3) | fail | 0 of 14 cells moved; P0 used 17–41 % of the tripled budget |
+| R1 at 3×, budget (§8.3) | fail | 0 of 14 cells moved; the allowance removed the fallbacks on 6 cells (26–63 % more evaluations) and changed nothing on the other 8 |
 | R2, true feed (§8.4) | fail | 0 of 4 S3-02 cells moved, 0 of 4 controls moved |
 | R1 at 10× (§8.5) | no move | both cells stay as at baseline; 5–11 % of the budget used |
 
@@ -360,10 +370,12 @@ remaining explanations are the ones this ladder cannot test: P0's attribution ru
 feed's composition (a composition-exact variant is not built here), and the record's own
 distinguishability, which is PR C's question.
 
-**Compute.** The whole ladder took about 27 runner-hours on three processes: R3 about 6 h
-of wall time, R1 at 3× about 12.5 h, R2 about 2.7 h and R1 at 10× about 2.3 h, all
-beside other work on the same four cores. The §6 estimate was about 65 runner-hours, and
-the cap of about 100 was not approached.
+**Compute.** Summed over runs, as §6 defines runner-hours: **65.7 runner-hours** with the
+hook-off check (10.6), and 55.2 without it (R3 16.4, R1 at 3× 23.8, R2 11.3, R1 at 10×
+3.6). That matches the §6 estimate of about 65, and the cap of about 100 was not
+approached. The elapsed time was about 22 h for the four rungs: R3 about 6.3 h, R1 at 3×
+8.6 h, R2 4.4 h and R1 at 10× 2.3 h, on three processes (two for R1 at 10×), beside other
+work on the same four cores.
 
 ---
 

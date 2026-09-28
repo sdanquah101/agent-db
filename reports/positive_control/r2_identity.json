@@ -1,0 +1,338 @@
+[
+ {
+  "cell": [
+   "S3-02",
+   "B",
+   "C"
+  ],
+  "baseline_run_id": "run_f5fae3a3726d",
+  "run_id": "run_47eabfd6d797",
+  "observations_identical": true,
+  "truth_identical": true,
+  "baseline_observations_sha256": {
+   "feed_assays.csv": "d285b6189181ff418d401c0d577d4f12c8081e72032c1cca0063678c8f3f306d",
+   "feed_log.csv": "c46cb3890fdcda63e3c10824e655b84b2c558228abf5e7be237a239046fa05ab",
+   "operator_notes.json": "47687458c5b2e8a850d031f97d5c46c679eb3c05bdaf4c1bd6f042c7b0e7aaee",
+   "sensors.json": "f2b49fd58b94b40d558530a5e1ab232181acfff1730da5ca2f9a949226fd60a8"
+  },
+  "regenerated_observations_sha256_before_rewrite": {
+   "feed_assays.csv": "d285b6189181ff418d401c0d577d4f12c8081e72032c1cca0063678c8f3f306d",
+   "feed_log.csv": "c46cb3890fdcda63e3c10824e655b84b2c558228abf5e7be237a239046fa05ab",
+   "operator_notes.json": "47687458c5b2e8a850d031f97d5c46c679eb3c05bdaf4c1bd6f042c7b0e7aaee",
+   "sensors.json": "f2b49fd58b94b40d558530a5e1ab232181acfff1730da5ca2f9a949226fd60a8"
+  },
+  "feed_log_sha256_after_rewrite": "5a849e1746ddc548031d0b9576b0d3c3eebe20186c4c7d0f2bffc9f74d215df2",
+  "truth_arrays_sha256": {
+   "parameters.json": "842c846f3fcda0e284a9f97031e5971a99c1e7fe685a53d6458962be2035d75d",
+   "influent.npz:ash_in_kg_per_m3": "b9996ecdf9102cc6040bb34bb49d1dc96d31bb2f7a3a8f9c9a623b7d656c1b63",
+   "influent.npz:delivered_kg_wet_per_d": "3fd5f74d9f5293ee87bf23d9920fa6a346776882225607c8b78b5e64e66ae314",
+   "influent.npz:feed_ids": "7d74aa3822193c2f026f9c3f6b8135c097c800e75d669976f366781eef7e9791",
+   "influent.npz:influent_concentrations": "8672af63ea0b832c3453ff41e5de356dea91624ea25bdbe48fc1f4967936dacb",
+   "influent.npz:influent_q_m3_per_d": "d77e17c7ec8e2b22fe8156dd33387a0286808a502de6714df689279b3c3948f1",
+   "influent.npz:influent_t_d": "65bb3e8cdb5099174b6d49f53a3e7a491bd47c455d60788ea4cfdc0248f835d1",
+   "influent.npz:liquid_state_names": "e044f93d046ceabeb62df797c11f8d96ef34448599bfba064116297b700a1d82",
+   "influent.npz:s_ca_kmol_per_m3": "6fc924fe9fbe5f8d682aa04b116523dfd46d671c07027164bbd8cf1260a87b9b",
+   "influent.npz:total_solids_kg_per_kg_wet": "b2dfe526e7ee2fe788026c646d432d1b729dd63032b99db7c27a7d61587b8452",
+   "states.npz:burn_in_final_state": "662501bb3e882f72ce40343767d10e60ef61665721beb50c3bc949543e8e844b",
+   "states.npz:scenario_initial_state": "662501bb3e882f72ce40343767d10e60ef61665721beb50c3bc949543e8e844b",
+   "states.npz:solver_success": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+   "states.npz:state_names": "6b768285b370fb2c503bdc4a7a2ce4117654a566f345f25972b420c35bad4f9d",
+   "states.npz:t_d": "243f8aadd8edf2a07d8ec612bb4516e4f81adc122339852a241267ac41d20da6",
+   "states.npz:y": "85820f740b15b7234b18e778e9c734f1988f15fd8ba2f35dd96b017609f28265"
+  }
+ },
+ {
+  "cell": [
+   "S3-02",
+   "B",
+   "B"
+  ],
+  "baseline_run_id": "run_df38fd4a7bd7",
+  "run_id": "run_56e0ffe08ccd",
+  "observations_identical": true,
+  "truth_identical": true,
+  "baseline_observations_sha256": {
+   "feed_assays.csv": "9001aa78714363a519c884581744a0508dae4d3ce6d80da557630f018f93d02d",
+   "feed_log.csv": "c46cb3890fdcda63e3c10824e655b84b2c558228abf5e7be237a239046fa05ab",
+   "operator_notes.json": "47687458c5b2e8a850d031f97d5c46c679eb3c05bdaf4c1bd6f042c7b0e7aaee",
+   "sensors.json": "edf1eb67b8b41f61c500c5cdcdc9126985654623d5697ff616b4f8be743075c4"
+  },
+  "regenerated_observations_sha256_before_rewrite": {
+   "feed_assays.csv": "9001aa78714363a519c884581744a0508dae4d3ce6d80da557630f018f93d02d",
+   "feed_log.csv": "c46cb3890fdcda63e3c10824e655b84b2c558228abf5e7be237a239046fa05ab",
+   "operator_notes.json": "47687458c5b2e8a850d031f97d5c46c679eb3c05bdaf4c1bd6f042c7b0e7aaee",
+   "sensors.json": "edf1eb67b8b41f61c500c5cdcdc9126985654623d5697ff616b4f8be743075c4"
+  },
+  "feed_log_sha256_after_rewrite": "5a849e1746ddc548031d0b9576b0d3c3eebe20186c4c7d0f2bffc9f74d215df2",
+  "truth_arrays_sha256": {
+   "parameters.json": "842c846f3fcda0e284a9f97031e5971a99c1e7fe685a53d6458962be2035d75d",
+   "influent.npz:ash_in_kg_per_m3": "b9996ecdf9102cc6040bb34bb49d1dc96d31bb2f7a3a8f9c9a623b7d656c1b63",
+   "influent.npz:delivered_kg_wet_per_d": "3fd5f74d9f5293ee87bf23d9920fa6a346776882225607c8b78b5e64e66ae314",
+   "influent.npz:feed_ids": "7d74aa3822193c2f026f9c3f6b8135c097c800e75d669976f366781eef7e9791",
+   "influent.npz:influent_concentrations": "8672af63ea0b832c3453ff41e5de356dea91624ea25bdbe48fc1f4967936dacb",
+   "influent.npz:influent_q_m3_per_d": "d77e17c7ec8e2b22fe8156dd33387a0286808a502de6714df689279b3c3948f1",
+   "influent.npz:influent_t_d": "65bb3e8cdb5099174b6d49f53a3e7a491bd47c455d60788ea4cfdc0248f835d1",
+   "influent.npz:liquid_state_names": "e044f93d046ceabeb62df797c11f8d96ef34448599bfba064116297b700a1d82",
+   "influent.npz:s_ca_kmol_per_m3": "6fc924fe9fbe5f8d682aa04b116523dfd46d671c07027164bbd8cf1260a87b9b",
+   "influent.npz:total_solids_kg_per_kg_wet": "b2dfe526e7ee2fe788026c646d432d1b729dd63032b99db7c27a7d61587b8452",
+   "states.npz:burn_in_final_state": "662501bb3e882f72ce40343767d10e60ef61665721beb50c3bc949543e8e844b",
+   "states.npz:scenario_initial_state": "662501bb3e882f72ce40343767d10e60ef61665721beb50c3bc949543e8e844b",
+   "states.npz:solver_success": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+   "states.npz:state_names": "6b768285b370fb2c503bdc4a7a2ce4117654a566f345f25972b420c35bad4f9d",
+   "states.npz:t_d": "243f8aadd8edf2a07d8ec612bb4516e4f81adc122339852a241267ac41d20da6",
+   "states.npz:y": "85820f740b15b7234b18e778e9c734f1988f15fd8ba2f35dd96b017609f28265"
+  }
+ },
+ {
+  "cell": [
+   "S3-02",
+   "C",
+   "C"
+  ],
+  "baseline_run_id": "run_03a0a9aa9291",
+  "run_id": "run_6c2cf9caf5aa",
+  "observations_identical": true,
+  "truth_identical": true,
+  "baseline_observations_sha256": {
+   "feed_assays.csv": "87110e263922a69161c0a61e18d4f2fefd047a528723da215d1d225c8d62103c",
+   "feed_log.csv": "3d99e661cc4b5ea51e6abab6d5d05bee41865df3681d91126928291bb3b95c9e",
+   "operator_notes.json": "2ca262177e0f56277b3d26c345c223a19f38f827a040b19283ce522ca03110d0",
+   "sensors.json": "7b3cc26e985e5ce42ff42c4997a7b014c70770045747c279036966e88b394338"
+  },
+  "regenerated_observations_sha256_before_rewrite": {
+   "feed_assays.csv": "87110e263922a69161c0a61e18d4f2fefd047a528723da215d1d225c8d62103c",
+   "feed_log.csv": "3d99e661cc4b5ea51e6abab6d5d05bee41865df3681d91126928291bb3b95c9e",
+   "operator_notes.json": "2ca262177e0f56277b3d26c345c223a19f38f827a040b19283ce522ca03110d0",
+   "sensors.json": "7b3cc26e985e5ce42ff42c4997a7b014c70770045747c279036966e88b394338"
+  },
+  "feed_log_sha256_after_rewrite": "18377e4d190278161aaddb9c7758556739e67866cee5d8ff89682673ed00211d",
+  "truth_arrays_sha256": {
+   "parameters.json": "18acf54267f32406e35c1d2039d8ea105b35b790a08a8a91a39b375a1d96e965",
+   "influent.npz:ash_in_kg_per_m3": "a823088b1ef70bb1c685a2f5e32acef7f3db50b5795abb805c8b3e5bb779d7ab",
+   "influent.npz:delivered_kg_wet_per_d": "18c5860068a297085b65705d7a649e8a573eba019bb6d645e6114d829f30f526",
+   "influent.npz:feed_ids": "2babeb180bad24d73c51114f3695329fbcc940ed64569ae053345b96d00b3da6",
+   "influent.npz:influent_concentrations": "e7755d3338c202fa4a42a3e452ac9a2f06f1574738fd36ee7a70c35c61907b1c",
+   "influent.npz:influent_q_m3_per_d": "49060500d404d5777dd3e8c4fb9dedbc5b33c46308ea20f69562c6b5b9dd9a91",
+   "influent.npz:influent_t_d": "65bb3e8cdb5099174b6d49f53a3e7a491bd47c455d60788ea4cfdc0248f835d1",
+   "influent.npz:liquid_state_names": "e044f93d046ceabeb62df797c11f8d96ef34448599bfba064116297b700a1d82",
+   "influent.npz:s_ca_kmol_per_m3": "773d527f0d7997a2b6e3661c35482a24219fe0de72c8e2a1d6760bef3b5df313",
+   "influent.npz:total_solids_kg_per_kg_wet": "af3a7f5cfa306107414de68297c367c77ee7f00d9b607961507b5ab280ebf854",
+   "states.npz:burn_in_final_state": "78d3f8f91dde33503cecd30c5689ef08f238302b8f1b5ef370beda8475d4f295",
+   "states.npz:scenario_initial_state": "78d3f8f91dde33503cecd30c5689ef08f238302b8f1b5ef370beda8475d4f295",
+   "states.npz:solver_success": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+   "states.npz:state_names": "6b768285b370fb2c503bdc4a7a2ce4117654a566f345f25972b420c35bad4f9d",
+   "states.npz:t_d": "243f8aadd8edf2a07d8ec612bb4516e4f81adc122339852a241267ac41d20da6",
+   "states.npz:y": "b53a95534a5b5762c8e3ae43c4957828dd646f22a0c5131d4804d051bb48316e"
+  }
+ },
+ {
+  "cell": [
+   "S3-02",
+   "C",
+   "B"
+  ],
+  "baseline_run_id": "run_7a7fde17a08a",
+  "run_id": "run_97f9714c17fd",
+  "observations_identical": true,
+  "truth_identical": true,
+  "baseline_observations_sha256": {
+   "feed_assays.csv": "0333ceec1fd46f1eb5ff0b5c09a2ef90357d68053ab1975f3bab7fbd1efa3e1a",
+   "feed_log.csv": "3d99e661cc4b5ea51e6abab6d5d05bee41865df3681d91126928291bb3b95c9e",
+   "operator_notes.json": "2ca262177e0f56277b3d26c345c223a19f38f827a040b19283ce522ca03110d0",
+   "sensors.json": "a665d3b6756785257a57692a7fa741bcad5850f82dd040aa67eaa2bbbf38ce97"
+  },
+  "regenerated_observations_sha256_before_rewrite": {
+   "feed_assays.csv": "0333ceec1fd46f1eb5ff0b5c09a2ef90357d68053ab1975f3bab7fbd1efa3e1a",
+   "feed_log.csv": "3d99e661cc4b5ea51e6abab6d5d05bee41865df3681d91126928291bb3b95c9e",
+   "operator_notes.json": "2ca262177e0f56277b3d26c345c223a19f38f827a040b19283ce522ca03110d0",
+   "sensors.json": "a665d3b6756785257a57692a7fa741bcad5850f82dd040aa67eaa2bbbf38ce97"
+  },
+  "feed_log_sha256_after_rewrite": "18377e4d190278161aaddb9c7758556739e67866cee5d8ff89682673ed00211d",
+  "truth_arrays_sha256": {
+   "parameters.json": "18acf54267f32406e35c1d2039d8ea105b35b790a08a8a91a39b375a1d96e965",
+   "influent.npz:ash_in_kg_per_m3": "a823088b1ef70bb1c685a2f5e32acef7f3db50b5795abb805c8b3e5bb779d7ab",
+   "influent.npz:delivered_kg_wet_per_d": "18c5860068a297085b65705d7a649e8a573eba019bb6d645e6114d829f30f526",
+   "influent.npz:feed_ids": "2babeb180bad24d73c51114f3695329fbcc940ed64569ae053345b96d00b3da6",
+   "influent.npz:influent_concentrations": "e7755d3338c202fa4a42a3e452ac9a2f06f1574738fd36ee7a70c35c61907b1c",
+   "influent.npz:influent_q_m3_per_d": "49060500d404d5777dd3e8c4fb9dedbc5b33c46308ea20f69562c6b5b9dd9a91",
+   "influent.npz:influent_t_d": "65bb3e8cdb5099174b6d49f53a3e7a491bd47c455d60788ea4cfdc0248f835d1",
+   "influent.npz:liquid_state_names": "e044f93d046ceabeb62df797c11f8d96ef34448599bfba064116297b700a1d82",
+   "influent.npz:s_ca_kmol_per_m3": "773d527f0d7997a2b6e3661c35482a24219fe0de72c8e2a1d6760bef3b5df313",
+   "influent.npz:total_solids_kg_per_kg_wet": "af3a7f5cfa306107414de68297c367c77ee7f00d9b607961507b5ab280ebf854",
+   "states.npz:burn_in_final_state": "78d3f8f91dde33503cecd30c5689ef08f238302b8f1b5ef370beda8475d4f295",
+   "states.npz:scenario_initial_state": "78d3f8f91dde33503cecd30c5689ef08f238302b8f1b5ef370beda8475d4f295",
+   "states.npz:solver_success": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+   "states.npz:state_names": "6b768285b370fb2c503bdc4a7a2ce4117654a566f345f25972b420c35bad4f9d",
+   "states.npz:t_d": "243f8aadd8edf2a07d8ec612bb4516e4f81adc122339852a241267ac41d20da6",
+   "states.npz:y": "b53a95534a5b5762c8e3ae43c4957828dd646f22a0c5131d4804d051bb48316e"
+  }
+ },
+ {
+  "cell": [
+   "S3-01",
+   "B",
+   "C"
+  ],
+  "baseline_run_id": "run_ccfc24a75601",
+  "run_id": "run_6cacb92c7a78",
+  "observations_identical": true,
+  "truth_identical": true,
+  "baseline_observations_sha256": {
+   "feed_assays.csv": "93d258f6fc145703ca1c54c60b5dad054562aaed157f537ed65aafaa07ca64d5",
+   "feed_log.csv": "763d5ffdb0be995aea3b371b10a68835d144b5be58d276ec4f0a7d5f6509158b",
+   "operator_notes.json": "9fc5992570b0a386500e338fec64779f330dba8f8ef7557c3312674ac1714e38",
+   "sensors.json": "9d87a9d5199594ae62a034fec07641152756a1b777b6896117001f20c491b643"
+  },
+  "regenerated_observations_sha256_before_rewrite": {
+   "feed_assays.csv": "93d258f6fc145703ca1c54c60b5dad054562aaed157f537ed65aafaa07ca64d5",
+   "feed_log.csv": "763d5ffdb0be995aea3b371b10a68835d144b5be58d276ec4f0a7d5f6509158b",
+   "operator_notes.json": "9fc5992570b0a386500e338fec64779f330dba8f8ef7557c3312674ac1714e38",
+   "sensors.json": "9d87a9d5199594ae62a034fec07641152756a1b777b6896117001f20c491b643"
+  },
+  "feed_log_sha256_after_rewrite": "9a48f9412f9d01575bca88674258a716c5492b141dc567bb7acfbca5fb526303",
+  "truth_arrays_sha256": {
+   "parameters.json": "1573500c498ca88d9b79dcf0678a469bab85d01b8e1a407ce33fd3223e4e6146",
+   "influent.npz:ash_in_kg_per_m3": "4998fe129dc5ae2158040c0b0bfa068eee19c542b974db78f5be1d9214b34194",
+   "influent.npz:delivered_kg_wet_per_d": "a948285f2bebcc2c3a7dcd776de1bdafa118aaf87cf961b248817241fb8c8c04",
+   "influent.npz:feed_ids": "7d74aa3822193c2f026f9c3f6b8135c097c800e75d669976f366781eef7e9791",
+   "influent.npz:influent_concentrations": "ccfbdf2b465b06e7795924bae23c641c688034683e3c75593dbd634dd654810d",
+   "influent.npz:influent_q_m3_per_d": "2d03b803352197559359ad6a19a4db14d456f9e9a74915c65c74a6cce75fdbb6",
+   "influent.npz:influent_t_d": "65bb3e8cdb5099174b6d49f53a3e7a491bd47c455d60788ea4cfdc0248f835d1",
+   "influent.npz:liquid_state_names": "e044f93d046ceabeb62df797c11f8d96ef34448599bfba064116297b700a1d82",
+   "influent.npz:s_ca_kmol_per_m3": "5ea868bd4b97567e91ae59628d8b5b67d2769786ff3891f7f3fda6d2429f840c",
+   "influent.npz:total_solids_kg_per_kg_wet": "3698184b3033f21c9566eee759c3919a4562b38f91c30da8615a1a4520f8c986",
+   "states.npz:burn_in_final_state": "eb82eb43df56e0b528c973a9c78f872cb2aba612b266f807df817630cb1ba6b1",
+   "states.npz:scenario_initial_state": "eb82eb43df56e0b528c973a9c78f872cb2aba612b266f807df817630cb1ba6b1",
+   "states.npz:solver_success": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+   "states.npz:state_names": "6b768285b370fb2c503bdc4a7a2ce4117654a566f345f25972b420c35bad4f9d",
+   "states.npz:t_d": "243f8aadd8edf2a07d8ec612bb4516e4f81adc122339852a241267ac41d20da6",
+   "states.npz:y": "e0d9fb9800917ad8da25262146396e8395dffafd437ba39e1052014cf9911dda"
+  }
+ },
+ {
+  "cell": [
+   "S3-01",
+   "C",
+   "C"
+  ],
+  "baseline_run_id": "run_55cb035f6d4f",
+  "run_id": "run_3f0d08226d13",
+  "observations_identical": true,
+  "truth_identical": true,
+  "baseline_observations_sha256": {
+   "feed_assays.csv": "08f89265a836ac727cf6c2af7fc0fc9f38d74d12db0106e056df356418acf88a",
+   "feed_log.csv": "e6ab3baacbb20cb67864a9ffdf0407996da396dbbe84555b77d65af9fdcf9c43",
+   "operator_notes.json": "5e8bf9cfb46052730fd6078b4383443ab2488954623a8fd494d31f696bf2bceb",
+   "sensors.json": "e4525cc86c371a7a7b43dac6e2560da17f912df194b427fe37de458a7812fa45"
+  },
+  "regenerated_observations_sha256_before_rewrite": {
+   "feed_assays.csv": "08f89265a836ac727cf6c2af7fc0fc9f38d74d12db0106e056df356418acf88a",
+   "feed_log.csv": "e6ab3baacbb20cb67864a9ffdf0407996da396dbbe84555b77d65af9fdcf9c43",
+   "operator_notes.json": "5e8bf9cfb46052730fd6078b4383443ab2488954623a8fd494d31f696bf2bceb",
+   "sensors.json": "e4525cc86c371a7a7b43dac6e2560da17f912df194b427fe37de458a7812fa45"
+  },
+  "feed_log_sha256_after_rewrite": "fbba3c5a035905346418876e7889d0d9105d27b0394a51f97abf25fac5d7e6e1",
+  "truth_arrays_sha256": {
+   "parameters.json": "18acf54267f32406e35c1d2039d8ea105b35b790a08a8a91a39b375a1d96e965",
+   "influent.npz:ash_in_kg_per_m3": "821fa20572293dc1a5c8600d097caf8d31bad5078684e3cc2a57b1c33dd1af91",
+   "influent.npz:delivered_kg_wet_per_d": "61a5f1c3c61e894c6b1b540f37914b4cc132fb38eade3d642ae56c83a2bcb091",
+   "influent.npz:feed_ids": "2babeb180bad24d73c51114f3695329fbcc940ed64569ae053345b96d00b3da6",
+   "influent.npz:influent_concentrations": "e8d7916a4e4d30d1943bb46f54a93b5f2327974a738bffa85d9ee75ead32ffe0",
+   "influent.npz:influent_q_m3_per_d": "4d628ca13f48c39dea6eca33b23044c75fdfbc87e9a0235929e5936c7676295b",
+   "influent.npz:influent_t_d": "65bb3e8cdb5099174b6d49f53a3e7a491bd47c455d60788ea4cfdc0248f835d1",
+   "influent.npz:liquid_state_names": "e044f93d046ceabeb62df797c11f8d96ef34448599bfba064116297b700a1d82",
+   "influent.npz:s_ca_kmol_per_m3": "53e93ce3249a896d22214bfce0e3495d39ed3b7c8abff4f3e3e20bfaf9184bdf",
+   "influent.npz:total_solids_kg_per_kg_wet": "d012c873f952b37f4b14eb4cd3a3c3384fe2b04bc1f2f4250e865ba3ee13b805",
+   "states.npz:burn_in_final_state": "b28c4ecf8b62d29123b1f5c48a5c6a3a10ce65a7948e1d249e413e81c52ba329",
+   "states.npz:scenario_initial_state": "b28c4ecf8b62d29123b1f5c48a5c6a3a10ce65a7948e1d249e413e81c52ba329",
+   "states.npz:solver_success": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+   "states.npz:state_names": "6b768285b370fb2c503bdc4a7a2ce4117654a566f345f25972b420c35bad4f9d",
+   "states.npz:t_d": "243f8aadd8edf2a07d8ec612bb4516e4f81adc122339852a241267ac41d20da6",
+   "states.npz:y": "3e2eaf51c23dc3a8f956fd2f52887cb922c88004ca06b82e250ff471c6492755"
+  }
+ },
+ {
+  "cell": [
+   "S3-03",
+   "B",
+   "C"
+  ],
+  "baseline_run_id": "run_6bc2ba96ad14",
+  "run_id": "run_4aaf0f3de0ac",
+  "observations_identical": true,
+  "truth_identical": true,
+  "baseline_observations_sha256": {
+   "feed_assays.csv": "585f17a84608db01427249e417c431e81241b7ab421549e872a404265ca13dad",
+   "feed_log.csv": "f9e242bf1b825c672dcd11a0b043a5f3f7aae06efb26b46a3c4be05bf8d0f816",
+   "operator_notes.json": "3d4356d2fd7f2fc4bb5efb3787efb1057008c7a1e723e870da1f7fa1e340bdff",
+   "sensors.json": "fe0c8058bd2ee85d476858eccb64a40b1c0628630a361ba979186f412d7c8f80"
+  },
+  "regenerated_observations_sha256_before_rewrite": {
+   "feed_assays.csv": "585f17a84608db01427249e417c431e81241b7ab421549e872a404265ca13dad",
+   "feed_log.csv": "f9e242bf1b825c672dcd11a0b043a5f3f7aae06efb26b46a3c4be05bf8d0f816",
+   "operator_notes.json": "3d4356d2fd7f2fc4bb5efb3787efb1057008c7a1e723e870da1f7fa1e340bdff",
+   "sensors.json": "fe0c8058bd2ee85d476858eccb64a40b1c0628630a361ba979186f412d7c8f80"
+  },
+  "feed_log_sha256_after_rewrite": "a38a7c7e0f760f9075edfcd31e2386e2fe4190dcd45b8aa103bc94a5c05c50a8",
+  "truth_arrays_sha256": {
+   "parameters.json": "442ee69f96b0af40999e51a3fc6a204cd3a13ece1bb1e3be7da0900a12b2aa54",
+   "influent.npz:ash_in_kg_per_m3": "3e6b95136b9cac0992995c9e56d7af951e5979ca6d6e1463dfe91fbca4f6df19",
+   "influent.npz:delivered_kg_wet_per_d": "430cfa8fec586d956a369c0d5ac3e07daa057e1b25dbeb29f967551caf09f303",
+   "influent.npz:feed_ids": "7d74aa3822193c2f026f9c3f6b8135c097c800e75d669976f366781eef7e9791",
+   "influent.npz:influent_concentrations": "ccf85597ac15ad652af9e09931d99e63f081c894c2b6041d8cccbc8d24f134da",
+   "influent.npz:influent_q_m3_per_d": "cf934db23b2755e2eaed3276ae53d4948f612b0556a23caeb8a94a59c93be2af",
+   "influent.npz:influent_t_d": "65bb3e8cdb5099174b6d49f53a3e7a491bd47c455d60788ea4cfdc0248f835d1",
+   "influent.npz:liquid_state_names": "e044f93d046ceabeb62df797c11f8d96ef34448599bfba064116297b700a1d82",
+   "influent.npz:s_ca_kmol_per_m3": "f3d56e2b84573cfeb67d5ac1c66f2f0886bb900eb2358a3587f915f041996c49",
+   "influent.npz:total_solids_kg_per_kg_wet": "cf13f465a64a99c3c5634ce389152f08cca047c4ba1402651d0676599aa45559",
+   "states.npz:burn_in_final_state": "ccfa9c7d0505e2a6a48a47adfe78310e2c266d78a7e492c0f2daf53e0b567b71",
+   "states.npz:scenario_initial_state": "ccfa9c7d0505e2a6a48a47adfe78310e2c266d78a7e492c0f2daf53e0b567b71",
+   "states.npz:solver_success": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+   "states.npz:state_names": "6b768285b370fb2c503bdc4a7a2ce4117654a566f345f25972b420c35bad4f9d",
+   "states.npz:t_d": "243f8aadd8edf2a07d8ec612bb4516e4f81adc122339852a241267ac41d20da6",
+   "states.npz:y": "dd8a947dacede24c2a4cd4d1f84afaf2e627fab7df892c7be392e50bce59250d"
+  }
+ },
+ {
+  "cell": [
+   "S3-03",
+   "C",
+   "C"
+  ],
+  "baseline_run_id": "run_3ba330fb57c1",
+  "run_id": "run_b229e9203d78",
+  "observations_identical": true,
+  "truth_identical": true,
+  "baseline_observations_sha256": {
+   "feed_assays.csv": "b4df2f09ba1569c5a83de070da7d5565bbaaa1fc68fdf43e5460ff85e32d1130",
+   "feed_log.csv": "7f6843b108edc866620823b2153ac801dba0533d332ab1dd1007926f0be56b22",
+   "operator_notes.json": "7f4d9d6c844b736f908f26096704c58d518812e6fcf57bf9c2000a6f9ca7cdd2",
+   "sensors.json": "3e75e337281cf7b958bfa2ad1a0991891e6ab671713c7cb743c7cfc0c6ee08ff"
+  },
+  "regenerated_observations_sha256_before_rewrite": {
+   "feed_assays.csv": "b4df2f09ba1569c5a83de070da7d5565bbaaa1fc68fdf43e5460ff85e32d1130",
+   "feed_log.csv": "7f6843b108edc866620823b2153ac801dba0533d332ab1dd1007926f0be56b22",
+   "operator_notes.json": "7f4d9d6c844b736f908f26096704c58d518812e6fcf57bf9c2000a6f9ca7cdd2",
+   "sensors.json": "3e75e337281cf7b958bfa2ad1a0991891e6ab671713c7cb743c7cfc0c6ee08ff"
+  },
+  "feed_log_sha256_after_rewrite": "ad814e5bd45037340b521e8ec218e19c376d8f872530f28716e40bf3c79d8947",
+  "truth_arrays_sha256": {
+   "parameters.json": "b52bc06b5d799650ca239e3bfe2b71be7b6f71582593929ab6bbec3293ca0db9",
+   "influent.npz:ash_in_kg_per_m3": "5af9d7d3eb5676bfade692a9b34857e9f170582c2d528213ff9f2be472e8c155",
+   "influent.npz:delivered_kg_wet_per_d": "6bfcad450854fcc2aac7cee0fda7b1cddacd26d013715ac8f75f35b97b173c43",
+   "influent.npz:feed_ids": "2babeb180bad24d73c51114f3695329fbcc940ed64569ae053345b96d00b3da6",
+   "influent.npz:influent_concentrations": "1b2bc8ae0cc991db9ca664cb6da9f2c50ed4142ede1ac1292883e0d2f11ce668",
+   "influent.npz:influent_q_m3_per_d": "3f242e12d4f4dcc8cd9b405018e8eae0baa9ba093f2baf53c086a73ba8445dfc",
+   "influent.npz:influent_t_d": "65bb3e8cdb5099174b6d49f53a3e7a491bd47c455d60788ea4cfdc0248f835d1",
+   "influent.npz:liquid_state_names": "e044f93d046ceabeb62df797c11f8d96ef34448599bfba064116297b700a1d82",
+   "influent.npz:s_ca_kmol_per_m3": "4e36b3a4d82e38592146fb9dcca993aac856e1ae67414dc28d8e8b83a49c0c47",
+   "influent.npz:total_solids_kg_per_kg_wet": "60fcebbcbfd6fff5f9ea10ef7ceba33486777a3bb81821958ae364d1bbe3dc22",
+   "states.npz:burn_in_final_state": "1d31e0d9444fe2f1ba40f72862e95d00b9fb646ab94bff6d605e85b415fde16c",
+   "states.npz:scenario_initial_state": "1d31e0d9444fe2f1ba40f72862e95d00b9fb646ab94bff6d605e85b415fde16c",
+   "states.npz:solver_success": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+   "states.npz:state_names": "6b768285b370fb2c503bdc4a7a2ce4117654a566f345f25972b420c35bad4f9d",
+   "states.npz:t_d": "243f8aadd8edf2a07d8ec612bb4516e4f81adc122339852a241267ac41d20da6",
+   "states.npz:y": "25d418e003a0ab48a8d88796ce9b479f2b933f5cbd44d576f23628cb15c13a3f"
+  }
+ }
+]

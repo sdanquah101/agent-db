@@ -2488,14 +2488,17 @@ P0 rulings (step 1).
 **Done.** Pre-registered in `docs/positive_control.md` (688d00d, before any code), then
 built and run within the cap: the R3 hook (`screening.force_include`, off by default),
 the driver, and every rung.
-- Hook-off check: passed (8 pilot cells byte-identical).
+- Hook-off check: passed (regenerated cells byte-identical; P0's normalised state
+  identical on 6 of 8, 2 differing only on a wall-clock path).
 - R3, candidate set: "not run: 8 of 10 fitted", as registered; P0's own time guard
   refused the fit on two Plant A cells. On the 8 fitted cells, forcing the shifted
   parameter changed no attribution.
-- R1 at 3×: fail, as predicted (0 of 14 moved; 17–41 % of the tripled budget used).
+- R1 at 3×: fail, as predicted (0 of 14 moved; the allowance removed the fallbacks on 6
+  cells and changed nothing on the other 8).
 - R2, true feed: fail (0 of 4 S3-02 cells moved, 0 of 4 controls).
 - R1 at 10×: neither cell moved.
-- About 27 runner-hours against a cap of about 100.
+- 65.7 runner-hours summed over runs (55.2 without the hook-off check), against the §6
+  estimate of about 65 and a cap of about 100; about 22 h elapsed.
 
 **Blocked:** nothing. **The next session starts on:** whatever the lead rules on the
 ladder's reading (§8.6): the remaining explanations are P0's attribution rule, the feed's
