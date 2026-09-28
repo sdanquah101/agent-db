@@ -2568,6 +2568,12 @@ model log.
 
 ### Session 2026-09-25/28 — the development pilot: both prompts on ten cells at `c1e5829`
 
+**Superseded as the baseline (2026-09-28).** The coordinator's re-review of `c1e5829` asked
+for both prompts to be re-run at its fix head (`4ef57c0`: fixes at `ef55ed5`, prompt
+revision 1b at `4ef57c0`). The runs below are kept as labelled extra development
+evidence, and their files were renamed `reports/p1_pilot_c1e5829*`. The baseline is the
+`4ef57c0` pilot (next entry).
+
 **Done.**
 - The coordinator's re-review at `1624e4d` was applied at `8207ed6`, and prompt revision
   1a was committed on its own at `c1e5829` (decisions, 2026-09-25).
@@ -2582,8 +2588,8 @@ model log.
   Every row's `summary.json` records commit `c1e5829` and its version's prompt hash, and
   the report refused any row whose hash differed. Three lanes ran on a 4-core container.
   Within each lane the two versions of a cell ran back to back, with the order
-  alternating. All 20 runs completed. The per-cell rows are in `reports/p1_pilot.csv`,
-  and each run's summary is in `reports/p1_pilot/summaries/`.
+  alternating. All 20 runs completed. The per-cell rows are in `reports/p1_pilot_c1e5829.csv`,
+  and each run's summary is in `reports/p1_pilot_c1e5829/summaries/`.
 - **These are development diagnostics only.** The label is compared with the truth on
   development cells; this is not a sweep score and is never set beside P0.
 - **Column notes:**
@@ -2642,7 +2648,7 @@ model log.
 | tokens | 6153437 | 7603988 | +1450551 |
 | USD | 0.3477 | 0.4288 | +0.0811 |
 
-Two further label diagnostics come from `reports/p1_pilot.csv`:
+Two further label diagnostics come from `reports/p1_pilot_c1e5829.csv`:
 - the primary label equals the truth in 1 of 10 cells on both prompts (S8-01 B/B);
 - the truth is among the labels given in 3 of 10 cells on the old prompt and 4 of 10 on
   revision 1a.
@@ -2666,3 +2672,32 @@ noise):**
 way; if it changes tool outputs, the affected cells are re-run at the fix head.
 **Next:** the lead's reading of this table. The prompt stays unfrozen; no sweep scoring
 and no held-out variants without the lead's word.
+
+### Session 2026-09-28 — the re-review of `c1e5829`: fixes, revision 1b, and the pilot at `4ef57c0`
+
+**Done.**
+- **The re-review at `c1e5829` cleared P1 for the pilot runs**, with five follow-ups.
+- **`8207ed6` and `c1e5829`**, recorded here because the milestones had not listed them:
+  - `8207ed6` fixed the re-review of `1624e4d`: calibration-only statistics, a half-open
+    window, converged-only estimates, whole-point Fisher intervals, the wider guard, and
+    raw response logging.
+  - `c1e5829` was prompt revision 1a, `f8e888f4…`.
+- **`ef55ed5`, follow-ups 1, 2, 4 and 5.** No tool output changes.
+  - An optimum at a bound the agent narrowed is not an estimate.
+  - A Fisher call's unnamed `at` coordinates count.
+  - The `data_qc` and `mass_balance` descriptions now say "calibration window".
+  - `missing_fraction` is taken over the calibration window.
+  - Each has a unit test with a negative control.
+- **`4ef57c0`, prompt revision 1b** (follow-up 3), sha256
+  `4b8f830ad0236d9f4ad44ed5300bebf435df73601e1e5f1e59223a8c9a2b4ddd`:
+  - the `none` criterion gets a margin (the coordinator's wording);
+  - the abstention example matches the global meaning of `parameter_values`.
+- **The pilot at `4ef57c0`:**
+  - the ten development cells on the old prompt (`0e178d5`'s text, `b0b43e80…`) and on
+    revision 1b (`4b8f830a…`), one run per cell per prompt, from a clean worktree;
+  - rows are committed as they land, in `reports/p1_pilot.csv` and
+    `reports/p1_pilot/summaries/`;
+  - the `c1e5829` runs are kept as labelled extra evidence (previous entry).
+
+**Open.** `bayes_mcmc` also accepts narrowed bounds; a rule for a posterior run inside a
+narrow box is left for the coordinator (decisions, 2026-09-28).
