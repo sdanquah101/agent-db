@@ -375,9 +375,15 @@ def test_what_the_runner_hands_the_jail_carries_nothing_of_a_run_and_no_model_se
         "prompts",
         "assay_catalogue",
     }
+    # the prompt prose is a model-facing text with its own guard, and revision 2 states
+    # the scoring rules, so it says "the truth"; the token scan covers everything else,
+    # and the prompts are held to the hazard itself: no path or field of the truth store
+    prose = payload.pop("prompts")
     text = json.dumps(payload)
     for token in ("run_", "truth", "scenario_id", "S0-01", "S8-01", "seed:", "baseline"):
         assert token not in text, token
+    for token in ("truth_store", "truth store", "truth_label", "runs/", "scenario_id"):
+        assert token not in json.dumps(prose), token
     assert config.model.model_id not in text
     assert payload["assay_catalogue"]["alkalinity"]["unit_cost"] >= 1
 
