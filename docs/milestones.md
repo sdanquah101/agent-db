@@ -2692,12 +2692,17 @@ and no held-out variants without the lead's word.
   `4b8f830ad0236d9f4ad44ed5300bebf435df73601e1e5f1e59223a8c9a2b4ddd`:
   - the `none` criterion gets a margin (the coordinator's wording);
   - the abstention example matches the global meaning of `parameter_values`.
-- **The pilot at `4ef57c0`:**
-  - the ten development cells on the old prompt (`0e178d5`'s text, `b0b43e80…`) and on
-    revision 1b (`4b8f830a…`), one run per cell per prompt, from a clean worktree;
-  - rows are committed as they land, in `reports/p1_pilot.csv` and
-    `reports/p1_pilot/summaries/`;
-  - the `c1e5829` runs are kept as labelled extra evidence (previous entry).
+- **The pilot, revision 1b (`4b8f830a…`), on the ten development cells**, one run per
+  cell, at `4ef57c0`, from a clean worktree. `acf681b` differs from it only in `docs/`
+  and `reports/`.
+  - By the coordinator's decision of 2026-09-28, the old-prompt and 1a runs at
+    `c1e5829` stand as the baseline, because `ef55ed5` changed no tool output.
+  - Old-prompt re-runs that had started at `4ef57c0` were stopped when that decision
+    arrived; none had finished.
+  - Rows are committed as they land, in `reports/p1_pilot.csv` and
+    `reports/p1_pilot/summaries/`. The baseline is in `reports/p1_pilot_c1e5829*`.
+  - The report has three column sets (old / 1a / 1b), with harness refusals counted
+    from the verbatim log and the evidence behind each label (decisions, 2026-09-28).
 
 **Open.** `bayes_mcmc` also accepts narrowed bounds; a rule for a posterior run inside a
 narrow box is left for the coordinator (decisions, 2026-09-28).
