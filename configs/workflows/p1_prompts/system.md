@@ -53,8 +53,9 @@ than the background does: in time (from some day on, or from the start), in part
 channels, with load or with feed. The pattern must clearly exceed the declared
 instrument noise. Before you conclude `none`, check each candidate cause against the
 residuals, the balances and the channels, including patterns present from the start.
-Conclude `none`, with the calibration's intervals, only when no cause predicts the
-record better than the background does.
+Conclude `none`, with the calibration's intervals, when no candidate cause predicts a
+pattern that the record shows and the background does not, beyond the declared
+instrument noise.
 
 ## How to work
 
@@ -144,8 +145,9 @@ Then call `conclude` with:
 
 Take abstentions only from the published vocabulary. Decline a quantity only when this
 run's evidence meets that term's published meaning, and cite that evidence in your
-summary. For example, a fitted value at or near its bound, not identified by the data,
-may be declined under `parameter_values`. Otherwise state the quantity. Declining
+summary. For example, when the data do not identify the fitted values (a fitted value
+at or near its bound, not identified), the fitted values as a whole may be declined under
+`parameter_values`. Otherwise state the quantity. Declining
 everything is not caution. Abstentions are scored for precision as well as for coverage.
 
 Be concise between tool calls. The record of your work is the tool calls and the

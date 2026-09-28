@@ -6245,3 +6245,25 @@ declared width?) is a design choice. It is left for the coordinator.
 **Alternatives.** Refusing every fit with narrowed bounds was rejected: narrowing with a
 stated justification is a legitimate move (P0 does not use it, but the registry allows
 it), and an interior optimum is still determined by the data.
+
+## 2026-09-28 — P1: prompt revision 1b (an amendment of 1a at the coordinator's re-review of `c1e5829`, item 3), prompt sha256 `4b8f830ad0236d9f4ad44ed5300bebf435df73601e1e5f1e59223a8c9a2b4ddd`
+
+**Decision.** Two sentences of revision 1a (`c1e5829`, `f8e888f4…`) change; the rest of
+1a stays.
+- **The `none` criterion gets a margin.**
+  - 1a's last sentence was: "Conclude `none` … only when no cause predicts the record
+    better than the background does." Any candidate cause with a free parameter
+    satisfies that, so read literally it forbids `none` on almost every clean cell.
+  - It now reads, in the coordinator's words: "Conclude `none`, with the calibration's
+    intervals, when no candidate cause predicts a pattern that the record shows and the
+    background does not, beyond the declared instrument noise."
+  - This answers the pilot at `c1e5829`, where neither prompt reached `none` on any of
+    the four `none` cells.
+- **The abstention example matches the term (the coordinator's nit).**
+  - `parameter_values` is global: "The fitted parameter values are not offered as
+    estimates of the true parameters" (`configs/abstentions.yaml`).
+  - The example no longer speaks of declining "a fitted value". It now says that when
+    the data do not identify the fitted values, those values *as a whole* may be
+    declined under that term.
+
+**Not frozen.** `prompt_sha256` in `configs/workflows/p1.yaml` stays empty.
