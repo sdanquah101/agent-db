@@ -66,9 +66,11 @@ from tools.runner import WORKFLOWS, p1_provenance, run_workflow
 from tools.server import OUTPUTS_DIR, OutputSink
 from tools.workflow_config import (
     WORKFLOW_CONFIG_DIR,
+    check_brief_hash,
     check_prompt_hash,
     load_p1,
     load_prompts,
+    model_system_text,
     sandbox_config,
 )
 from workflows.p1_single_agent import agent
@@ -144,8 +146,13 @@ _LIBRARY_EXAMPLES = re.compile(
     r"|under-?read|over-?read|more water|water than|dilute|solids than declared"
     r"|declared solids|never appear|missing from the feed log"
     r"|not (?:\w+ )?(?:completely|fully|well|perfectly) (?:stirred|mixed)"
-    r"|free ammonia|ammonia \w+ suppress"
-    r"|one in (?:two|three|four|five|six|seven|eight|nine|ten|\d+)\b"
+    r"|free ammonia|ammonia \w+ suppress",
+    re.IGNORECASE,
+)
+# Per-cell P0 outcomes and library frequencies stated as counts. Applied to every surface,
+# the expert brief included (the lead's ruling of 2026-09-28, the coordinator's design, d).
+_P0_OUTCOME = re.compile(
+    r"one in (?:two|three|four|five|six|seven|eight|nine|ten|\d+)\b"
     r"|\d+ (?:of|in|out of) \d+ (?:cells|runs|scenarios)",
     re.IGNORECASE,
 )
@@ -196,6 +203,7 @@ def library_examples(texts: dict[str, str], *, paraphrases: bool = True) -> list
     for where, text in texts.items():
         found += [(where, m.group(0)) for m in _HOLD_A_VALUE.finditer(text)]
         found += [(where, m.group(0)) for m in _LABEL_FREQUENCY.finditer(text)]
+        found += [(where, m.group(0)) for m in _P0_OUTCOME.finditer(text)]
         if not paraphrases:
             continue
         sentences = [x for x in _SENTENCE.split(text) if x and x.strip()]
@@ -206,12 +214,94 @@ def library_examples(texts: dict[str, str], *, paraphrases: bool = True) -> list
     return found
 
 
+BRIEF_FILE = "expert_brief.md"
+
+
+def brief_findings(texts: dict[str, str]) -> list[tuple[str, str]]:
+    """The guard over the expert brief: ids, label frequencies and P0 outcomes only.
+
+    The failure-mode patterns (the library's mechanism phrases, "hold a value" and the
+    sensor-fault co-occurrence) are waived for the brief, because describing failure modes
+    from the literature is its purpose; the lead's read of the brief is the defence (the
+    lead's ruling of 2026-09-28, the coordinator's design, item d).
+    """
+    found = prompt_violations(texts)
+    for where, text in texts.items():
+        found += [(where, m.group(0)) for m in _LABEL_FREQUENCY.finditer(text)]
+        found += [(where, m.group(0)) for m in _P0_OUTCOME.finditer(text)]
+    return found
+
+
+def surface_findings(texts: dict[str, str]) -> list[tuple[str, str]]:
+    """The guard by surface: prompt files in full, the brief under its waiver, the rest in part."""
+    brief = {k: v for k, v in texts.items() if k.endswith(BRIEF_FILE)}
+    prompt_files = {
+        k: v for k, v in texts.items() if k.startswith(str(PROMPT_DIR)) and k not in brief
+    }
+    others = {k: v for k, v in texts.items() if k not in prompt_files and k not in brief}
+    return (
+        library_examples(prompt_files)
+        + library_examples(others, paraphrases=False)
+        + brief_findings(brief)
+    )
+
+
 def committed_surfaces_found() -> list[tuple[str, str]]:
-    """The guard over every committed surface: prompt files in full, the rest in part."""
-    texts = model_facing_texts()
-    prompt_files = {k: v for k, v in texts.items() if k.startswith(str(PROMPT_DIR))}
-    others = {k: v for k, v in texts.items() if k not in prompt_files}
-    return library_examples(prompt_files) + library_examples(others, paraphrases=False)
+    """The guard over every committed surface (see surface_findings)."""
+    return surface_findings(model_facing_texts())
+
+
+def test_the_waiver_applies_only_to_the_expert_brief():
+    # the lead's ruling of 2026-09-28, the coordinator's design, item d
+    modes = (
+        "An instrument may drift, hold a value, or misreport by a constant factor. "
+        "Ammonia inhibition suppresses the methanogens."
+    )
+    brief, system = str(PROMPT_DIR / BRIEF_FILE), str(PROMPT_DIR / "system.md")
+    assert surface_findings({brief: modes}) == []
+    assert surface_findings({system: modes}) != []  # negative control: the same text elsewhere
+    # what the brief is still held to: ids, label frequencies and P0 outcomes
+    kept = {
+        "id": "Treat this like S2_03.",
+        "rule": "Apply rule R 4 when the steps align.",
+        "frequency": "About a third of the cells carry a sensor fault.",
+        "outcome": "One in five cells has nothing wrong with it.",
+    }
+    for kind, text in kept.items():
+        assert surface_findings({brief: text}) != [], kind
+
+
+def test_the_expert_brief_arm_differs_from_p1_only_in_the_brief():
+    plain = yaml.safe_load((WORKFLOW_CONFIG_DIR / "p1.yaml").read_text("utf-8"))
+    arm = yaml.safe_load((WORKFLOW_CONFIG_DIR / "p1_expert_brief.yaml").read_text("utf-8"))
+    assert arm["prompts"].pop("brief") == f"p1_prompts/{BRIEF_FILE}"
+    assert arm.pop("brief_sha256") == ""  # not frozen
+    assert arm == plain
+
+
+def test_the_brief_is_appended_to_the_system_text_and_hashed_apart():
+    import hashlib
+
+    arm = load_p1(WORKFLOW_CONFIG_DIR / "p1_expert_brief.yaml")
+    plain = load_p1()
+    prompts = load_prompts(arm)
+    assert set(prompts) == {"system", "task", "brief"}
+    assert set(load_prompts(plain)) == {"system", "task"}
+    joined = model_system_text(prompts)
+    assert joined.startswith(prompts["system"].rstrip("\n")) and joined.endswith(prompts["brief"])
+    a, p = p1_provenance(arm), p1_provenance(plain)
+    assert a["prompt_sha256"] == p["prompt_sha256"]  # the brief does not move the prompt hash
+    assert a["brief_sha256"] == hashlib.sha256(prompts["brief"].encode("utf-8")).hexdigest()
+    assert p["brief_sha256"] == ""
+    assert a["system_sha256"] == system_digest(joined) != p["system_sha256"]
+    assert sandbox_config(arm)["prompts"]["system"] == joined
+    assert sandbox_config(plain)["prompts"]["system"] == prompts["system"]
+    # a committed brief hash is enforced, and refused where no brief is configured
+    assert check_brief_hash(arm.model_copy(update={"brief_sha256": a["brief_sha256"]}))
+    with pytest.raises(ValueError, match="brief_sha256"):
+        check_brief_hash(arm.model_copy(update={"brief_sha256": "0" * 64}))
+    with pytest.raises(ValueError, match="no brief is configured"):
+        check_brief_hash(plain.model_copy(update={"brief_sha256": "0" * 64}))
 
 
 def test_no_prompt_surface_reintroduces_the_librarys_examples(tmp_path):

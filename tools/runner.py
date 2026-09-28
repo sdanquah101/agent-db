@@ -62,9 +62,11 @@ from tools.sandbox import REPO_ROOT, SandboxError, launch
 from tools.server import OUTPUTS_DIR
 from tools.workflow_config import (
     P1Config,
+    check_brief_hash,
     check_prompt_hash,
     load_prompts,
     load_workflow_config,
+    model_system_text,
     sandbox_config,
 )
 
@@ -121,6 +123,7 @@ class WorkflowResult:
     system_sha256: str | None = None
     task_sha256: str | None = None
     prompt_sha256: str | None = None
+    brief_sha256: str | None = None
     tools_sha256: str | None = None
     git_commit: str | None = None
     secondary_labels: list[str] = field(default_factory=list)
@@ -200,7 +203,8 @@ def p1_provenance(config: P1Config) -> dict[str, str]:
     prompts = load_prompts(config)
     return {
         "prompt_sha256": check_prompt_hash(config),
-        "system_sha256": system_digest(prompts["system"]),
+        "brief_sha256": check_brief_hash(config),  # "" in the plain arm
+        "system_sha256": system_digest(model_system_text(prompts)),  # the text sent
         "task_sha256": hashlib.sha256(prompts["task"].encode("utf-8")).hexdigest(),
         "tools_sha256": tools_digest(tool_specs()),
         "git_commit": git_commit(),

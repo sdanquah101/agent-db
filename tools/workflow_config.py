@@ -357,6 +357,11 @@ class Prompts(_Frozen):
 
     system: str
     task: str
+    brief: str | None = Field(
+        default=None,
+        description="The expert brief, appended to the system prompt in the expert-brief "
+        "arm only (the lead's ruling of 2026-09-28); absent in the plain P1 arm",
+    )
 
 
 class P1Config(_Frozen):
@@ -380,6 +385,11 @@ class P1Config(_Frozen):
         description="The prompts' fingerprint (prompt_digest), committed at the freeze; "
         "empty until then. When set, the runner refuses prompts that do not match it",
     )
+    brief_sha256: str = Field(
+        default="",
+        description="The expert brief's fingerprint (sha256 of the file), committed at the "
+        "freeze; empty until then. When set, the runner refuses a brief that does not match it",
+    )
     runner: Runner
 
 
@@ -392,20 +402,62 @@ def load_p1(path: Path = WORKFLOW_CONFIG_DIR / "p1.yaml") -> P1Config:
 
 
 def load_prompts(config: P1Config, root: Path = WORKFLOW_CONFIG_DIR) -> dict[str, str]:
-    """The prompt texts P1's configuration names, by role (``system``, ``task``)."""
+    """The prompt texts P1's configuration names, by role.
+
+    ``system`` and ``task`` always; ``brief`` only in the expert-brief arm, whose
+    configuration names one.
+    """
     return {
         role: (Path(root) / rel).read_text(encoding="utf-8")
         for role, rel in config.prompts.model_dump().items()
+        if rel is not None
     }
 
 
+def model_system_text(prompts: dict[str, str]) -> str:
+    """The system text the model is sent: the system prompt, then the brief when there is one.
+
+    The brief is appended on the privileged side, so the jailed agent and the gateway's
+    system-text check see one text; ``prompt_sha256`` covers the system and task prompts
+    only, so the brief arm shares it with the plain arm and differs in ``brief_sha256``.
+    """
+    brief = prompts.get("brief")
+    if brief:
+        return prompts["system"].rstrip("\n") + "\n\n" + brief
+    return prompts["system"]
+
+
 def prompt_digest(prompts: dict[str, str]) -> str:
-    """The fingerprint of the prompt texts: sha256 of their sorted-key JSON."""
+    """The fingerprint of the system and task prompts: sha256 of their sorted-key JSON.
+
+    The brief, when present, is fingerprinted separately (``check_brief_hash``).
+    """
     import hashlib
     import json
 
-    blob = json.dumps(prompts, sort_keys=True, separators=(",", ":"))
+    core = {role: prompts[role] for role in ("system", "task")}
+    blob = json.dumps(core, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def check_brief_hash(config: P1Config) -> str:
+    """The expert brief's fingerprint (empty when the arm has no brief), refused on a mismatch.
+
+    Raises:
+        ValueError: If ``brief_sha256`` is set and the brief on disk does not hash to it,
+            or is set while the configuration names no brief.
+    """
+    import hashlib
+
+    brief = load_prompts(config).get("brief")
+    digest = hashlib.sha256(brief.encode("utf-8")).hexdigest() if brief else ""
+    if config.brief_sha256 and config.brief_sha256 != digest:
+        raise ValueError(
+            f"the brief does not match the committed brief_sha256 ({config.brief_sha256}); "
+            f"it hashes to {digest or 'nothing (no brief is configured)'}: a post-freeze "
+            "change invalidates the runs"
+        )
+    return digest
 
 
 def check_prompt_hash(config: P1Config) -> str:
@@ -469,7 +521,11 @@ def sandbox_config(config: P0Config | P1Config) -> dict[str, Any]:
         from tools.config import load_assays
 
         del payload["model"]
-        payload["prompts"] = load_prompts(config)
+        prompts = load_prompts(config)
+        payload["prompts"] = {
+            "system": model_system_text(prompts),  # the brief, when the arm has one, joined
+            "task": prompts["task"],
+        }
         # the public price list of requestable assays (proposal §6.4: "at a declared cost
         # and turnaround"), which P0 carries as its own preference list
         payload["assay_catalogue"] = {

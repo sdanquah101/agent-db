@@ -6693,3 +6693,46 @@ what the cells contain (the coordinator's design under the lead's ruling).
 
 **Runs.** The ten development cells run on revision 2 once the ten revision-1b rows are
 committed (the coordinator's order of work).
+
+## 2026-09-28 — P1: the expert-brief arm, brief sha256 `81b89186a77f6ce1bb6cf1283a6a111335949ef8bd5ac2ac82b2cac1650eac7d`
+
+**Decision** (the coordinator's design under the lead's ruling, implemented as follows).
+1. **The arm is a configuration.** `configs/workflows/p1_expert_brief.yaml` is
+   `p1.yaml` plus two lines: `prompts.brief: p1_prompts/expert_brief.md` and
+   `brief_sha256: ""`. A test pins that the two files differ in nothing else, so the arm
+   cannot drift from P1. A run of the arm is `run_workflow(..., "p1", config_path=...)`.
+2. **The brief is appended on the privileged side.** `load_prompts` returns it under
+   `brief`; `sandbox_config` hands the jailed agent one system text, the system prompt
+   followed by the brief (`model_system_text`). The agent code does not change, and the
+   gateway's system-text check sees the joined text.
+3. **Hashing.** `prompt_sha256` covers the system and task prompts only, so the two
+   arms share it (revision 2: `c80a3752…`) and differ in `brief_sha256`, which is the
+   sha256 of the brief file. That is what lets rev2 → rev2+brief isolate the brief.
+   `system_sha256`, the fingerprint of the text the model is sent, differs between the
+   arms. `check_brief_hash` refuses a committed hash that the brief does not match, and
+   a committed hash where no brief is configured. `brief_sha256` stays empty until the
+   freeze.
+4. **The guard's waiver, and its reading.** The coordinator waived "the failure-mode
+   co-occurrence pattern" for the brief. The brief is also, necessarily, full of the
+   library's *mechanism phrases* (ammonia inhibition, overload, unrecorded loads, an
+   electrode, a drifting zero): the coordinator's own content list asks for them. So the
+   waiver is read as covering the three failure-mode patterns together: the mechanism
+   phrase list, "hold a value", and the sensor-fault co-occurrence. The brief is held to
+   the scenario-id and rule-id patterns, the label-frequency pattern, and the P0-outcome
+   pattern, which is split out of the phrase list (`_P0_OUTCOME`: "one in N", "N of N
+   cells") so that it can apply to the brief on its own. A test plants failure-mode
+   wording under the brief's name (waived) and under `system.md` (caught), and plants an
+   id, a rule id, a frequency and an outcome under the brief's name (all caught). The
+   lead's read of the brief is the defence. **The coordinator is asked to confirm this
+   reading** (PR #26, questions).
+5. **The brief's text.** Written from the cited literature only: the ADM1 report and
+   paper, the monitoring and early-warning reviews, the inhibition reviews, the
+   identifiability reviews, the data-reconciliation and sensor literature, and the gas
+   measurement literature. Every substantive claim carries an author-year citation and
+   the reference list is at the end. It contains no scenario or rule id, no statement of
+   how often anything occurs (the frequency words the guard reads are absent
+   throughout), no numeric percentage, none of the library's magnitudes, onset days,
+   durations or instrument inventory, nothing from a per-cell outcome, and nothing on
+   scoring. Literature thresholds are cited by author rather than quoted as numbers.
+6. **No run of this arm** until the lead has read the brief and the coordinator relays
+   the lead's word. The revision-2 arm runs meanwhile.
