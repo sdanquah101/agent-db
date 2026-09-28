@@ -1122,8 +1122,13 @@ def test_an_estimate_must_be_one_an_estimator_returned(p1_cell):
     assert final.estimate == pytest.approx(fit["theta"]["k_m_ac"], rel=1e-3)
 
 
-def _interval_workspace(fits=(), fishers=()):
-    """A Workspace holding only the calls interval_sources reads (a unit-test stub)."""
+def _interval_workspace(fits=(), fishers=(), narrowed=None, at_bound=None):
+    """A Workspace holding only the calls interval_sources reads (a unit-test stub).
+
+    ``fishers`` are the `at` points; a Fisher call's named parameters are the keys of its
+    point unless ``(parameters, at)`` is given. ``narrowed`` and ``at_bound`` map a fit's
+    position to the bounds the agent narrowed and the names the fitter reported at a bound.
+    """
     from types import SimpleNamespace as NS
 
     ws = object.__new__(agent.Workspace)
@@ -1131,13 +1136,22 @@ def _interval_workspace(fits=(), fishers=()):
     ws.lower, ws.upper = {"a": 0.1, "b": 0.1}, {"a": 10.0, "b": 10.0}
     ws.posteriors, ws.profiles = {}, {}
     ws.fits = {
-        i: NS(parameters=list(p), theta=list(t), sd=[0.1] * len(p), converged=c)
+        i: NS(
+            parameters=list(p),
+            theta=list(t),
+            sd=[0.1] * len(p),
+            converged=c,
+            at_bound=list((at_bound or {}).get(i, [])),
+        )
         for i, (p, t, c) in enumerate(fits)
     }
+    ws.fit_bounds = {i: dict((narrowed or {}).get(i, {})) for i in range(len(fits))}
+    calls = [f if isinstance(f, tuple) else (list(f), f) for f in fishers]
     ws.fishers = {
-        100 + i: NS(parameters=list(at), crlb_sd=[0.2] * len(at)) for i, at in enumerate(fishers)
+        100 + i: NS(parameters=list(names), crlb_sd=[0.2] * len(names))
+        for i, (names, _) in enumerate(calls)
     }
-    ws.fisher_at = {100 + i: dict(at) for i, at in enumerate(fishers)}
+    ws.fisher_at = {100 + i: dict(at) for i, (_, at) in enumerate(calls)}
     return ws
 
 
@@ -1155,6 +1169,18 @@ def test_a_fisher_call_backs_an_interval_only_at_a_whole_optimum():
     ws.fishers[100].parameters = ["a", "b"]
     ws.fishers[100].crlb_sd = [0.2, 0.2]
     assert ws.interval_problem("a", 2.0, *iv, "fisher") is not None
+    # the re-review of c1e5829, item 2: a coordinate of `at` that is not a named parameter
+    # still sets the point the CRLB was evaluated at
+    only_a = [(["a"], [2.0], True)]
+    ws = _interval_workspace(fits=only_a, fishers=[(["a"], {"a": 2.0, "b": 1.37})])
+    assert ws.interval_problem("a", 2.0, *iv, "fisher") is not None
+    # negative controls: an optimum that never fitted `b` implies it at its default 1.0,
+    # and an unnamed `b` at the optimum of a fit of both is that optimum
+    ws = _interval_workspace(fits=only_a, fishers=[(["a"], {"a": 2.0, "b": 1.0})])
+    assert ws.interval_problem("a", 2.0, *iv, "fisher") is None
+    both = [(["a", "b"], [2.0, 3.0], True)]
+    ws = _interval_workspace(fits=both, fishers=[(["a"], {"a": 2.0, "b": 3.0})])
+    assert ws.interval_problem("a", 2.0, *iv, "fisher") is None
 
 
 def test_only_a_converged_fit_is_an_estimate():
@@ -1167,6 +1193,32 @@ def test_only_a_converged_fit_is_an_estimate():
         assert (ws.interval_problem("a", 2.0, *fit_iv, "fisher") is None) is converged
         fisher_iv = [2.0 - 1.645 * 0.2, 2.0 + 1.645 * 0.2]
         assert (ws.interval_problem("a", 2.0, *fisher_iv, "fisher") is None) is converged
+
+
+def test_an_optimum_at_a_bound_the_agent_narrowed_is_not_an_estimate():
+    # the re-review of c1e5829, item 1: bounds narrowed to [1.365, 1.375] make the fit
+    # return 1.375, a value the agent chose
+    e = 1.375
+    fit_iv = [e - 1.645 * 0.1, e]  # clipped at the narrowed bound as the fit reports it
+    for flagged in (["a"], []):  # the fitter's at_bound, and the harness's own check
+        ws = _interval_workspace(
+            fits=[(["a"], [e], True)],
+            fishers=[{"a": e}],
+            narrowed={0: {"a": (1.365, 1.375)}},
+            at_bound={0: flagged},
+        )
+        assert ws.estimated_points("a") == []
+        assert ws.interval_problem("a", e, None, None, "none") is not None
+        assert ws.interval_problem("a", e, *fit_iv, "fisher") is not None
+        fisher_iv = [e - 1.645 * 0.2, e + 1.645 * 0.2]
+        assert ws.interval_problem("a", e, *fisher_iv, "fisher") is not None
+    # negative controls: an interior optimum inside narrowed bounds, and an optimum at a
+    # declared bound nobody narrowed (a warning, not a refusal), both qualify
+    ws = _interval_workspace(fits=[(["a"], [1.5], True)], narrowed={0: {"a": (1.0, 2.0)}})
+    assert ws.estimated_points("a") == [1.5]
+    assert ws.interval_problem("a", 1.5, None, None, "none") is None
+    ws = _interval_workspace(fits=[(["a"], [10.0], True)], at_bound={0: ["a"]})
+    assert ws.estimated_points("a") == [10.0]
 
 
 def test_tool_outputs_do_not_depend_on_hold_out_values(p1_cell, tmp_path):
@@ -1347,3 +1399,24 @@ def test_the_replay_checks_the_logged_translated_request(tmp_path):
     lines[0]["response"]["provider"]["request"]["instructions"] = "tampered"
     with pytest.raises(ModelError, match="translated request differs"):
         _gateway(tmp_path / "bad", RecordedClient(lines)).complete(request)
+
+
+def test_the_missing_fraction_reads_the_calibration_window_only():
+    # the re-review of c1e5829, item 5: hold-out gaps do not reach state.json
+    raw = {
+        "channel": "ph",
+        "unit": "-",
+        "sample_t_d": [0.0, 1.0, 2.0, 3.0],
+        "value": [7.0, 7.1, None, None],
+    }
+    cal = {"min_relative_sd": 0.01, "sd_floor_abs": 1e-6}
+    assert agent.Series("ph", raw, {}, cal, cal_end=2.0).missing_fraction() == 0.0
+    # negative control: the same gap inside the calibration window counts
+    assert agent.Series("ph", raw, {}, cal, cal_end=4.0).missing_fraction() == 0.5
+
+
+def test_no_record_reading_tool_claims_the_whole_record():
+    # the re-review of c1e5829, item 4: the descriptions agree with task.md
+    specs = {t["name"]: t["description"] for t in agent.tool_specs()}
+    for name in ("data_qc", "mass_balance"):
+        assert "whole record" not in specs[name] and "calibration window" in specs[name]

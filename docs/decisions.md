@@ -6202,3 +6202,46 @@ rule).
 
 **Not frozen.** `prompt_sha256` in `configs/workflows/p1.yaml` stays empty. Freezing
 waits for the lead's word.
+
+## 2026-09-28 — P1: the fixes of the coordinator's re-review at `c1e5829`
+
+**Decision.** None of these changes a tool output. They change what the harness accepts at
+`conclude`, one field of `state.json`, and two tool descriptions.
+1. **An optimum at a bound the agent narrowed is not an estimate.**
+   - The case: `fit_lsq` with `bounds={k_m_ac: [1.365, 1.375]}` converges at 1.375,
+     which is a value the agent chose.
+   - The harness now records the narrowed bounds of each fit
+     (`Workspace.fit_bounds[index]`).
+   - `qualifying_fit` rejects a fit whose optimum lies at one of those narrowed bounds:
+     either the fitter reports the parameter in `at_bound`, or the value lies within 1 %
+     of the narrowed span from either end.
+   - `estimated_optima`, `estimated_points` and the fit branch of `interval_sources` use
+     `qualifying_fit`.
+   - Two cases still qualify: an interior optimum inside narrowed bounds, and an optimum
+     at a *declared* bound nobody narrowed (a warning, as before).
+2. **A Fisher call's unnamed `at` coordinates count.**
+   - The coordinates the CRLB was evaluated at are now the named parameters (default
+     1.0) plus every key of that call's `at`.
+   - An optimum qualifies only when it matches all of them. A coordinate the optimum
+     never fitted is taken at its default, 1.0.
+3. **The `data_qc` and `mass_balance` descriptions** now say "the calibration window",
+   in agreement with `task.md`. This changes the tool-spec hash `tools_sha256`, not any
+   tool output.
+4. **`state.json`'s `data_quality.missing_fraction`** is taken over the calibration
+   window. It read the whole record.
+
+Each has a unit test with a negative control:
+- `test_an_optimum_at_a_bound_the_agent_narrowed_is_not_an_estimate`;
+- the new cases in `test_a_fisher_call_backs_an_interval_only_at_a_whole_optimum`;
+- `test_the_missing_fraction_reads_the_calibration_window_only`;
+- `test_no_record_reading_tool_claims_the_whole_record`.
+
+**Open, not changed.** `bayes_mcmc` accepts narrowed bounds through the same arguments,
+so a sampler run inside a narrow box yields a mean and a q05–q95 inside that box. This
+PR does not close that case: the review named fits only, and the right rule for a
+posterior (refuse any narrowed box? refuse a box narrower than some fraction of the
+declared width?) is a design choice. It is left for the coordinator.
+
+**Alternatives.** Refusing every fit with narrowed bounds was rejected: narrowing with a
+stated justification is a legitimate move (P0 does not use it, but the registry allows
+it), and an interior optimum is still determined by the data.

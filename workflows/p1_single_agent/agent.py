@@ -275,6 +275,7 @@ class Series:
         self.channel = str(raw["channel"])
         self.unit = str(raw["unit"])
         self.t = np.asarray(raw["sample_t_d"], dtype=float)
+        self.cal_end = float(cal_end)
         self.raw = _nan(list(raw["value"]))
         self.value = self.raw.copy()
         self.noise = {k: _f(v) for k, v in noise.items()}
@@ -292,8 +293,9 @@ class Series:
         self.reason = ""
 
     def missing_fraction(self) -> float | None:
-        """Fraction of the record's samples without a value."""
-        return float(np.mean(~np.isfinite(self.raw))) if self.raw.size else None
+        """Fraction of calibration-window samples without a value (re-review of c1e5829, 5)."""
+        in_cal = self.raw[self.t < self.cal_end]
+        return float(np.mean(~np.isfinite(in_cal))) if in_cal.size else None
 
     def mask(self, window: tuple[float, float] | None) -> np.ndarray:
         """Samples inside the half-open ``[start, end)`` (all when None).
@@ -411,7 +413,8 @@ def tool_specs() -> list[dict[str, Any]]:
         ),
         (
             "data_qc",
-            "Rule-based quality checks per sensor over the whole record: unit and timestamp "
+            "Rule-based quality checks per sensor over the calibration window: unit and "
+            "timestamp "
             "checks, flatlines, spikes, drift, and missingness during high-load event "
             "windows. No evaluation.",
             {
@@ -426,7 +429,7 @@ def tool_specs() -> list[dict[str, Any]]:
         ),
         (
             "mass_balance",
-            "COD and N closure over consecutive windows of the whole record, and the "
+            "COD and N closure over consecutive windows of the calibration window, and the "
             "consistency of the implied charge balance. No evaluation.",
             {"window_d": _d(_NUM, "Window width, d (default from the configuration)")},
             (),
@@ -705,6 +708,7 @@ class Workspace:
         self.posteriors: dict[int, Any] = {}
         self.fishers: dict[int, Any] = {}
         self.fisher_at: dict[int, dict[str, float]] = {}
+        self.fit_bounds: dict[int, dict[str, tuple[float, float]]] = {}
         self.sim_params: dict[int, dict[str, float]] = {}
         self.profiles: dict[int, Any] = {}
         # the evidence values each call produced, by call index and evidence key: an
@@ -1355,6 +1359,7 @@ class Workspace:
                 args[key] = inp[key]
         out, index = self.rec.call(name, name, **args)
         self.fits[index] = out
+        self.fit_bounds[index] = dict(args.get("bounds") or {})
         return self._out(index, self.fit_result(out))
 
     def t_mcmc(self, inp: dict[str, Any]) -> dict[str, Any]:
@@ -1781,8 +1786,8 @@ class Workspace:
                     best = float(grid[int(np.nanargmin(chi2))]) if chi2.size else float(lo)
                     out.append(([best], float(lo), float(hi)))
         elif method == "fisher":
-            for fit in self.fits.values():
-                if fit.converged and fit.sd is not None and name in fit.parameters:
+            for fit_index, fit in self.fits.items():
+                if self.qualifying_fit(fit_index) and fit.sd is not None and name in fit.parameters:
                     i = list(fit.parameters).index(name)
                     theta = float(list(fit.theta)[i])
                     iv = self.fisher_interval(name, theta, list(fit.sd)[i])
@@ -1792,15 +1797,17 @@ class Workspace:
             for index, fisher in self.fishers.items():
                 if name in fisher.parameters:
                     i = list(fisher.parameters).index(name)
-                    at = self.fisher_at.get(index, {})
-                    full = {p: float(at.get(p, 1.0)) for p in fisher.parameters}
+                    at = {p: float(v) for p, v in self.fisher_at.get(index, {}).items()}
+                    # every coordinate the CRLB was evaluated at: the named parameters
+                    # (default 1.0) and any other key of `at` the registry used
+                    full = {p: 1.0 for p in fisher.parameters} | at
                     point = full[name]
                     # a Fisher call's interval backs an estimate only when ALL its
                     # coordinates are an optimum this run estimated, never a point the
-                    # agent chose (the re-reviews of e4fc44a, 2 and 1624e4d, 2)
+                    # agent chose; an optimum that never fitted a coordinate implies it at
+                    # its default (the re-reviews of e4fc44a, 2; 1624e4d, 2; c1e5829, 2)
                     if not any(
-                        all(p in o and self._close(v, o[p]) for p, v in full.items())
-                        for o in optima
+                        all(self._close(v, o.get(p, 1.0)) for p, v in full.items()) for o in optima
                     ):
                         continue
                     iv = self.fisher_interval(name, point, list(fisher.crlb_sd)[i])
@@ -1815,13 +1822,12 @@ class Workspace:
     def estimated_optima(self) -> list[dict[str, float]]:
         """Every whole point an estimator of this run returned, parameter -> value.
 
-        A converged fit's optimum, and a converged sampler's mean and its median. A fit
-        that did not converge returns its start, not an estimate (the re-review of
-        1624e4d, 2); a simulate's input and the default are never estimates.
+        A qualifying fit's optimum (see qualifying_fit), and a converged sampler's mean and
+        its median. A simulate's input and the default are never estimates.
         """
         out: list[dict[str, float]] = []
-        for fit in self.fits.values():
-            if fit.converged:
+        for index, fit in self.fits.items():
+            if self.qualifying_fit(index):
                 out.append({n: float(v) for n, v in zip(fit.parameters, fit.theta, strict=True)})
         for post in self.posteriors.values():
             if post.converged:
@@ -1831,6 +1837,27 @@ class Workspace:
                 if q50 is not None:
                     out.append({n: float(v) for n, v in zip(names, q50, strict=True)})
         return out
+
+    def qualifying_fit(self, index: int) -> bool:
+        """Whether a fit's optimum is an estimate this run may report.
+
+        A fit that did not converge returns its start (the re-review of 1624e4d, 2). A fit
+        whose optimum lies at a bound the agent narrowed returns that bound, a value the
+        agent chose (the re-review of c1e5829, 1). An interior optimum inside narrowed
+        bounds still qualifies.
+        """
+        fit = self.fits[index]
+        if not fit.converged:
+            return False
+        narrowed = self.fit_bounds.get(index, {})
+        at_bound = set(fit.at_bound or [])
+        for n, v in zip(fit.parameters, fit.theta, strict=True):
+            if n not in narrowed:
+                continue
+            lo, hi = narrowed[n]
+            if n in at_bound or min(float(v) - lo, hi - float(v)) <= 0.01 * (hi - lo):
+                return False
+        return True
 
     def estimated_points(self, name: str) -> list[float]:
         """The values an estimator of this run returned for ``name`` (see estimated_optima)."""
