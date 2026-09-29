@@ -1619,8 +1619,8 @@ def test_a_call_that_does_not_fit_the_clock_is_refused(p1_cell, tmp_path):
     assert "evaluations fit" in refused[0]["message"]
     fits = [a for a in state["actions"] if a["name"] == "fit_lsq"]
     assert len(fits) == 1 and fits[0]["outcome"] == "ok"  # the smaller fit ran
-    guard = state["plan"]["duration_guard"]
-    assert guard["seconds_per_evaluation"] == 60.0 and guard["measured"] is False
+    note = [a for a in state["annotations"] if a.startswith("duration guard:")][-1]
+    assert "60.00 s per evaluation (the default;" in note, note
     # negative control: the committed configuration (12 s per evaluation) lets both run
     result = run_workflow(
         run.run_id,
@@ -1637,7 +1637,8 @@ def test_a_call_that_does_not_fit_the_clock_is_refused(p1_cell, tmp_path):
     assert not [f for f in state["tool_failures"] if f["name"] == "p1.fit_lsq"]
     assert len([a for a in state["actions"] if a["name"] == "fit_lsq"]) == 2
     # the measured rate replaced the default once the run had charged evaluations
-    assert state["plan"]["duration_guard"]["measured"] is True
+    note = [a for a in state["annotations"] if a.startswith("duration guard:")][-1]
+    assert "(measured;" in note, note
 
 
 def test_a_cancelled_registry_stops_its_next_call(p1_cell):

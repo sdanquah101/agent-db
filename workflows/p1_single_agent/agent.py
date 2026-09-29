@@ -2086,6 +2086,17 @@ class Workspace:
         return {"concluded": True}
 
     # -- the state -----------------------------------------------------------------------
+    @staticmethod
+    def guard_note(guard: dict[str, Any] | None) -> list[str]:
+        """The duration guard's rate as one annotation line (the state's plan has no slot)."""
+        if not guard:
+            return []
+        source = "measured" if guard.get("measured") else "the default"
+        return [
+            f"duration guard: {float(guard['seconds_per_evaluation']):.2f} s per evaluation "
+            f"({source}; {int(guard['evaluations_measured'])} evaluations measured so far)"
+        ]
+
     def build_state(self, loop: dict[str, Any], completed: bool) -> dict[str, Any]:
         """The task state as JSON (``state.task_state.TaskState``)."""
         rem = tools.remaining()
@@ -2171,7 +2182,6 @@ class Workspace:
                 "fallbacks": [],
                 "guards_tripped": list(loop["guards"]),
                 "eval_seconds_assumed": None,
-                "duration_guard": loop.get("duration_guard"),
                 "steps_completed": list(self.steps),
                 "steps_skipped": {},
             },
@@ -2183,7 +2193,7 @@ class Workspace:
                 }
                 for n in self.notes
             ],
-            "annotations": list(self.annotations),
+            "annotations": [*self.annotations, *self.guard_note(loop.get("duration_guard"))],
         }
 
 
