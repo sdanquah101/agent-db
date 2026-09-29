@@ -25,11 +25,12 @@ from scripts.p0_freeze_golden import (
     summary_digest,
 )
 
-# The golden run: S0-01 B/A, P0 at 3ea1dee, 2026-09-29 (run_8f14dcebe5e2 in its own store).
+# The golden run: S0-01 B/A, P0 at 3ea1dee, 2026-09-29, run_8f14dcebe5e2, 61 min:
+# label none, 202 evaluations, 23 calls.
 GOLDEN = {
-    "state_sha256": "<filled from the golden run>",
-    "summary_sha256": "<filled from the golden run>",
-    "readable": {},
+    "state_sha256": "156b5c9e86f5742ad55c24681b7bcd53cdfcc1bc8b9c876d8b1ff2bbd2ada457",
+    "summary_sha256": "57b705d9aa9795a5bd68cb1fa99551ea98394252b8610a5fe227951c5df5cca6",
+    "readable": {"label": "none", "simulator_evals_used": 202, "n_calls": 23},
 }
 
 
