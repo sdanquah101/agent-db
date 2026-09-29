@@ -6910,3 +6910,18 @@ keys on `kinetic_update_allowed`, which is true on the `none` cells) and "an
 unconcluded run is a miss" is applied by hand in the report, not by the evaluator; the
 revision-2 rows ran at `cc256fd` and the brief rows at `06896dd`, which differ only by
 the live-client hash fix that revision 2, sending no brief, never met.
+
+## 2026-09-29 — COORDINATOR ANSWERS: the guard waiver confirmed; interim-state scoring deferred to the lead
+
+1. **The guard-waiver reading: confirmed** (the coordinator, ~21:15 UTC). The waiver
+   covers the three failure-mode patterns (the mechanism phrase list, "hold a value",
+   the sensor-fault co-occurrence) for `expert_brief.md` only; the brief is still held to
+   the scenario-id, rule-id, label-frequency and P0-outcome patterns; `system.md` is
+   held to all of them; the lead's read of the brief text is the defence. This is what
+   `tests/test_p1_agent.py` (`surface_findings`, `brief_findings`) implements.
+2. **The evaluator and interim states: deferred to the lead, not open.** `eval/` is
+   frozen for PR #26 and is not changed here. The coordinator will recommend to the
+   lead, in a separate small PR after #26 merges, that the evaluator score
+   `completed: false` as a miss (credit columns blank, `run_failed` carried through).
+   Until the lead rules, the hand-applied rule and the blank credit columns in
+   `reports/p1_pilot*.csv` stand as the record.
