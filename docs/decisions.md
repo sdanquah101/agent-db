@@ -6806,8 +6806,9 @@ counts as a miss; `reports/p1_pilot.csv` keeps `run_failed` and `failure_reason`
    - *DESIGN values* (`p1.yaml`, `duration_guard`): `seconds_per_evaluation_default`
      12.0 s (P0's `eval_seconds_assumed`), `min_evaluations_measured` 10,
      `safety_factor` 1.25, the eight sized tools;
-   - the state's `plan.duration_guard` records the rate the guard last used and whether
-     it was measured.
+   - the rate the guard last used, and whether it was measured, is one line of the
+     state's `annotations` (`b950bfa`: the shared state schema forbids extra keys under
+     `plan`).
 2. **A kill stops the in-flight call.** `EvaluationMeter.cancel()` makes the next charge
    raise `RunCancelled`; the registry logs that call as `error`, detail `cancelled: …`,
    and re-raises `ToolError`; `Registry.cancel()` sets the flag and `wait_idle()` lets
@@ -6875,3 +6876,37 @@ were removed from `reports/` (kept in the session's scratch as a labelled defect
    coordinator is asked to confirm**, or to order a second revision-2 re-run at the
    fixed head.
 3. No other change rides on this head.
+
+
+## 2026-09-29 — COORDINATOR REVIEW of `cc256fd`: the P0 freeze golden was machine-bound; replaced
+
+**Finding** (the coordinator's fresh-context review). The committed golden was not
+reproducible on a second machine: P0 sizes its plan from the measured seconds per
+evaluation, `_normalise` keeps `plan.sizes`, and the golden's 202 evaluations came from
+this container, while the reviewer's machine gave 271 at both `main` and `cc256fd`. The
+freeze itself is intact: on one machine, alone, S0-01 B/A at `main` and at `cc256fd`
+gives equal normalised state digests and equal `calls.jsonl` on seq, name, version,
+args hash, outcome and detail; and the registry's only change is the `RunCancelled`
+branch, taken only after a timeout kill, never on a concluded P0 cell.
+
+**Decision.** The stored golden is dropped. `tests/test_p0_freeze.py` (marker
+`p0_freeze`, deselected by default) becomes a same-machine, same-session two-head
+comparison: the cell runs at the reviewed base (`origin/main`, or `P0_FREEZE_BASE`) in a
+temporary worktree and at the head, back to back, each alone, through one standalone
+cell runner, and the two normalised states (`scripts.positive_control._normalise`, run
+ids masked) and the two `calls.jsonl` projections (seq, name, version, args hash,
+outcome, detail) must be equal. `scripts/p0_freeze_golden.py` keeps its digest helpers
+for the record but no longer holds a golden. The `3ea1dee` digests stay in this log as
+history only. The evaluation-rate finding of the same day (the machine after the 28
+September reboot evaluates at about 0.6x) is the same effect seen from the other side.
+
+**Also from the review** (all applied): the credit columns (`attribution_exact`,
+`primary_matches_truth`, `truth_among_labels`) are blank on every `run_failed` row of
+`reports/p1_pilot*.csv`; the wording above on where the guard's rate lives; a comment
+on `wait_idle`'s 120 s; the brief's digest in this log is the file's full digest
+(`…eac7d`). For the report: guard refusals are counted under harness refusals; the
+scoring statement's kinetic sentence merges two evaluator rules (`false_kinetic_update`
+keys on `kinetic_update_allowed`, which is true on the `none` cells) and "an
+unconcluded run is a miss" is applied by hand in the report, not by the evaluator; the
+revision-2 rows ran at `cc256fd` and the brief rows at `06896dd`, which differ only by
+the live-client hash fix that revision 2, sending no brief, never met.
