@@ -2970,3 +2970,37 @@ full (63 min) reproduces the golden's normalised state and summary digests exact
 (`156b5c9e…`, `57b705d9…`; `none`, 202 evaluations, 23 calls). The live request
 returned OK. The revision-2 re-run started at 06:05, ten cells, three lanes, one process
 per cell, nothing else on the machine; the brief arm follows it at the same head.
+
+### Session 2026-09-29 (continued) — revision 2 re-run; the brief arm's false start; the evaluation rate is the machine
+
+**Done.**
+- **Revision 2 re-run at `cc256fd`, 06:05–11:11**, ten cells, three lanes, one process
+  per cell, nothing else on the machine: **ten of ten concluded, none killed, none
+  lost.** Rows in `reports/p1_pilot.csv` (`rev2`), summaries `rev2_*`. The duration
+  guard refused fourteen oversized calls in seven cells (bounds of 94–417 evaluations
+  asked for); the agent resized and went on; four cells concluded within minutes of
+  their allowance (S0-01 B/C at 92.6 of 90 min, inside the runner's margin).
+- **The brief arm's first attempt (11:11) failed on every cell at turn 0**: the live
+  OpenAI client hashed the system prompt alone, the gateway and the provenance the
+  joined text, so the client's own check rejected the brief arm's requests (decisions,
+  2026-09-29). Fixed at `3499b04` (one line of `tools/runner.py`, a test pinning the
+  client's digest to the provenance's in both arms); the ten rows removed from the
+  reports at `eda0ad5`. The brief arm relaunches at the fixed head after the full suite
+  and the push; the plain arm's text is unchanged by the fix, so the revision-2 re-run
+  stands (the coordinator is asked to confirm the two heads, or to order a second
+  revision-2 re-run).
+- **The evaluation rate is the machine.** Single-evaluation `simulate` calls took
+  11.2–11.6 s (median) in the old and 1a arms and 17.7–19.6 s in every arm since,
+  contended or alone; the boundary is the container reboot of 28 September 06:24 UTC.
+  The re-run alone measured 20.8 s per evaluation over all sized calls. So the suites
+  and the orphaned fits explain the kills (a long call past the allowance) but not the
+  slowdown; wall clock, cost and evaluation counts are comparable within the boundary,
+  not across it. The P0 golden (61 min for 202 evaluations, 29 September) against the
+  original P0 pilot cell (58 min for 271, 21 September) shows the same ratio.
+
+**Revision 2 (re-run), totals against the earlier arms** (failed runs are misses):
+exact attribution 1/10 (S2-01 B/B); primary label = truth 4/10 (S2-01, S3-01, S4-01,
+S8-01: the faulted cells with a single true cause); `none` reached on none of the four
+`none` cells; 16 labels over ten runs, one resting on whole-record figures only; no
+unsupported claim, no kinetic-update error, no kinetic drift; 54 harness refusals (14 the
+guard's); 92 extra abstentions; 2,311 evaluations; 851 min; 7.18 M tokens; $0.419.
