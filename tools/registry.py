@@ -412,7 +412,13 @@ class Registry:
         return int(self._in_flight)
 
     def wait_idle(self, timeout_s: float = 60.0) -> bool:
-        """Wait until no call is in flight; False if the wait timed out."""
+        """Wait until no call is in flight; False if the wait timed out.
+
+        A cancelled call stops at its next evaluation, which takes one evaluation's time
+        (tens of seconds on this simulator); the runner waits 120 s, well past that, and
+        gives up rather than hang the batch if a call is stuck somewhere no evaluation
+        is charged.
+        """
         deadline = time.monotonic() + float(timeout_s)  # the real clock, not the injected one
         while self._in_flight > 0 and time.monotonic() < deadline:
             time.sleep(0.05)

@@ -1,14 +1,16 @@
-"""The P0 freeze golden: run the pilot cell S0-01 B/A and print its normalised digests.
+"""Digest helpers for the P0 freeze check, and a runner that prints a cell's digests.
 
 Usage::
 
     python -m scripts.p0_freeze_golden <store>
 
-The digests are what ``tests/test_p0_freeze.py`` compares a re-run against: the
-positive-control driver's normalised state (``scripts.positive_control._normalise``, the
-run id masked) and the summary without its volatile fields. The golden was made at
-``3ea1dee``, before the infrastructure changes of 2026-09-29 (the coordinator's decision);
-regenerate it only on the lead's word, since a new golden hides a P0 change.
+``tests/test_p0_freeze.py`` compares the pilot cell S0-01 B/A between the reviewed base
+and the head on one machine, back to back, with the positive-control driver's
+normalisation (``scripts.positive_control._normalise``, the run id masked). A stored
+golden was tried first (the ``3ea1dee`` digests in ``docs/decisions.md``) and dropped:
+P0 sizes its plan from the measured seconds per evaluation, so a golden made on one
+machine does not hold on another (the coordinator's review of ``cc256fd``, 2026-09-29).
+This module keeps the digest helpers and prints a cell's digests for the record.
 
 Run it alone on the machine: P0's plan reads the measured evaluation rate.
 """
