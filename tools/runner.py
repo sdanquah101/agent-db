@@ -214,8 +214,11 @@ def p1_provenance(config: P1Config) -> dict[str, str]:
 def live_client(config: P1Config) -> ModelClient:
     """The provider's live client for the configuration's ``model`` block."""
     if config.model.provider == "openai":
+        # the text the model is sent: the system prompt, with the brief joined in the
+        # expert-brief arm, as the gateway and the provenance hash it (2026-09-29: hashing
+        # the system prompt alone here rejected every request of the brief arm)
         return OpenAIResponsesClient(
-            config.model, system_sha256=system_digest(load_prompts(config)["system"])
+            config.model, system_sha256=system_digest(model_system_text(load_prompts(config)))
         )
     return AnthropicClient(config.model)
 

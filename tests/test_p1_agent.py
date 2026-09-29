@@ -1696,3 +1696,31 @@ def test_the_expert_brief_is_the_version_the_lead_read():
         == "81b89186a77f6ce1bb6cf1283a6a111335949ef8bd5ac2ac82b2cac1650eac7d"
     )
     assert load_p1(WORKFLOW_CONFIG_DIR / "p1_expert_brief.yaml").brief_sha256 == ""
+
+
+def test_the_live_client_checks_the_text_the_gateway_sends(monkeypatch):
+    # 2026-09-29: the live client hashed the system prompt alone, so its own check
+    # rejected every request of the expert-brief arm ("the instructions sent are not the
+    # committed system prompt") while the plain arm passed. The client's digest must be
+    # the provenance's, in both arms.
+    pytest.importorskip("openai")
+    from tools.runner import live_client
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key-never-used")
+    for path in (WORKFLOW_CONFIG_DIR / "p1.yaml", WORKFLOW_CONFIG_DIR / "p1_expert_brief.yaml"):
+        config = load_p1(path)
+        assert config.model.provider == "openai"
+        client = live_client(config)
+        assert client.system_sha256 == p1_provenance(config)["system_sha256"], path.name
+    # negative control: the system prompt alone is not the brief arm's text
+    arm = load_p1(WORKFLOW_CONFIG_DIR / "p1_expert_brief.yaml")
+    prompts = load_prompts(arm)
+    assert system_digest(prompts["system"]) != p1_provenance(arm)["system_sha256"]
+    kw = to_responses_request(
+        {"model": arm.model.model_id, "max_tokens": arm.model.max_tokens,
+         "system": model_system_text(prompts), "output_config": {"effort": arm.model.effort},
+         "messages": [{"role": "user", "content": "x"}]}
+    )  # fmt: skip
+    check_responses_request(kw, arm.model, p1_provenance(arm)["system_sha256"])
+    with pytest.raises(ModelError, match="not the committed system prompt"):
+        check_responses_request(kw, arm.model, system_digest(prompts["system"]))
