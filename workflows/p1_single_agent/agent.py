@@ -38,6 +38,7 @@ from __future__ import annotations
 import json
 import math
 import string
+import time
 from typing import Any
 
 import numpy as np
@@ -182,6 +183,91 @@ def check(value: Any, schema: dict[str, Any], where: str = "input") -> None:
 # ------------------------------------------------------------------ the call record
 
 
+def _ceiling(value: Any, limit: int, name: str) -> int:
+    """The registry's rule for a sized argument: the ceiling when omitted, else at most it."""
+    if value is None:
+        return int(limit)
+    if int(value) > int(limit):
+        raise ActionError(f"{name} = {value} exceeds the registry's ceiling of {limit}")
+    return int(value)
+
+
+def estimate_evaluations(name: str, inp: dict[str, Any], ceilings: dict[str, Any]) -> int:
+    """The registry's evaluation bound for a sized call, as its cost functions compute it.
+
+    Mirrors ``tools/impl``'s cost functions (a test pins the mirror to them): the bound
+    the registry refuses on when it exceeds the evaluations left, and the number the
+    duration guard prices in seconds (the coordinator's decision of 2026-09-29).
+    """
+    c = ceilings.get(name)
+    if c is None:
+        return 0
+    k = len(inp.get("parameters") or [])
+    if name == "gsa_morris":
+        r = _ceiling(inp.get("n_trajectories"), c["n_trajectories"], "n_trajectories")
+        return r * (k + 1)
+    if name == "gsa_sobol":
+        n = _ceiling(inp.get("n_samples"), c["n_samples"], "n_samples")
+        second = c["second_order"] if inp.get("second_order") is None else bool(inp["second_order"])
+        return n * ((2 * k + 2) if second else (k + 2))
+    if name == "profile_likelihood":
+        grid = inp.get("grid")
+        n_grid = (
+            len(grid) if grid is not None else _ceiling(inp.get("n_grid"), c["n_grid"], "n_grid")
+        )
+        n_starts = _ceiling(inp.get("n_starts"), c["n_starts"], "n_starts")
+        return n_grid * n_starts * (int(c["max_nfev_per_start"]) + 1)
+    if name == "fit_lsq":
+        n_starts = _ceiling(inp.get("n_starts"), c["n_starts"], "n_starts")
+        nfev = _ceiling(
+            inp.get("max_nfev_per_start"), c["max_nfev_per_start"], "max_nfev_per_start"
+        )
+        return n_starts * (nfev + 2 * k + 1) + 2 * k
+    if name == "fit_de":
+        popsize = _ceiling(inp.get("popsize"), c["popsize"], "popsize")
+        gens = _ceiling(inp.get("max_generations"), c["max_generations"], "max_generations")
+        return (gens + 1) * popsize * k + 2 * k
+    if name == "fit_cmaes":
+        max_evals = _ceiling(inp.get("max_evaluations"), c["max_evaluations"], "max_evaluations")
+        popsize = c["popsize"] if c["popsize"] is not None else 4 + int(3 * math.log(max(k, 1)))
+        return max_evals + int(popsize) + 2 * k
+    if name == "bayes_mcmc":
+        walkers = _ceiling(inp.get("n_walkers"), c["n_walkers"], "n_walkers")
+        steps = _ceiling(inp.get("n_steps"), c["n_steps"], "n_steps")
+        return walkers * (steps + 1)
+    if name == "voi_assay":
+        return _ceiling(inp.get("n_outer"), c["n_outer"], "n_outer") + _ceiling(
+            inp.get("n_inner"), c["n_inner"], "n_inner"
+        )
+    return 0
+
+
+def duration_problem(
+    bound: int,
+    seconds_per_evaluation: float,
+    wall_left_min: float,
+    reserve_min: float,
+    safety: float,
+) -> str | None:
+    """Why a call of ``bound`` evaluations does not fit the wall clock left, or None.
+
+    The estimate is ``bound x seconds_per_evaluation x safety``; it must fit in the wall
+    clock left less the reserve the harness keeps for concluding.
+    """
+    allowed_min = wall_left_min - reserve_min
+    estimate_min = bound * seconds_per_evaluation * safety / 60.0
+    if estimate_min <= allowed_min:
+        return None
+    fits = int(max(allowed_min, 0.0) * 60.0 / (seconds_per_evaluation * safety))
+    return (
+        f"this call would make up to {bound} simulator evaluations, about "
+        f"{estimate_min:.0f} min at this run's {seconds_per_evaluation:.1f} s per evaluation "
+        f"(x{safety:g} margin), but {wall_left_min:.1f} min of wall clock remain less the "
+        f"{reserve_min:g} min reserve for concluding: at most {fits} evaluations fit; "
+        "size the call to that, or conclude"
+    )
+
+
 class Recorder:
     """Every registry call goes through here: the action record of §6.6, and the failures.
 
@@ -193,6 +279,8 @@ class Recorder:
         """Start with no actions and no failures."""
         self.actions: list[dict[str, Any]] = []
         self.failures: list[dict[str, Any]] = []
+        self.eval_seconds = 0.0  # over calls that charged evaluations (the guard's rate)
+        self.evals_charged = 0
 
     @staticmethod
     def next_index() -> int:
@@ -212,6 +300,8 @@ class Recorder:
             "outcome": "ok",
             "detail": "",
         }
+        before = int(tools.remaining().simulator_evals)
+        started = time.monotonic()
         try:
             out = tools.call(name, **args)
         except tools.BudgetExceededError as exc:
@@ -224,8 +314,21 @@ class Recorder:
             record["detail"] = str(exc)[:300]
             self._finish(record)
             raise
+        finally:
+            # this run's own rate: seconds per evaluation the registry charged, over
+            # every call that charged any (the duration guard's estimate)
+            charged = before - int(tools.remaining().simulator_evals)
+            if charged > 0:
+                self.eval_seconds += time.monotonic() - started
+                self.evals_charged += charged
         self._finish(record)
         return out, index
+
+    def seconds_per_evaluation(self, default: float, min_measured: int) -> tuple[float, bool]:
+        """The measured rate once enough evaluations were charged, else the default."""
+        if self.evals_charged >= int(min_measured) and self.eval_seconds > 0.0:
+            return self.eval_seconds / self.evals_charged, True
+        return float(default), False
 
     def _finish(self, record: dict[str, Any]) -> None:
         logged = tools.last_call() or {}
@@ -2068,6 +2171,7 @@ class Workspace:
                 "fallbacks": [],
                 "guards_tripped": list(loop["guards"]),
                 "eval_seconds_assumed": None,
+                "duration_guard": loop.get("duration_guard"),
                 "steps_completed": list(self.steps),
                 "steps_skipped": {},
             },
@@ -2213,6 +2317,7 @@ class Agent:
             ):
                 raise ActionError("the tool-use cap is reached; only `conclude` is accepted")
             check(inp, spec["input_schema"], name)
+            self.guard_duration(name, inp)
             if name == "conclude":
                 payload: dict[str, Any] = self.ws.conclude(inp)
             elif name in ("fit_lsq", "fit_de", "fit_cmaes"):
@@ -2233,6 +2338,34 @@ class Agent:
             index = self.ws.rec.actions[-1]["call_index"] if self.ws.rec.actions else None
             self.ws.rec.failure(name, name, "error", str(exc), "reported to the agent", index)
             return self._result(block, {"error": f"tool error: {exc}"}, True)
+
+    def guard_duration(self, name: str, inp: dict[str, Any]) -> None:
+        """Refuse a sized call that does not fit the wall clock left (the duration guard).
+
+        Raises:
+            ActionError: With the estimate, the time left and the largest bound that fits.
+        """
+        guard = self.cfg["duration_guard"]
+        if name not in guard["tools"]:
+            return
+        bound = estimate_evaluations(name, inp, self.cfg["tool_size_ceilings"])
+        rate, measured = self.ws.rec.seconds_per_evaluation(
+            float(guard["seconds_per_evaluation_default"]), int(guard["min_evaluations_measured"])
+        )
+        self.state["duration_guard"] = {
+            "seconds_per_evaluation": round(rate, 2),
+            "measured": measured,
+            "evaluations_measured": int(self.ws.rec.evals_charged),
+        }
+        problem = duration_problem(
+            bound,
+            rate,
+            float(tools.remaining().wall_clock_min),
+            float(self.loop_cfg["wall_clock_reserve_min"]),
+            float(guard["safety_factor"]),
+        )
+        if problem is not None:
+            raise ActionError(problem)
 
     def refuse(self, block: dict[str, Any], reason: str) -> dict[str, Any]:
         """Refuse one tool use: recorded under ``tool_failures``, returned as an error."""

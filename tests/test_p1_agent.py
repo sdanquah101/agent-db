@@ -37,6 +37,8 @@ from tests.p1_support import (
     chosen_point_policy,
     clean_policy,
     dawdling_policy,
+    long_call_policy,
+    oversized_policy,
     peeking_policy,
     probe_policy,
     slow,
@@ -72,6 +74,7 @@ from tools.workflow_config import (
     load_prompts,
     model_system_text,
     sandbox_config,
+    tool_size_ceilings,
 )
 from workflows.p1_single_agent import agent
 
@@ -1516,3 +1519,164 @@ def test_no_record_reading_tool_claims_the_whole_record():
     specs = {t["name"]: t["description"] for t in agent.tool_specs()}
     for name in ("data_qc", "mass_balance"):
         assert "whole record" not in specs[name] and "calibration window" in specs[name]
+
+
+# ------------------------------------------------------------------ the duration guard
+# (the coordinator's decision of 2026-09-29, after the killed runs of 2026-09-28)
+
+_SIZE_FIELDS = {
+    "parameters": [], "n_trajectories": None, "n_samples": None, "second_order": None,
+    "n_grid": None, "grid": None, "n_starts": None, "max_nfev_per_start": None,
+    "popsize": None, "max_generations": None, "max_evaluations": None, "n_walkers": None,
+    "n_steps": None, "n_outer": None, "n_inner": None,
+}  # fmt: skip
+_GUARD_CASES = [
+    ("gsa_morris", {"parameters": ["a", "b"], "n_trajectories": 7}),
+    ("gsa_morris", {"parameters": ["a", "b", "c"]}),
+    ("gsa_sobol", {"parameters": ["a", "b"], "n_samples": 16}),
+    ("gsa_sobol", {"parameters": ["a"], "n_samples": 8, "second_order": False}),
+    ("gsa_sobol", {"parameters": ["a", "b"]}),
+    ("profile_likelihood", {"parameters": ["a", "b"], "n_grid": 5, "n_starts": 2}),
+    ("profile_likelihood", {"parameters": ["a"], "grid": [0.5, 1.0, 1.5]}),
+    ("fit_lsq", {"parameters": ["a"], "n_starts": 3, "max_nfev_per_start": 8}),
+    ("fit_lsq", {"parameters": ["a", "b"]}),
+    ("fit_de", {"parameters": ["a", "b"], "popsize": 5, "max_generations": 3}),
+    ("fit_cmaes", {"parameters": ["a", "b", "c"], "max_evaluations": 50}),
+    ("bayes_mcmc", {"parameters": ["a"], "n_walkers": 8, "n_steps": 20}),
+    ("voi_assay", {"n_outer": 4, "n_inner": 3}),
+    ("voi_assay", {}),
+]
+
+
+@pytest.mark.parametrize(("name", "inp"), _GUARD_CASES)
+def test_the_duration_estimate_is_the_registrys_bound(name, inp):
+    from types import SimpleNamespace
+
+    from tools.impl import SPECS
+    from tools.registry import ToolConfigs
+
+    ctx = SimpleNamespace(configs=ToolConfigs())
+    registry_bound = SPECS[name].cost(SimpleNamespace(**{**_SIZE_FIELDS, **inp}), ctx)
+    assert agent.estimate_evaluations(name, inp, tool_size_ceilings()) == registry_bound
+    assert registry_bound > 0
+
+
+def test_a_size_past_the_registrys_ceiling_is_refused_by_the_estimate():
+    with pytest.raises(agent.ActionError, match="exceeds the registry's ceiling"):
+        agent.estimate_evaluations(
+            "fit_lsq", {"parameters": ["a"], "n_starts": 10**6}, tool_size_ceilings()
+        )
+    assert agent.estimate_evaluations("data_qc", {}, tool_size_ceilings()) == 0  # unsized: no bound
+
+
+def test_the_duration_rule():
+    # 30 evaluations at 12 s x 1.25 = 7.5 min fit in 20 - 6 min; 300 do not
+    assert agent.duration_problem(30, 12.0, 20.0, 6.0, 1.25) is None
+    msg = agent.duration_problem(300, 12.0, 20.0, 6.0, 1.25)
+    assert msg and "300 simulator evaluations" in msg and "at most 56 evaluations fit" in msg
+    assert "at most 0 evaluations fit" in agent.duration_problem(1, 12.0, 5.0, 6.0, 1.25)
+
+
+def test_the_meter_cancel_stops_the_next_charge():
+    from tools.models import EvaluationMeter, RunCancelled
+
+    meter = EvaluationMeter(10)
+    meter.charge(3)  # negative control
+    meter.cancel()
+    with pytest.raises(RunCancelled):
+        meter.charge(1)
+    assert meter.used == 3  # nothing charged after the cancel
+
+
+def _guarded_config(tmp_path, seconds_per_evaluation: float):
+    raw = yaml.safe_load((WORKFLOW_CONFIG_DIR / "p1.yaml").read_text("utf-8"))
+    raw["duration_guard"]["seconds_per_evaluation_default"] = seconds_per_evaluation
+    raw["duration_guard"]["min_evaluations_measured"] = 10**6  # the default rate stays
+    path = tmp_path / "p1_guard.yaml"
+    path.write_text(yaml.safe_dump(raw), encoding="utf-8")
+    return path
+
+
+def test_a_call_that_does_not_fit_the_clock_is_refused(p1_cell, tmp_path):
+    run, scenario = p1_cell
+    # at 60 s per evaluation the 35-evaluation fit needs 44 min of the 20-min cell
+    result = run_workflow(
+        run.run_id,
+        "p1",
+        runs_root=run.paths.root.parent,
+        scenario=scenario,
+        model_client=ScriptedClient(oversized_policy),
+        output_name="p1_guard",
+        config_path=_guarded_config(tmp_path, 60.0),
+    )
+    assert result.completed, result.stderr_tail
+    state = json.loads(
+        (run.paths.root / OUTPUTS_DIR / "p1_guard" / "state.json").read_text("utf-8")
+    )
+    refused = [f for f in state["tool_failures"] if f["name"] == "p1.fit_lsq"]
+    assert len(refused) == 1, state["tool_failures"]
+    assert "35 simulator evaluations" in refused[0]["message"]
+    assert "evaluations fit" in refused[0]["message"]
+    fits = [a for a in state["actions"] if a["name"] == "fit_lsq"]
+    assert len(fits) == 1 and fits[0]["outcome"] == "ok"  # the smaller fit ran
+    guard = state["plan"]["duration_guard"]
+    assert guard["seconds_per_evaluation"] == 60.0 and guard["measured"] is False
+    # negative control: the committed configuration (12 s per evaluation) lets both run
+    result = run_workflow(
+        run.run_id,
+        "p1",
+        runs_root=run.paths.root.parent,
+        scenario=scenario,
+        model_client=ScriptedClient(oversized_policy),
+        output_name="p1_unguarded",
+    )
+    assert result.completed, result.stderr_tail
+    state = json.loads(
+        (run.paths.root / OUTPUTS_DIR / "p1_unguarded" / "state.json").read_text("utf-8")
+    )
+    assert not [f for f in state["tool_failures"] if f["name"] == "p1.fit_lsq"]
+    assert len([a for a in state["actions"] if a["name"] == "fit_lsq"]) == 2
+    # the measured rate replaced the default once the run had charged evaluations
+    assert state["plan"]["duration_guard"]["measured"] is True
+
+
+def test_a_cancelled_registry_stops_its_next_call(p1_cell):
+    # the cancel path the runner uses on a kill (the coordinator's decision of 2026-09-29)
+    from tools import open_registry
+    from tools.registry import ToolError
+
+    run, scenario = p1_cell
+    registry = open_registry(run.run_id, runs_root=run.paths.root.parent, scenario=scenario)
+    desc = registry.call("describe_model", model=agent.MODEL)
+    params = dict.fromkeys(desc.parameter_names, 1.0)
+    registry.call("simulate", model=agent.MODEL, parameters=params)  # negative control
+    assert not registry.cancelled and registry.in_flight == 0
+    registry.cancel()
+    with pytest.raises(ToolError, match="cancelled"):
+        registry.call("simulate", model=agent.MODEL, parameters=params)
+    truth = run.paths.root.parent.parent / "truth_store" / run.run_id / "calls.jsonl"
+    last = json.loads(truth.read_text("utf-8").splitlines()[-1])
+    assert last["name"] == "simulate" and last["outcome"] == "error"
+    assert last["detail"].startswith("cancelled") and last["n_evaluations"] == 0
+
+
+def test_a_kill_stops_the_call_the_jail_was_waiting_on(p1_cell):
+    # a Morris screening of 36 evaluations (about half a minute on this cell) is under way
+    # when the runner kills the jail at 12 s: the call must stop within one evaluation,
+    # not compute on for the rest of its size on the registry's thread
+    run, scenario = p1_cell
+    result = run_workflow(
+        run.run_id,
+        "p1",
+        runs_root=run.paths.root.parent,
+        scenario=scenario,
+        model_client=ScriptedClient(long_call_policy),
+        output_name="p1_killed",
+        timeout_s=12.0,
+    )
+    assert not result.completed and "killed" in result.error, result.error
+    truth = run.paths.root.parent.parent / "truth_store" / run.run_id / "calls.jsonl"
+    last = json.loads(truth.read_text("utf-8").splitlines()[-1])
+    assert last["name"] == "gsa_morris", last
+    assert last["outcome"] == "error" and last["detail"].startswith("cancelled"), last
+    assert 0 < last["n_evaluations"] < 36, last  # stopped part-way, within one evaluation

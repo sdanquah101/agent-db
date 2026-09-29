@@ -6772,3 +6772,61 @@ committed (the coordinator's order of work).
 was rejected: the reserve rule is already in the prompt, the agent still sized the fits
 for an uncontended container, and a harness rule is the only one that holds under any
 load.
+
+## 2026-09-29 — COORDINATOR DECISION: the killed-run proposals, as one head; the revision-2 re-run
+
+**Decision** (the coordinator, ~02:10 UTC, on the finding of 2026-09-28). All three
+proposals are approved, as one new head; then the ten revision-2 cells are re-run at it,
+uncontended, one process per cell, at most three in parallel, nothing else running. The
+`3ea1dee` revision-2 rows stay as a labelled contended attempt, failures included, out
+of the comparison; revision 1b stays as it is, its two killed cells as failures. The
+expert brief (read by the coordinator, found within the rules; with the lead) runs only
+on the lead's word, at the new head, after the revision-2 re-run. In every table a
+failed run shows as FAILED with its cause (killed / connection), never as a label, and
+counts as a miss; `reports/p1_pilot.csv` keeps `run_failed` and `failure_reason`.
+
+**Implementation.**
+1. **The per-call duration guard**, in P1's harness (`workflows/p1_single_agent/agent.py`,
+   not the registry, which P0 shares):
+   - *the bound:* `estimate_evaluations` mirrors the registry's cost functions
+     (`tools/impl`: Morris `r (k+1)`; Sobol `N (2k+2)` or `N (k+2)`; profile
+     `n_grid x n_starts x (max_nfev+1)`; LSQ `n_starts (nfev + 2k + 1) + 2k`; DE
+     `(gens+1) popsize k + 2k`; CMA-ES `max_evals + popsize + 2k`; MCMC
+     `walkers (steps+1)`; VoI `n_outer + n_inner`), with the registry's size ceilings
+     as the default of an omitted size and the maximum of a given one. The ceilings
+     travel in the sandbox payload (`tool_size_ceilings`, from `configs/tools/`). A test
+     pins the mirror to `SPECS[name].cost` on fourteen inputs;
+   - *the rate:* the recorder times every registry call and counts what it charged
+     (`remaining().simulator_evals` before and after), so the run's seconds per charged
+     evaluation are its own measurement; until `min_evaluations_measured` evaluations
+     are charged, the default applies;
+   - *the rule:* `bound x rate x safety_factor` must fit in the wall clock left less
+     `loop.wall_clock_reserve_min`; otherwise the harness refuses (`p1.<tool>`) with the
+     estimate, the time left and the largest bound that fits;
+   - *DESIGN values* (`p1.yaml`, `duration_guard`): `seconds_per_evaluation_default`
+     12.0 s (P0's `eval_seconds_assumed`), `min_evaluations_measured` 10,
+     `safety_factor` 1.25, the eight sized tools;
+   - the state's `plan.duration_guard` records the rate the guard last used and whether
+     it was measured.
+2. **A kill stops the in-flight call.** `EvaluationMeter.cancel()` makes the next charge
+   raise `RunCancelled`; the registry logs that call as `error`, detail `cancelled: …`,
+   and re-raises `ToolError`; `Registry.cancel()` sets the flag and `wait_idle()` lets
+   the runner wait for the line to be written. `run_workflow` calls both on a timeout
+   kill. A call stops within one evaluation instead of running to its size on the
+   registry's thread. Tests: the meter, the registry, and a jail killed mid-Morris.
+3. **One process per cell in the batch driver.** `scripts/p1_pilot.py` runs each cell
+   in a subprocess (`--one`), at most `--lanes` at a time (default 3), and documents the
+   operating rules: nothing else runs beside live cells; the checks and the full suite
+   run before a batch, never beside one; cells run from a committed checkout.
+4. **The P0 freeze check.** `tests/test_p0_freeze.py` (marker `p0_freeze`, deselected by
+   default, about an hour, run alone) re-runs the pilot cell S0-01 B/A in full and
+   compares the positive-control driver's normalised state and the summary without its
+   volatile fields against the golden digests made at `3ea1dee` with
+   `scripts/p0_freeze_golden.py`, before any of the above. P0's plan reads the measured
+   evaluation rate, which is why the golden and the check both run alone; the
+   hookoff comparison of PR #23 shows S0-01 B/A normalised-equal between two runs and
+   S0-01 B/B not, so the cell is the one the comparison is known to hold for.
+
+**Alternatives.** A `cost` query on the registry server (exact, no mirror) was rejected
+because the coordinator placed the guard in the harness; the mirror is pinned by a test
+instead. A duration rule in the registry itself would bind P0, which is frozen.

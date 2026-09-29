@@ -339,6 +339,15 @@ class Loop(_Frozen):
     array_preview: _PosInt
 
 
+class DurationGuard(_Frozen):
+    """The per-call duration guard (the coordinator's decision of 2026-09-29)."""
+
+    seconds_per_evaluation_default: Annotated[float, Field(gt=0.0)]
+    min_evaluations_measured: _PosInt
+    safety_factor: Annotated[float, Field(ge=1.0)]
+    tools: tuple[str, ...] = Field(min_length=1)
+
+
 class P1Uncertainty(_Frozen):
     """How a reported interval is checked against the call that produced it."""
 
@@ -376,6 +385,7 @@ class P1Config(_Frozen):
     defaults: P1Defaults
     model: ModelSettings
     loop: Loop
+    duration_guard: DurationGuard
     uncertainty: P1Uncertainty
     seeds: P1Seeds
     evidence_keys: dict[str, tuple[str, ...]] = Field(min_length=1)
@@ -475,6 +485,45 @@ def check_prompt_hash(config: P1Config) -> str:
     return digest
 
 
+def tool_size_ceilings() -> dict[str, dict[str, Any]]:
+    """The registry's size ceilings per sized tool, from ``configs/tools/`` (see the guard)."""
+    from tools.config import load_fitters, load_gsa, load_identifiability, load_mcmc, load_voi
+
+    fitters, gsa, ident, mcmc, voi = (
+        load_fitters(),
+        load_gsa(),
+        load_identifiability(),
+        load_mcmc(),
+        load_voi(),
+    )
+    return {
+        "gsa_morris": {"n_trajectories": int(gsa.morris.n_trajectories)},
+        "gsa_sobol": {
+            "n_samples": int(gsa.sobol.n_samples),
+            "second_order": bool(gsa.sobol.second_order),
+        },
+        "profile_likelihood": {
+            "n_grid": int(ident.profile.n_grid),
+            "n_starts": int(ident.profile.n_starts),
+            "max_nfev_per_start": int(ident.profile.max_nfev_per_start),
+        },
+        "fit_lsq": {
+            "n_starts": int(fitters.lsq.n_starts),
+            "max_nfev_per_start": int(fitters.lsq.max_nfev_per_start),
+        },
+        "fit_de": {
+            "popsize": int(fitters.de.popsize),
+            "max_generations": int(fitters.de.max_generations),
+        },
+        "fit_cmaes": {
+            "max_evaluations": int(fitters.cmaes.max_evaluations),
+            "popsize": None if fitters.cmaes.popsize is None else int(fitters.cmaes.popsize),
+        },
+        "bayes_mcmc": {"n_walkers": int(mcmc.n_walkers), "n_steps": int(mcmc.n_steps)},
+        "voi_assay": {"n_outer": int(voi.n_outer), "n_inner": int(voi.n_inner)},
+    }
+
+
 def load_workflow_config(workflow: str, path: Path | None = None) -> P0Config | P1Config:
     """The configuration of a workflow by name (``p0`` or ``p1``)."""
     loaders = {"p0": load_p0, "p1": load_p1}
@@ -528,6 +577,10 @@ def sandbox_config(config: P0Config | P1Config) -> dict[str, Any]:
         }
         # the public price list of requestable assays (proposal §6.4: "at a declared cost
         # and turnaround"), which P0 carries as its own preference list
+        # the size ceilings the registry applies to a sized call (its default when the
+        # agent omits a size, its maximum otherwise): what the duration guard's estimate
+        # of the registry's evaluation bound needs (the coordinator's decision of 2026-09-29)
+        payload["tool_size_ceilings"] = tool_size_ceilings()
         payload["assay_catalogue"] = {
             name: {
                 "channel": spec.channel,

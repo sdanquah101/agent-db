@@ -92,6 +92,28 @@ loop:
   max_points_shown: 200       # DESIGN  samples one record inspection returns at most
   array_preview: 12           # DESIGN  elements of a long array shown before it is summarised
 
+# The per-call duration guard (the coordinator's decision of 2026-09-29, after the killed
+# runs of 2026-09-28). Before a sized call, the harness estimates its duration as the
+# registry's evaluation bound for the call times this run's measured seconds per charged
+# evaluation, and refuses (p1.<tool>) what does not fit in the wall clock left less the
+# reserve; the refusal names the estimate, the time left and the largest bound that fits.
+# P1 only: P0 sizes its calls from its own eval_seconds_assumed and never meets it.
+duration_guard:
+  seconds_per_evaluation_default: 12.0  # DESIGN  s; P0's declared cost of one evaluation, used
+                                        # until this run has measured its own rate
+  min_evaluations_measured: 10          # DESIGN  charged evaluations before the measured rate
+                                        # replaces the default
+  safety_factor: 1.25                   # DESIGN  multiplier on the estimate (the rate drifts)
+  tools:                                # the sized calls the guard covers
+    - gsa_morris
+    - gsa_sobol
+    - profile_likelihood
+    - fit_lsq
+    - fit_de
+    - fit_cmaes
+    - bayes_mcmc
+    - voi_assay
+
 uncertainty:
   # The half-width of a Fisher (Cramer-Rao) interval in sd units: the central 90 % of a
   # normal, P0's own value (configs/workflows/p0.yaml uncertainty.z). A reported interval

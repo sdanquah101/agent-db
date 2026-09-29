@@ -45,6 +45,7 @@ from tools.models import (
     EvaluationMeter,
     MeteredModel,
     Model,
+    RunCancelled,
     StateSpaceModel,
 )
 from tools.schemas import RemainingBudget, ToolInput, ToolOutput
@@ -326,6 +327,7 @@ class Registry:
         self._visible = CallLog(run_dir, projection=True) if run_dir is not None else None
         self._full = CallLog(truth_log_dir) if truth_log_dir is not None else None
         self._meter = EvaluationMeter(budget.simulator_evals)
+        self._in_flight = 0
         self._assay_units_used = 0
         self._n_calls = 0
         self._models: dict[str, Model] = dict(models or {})
@@ -395,6 +397,27 @@ class Registry:
             "output_schema": spec.output_model.model_json_schema(),
         }
 
+    def cancel(self) -> None:
+        """Stop the run's in-flight call at its next evaluation (the runner, on a kill)."""
+        self._meter.cancel()
+
+    @property
+    def cancelled(self) -> bool:
+        """Whether :meth:`cancel` was called."""
+        return bool(self._meter.cancelled)
+
+    @property
+    def in_flight(self) -> int:
+        """Calls running right now (the server's thread may be inside one)."""
+        return int(self._in_flight)
+
+    def wait_idle(self, timeout_s: float = 60.0) -> bool:
+        """Wait until no call is in flight; False if the wait timed out."""
+        deadline = time.monotonic() + float(timeout_s)  # the real clock, not the injected one
+        while self._in_flight > 0 and time.monotonic() < deadline:
+            time.sleep(0.05)
+        return self._in_flight == 0
+
     @property
     def evaluations_used(self) -> int:
         """Simulator evaluations the meter has charged so far (privileged side)."""
@@ -429,6 +452,13 @@ class Registry:
             BudgetExceededError: The call would exceed, or exceeded, the budget.
             ToolError: The tool raised; the message is in the log.
         """
+        self._in_flight += 1
+        try:
+            return self._call(name, **args)
+        finally:
+            self._in_flight -= 1
+
+    def _call(self, name: str, **args: Any) -> ToolOutput:
         spec = self._spec(name)
         version = self.version_of(name)
         started = self._clock()
@@ -489,6 +519,11 @@ class Registry:
 
         try:
             output = spec.run(inp, context)
+        except RunCancelled as exc:
+            # the jail was killed while this call ran: the call stops at its next
+            # evaluation and the truth-side log says so (its result is discarded)
+            self._log(name, version, hashed, started, "error", f"cancelled: {exc}", charged())
+            raise ToolError(f"{name}: cancelled: {exc}") from exc
         except BudgetExhausted as exc:
             self._log(name, version, hashed, started, "budget_exceeded", str(exc), charged())
             raise BudgetExceededError(f"{name}: {exc}") from exc

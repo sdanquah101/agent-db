@@ -309,6 +309,8 @@ def run_workflow(
             error = f"the workflow exited with status {returncode}"
     except subprocess.TimeoutExpired:
         error = f"the workflow was killed after {timeout_s:.0f} s"
+        registry.cancel()  # the call the jail was waiting on stops at its next evaluation
+        registry.wait_idle(timeout_s=120.0)  # and its log line is written before the close
     except SandboxError as exc:
         error = f"SandboxError: {exc}"
         raise

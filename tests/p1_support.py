@@ -323,3 +323,38 @@ def probe_policy(params: dict[str, Any]) -> dict[str, Any]:
             tool_use(1, 4, "request_assay", {"assay": "tan", "day": 10, "prediction": sim}),
         )  # fmt: skip
     return reply(tool_use(turn, 0, "conclude", conclusion_for(sim)))
+
+
+def oversized_policy(params: dict[str, Any]) -> dict[str, Any]:
+    """A fit sized past the wall clock left, then one that fits, then conclude.
+
+    The duration guard (the coordinator's decision of 2026-09-29): turn 0 asks for a
+    3-start fit of 8 evaluations each (a bound of 35, within the evaluation budget); turn
+    1 for a 1-start fit of 3; turn 2 concludes. Under a configuration whose default rate
+    is 60 s per evaluation the first is refused and the second accepted; under the
+    committed configuration both run.
+    """
+    turn = turn_of(params)
+    if turn == 0:
+        return reply(
+            tool_use(0, 0, "fit_lsq", {"parameters": ["k_m_ac"], "sensors": ["gas_flow"],
+                                       "n_starts": 3, "max_nfev_per_start": 8})
+        )  # fmt: skip
+    if turn == 1:
+        return reply(
+            tool_use(1, 0, "fit_lsq", {"parameters": ["k_m_ac"], "sensors": ["gas_flow"],
+                                       "n_starts": 1, "max_nfev_per_start": 3})
+        )  # fmt: skip
+    final = {k: v for k, v in conclusion_for(0).items() if k != "prediction"}
+    return reply(tool_use(turn, 0, "conclude", final))
+
+
+def long_call_policy(params: dict[str, Any]) -> dict[str, Any]:
+    """One Morris screening of twelve trajectories, then conclude: the call a kill lands in."""
+    turn = turn_of(params)
+    if turn == 0:
+        return reply(
+            tool_use(0, 0, "gsa_morris", {"parameters": ["k_m_ac", "k_dis"], "n_trajectories": 12})
+        )
+    final = {k: v for k, v in conclusion_for(0).items() if k != "prediction"}
+    return reply(tool_use(turn, 0, "conclude", final))
