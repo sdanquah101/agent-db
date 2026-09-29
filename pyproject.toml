@@ -38,6 +38,7 @@ dev = [
 # 2026-09-25. Not needed for the tests, which run on deterministic doubles.
 llm = [
     "openai>=2.0",
+    "anthropic>=1.0",
 ]
 
 [tool.setuptools]

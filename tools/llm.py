@@ -21,8 +21,12 @@ socket (:mod:`tools.server`), and :class:`ModelGateway` here, in the privileged 
 The file name is reserved: the workflow's own ``write_output`` cannot write it
 (:class:`tools.server.OutputSink`).
 
-**Clients.** :class:`AnthropicClient` calls the Messages API through the ``anthropic`` SDK
-(imported only when it is constructed). Two deterministic test doubles let the whole loop
+**Clients.** :class:`OpenAIResponsesClient` calls OpenAI's Responses API through the
+``openai`` SDK and :class:`AnthropicClient` Anthropic's Messages API through the
+``anthropic`` SDK (each imported only when it is constructed); each translates the
+gateway's request, checks the request as it will be sent, and keeps the provider's raw
+reply under ``provider``, so the log and the replay are the same for every provider. Two
+deterministic test doubles let the whole loop
 run in CI with no network and no key: :class:`ScriptedClient` answers with a policy, a
 pure function of the request; :class:`RecordedClient` replays a logged transcript and
 refuses a request that differs from the one recorded.
@@ -53,13 +57,16 @@ __all__ = [
     "RetryableModelError",
     "ScriptedClient",
     "check_agent_request",
+    "check_messages_request",
     "check_responses_request",
+    "from_messages_output",
     "from_responses_output",
     "read_transcript",
     "rebuild_requests",
     "replay_digest",
     "request_digest",
     "system_digest",
+    "to_messages_request",
     "to_responses_request",
     "tools_digest",
 ]
@@ -214,38 +221,279 @@ def check_agent_request(
 
 
 class AnthropicClient:
-    """The Messages API through the ``anthropic`` SDK; the key comes from the environment.
+    """The Messages API through the ``anthropic`` SDK; the key comes from ``ANTHROPIC_API_KEY``.
 
-    The SDK's own retries are off (``max_retries=0``) so that every attempt passes through
+    The gateway's request is already the Messages API's shape, so the translation is
+    small (:func:`to_messages_request`): the system text becomes one text block with a
+    cache breakpoint and the last block of the last message carries the other (the prefix
+    caching OpenAI does unasked), the tools are the committed specifications unchanged
+    (no ``strict``: the API allows 24 optional parameters per request under it and P1's
+    twenty tools declare 61; the harness validates every input itself), and the model
+    picks tools itself (``tool_choice`` auto). Nothing is sent for thinking (the model's
+    own default), no sampling parameter, no fallback model, no metadata, no server tool.
+    The request is checked before it is sent (:func:`check_messages_request`), the reply
+    is read from a stream (``messages.stream``: the SDK refuses a long non-streaming
+    request) and kept verbatim under ``provider`` (:func:`from_messages_output`). The
+    SDK's own retries are off (``max_retries=0``) so that every attempt passes through
     the gateway's declared policy and its log.
     """
 
-    def __init__(self, settings: ModelSettings) -> None:
+    def __init__(
+        self,
+        settings: ModelSettings,
+        *,
+        system_sha256: str | None = None,
+        transport: Any = None,
+    ) -> None:
         """Build the SDK client.
+
+        Args:
+            settings: The frozen ``model`` block.
+            system_sha256: The committed system text's fingerprint; the system blocks
+                actually sent must carry it (checked on every call).
+            transport: A stand-in for the SDK client (tests): an object whose
+                ``messages.stream(**kwargs)`` is a context manager with
+                ``get_final_message()``. With it, no SDK is imported.
 
         Raises:
             ModelError: If the SDK is not installed.
         """
-        try:
-            import anthropic
-        except ImportError as exc:  # pragma: no cover - depends on the environment
-            raise ModelError("the anthropic SDK is not installed (pip install anthropic)") from exc
-        self._sdk = anthropic
-        self._client = anthropic.Anthropic(max_retries=0, timeout=settings.request_timeout_s)
+        self._sdk: Any = None
+        if transport is None:
+            try:
+                import anthropic
+            except ImportError as exc:  # pragma: no cover - depends on the environment
+                raise ModelError(
+                    "the anthropic SDK is not installed (pip install anthropic)"
+                ) from exc
+            self._sdk = anthropic
+            transport = anthropic.Anthropic(max_retries=0, timeout=settings.request_timeout_s)
+        self._client = transport
+        self.settings = settings
+        self.system_sha256 = system_sha256
+        self.last_request = None
+        self.last_response = None
         self.name = f"anthropic:{settings.model_id}"
 
     def create(self, params: dict[str, Any]) -> dict[str, Any]:
-        """One Messages API call."""
+        """One Messages API call, streamed, checked before it is sent."""
+        self.last_request: dict[str, Any] | None = None
+        self.last_response: dict[str, Any] | None = None
+        kwargs = to_messages_request(params)
+        self.last_request = kwargs
+        check_messages_request(kwargs, self.settings, self.system_sha256)
         sdk = self._sdk
         try:
-            message = self._client.messages.create(**params)
-        except (sdk.RateLimitError, sdk.APIConnectionError) as exc:  # includes timeouts
-            raise RetryableModelError(f"{type(exc).__name__}: {exc}") from exc
-        except sdk.APIStatusError as exc:
-            if exc.status_code >= 500:
+            with self._client.messages.stream(**kwargs) as stream:
+                message = stream.get_final_message()
+        except Exception as exc:
+            if sdk is not None and isinstance(exc, sdk.RateLimitError | sdk.APIConnectionError):
                 raise RetryableModelError(f"{type(exc).__name__}: {exc}") from exc
-            raise ModelError(f"{type(exc).__name__}: {exc}") from exc
-        return message.to_dict()
+            if sdk is not None and isinstance(exc, sdk.APIStatusError):
+                if exc.status_code >= 500:  # includes 529, overloaded
+                    raise RetryableModelError(f"{type(exc).__name__}: {exc}") from exc
+                raise ModelError(f"{type(exc).__name__}: {exc}") from exc
+            if sdk is not None and isinstance(exc, sdk.APIError):
+                # an error event inside the stream (the SDK raises it without a status)
+                raise RetryableModelError(f"{type(exc).__name__}: {exc}") from exc
+            raise
+        raw = message if isinstance(message, dict) else message.to_dict(mode="json")
+        self.last_response = raw
+        return from_messages_output(raw, kwargs)
+
+
+_MESSAGES_KEYS = frozenset(
+    {"model", "max_tokens", "system", "messages", "tools", "tool_choice", "output_config",
+     "temperature"}
+)  # fmt: skip
+_CACHE_CONTROL = {"type": "ephemeral"}
+
+
+def to_messages_request(params: dict[str, Any]) -> dict[str, Any]:
+    """The gateway's request as ``anthropic`` SDK arguments.
+
+    - the system text becomes one text block, with a cache breakpoint when the settings
+      cache; the other breakpoint goes on the last block of the last message, so the
+      whole history up to it is read from the cache next turn (the API looks the prefix up
+      at every earlier breakpoint, so moving the breakpoint forward keeps the hits);
+    - the messages are the agent's, unchanged but for that one field; the tools are the
+      committed specifications, unchanged, with ``tool_choice`` auto;
+    - the effort is passed as ``output_config``; ``max_tokens`` as it is;
+    - nothing is sent for thinking, metadata, fallbacks or stop sequences.
+
+    ``temperature`` is passed through only if the settings sent one.
+    """
+    caching = params.get("cache_control") is not None
+    system_block: dict[str, Any] = {"type": "text", "text": str(params.get("system", ""))}
+    if caching:
+        system_block["cache_control"] = dict(_CACHE_CONTROL)
+    messages = [dict(m) for m in params.get("messages") or []]
+    if caching and messages:
+        last = messages[-1]
+        content = last["content"]
+        if isinstance(content, str):
+            content = [{"type": "text", "text": content}]
+        else:
+            content = [dict(b) for b in content]
+        if content:
+            content[-1] = {**content[-1], "cache_control": dict(_CACHE_CONTROL)}
+        last["content"] = content
+    kwargs: dict[str, Any] = {
+        "model": params["model"],
+        "max_tokens": params["max_tokens"],
+        "system": [system_block],
+        "messages": messages,
+    }
+    if params.get("tools"):
+        kwargs["tools"] = list(params["tools"])
+        kwargs["tool_choice"] = {"type": "auto"}
+    if params.get("output_config"):
+        kwargs["output_config"] = dict(params["output_config"])
+    if "temperature" in params:
+        kwargs["temperature"] = params["temperature"]
+    return kwargs
+
+
+def check_messages_request(
+    kwargs: dict[str, Any], settings: ModelSettings, system_sha256: str | None
+) -> None:
+    """Every gateway guarantee, on the request as Anthropic will receive it.
+
+    - only the parameters the frozen settings name are sent: no ``thinking`` (the model's
+      default), no ``metadata``, ``fallbacks``, ``stop_sequences``, ``top_k``, ``top_p``,
+      ``service_tier``, ``betas``, ``mcp_servers`` or ``container``;
+    - the model id and ``max_tokens`` are the frozen ones; the effort is the frozen one;
+      ``temperature`` only when the settings sent one;
+    - the system blocks are text and, joined, carry the committed digest;
+    - the tools are custom tools (a name, a description, an input schema; no ``type``, no
+      ``strict``), ``tool_choice`` is auto, and only with tools;
+    - the messages are user and assistant turns of the accepted block types, each block
+      carrying at most a cache breakpoint beyond its fields.
+
+    Raises:
+        ModelError: Naming the first guarantee the request breaks.
+    """
+    extra = set(kwargs) - _MESSAGES_KEYS
+    if extra:
+        raise ModelError(f"the Messages request carries a parameter it may not: {sorted(extra)}")
+    if kwargs.get("model") != settings.model_id:
+        raise ModelError(f"the model sent is {kwargs.get('model')!r}, not {settings.model_id!r}")
+    if kwargs.get("max_tokens") != settings.max_tokens:
+        raise ModelError("max_tokens is not the frozen value")
+    effort = (kwargs.get("output_config") or {}).get("effort")
+    if set(kwargs.get("output_config") or {}) - {"effort"} or effort != settings.effort:
+        raise ModelError("the effort sent is not the frozen one")
+    if ("temperature" in kwargs) != (settings.temperature is not None) or (
+        "temperature" in kwargs and kwargs["temperature"] != settings.temperature
+    ):
+        raise ModelError("temperature is sent only when the settings name one, and as named")
+    system = kwargs.get("system")
+    if not isinstance(system, list) or not system:
+        raise ModelError("the system text is sent as a list of text blocks")
+    for block in system:
+        if (
+            not isinstance(block, dict)
+            or block.get("type") != "text"
+            or not isinstance(block.get("text"), str)
+            or set(block) - {"type", "text", "cache_control"}
+        ):
+            raise ModelError("a system block is text, with at most a cache breakpoint")
+    if system_sha256 is not None:
+        joined = "".join(block["text"] for block in system)
+        if system_digest(joined) != system_sha256:
+            raise ModelError("the system text sent is not the committed system prompt")
+    tools = kwargs.get("tools") or []
+    if ("tool_choice" in kwargs) != bool(tools) or (
+        tools and kwargs["tool_choice"] != {"type": "auto"}
+    ):
+        raise ModelError("tool_choice is auto, and only with tools")
+    for tool in tools:
+        if not isinstance(tool, dict) or set(tool) != {"name", "description", "input_schema"}:
+            raise ModelError(
+                "a tool is a custom tool (name, description, input_schema): no type, no strict"
+            )
+    for message in kwargs.get("messages") or []:
+        if not isinstance(message, dict) or set(message) != {"role", "content"}:
+            raise ModelError("a message is exactly {role, content}")
+        if message["role"] not in ("user", "assistant"):
+            raise ModelError(f"role {message['role']!r} is not accepted")
+        content = message["content"]
+        if isinstance(content, str):
+            continue
+        for block in content:
+            kind = block.get("type") if isinstance(block, dict) else None
+            if kind not in _BLOCK_FIELDS:
+                raise ModelError(f"block type {kind!r} is not accepted")
+            required, allowed = _BLOCK_FIELDS[kind]
+            fields = set(block) - {"cache_control"}
+            if not required <= fields <= allowed:
+                raise ModelError(f"a {kind} block carries exactly {sorted(allowed)}")
+
+
+_STOP_REASONS = frozenset({"tool_use", "end_turn", "max_tokens", "refusal"})
+
+
+def from_messages_output(raw: dict[str, Any], kwargs: dict[str, Any]) -> dict[str, Any]:
+    """A Messages API response as the gateway's response.
+
+    The content blocks are kept as the API returned them (text, tool_use, thinking with
+    its signature, redacted_thinking); a block of any other type ends the attempt and the
+    gateway logs it. A tool input the SDK left as text is parsed here. ``stop_reason`` is
+    the API's (``stop_sequence`` cannot occur: none is sent); ``stop_details`` is kept
+    when present (a refusal's category). ``usage`` keeps the API's four counts. The raw
+    response is kept under ``provider.response`` and the request as sent, verbatim,
+    under ``provider.request``.
+    """
+    content: list[dict[str, Any]] = []
+    for block in raw.get("content") or []:
+        kind = block.get("type")
+        if kind == "text":
+            content.append({"type": "text", "text": str(block.get("text", ""))})
+        elif kind == "tool_use":
+            arguments = block.get("input")
+            if isinstance(arguments, str):
+                try:
+                    arguments = json.loads(arguments or "{}")
+                except json.JSONDecodeError:
+                    arguments = {"_unparseable_arguments": arguments}
+            if not isinstance(arguments, dict):
+                arguments = {"_unparseable_arguments": str(block.get("input"))}
+            content.append(
+                {"type": "tool_use", "id": block["id"], "name": block["name"], "input": arguments}
+            )
+        elif kind == "thinking":
+            content.append(
+                {
+                    "type": "thinking",
+                    "thinking": str(block.get("thinking") or ""),
+                    "signature": str(block.get("signature") or ""),
+                }
+            )
+        elif kind == "redacted_thinking":
+            content.append({"type": "redacted_thinking", "data": str(block.get("data") or "")})
+        else:
+            raise ModelError(f"unhandled content block type {kind!r}")
+    stop = raw.get("stop_reason")
+    if stop not in _STOP_REASONS:
+        raise ModelError(f"unhandled stop reason {stop!r}")
+    usage = raw.get("usage") or {}
+    out: dict[str, Any] = {
+        "type": "message",
+        "role": "assistant",
+        "model": raw.get("model", kwargs.get("model")),
+        "content": content,
+        "stop_reason": stop,
+        "usage": {
+            "input_tokens": int(usage.get("input_tokens") or 0),
+            "output_tokens": int(usage.get("output_tokens") or 0),
+            "cache_read_input_tokens": int(usage.get("cache_read_input_tokens") or 0),
+            "cache_creation_input_tokens": int(usage.get("cache_creation_input_tokens") or 0),
+        },
+        "provider": {"api": "anthropic.messages", "request": dict(kwargs), "response": raw},
+    }
+    if raw.get("stop_details") is not None:
+        out["stop_details"] = raw["stop_details"]
+    return out
 
 
 class OpenAIResponsesClient:
@@ -626,6 +874,14 @@ def read_transcript(path: Path) -> list[dict[str, Any]]:
     ]
 
 
+_TRANSLATIONS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
+    "openai.responses": to_responses_request,
+    "anthropic.messages": to_messages_request,
+}
+"""How each provider's request is built from the gateway's, by the ``provider.api`` a
+logged response names (the replay re-checks the translation too)."""
+
+
 class RecordedClient:
     """Replays the successful responses of a logged run, in order.
 
@@ -656,10 +912,11 @@ class RecordedClient:
             )
         provider = (line.get("response") or {}).get("provider") or {}
         # the translated request, too, must be the one that was sent (wall clock masked)
+        translate = _TRANSLATIONS.get(str(provider.get("api")))
         if (
             self._strict
-            and provider.get("api") == "openai.responses"
-            and replay_digest(to_responses_request(params)) != replay_digest(provider["request"])
+            and translate is not None
+            and replay_digest(translate(params)) != replay_digest(provider["request"])
         ):
             raise ModelError(
                 f"turn {self._next}: the translated request differs from the logged one; "

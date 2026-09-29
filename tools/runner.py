@@ -118,6 +118,7 @@ class WorkflowResult:
     llm_turns: int | None = None
     llm_attempts: int | None = None
     llm_cost_usd: float | None = None
+    provider: str | None = None
     model_id: str | None = None
     model_client: str | None = None
     system_sha256: str | None = None
@@ -212,15 +213,18 @@ def p1_provenance(config: P1Config) -> dict[str, str]:
 
 
 def live_client(config: P1Config) -> ModelClient:
-    """The provider's live client for the configuration's ``model`` block."""
+    """The provider's live client for the configuration's ``model`` block.
+
+    Each client checks, on every call, that the system text it sends is the one the
+    gateway and the provenance hash: the system prompt with the brief joined in the
+    expert-brief arm (2026-09-29: hashing the system prompt alone here rejected every
+    request of the brief arm). The key comes from the provider's environment variable
+    (``OPENAI_API_KEY``, ``ANTHROPIC_API_KEY``) and is read by the SDK alone.
+    """
+    digest = system_digest(model_system_text(load_prompts(config)))
     if config.model.provider == "openai":
-        # the text the model is sent: the system prompt, with the brief joined in the
-        # expert-brief arm, as the gateway and the provenance hash it (2026-09-29: hashing
-        # the system prompt alone here rejected every request of the brief arm)
-        return OpenAIResponsesClient(
-            config.model, system_sha256=system_digest(model_system_text(load_prompts(config)))
-        )
-    return AnthropicClient(config.model)
+        return OpenAIResponsesClient(config.model, system_sha256=digest)
+    return AnthropicClient(config.model, system_sha256=digest)
 
 
 def run_workflow(
@@ -335,6 +339,7 @@ def run_workflow(
         summary.llm_attempts = meter.attempts
         cost = gateway.cost_usd()
         summary.llm_cost_usd = None if cost is None else round(cost, 6)
+        summary.provider = gateway.settings.provider
         summary.model_id = gateway.settings.model_id
         summary.model_client = gateway.client.name
         for key, value in provenance.items():

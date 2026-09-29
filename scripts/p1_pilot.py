@@ -8,7 +8,8 @@ Usage::
 Each cell runs in its own subprocess (``--one``), so the registry server of a cell that
 the runner kills dies with that cell's process and cannot compute on beside the next one.
 At most ``--lanes`` cells run at once (default 3 on a 4-core container). The key comes
-from ``OPENAI_API_KEY`` in the environment and is never written anywhere. Every finished
+from the provider's variable in the environment (``OPENAI_API_KEY``, ``ANTHROPIC_API_KEY``)
+and is never written anywhere. Every finished
 cell appends one JSON line to the results file: the runner's summary and the evaluator's
 diagnostic row (development only; never a sweep score, never beside P0).
 
@@ -37,6 +38,17 @@ import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+KEY_VARIABLES = {"openai": "OPENAI_API_KEY", "anthropic": "ANTHROPIC_API_KEY"}
+"""The environment variable each provider's SDK reads its key from; nothing else reads it."""
+
+
+def provider_key_variable(config: str | None) -> str:
+    """The key variable of the configuration's provider (the default configuration's if none)."""
+    from tools.workflow_config import load_p1
+
+    settings = (load_p1(Path(config)) if config else load_p1()).model
+    return KEY_VARIABLES[settings.provider]
 
 
 def run_one(store: Path, sid: str, plant: str, tier: str, config: str | None) -> dict:
@@ -101,8 +113,9 @@ def main(argv: list[str] | None = None) -> int:
             fh.write(json.dumps(row, default=str) + "\n")
         print(f"{sid} {plant}/{tier} done in {row['driver_wall_s']} s", flush=True)
         return 0
-    if not os.environ.get("OPENAI_API_KEY"):
-        print("OPENAI_API_KEY is not set", file=sys.stderr)
+    key_var = provider_key_variable(args.config)
+    if not os.environ.get(key_var):
+        print(f"{key_var} is not set", file=sys.stderr)
         return 2
     log_dir = args.store / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
