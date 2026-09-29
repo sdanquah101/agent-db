@@ -3138,3 +3138,17 @@ session's own).
 **Blocked:** nothing. **Next:** the two-head freeze check after the suite (unattended);
 the coordinator's answers on the evaluator's treatment of interim states and the
 guard-waiver reading; then the lead's word on the freeze, or the next arm.
+
+**2026-09-29, 19:55 UTC — answers to the coordinator's status question of 19:50.**
+1. *The brief arm* is neither paused nor dead: it finished at 19:32, ten of ten
+   concluded (one cell at 12:13–14:03 before the reboot of ~15:27, the other nine
+   resumed 15:28–19:32). Its rows were committed locally as they landed (`1aed894`, ten
+   rows) but not pushed, because the reports-only pusher holds when a code commit is on
+   the branch ahead of the tested commit — and the freeze-test replacement (`06563c5`)
+   was. Nothing ran beside the arm.
+2. *The freeze-test code* is committed at `06563c5` and lands with the full suite that
+   started at 19:33, alone on the machine, right after the arm finished: the chain
+   pushes everything queued (the brief rows, the five-arm report, this note, the code)
+   on green, expected about 20:30, and only then runs the two-head freeze comparison,
+   alone (about two hours). The order chosen is arm → suite → push → freeze check; the
+   comparison and the arm never overlap.
