@@ -2964,3 +2964,9 @@ check alone; the minimal live request; revision 2 on the ten development cells,
 uncontended, one process per cell, three lanes; then the expert-brief arm on the same
 ten cells at the same head; then the five-arm report (old / 1a / 1b / rev2 / rev2+brief),
 failed runs shown as FAILED with their cause and counted as misses.
+
+**2026-09-29, 06:05 UTC — the freeze check passed at `cc256fd`:** S0-01 B/A re-run in
+full (63 min) reproduces the golden's normalised state and summary digests exactly
+(`156b5c9e…`, `57b705d9…`; `none`, 202 evaluations, 23 calls). The live request
+returned OK. The revision-2 re-run started at 06:05, ten cells, three lanes, one process
+per cell, nothing else on the machine; the brief arm follows it at the same head.
