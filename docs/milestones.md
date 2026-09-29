@@ -3152,3 +3152,31 @@ guard-waiver reading; then the lead's word on the freeze, or the next arm.
    on green, expected about 20:30, and only then runs the two-head freeze comparison,
    alone (about two hours). The order chosen is arm → suite → push → freeze check; the
    comparison and the arm never overlap.
+
+**2026-09-29, 22:16 UTC — the two-head freeze comparison passed.** `pytest -m p0_freeze
+tests/test_p0_freeze.py` at `66972db` (code head `06563c5`), alone on the machine,
+20:10–22:14: S0-01 plant B tier A at `origin/main` (`b33ef69`, a temporary worktree) and
+then at this checkout, through one standalone cell runner, back to back. Equal final
+label (`none`), equal normalised states (run ids masked), equal `calls.jsonl` on seq,
+name, version, args hash, outcome and detail.
+
+| run | head | simulator evaluations | calls | wall clock |
+|---|---|---|---|---|
+| base | `origin/main` = `b33ef69` | 271 | 24 | 3,796.5 s (63.3 min) |
+| head | `66972db` (code `06563c5`) | 271 | 24 | 3,604.5 s (60.1 min) |
+
+The 271 evaluations are the reviewer's count on their machine, not the 202 of the
+`3ea1dee` golden made on the earlier container instance: the plan sizes to the measured
+rate, and this instance's rate is the reviewer's. The two wall clocks differ by three
+minutes of the same plan on the same machine (the base ran first, its worktree cold);
+nothing in P0's plan depends on the wall clock at this rate. `workflows/p0_scripted/`
+and `configs/workflows/p0.yaml` are untouched on this branch, as the equal call logs show.
+
+**The Anthropic arm (the lead's ruling of ~21:26, relayed by the coordinator)** starts
+now, on a new branch `claude/p1-anthropic-arm` from this one, as its own PR; nothing more
+lands on this branch but notes. The coordinator's relay of 21:29 supplied the lead's key
+for it: stored in a file outside the repository (`~/.config/agentdb/anthropic.env`, mode
+600), sourced only by the driver's shell; `ANTHROPIC_API_KEY` is **True** in a shell that
+sources it and False in every other, never printed, never on a command line. The lead
+has said the key will be rotated; the arm's summaries, logs and CSVs are tested for the
+absence of any `sk-ant-` string before the live run.
