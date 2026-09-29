@@ -377,6 +377,7 @@ def test_what_the_runner_hands_the_jail_carries_nothing_of_a_run_and_no_model_se
         "abstentions",
         "prompts",
         "assay_catalogue",
+        "tool_size_ceilings",  # the duration guard's size ceilings (2026-09-29)
     }
     # the prompt prose is a model-facing text with its own guard, and revision 2 states
     # the scoring rules, so it says "the truth"; the token scan covers everything else,
