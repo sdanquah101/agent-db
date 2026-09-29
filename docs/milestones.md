@@ -3180,3 +3180,52 @@ for it: stored in a file outside the repository (`~/.config/agentdb/anthropic.en
 sources it and False in every other, never printed, never on a command line. The lead
 has said the key will be rotated; the arm's summaries, logs and CSVs are tested for the
 absence of any `sk-ant-` string before the live run.
+
+### Session 2026-09-29 (continued) — the Anthropic arm: revision 2 with `claude-opus-5-5` (`claude/p1-anthropic-arm`, from the unmerged PR #26)
+
+**The lead's ruling of ~21:26 (relayed by the coordinator):** a second model arm beside
+rev2/`gpt-5.6-luna`, one ten-cell development run, on a new branch from
+`claude/p1-single-agent` as its own PR, started only after the two-head freeze comparison
+passed and its note was pushed (22:16). This branch carries PR #26 whole; it merges after
+it or is rebased if #26 changes.
+
+**Built (`d9755e1`), the design in `docs/decisions.md`:**
+- `configs/workflows/p1_anthropic.yaml`: `p1.yaml` with the `model` block alone replaced
+  (a test pins the rest equal): `claude-opus-5-5`, `max_tokens` 16000, effort `high`, no
+  temperature, prompt caching, the same retry policy, Anthropic's published prices.
+- `tools/llm.py::AnthropicClient`, rewritten in the OpenAI client's shape: the request
+  translated (`to_messages_request`), checked as it will be sent
+  (`check_messages_request`: only the frozen parameters; no `thinking`, no fallback, no
+  metadata, no server tool, no `strict`; `tool_choice` auto; the joined system text's
+  digest), the reply translated back with the raw response kept verbatim
+  (`from_messages_output`); streamed reads; the SDK's retries off. The replay re-checks
+  the translated request for this provider too.
+- **Strict schemas are not sent** (a deviation for the coordinator's record): the API
+  allows 24 optional parameters per request under `strict`, and P1's twenty tools carry
+  61. The committed schemas go unchanged, exactly as the OpenAI arm sends them; the
+  harness validates every input itself, as before.
+- The loop: a reply cut at the token limit is continued once (its tool uses refused, the
+  model told); a second cut ends the run. A refusal ends the run with the API's
+  category. Neither stop occurred in any logged run of the OpenAI arm.
+- Summaries carry `provider`; the pilot CSVs get a `model` column, backfilled from the
+  summaries' `model_id`; a run ended by a refusal is `run_failed` with `failure_reason`
+  `refusal`.
+- `tests/test_p1_anthropic_arm.py` (12 tests, on a stand-in SDK, no key, no network): the
+  configuration, the request and its check, the reply and its refusals, the SDK's error
+  classes against the retry policy, a full run of the arm and its replay, **the key
+  never written** (a marker key in the run's environment, then every file the run wrote,
+  the summary, the provenance and the log scanned for `sk-ant-` and for the variable's
+  name), the two new stops of the loop.
+- The key: `~/.config/agentdb/anthropic.env` (mode 600, outside the repository), sourced
+  by the driver's shell only; `ANTHROPIC_API_KEY` **True** there, False elsewhere. The
+  `anthropic` SDK is 1.9.0 (its HTTP layer `httpx2`), added to the `llm` extra.
+- One live smoke turn through the client (the committed system text and the twenty tool
+  schemas, one user line, no tool called): accepted; `end_turn`, the text `OK`, 10,765
+  tokens written to the cache, USD 0.054. The request shape holds against the API.
+
+**Running:** the full suite alone (started 22:20); on green and ruff clean, the push,
+the PR, then the ten cells of the rev2 comparison (S0-01 B/A, B/B, B/C; S1-01 B/B;
+S2-01 B/B; S3-01 C/B; S4-01 B/B; S5-01 A/A; S6-02 B/B; S8-01 B/B), three lanes, one
+process per cell, from a worktree at the pushed head, nothing else on the machine.
+Expected cost at Anthropic's rates: a few USD per cell (the history is read from the
+cache at 0.20 USD per million tokens; thinking is billed as output at 20).
