@@ -2931,3 +2931,36 @@ cells. The suites run before a batch or after it.
 **Blocked:** the expert-brief arm waits for the lead's read; the proposals and re-runs
 for the coordinator. **Next:** on the coordinator's word, the guard and the re-runs;
 on the lead's word, the brief arm; then the five-column report.
+
+### Session 2026-09-29 — the coordinator's decision on the killed runs: the new head; the lead's word on the brief
+
+**Done.**
+- **The coordinator approved the three proposals as one head** (decisions, 2026-09-29):
+  - the harness's per-call duration guard (`estimate_evaluations` mirrors the registry's
+    cost functions, pinned by a fourteen-case test; the recorder measures the run's own
+    seconds per charged evaluation; a sized call that does not fit the wall clock left
+    less the reserve is refused with the estimate and the largest bound that fits;
+    DESIGN values in `p1.yaml`, `duration_guard`; the rate is recorded as an annotation);
+  - a timeout kill cancels the registry's in-flight call (`EvaluationMeter.cancel`,
+    `Registry.cancel`/`wait_idle`, the runner on `TimeoutExpired`); tests: the meter, the
+    registry, and a jail killed mid-Morris whose call stops within one evaluation;
+  - `scripts/p1_pilot.py`, one process per cell, at most three lanes, the operating rules
+    in its docstring: nothing else runs beside live cells.
+- **The P0 freeze check.** `tests/test_p0_freeze.py` (marker `p0_freeze`, deselected by
+  default) re-runs the pilot cell S0-01 B/A in full and compares the positive-control
+  driver's normalised state and the summary without its volatile fields against the
+  golden made at `3ea1dee` with `scripts/p0_freeze_golden.py`: run `run_8f14dcebe5e2`,
+  61 min, label `none`, 202 evaluations, 23 calls, state
+  `156b5c9e…`, summary `57b705d9…`. The check runs alone after the full suite, before
+  any live cell.
+- **The lead's word on the expert brief** (decisions, 2026-09-29): run it, after the
+  revision-2 re-run, at the same head. The brief is fixed at `81b89186…`, pinned by a
+  test; `brief_sha256` and `prompt_sha256` stay empty in the configurations.
+- **Reports:** the contended revision-2 attempt at `996825c` moved to
+  `reports/p1_pilot_rev2_contended*`; `failure_reason` beside `run_failed`.
+
+**Order of work from here** (the coordinator's): the full suite and the push; the freeze
+check alone; the minimal live request; revision 2 on the ten development cells,
+uncontended, one process per cell, three lanes; then the expert-brief arm on the same
+ten cells at the same head; then the five-arm report (old / 1a / 1b / rev2 / rev2+brief),
+failed runs shown as FAILED with their cause and counted as misses.
