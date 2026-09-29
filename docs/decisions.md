@@ -6830,3 +6830,23 @@ counts as a miss; `reports/p1_pilot.csv` keeps `run_failed` and `failure_reason`
 **Alternatives.** A `cost` query on the registry server (exact, no mirror) was rejected
 because the coordinator placed the guard in the harness; the mirror is pinned by a test
 instead. A duration rule in the registry itself would bind P0, which is frozen.
+
+## 2026-09-29 — RULING (the lead): run the expert-brief arm; the brief is fixed
+
+**Ruling** (the lead, relayed by the coordinator ~02:20 UTC: "Yes, run the expert
+brief"). The version the lead read is `configs/workflows/p1_prompts/expert_brief.md` at
+sha256 `81b89186a77f6ce1bb6cf1283a6a111335949ef8bd5ac2ac82b2cac1650eac7d` (the relayed
+message carried the first 62 characters; the file's digest is this one). **The brief
+text is fixed:** no edit without the lead's word; a change is a new version with a new
+hash and a new read. A test pins the file to this digest
+(`test_the_expert_brief_is_the_version_the_lead_read`), which is not the freeze:
+`brief_sha256` and `prompt_sha256` stay empty in the configurations until the lead's
+word on the freeze.
+
+**Order of work** (the coordinator's, unchanged): the new head with the three harness
+fixes and the P0 freeze check, ruff and the full suite before any live cell; the minimal
+live request; revision 2 on the ten development cells, uncontended, at the new head;
+then the expert-brief arm (`p1_expert_brief.yaml`: revision 2 plus the brief) on the same
+ten cells at the same head, one run per cell, rows and summaries committed as they land,
+`brief_sha256` recorded in every `summary.json`; then the five-arm report with failed
+runs shown as FAILED with their cause and counted as misses.

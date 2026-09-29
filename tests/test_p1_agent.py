@@ -1680,3 +1680,17 @@ def test_a_kill_stops_the_call_the_jail_was_waiting_on(p1_cell):
     assert last["name"] == "gsa_morris", last
     assert last["outcome"] == "error" and last["detail"].startswith("cancelled"), last
     assert 0 < last["n_evaluations"] < 36, last  # stopped part-way, within one evaluation
+
+
+def test_the_expert_brief_is_the_version_the_lead_read():
+    # the lead's ruling of 2026-09-29: the brief text is fixed at the version the lead
+    # read; an edit is a new version with a new hash and a new read. Not the freeze:
+    # brief_sha256 in the configurations stays empty until the lead's word on that.
+    import hashlib
+
+    text = (PROMPT_DIR / BRIEF_FILE).read_bytes()
+    assert (
+        hashlib.sha256(text).hexdigest()
+        == "81b89186a77f6ce1bb6cf1283a6a111335949ef8bd5ac2ac82b2cac1650eac7d"
+    )
+    assert load_p1(WORKFLOW_CONFIG_DIR / "p1_expert_brief.yaml").brief_sha256 == ""
