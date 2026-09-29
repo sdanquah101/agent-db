@@ -6850,3 +6850,28 @@ then the expert-brief arm (`p1_expert_brief.yaml`: revision 2 plus the brief) on
 ten cells at the same head, one run per cell, rows and summaries committed as they land,
 `brief_sha256` recorded in every `summary.json`; then the five-arm report with failed
 runs shown as FAILED with their cause and counted as misses.
+
+## 2026-09-29 — P1: the expert-brief arm's first attempt failed on a client hash; the arm runs at the fixed head
+
+**What happened.** At 11:11 UTC, after the revision-2 re-run, the launcher started the
+brief arm; all ten cells ended at turn 0 within two minutes. The gateway log of every
+run says "the instructions sent are not the committed system prompt": `live_client`
+built the OpenAI client with a digest of the system prompt alone, while the gateway,
+the provenance and the agent use the joined text (system prompt plus brief). The plain
+arm's text is the system prompt, so nothing before this was affected; no unit test had
+run the brief arm through the live client's check. The ten rows are not the arm: they
+were removed from `reports/` (kept in the session's scratch as a labelled defect).
+
+**Decision.**
+1. The fix: `live_client` hashes `model_system_text(load_prompts(config))`, as the
+   provenance does. A test pins the client's digest to the provenance's in both arms,
+   with the system prompt alone as the negative control.
+2. **The head.** The coordinator asked for the brief arm at the same head as revision 2
+   (`cc256fd`). The fix is one line of `tools/runner.py` that changes what the live
+   client *checks*, not what any run does: in the plain arm the joined text is the
+   system prompt, so its digest is unchanged before and after the fix, and the
+   revision-2 re-run at `cc256fd` is what the fixed head would have produced. The brief
+   arm therefore runs at the fixed head, and the report names both heads. **The
+   coordinator is asked to confirm**, or to order a second revision-2 re-run at the
+   fixed head.
+3. No other change rides on this head.
