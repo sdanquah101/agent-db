@@ -3445,3 +3445,21 @@ test, fill the PR body; then `docs/p2_design.md` on `claude/p2-multi-agent`.
   Relaunched at 19:58 UTC; 24 runs left at about 70 min each, four at a time, so about
   03:00 UTC. The runs are seeded and fixed-size, so a relaunch only repeats the runs in
   progress.
+
+**2026-09-30, 20:14 UTC — the lead's ruling on Q1, implemented.**
+- The rule is recorded in `docs/decisions.md` (0373201) **before** any run of seeds
+  900004–900010: N = 10 seeds per truth group; the band is the min–max envelope per
+  (plant, tier) and statistic; final for this version; a clean development cell outside
+  the band is a finding, not a correction.
+- Driver, schema and tests (7ff637a): `SEEDS` = 900001–900010, the first three computed
+  first; a new statistic, the per-run worst window (the window with the largest
+  |closure|, sign kept); `provenance.status` is PROVISIONAL until every declared seed is
+  in, FINAL after; only seeds with all their runs are published; the card states the
+  status, N and the seeds.
+- Relaunched 20:14 UTC: generation of the 28 new truth groups alongside the remaining 24
+  three-seed runs, then the 84 new runs. 108 runs at about 70 min each, four at a time.
+  The three-seed band (PROVISIONAL) is due about 03:00 UTC on 1 October; the ten-seed
+  band (FINAL) about 04:00 UTC on 2 October.
+- **The P0 freeze test needs the machine alone for about two hours.** Plan: after the
+  three-seed publish, pause the computation, run the freeze test, then resume. A relaunch
+  only repeats the runs in progress.
