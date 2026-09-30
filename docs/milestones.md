@@ -3374,3 +3374,25 @@ manifest is the redacted one; the static rule-1 checker applies to Python module
 tree holds none. Pushed with the freeze and the two reviews' notes once the full suite
 that started 05:04 is green (the push rule).
 
+**2026-09-30, 08:44 UTC — the coordinator's review of PR #27 at `dbf2e45`: PASS**; the
+coordinator has asked the lead for the merge word at that head. Its four LOW notes are
+one small follow-up:
+1. The CSVs' inputs are committed: `reports/p1_pilot/results/<prompt_version>.jsonl`,
+   the pilot driver's results files of all seven arms (old, 1a, 1b, rev2_contended,
+   rev2, rev2_brief, rev2_claude; summary and evaluator row per cell, ~60 KB each;
+   scanned for key material and truth-store content: none; the evaluator's columns are
+   the ones the public P0 scored tables carry, seed, truth label and recovery detail
+   included). `reports/README.md` says what regenerates from what.
+2. `load_p1` records the yaml's directory as `prompt_root` (set by the loader only,
+   never in the file, never in the jail payload) and `load_prompts` resolves the prompt
+   paths against it, so a configuration loaded from a worktree or a copy hashes and
+   sends the prompts beside it; tested with a copied frozen configuration whose prompt
+   is edited by one character (refused) beside the repository's (passes).
+3. `check_frozen`, `check_brief_hash`, `system_digest`, `model_system_text` and `Frozen`
+   are in `tools.workflow_config.__all__`.
+4. `reports/p1_pilot/records/README.md` says the index's `truth_label` is the public
+   scenario label, at the records root, outside every run directory.
+The observation stands as an observation: the summaries carry the model id and the
+digests, not effort, response cap or retry; the frozen record was matched against
+`cc256fd`'s yaml.
+
