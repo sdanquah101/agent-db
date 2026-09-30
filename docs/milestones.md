@@ -3302,7 +3302,7 @@ for every row from the summaries), summaries in `reports/p1_pilot/summaries/rev2
 **Blocked:** nothing. **Next:** the coordinator's review of PR #27; the lead's word on
 what follows (a second run per cell, another prompt revision, or the freeze).
 
-**2026-09-30, ~05:20 UTC — the coordinator's review of `d5f6282` (PASS, four flags): applied.**
+**2026-09-30, ~04:50 UTC — the coordinator's review of `d5f6282` (PASS, four flags): applied.**
 1. *The second cache breakpoint* (last block of the last message) is kept and recorded
    in `docs/decisions.md` as deliberate: it is what caches the growing history (6.11 M
    tokens read from the cache against 1.24 M written over the ten cells); a breakpoint
@@ -3314,7 +3314,8 @@ what follows (a second run per cell, another prompt revision, or the freeze).
    scratch script of every table so far, tidied) and reads the fields from the summary;
    the CSVs and the forty summaries are regenerated with it (the earlier rows backfilled
    by the same classifier: the 1b arm's two killed cells and the contended attempt's
-   three read `killed`; no other row changes). The refusal path is tested end to end
+   three read `killed`, the contended attempt's two model-transport failures
+   `connection`; the CSVs are byte-identical to the hand-assembled ones). The refusal path is tested end to end
    (fake refusal → `run_failed` true, `failure_reason` `refusal` in the result and in
    `summary.json` → the report's row with blank credit columns, and its totals).
 3. *The digests are pinned*: `prompt_sha256` `c80a3752…`, the joined system text's
