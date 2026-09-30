@@ -3396,3 +3396,20 @@ The observation stands as an observation: the summaries carry the model id and t
 digests, not effort, response cap or retry; the frozen record was matched against
 `cc256fd`'s yaml.
 
+
+### Session 2026-09-30 — the P1 session closes (`claude/p1-followup`, from `main` after #27)
+
+**Done.** PR #27 merged on the lead's word at `dbf2e45` (`ad94b65`); PR #28 (the knowledge
+audit, the P2 launch brief, the lead's decisions of 2026-09-30) merged after it
+(`b611a1b`). `main` carries the frozen P1 (revision 2 with `gpt-5.6-luna`, no brief; the
+`frozen` record checked before every run), the Anthropic comparison arm, the six-arm
+development record and the run records of the two revision-2 arms. The lead has launched
+P2 as its own session.
+
+This branch is the one small follow-up the coordinator asked for, cut from `main` after
+#27 and #28: the four LOW notes of the `dbf2e45` review (above, 08:44), and nothing
+else. No P1 arm, no re-run, no prompt or configuration change: `check_frozen` passes on
+`main` and here. Full suite alone on the machine and ruff clean before the push.
+
+**Blocked:** nothing. **Next:** nothing without the lead's word. The P1 component work
+is complete; this session stands down once the follow-up PR is open.
