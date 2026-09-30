@@ -153,6 +153,28 @@ def test_the_anthropic_arm_differs_from_p1_only_in_the_model_block():
     assert p1_provenance(config) == p1_provenance(load_p1())  # the same prompts and tools
 
 
+def test_the_digests_of_both_configurations_are_the_ones_the_summaries_carry():
+    # the coordinator's review of d5f6282 (flag 3): the literal values, so that a silent
+    # edit of a prompt or a tool specification fails a test rather than moving a runtime
+    # value. Not the freeze: prompt_sha256 in the configurations stays empty until the
+    # lead's word. The pins move with a deliberate edit, recorded in docs/decisions.md.
+    pins = {
+        "prompt_sha256": "c80a37521e81487012b7a7ebc13e179b616216060d93f1ae45aa8791daf661d1",
+        "system_sha256": "ab2025e4d00db06eac2b146bb175ab5fd1cfb744c71af21b14d816608324c1eb",
+        "tools_sha256": "11d8e352a76e776c2973a7b1d57f15d52a3529e96a743012bc59647d7a07fd6b",
+    }
+    for path in (ARM, WORKFLOW_CONFIG_DIR / "p1.yaml"):
+        provenance = p1_provenance(load_p1(path))
+        for key, value in pins.items():
+            assert provenance[key] == value, (path.name, key)
+        assert provenance["brief_sha256"] == ""
+    # what the pins are: the joined system text's sha256 (the system prompt alone in
+    # these two arms) and the sorted-key JSON of the system and task prompts
+    prompts = load_prompts(load_p1(ARM))
+    assert system_digest(model_system_text(prompts)) == pins["system_sha256"]
+    assert system_digest(prompts["system"]) == pins["system_sha256"]
+
+
 # ------------------------------------------------------------------ the request
 
 
@@ -454,6 +476,7 @@ def test_a_run_of_the_arm_records_its_provider_and_replays(p1_cell, tmp_path, mo
     assert result.error == "", result.stderr_tail
     assert result.completed and result.state_valid
     assert result.provider == "anthropic" and result.model_id == "claude-opus-5-5"
+    assert result.run_failed is False and result.failure_reason == ""
     assert result.model_client == "anthropic:claude-opus-5-5"
     assert result.llm_cost_usd is not None and result.llm_cost_usd > 0
     out = run.paths.root / OUTPUTS_DIR / "p1_anthropic"
@@ -548,6 +571,7 @@ def test_a_second_cut_reply_ends_the_run_and_its_tool_uses_never_run(p1_cell):
     out = run.paths.root / OUTPUTS_DIR / "p1_cut_twice"
     state = TaskState.model_validate_json((out / "state.json").read_text("utf-8"))
     assert "run ended: the model's reply was cut at the token limit twice" in state.annotations
+    assert result.run_failed is True and result.failure_reason == "cut_reply"
     assert state.plan.sizes["refused_actions"] == 1  # the first cut's tool use, refused
     assert [f.message for f in state.tool_failures] == [
         "the reply was cut at the token limit; the tool was not run"
@@ -583,3 +607,37 @@ def test_a_refusal_ends_the_run_with_its_category(p1_cell):
     out = run.paths.root / OUTPUTS_DIR / "p1_refusal"
     state = TaskState.model_validate_json((out / "state.json").read_text("utf-8"))
     assert "run ended: the model refused (test)" in state.annotations
+    # the summary says why (the coordinator's review of d5f6282, flag 2) ...
+    assert result.run_failed is True and result.failure_reason == "refusal"
+    summary = json.loads((out / "summary.json").read_text("utf-8"))
+    assert summary["run_failed"] is True and summary["failure_reason"] == "refusal"
+    # ... and the report's row reads it from the summary: a failed row, its credit
+    # columns blank, the placeholder label named as such
+    from scripts.p1_pilot_report import row_of, totals
+
+    version = {
+        "label": "t",
+        "sha": summary["prompt_sha256"],
+        "store": str(run.paths.root.parent.parent),
+    }
+    line = {
+        "scenario_id": scenario.id,
+        "plant": "C",
+        "tier": "B",
+        "run_id": run.run_id,
+        "summary": summary,
+        "score": {"truth_label": "none", "attribution_exact": True, "claims": 0},
+    }
+    row = row_of(version, line)
+    assert row["run_failed"] is True and row["failure_reason"] == "refusal"
+    assert row["primary_matches_truth"] == "" and row["attribution_exact"] == ""
+    assert row["truth_among_labels"] == ""
+    assert row["evidence_by_label"].startswith("(no conclusion")
+    tot = totals([row])
+    assert tot["failed runs (no conclusion)"] == 1 and tot["  of which refusal"] == 1
+    assert tot["exact attribution"] == 0 and tot["labels given"] == 0
+    # a summary recorded before the fields existed is backfilled from the record
+    older = {k: v for k, v in summary.items() if k not in ("run_failed", "failure_reason")}
+    row = row_of(version, {**line, "summary": older})
+    assert row["run_failed"] is True and row["failure_reason"] == "refusal"
+    assert older["run_failed"] is True  # and the copy the report keeps carries them

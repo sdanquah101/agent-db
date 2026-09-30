@@ -6976,3 +6976,33 @@ compared pairwise with the rev2/luna run of `cc256fd`. The lead's ruling of 2026
 loop the jailed agent owns, so no. Strict schemas on the tools that fit the limits: a
 mixed set, and not the OpenAI arm's; no. `thinking: adaptive` sent explicitly: the same
 as omitting it on this model, and the check refuses the key; no.
+
+**Amendments after the coordinator's review of `d5f6282` (2026-09-30, PASS with four
+flags).**
+- *The second cache breakpoint is deliberate* (flag 1). The spec named a breakpoint on
+  the last system block; the client also puts one on the last block of the last message
+  (`to_messages_request`). Reason: the breakpoint marks where the cache lookup ends, so
+  one on the system text alone caches the system text and the tools and re-reads the
+  whole growing history at the uncached price every turn; one on the last message caches
+  the history up to it, and the API finds the hit at the previous turn's breakpoint. That
+  is the prefix caching the OpenAI arm gets unasked, so the two arms are billed alike in
+  kind. Two breakpoints of the four allowed; the ten cells showed 6.11 M tokens read from
+  the cache against 1.24 M written. Kept.
+- *A failed run's reason is in the summary* (flag 2): `WorkflowResult.run_failed` and
+  `failure_reason` (`tools/runner.py::FAILURE_REASONS`: killed, connection, refusal,
+  cut_reply, unhandled_stop, model_error, limits, other), classified from the run's own
+  record; the report writer (`scripts/p1_pilot_report.py`, committed) reads them from the
+  summary and blanks the credit columns of a failed row; the refusal path is tested end
+  to end. Rows recorded before the fields existed are backfilled by the same classifier
+  from their stored records.
+- *The digests are pinned* (flag 3): `tests/test_p1_anthropic_arm.py` holds the literal
+  `prompt_sha256`, the joined system text's digest and the tools digest of both
+  configurations; a silent edit fails the test.
+- *Stops the client does not translate* (flag 4): `pause_turn` and
+  `model_context_window_exceeded` end the run as `unhandled_stop` (a `ModelError` from
+  `from_messages_output`), not as a continuation. Deliberate: P1 sends no server tool, so
+  `pause_turn` cannot occur, and the loop's token budget holds the history far under the
+  context window; if either ever appears it is a finding, not a case to paper over.
+- *The thinking count is an observation.* "Thinking blocks on 148 of 164 turns" in the
+  milestones was read from the stores' logs, which are not committed; it is not a table
+  figure and no committed artefact carries it.

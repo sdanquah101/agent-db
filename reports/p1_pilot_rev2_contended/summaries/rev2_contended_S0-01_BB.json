@@ -30,6 +30,7 @@
  "confidence": 0.78,
  "cost_source": "registry_meter",
  "error": "",
+ "failure_reason": "",
  "fallbacks": [],
  "flag_sensor": "gas_flow",
  "git_commit": "996825cc39365dac5712377e7097e030bcc36f88",
@@ -44,6 +45,7 @@
  "output_name": "p1",
  "prompt_sha256": "c80a37521e81487012b7a7ebc13e179b616216060d93f1ae45aa8791daf661d1",
  "returncode": 0,
+ "run_failed": false,
  "run_id": "run_3ed54b9b61ff",
  "secondary_labels": [
   "sensor"

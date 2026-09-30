@@ -3301,3 +3301,25 @@ for every row from the summaries), summaries in `reports/p1_pilot/summaries/rev2
 
 **Blocked:** nothing. **Next:** the coordinator's review of PR #27; the lead's word on
 what follows (a second run per cell, another prompt revision, or the freeze).
+
+**2026-09-30, ~05:20 UTC — the coordinator's review of `d5f6282` (PASS, four flags): applied.**
+1. *The second cache breakpoint* (last block of the last message) is kept and recorded
+   in `docs/decisions.md` as deliberate: it is what caches the growing history (6.11 M
+   tokens read from the cache against 1.24 M written over the ten cells); a breakpoint
+   on the system text alone would re-read the history at the uncached price every turn.
+2. *A failed run's reason is in the summary*: `WorkflowResult.run_failed` and
+   `failure_reason` (`tools/runner.py::FAILURE_REASONS`: killed, connection, refusal,
+   cut_reply, unhandled_stop, model_error, limits, other), classified from the run's
+   record. The report writer is now committed (`scripts/p1_pilot_report.py`, the
+   scratch script of every table so far, tidied) and reads the fields from the summary;
+   the CSVs and the forty summaries are regenerated with it (the earlier rows backfilled
+   by the same classifier: the 1b arm's two killed cells and the contended attempt's
+   three read `killed`; no other row changes). The refusal path is tested end to end
+   (fake refusal → `run_failed` true, `failure_reason` `refusal` in the result and in
+   `summary.json` → the report's row with blank credit columns, and its totals).
+3. *The digests are pinned*: `prompt_sha256` `c80a3752…`, the joined system text's
+   `ab2025e4…c1eb` and the tools digest `11d8e352…`, for both configurations.
+4. `pause_turn` and `model_context_window_exceeded` end the run as `unhandled_stop`;
+   recorded in the decisions as deliberate. The "thinking on 148 turns" figure is marked
+   an observation from the uncommitted stores.
+Full suite alone on the machine before the push; ruff clean. PR #27 stays behind #26.
