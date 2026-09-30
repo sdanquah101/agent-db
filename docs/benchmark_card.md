@@ -498,6 +498,59 @@ closest percentile to 0.40 of any between the 50th and the 99th. It fires rarely
 simulation because the simulated distribution still sits ~1.5× below the plant's; the
 threshold is not moved to compensate.
 
+### 5.5 The declared background: what a clean record looks like under the fitted model
+
+**Declared beside the instrument noise, from 2026-09-30** (the lead's decision 1 of that
+date, `docs/decisions.md`; built by the P2 session). Every sensor has a declared noise
+model (§4.1); until this section the benchmark declared nothing about the **plant's own
+misfit** — how far a clean, fault-free record on each plant sits from the fitted model at
+its defaults and after a screened fit — and every model-backed workflow read that misfit
+as a fault: on the clean development cells the tools report gas +11–25 % at the defaults,
+COD closure −0.14 to −0.19 with two inadmissible 30-day windows, and 5–19σ channel biases
+after any fit (P0's pilot; the P1 knowledge audit, `docs/p1_knowledge_audit.md` §0), and
+both P1 arms labelled a fault on all four clean cells because no step ever asked what a
+clean record on this plant looks like. P0 was rescued by ruled thresholds (§4.2); a
+prompt cannot name thresholds (the P1 prompt rule). So the benchmark now **publishes the
+null band**, per plant and per tier, and serves it as a registry tool.
+
+**What it is.** `configs/background.yaml`, served by the registry tool
+`declared_background(plant, tier)` (`tools/background.py`, version 1.0, logged like every
+tool, costs no evaluation), computed offline by `scripts/declared_background.py` from
+seeded **clean** Level-0 generator runs: the `S0-01` row staged on each plant at the
+plant's horizon (200 d on B and C, 365 d on A), three base seeds of the benchmark's own
+(disjoint from the library's), Plant A on **both** its declared community states and its
+band the union of the two (which state a run is in is not declared, ruling B5). Each run
+was read the way a workflow reads it (the tier's sensors, the feed log, the redacted
+manifest) and taken through one declared, fixed-size procedure through the run's own
+registry: `simulate` at the defaults; `mass_balance` over 30-day windows of the
+calibration window `[0, 0.75 T]`; `fisher_info` at the defaults on the twenty declared
+parameters against P0's calibration channels with P0's declared-noise weights, and P0's
+identifiability rule on it (relative CRLB ≤ 0.5, at most 4 and at least 2 parameters:
+the bottom rung of P0's own screening ladder, §4 of `docs/p0_design.md`); `fit_lsq` on
+that subset from the defaults with P0's ruled sizes (one start, 40 evaluations); one
+`simulate` at the optimum. For every sensor of the tier the band records the mean and
+the root-mean-square of the standardised residual `(observed − predicted) / declared sd`
+over the calibration window, at the defaults and after the fit, and for the balance the
+per-run mean COD closure, every window's closure, the count of inadmissible windows and
+the charge drift — each as its mean, sd, minimum and maximum over the clean runs. No QC
+step and no quarantine: every observed sample enters, so the band is the record *before*
+cleaning. The per-run record, with each run's visible call log, is under
+`reports/background/`; the yaml regenerates from it (tested).
+
+**What it is not.** Not per cell and not per scenario: the keys are plant and tier, the
+seeds are the benchmark's own, and the tool answers the same on every run of a plant at a
+tier (tested with a negative control). Not a change to any existing tool: the frozen
+table is untouched, P0's plan and outputs are byte-identical (the two-head freeze test on
+the PR that added it), P0 does not call it, and the frozen P1 does not call it — P1's 0/4
+on `none` stands as its record. Not a threshold: the band is a reference; what a workflow
+requires a fault to exceed is that workflow's declared rule (P2's, in its design
+document). Not a claim that the fitted model is right: the band *is* the size of the
+structural difference between the fitted model on the visible feed log and the truth on a
+clean cell (§4.2's "recorded benchmark property"), stated per plant and tier.
+
+<!-- BEGIN GENERATED: declared background -->
+<!-- END GENERATED: declared background -->
+
 ## 6. Scenario ladder (§6.3)
 
 Levels 0–8, from "the fitted model is the truth model" up to compound discrepancies:

@@ -1,0 +1,458 @@
+{
+ "bayes_mcmc": {
+  "has_assay_cost": false,
+  "has_failure_payload": true,
+  "input": [
+   "ar1_rho",
+   "bounds",
+   "data",
+   "heteroscedastic_cv",
+   "likelihood",
+   "model",
+   "n_steps",
+   "n_walkers",
+   "parameters",
+   "seed",
+   "start"
+  ],
+  "output": [
+   "acceptance_fraction",
+   "converged",
+   "ess",
+   "log_prob_max",
+   "mean",
+   "n_evaluations",
+   "n_steps",
+   "n_walkers",
+   "parameters",
+   "quantiles",
+   "rhat",
+   "samples",
+   "sd",
+   "warning"
+  ],
+  "version": "1.0"
+ },
+ "data_qc": {
+  "has_assay_cost": false,
+  "has_failure_payload": false,
+  "input": [
+   "event_windows",
+   "flatline_min_samples",
+   "series",
+   "spike_mad_multiplier"
+  ],
+  "output": [
+   "flagged",
+   "results"
+  ],
+  "version": "1.0"
+ },
+ "describe_model": {
+  "has_assay_cost": false,
+  "has_failure_payload": false,
+  "input": [
+   "model"
+  ],
+  "output": [
+   "defaults",
+   "description",
+   "lower",
+   "model",
+   "output_names",
+   "output_units",
+   "parameter_names",
+   "parameter_units",
+   "t",
+   "upper"
+  ],
+  "version": "1.0"
+ },
+ "feed_loads": {
+  "has_assay_cost": false,
+  "has_failure_payload": false,
+  "input": [
+   "model"
+  ],
+  "output": [
+   "charge_keq_d",
+   "cod_kg_d",
+   "q_m3_d",
+   "t",
+   "tan_kg_n_d",
+   "tkn_kg_n_d",
+   "units"
+  ],
+  "version": "1.0"
+ },
+ "filter_enkf": {
+  "has_assay_cost": false,
+  "has_failure_payload": false,
+  "input": [
+   "initial_mean",
+   "initial_sd",
+   "model",
+   "n_ensemble",
+   "observation_sd",
+   "observations",
+   "parameter_lower",
+   "parameter_upper",
+   "parameters",
+   "process_sd",
+   "seed"
+  ],
+  "output": [
+   "mean",
+   "n_evaluations",
+   "parameter_mean",
+   "parameter_sd",
+   "sd",
+   "t"
+  ],
+  "version": "1.0"
+ },
+ "filter_mhe": {
+  "has_assay_cost": false,
+  "has_failure_payload": false,
+  "input": [
+   "horizon_steps",
+   "initial_mean",
+   "initial_sd",
+   "model",
+   "observation_sd",
+   "observations",
+   "parameter_lower",
+   "parameter_upper",
+   "parameters",
+   "process_sd",
+   "state_lower",
+   "state_upper"
+  ],
+  "output": [
+   "chi2",
+   "mean",
+   "n_evaluations",
+   "parameter_estimate",
+   "t"
+  ],
+  "version": "1.0"
+ },
+ "fisher_info": {
+  "has_assay_cost": false,
+  "has_failure_payload": false,
+  "input": [
+   "at",
+   "data",
+   "model",
+   "parameters"
+  ],
+  "output": [
+   "condition_number",
+   "correlation",
+   "crlb_sd",
+   "eigenvalues",
+   "eigenvectors",
+   "fim",
+   "ill_conditioned",
+   "n_evaluations",
+   "null_directions",
+   "parameters",
+   "rank"
+  ],
+  "version": "1.0"
+ },
+ "fit_cmaes": {
+  "has_assay_cost": false,
+  "has_failure_payload": false,
+  "input": [
+   "bounds",
+   "data",
+   "max_evaluations",
+   "model",
+   "parameters",
+   "seed",
+   "start"
+  ],
+  "output": [
+   "at_bound",
+   "chi2",
+   "converged",
+   "covariance",
+   "lower",
+   "message",
+   "method",
+   "n_data",
+   "n_evaluations",
+   "parameters",
+   "sd",
+   "starts_chi2",
+   "theta",
+   "upper"
+  ],
+  "version": "1.0"
+ },
+ "fit_de": {
+  "has_assay_cost": false,
+  "has_failure_payload": false,
+  "input": [
+   "bounds",
+   "data",
+   "max_generations",
+   "model",
+   "parameters",
+   "popsize",
+   "seed",
+   "start"
+  ],
+  "output": [
+   "at_bound",
+   "chi2",
+   "converged",
+   "covariance",
+   "lower",
+   "message",
+   "method",
+   "n_data",
+   "n_evaluations",
+   "parameters",
+   "sd",
+   "starts_chi2",
+   "theta",
+   "upper"
+  ],
+  "version": "1.0"
+ },
+ "fit_lsq": {
+  "has_assay_cost": false,
+  "has_failure_payload": false,
+  "input": [
+   "bounds",
+   "data",
+   "max_nfev_per_start",
+   "model",
+   "n_starts",
+   "parameters",
+   "seed",
+   "start"
+  ],
+  "output": [
+   "at_bound",
+   "chi2",
+   "converged",
+   "covariance",
+   "lower",
+   "message",
+   "method",
+   "n_data",
+   "n_evaluations",
+   "parameters",
+   "sd",
+   "starts_chi2",
+   "theta",
+   "upper"
+  ],
+  "version": "1.0"
+ },
+ "gsa_morris": {
+  "has_assay_cost": false,
+  "has_failure_payload": false,
+  "input": [
+   "model",
+   "n_levels",
+   "n_trajectories",
+   "outputs",
+   "parameters",
+   "seed",
+   "summary",
+   "window"
+  ],
+  "output": [
+   "n_evaluations",
+   "n_trajectories",
+   "parameters",
+   "results",
+   "units"
+  ],
+  "version": "1.0"
+ },
+ "gsa_sobol": {
+  "has_assay_cost": false,
+  "has_failure_payload": false,
+  "input": [
+   "model",
+   "n_samples",
+   "outputs",
+   "parameters",
+   "second_order",
+   "seed",
+   "summary",
+   "window"
+  ],
+  "output": [
+   "n_evaluations",
+   "n_samples",
+   "parameters",
+   "results",
+   "units"
+  ],
+  "version": "1.0"
+ },
+ "mass_balance": {
+  "has_assay_cost": false,
+  "has_failure_payload": false,
+  "input": [
+   "T_op_K",
+   "V_liq_m3",
+   "alkalinity",
+   "ch4_fraction",
+   "charge_in_keq_d",
+   "cod_in_kg_d",
+   "cod_out",
+   "gas_flow",
+   "pK_a_IN",
+   "pK_a_ac",
+   "pK_a_co2",
+   "ph",
+   "q_in_m3_d",
+   "t",
+   "tan_out",
+   "tkn_in_kg_n_d",
+   "vfa",
+   "windows"
+  ],
+  "output": [
+   "admissible",
+   "charge_consistent",
+   "charge_drift",
+   "units",
+   "windows"
+  ],
+  "version": "1.0"
+ },
+ "profile_likelihood": {
+  "has_assay_cost": false,
+  "has_failure_payload": false,
+  "input": [
+   "center",
+   "data",
+   "grid",
+   "model",
+   "n_grid",
+   "n_starts",
+   "parameters",
+   "profile",
+   "seed"
+  ],
+  "output": [
+   "best_fit_per_point",
+   "chi2",
+   "chi2_min",
+   "flat",
+   "grid",
+   "identifiable",
+   "interval",
+   "n_evaluations",
+   "parameter",
+   "threshold"
+  ],
+  "version": "1.0"
+ },
+ "request_assay": {
+  "has_assay_cost": true,
+  "has_failure_payload": false,
+  "input": [
+   "assay",
+   "day"
+  ],
+  "output": [
+   "assay",
+   "report_day",
+   "results",
+   "sample_day",
+   "unit_cost"
+  ],
+  "version": "1.0"
+ },
+ "residual_diag": {
+  "has_assay_cost": false,
+  "has_failure_payload": false,
+  "input": [
+   "covariates",
+   "n_bins",
+   "residual",
+   "t"
+  ],
+  "output": [
+   "covariates",
+   "durbin_watson",
+   "lag1_autocorrelation",
+   "mean",
+   "most_explanatory",
+   "n",
+   "runs_p_value",
+   "sd",
+   "serially_structured",
+   "trend_p_value",
+   "trend_slope_per_d"
+  ],
+  "version": "1.0"
+ },
+ "simulate": {
+  "has_assay_cost": false,
+  "has_failure_payload": false,
+  "input": [
+   "biomass_scale",
+   "initial_state",
+   "model",
+   "parameters",
+   "t_end"
+  ],
+  "output": [
+   "message",
+   "model",
+   "n_evaluations",
+   "outputs",
+   "success",
+   "t",
+   "units"
+  ],
+  "version": "1.0"
+ },
+ "validate": {
+  "has_assay_cost": false,
+  "has_failure_payload": false,
+  "input": [
+   "holdout",
+   "observed",
+   "predicted",
+   "t"
+  ],
+  "output": [
+   "ensemble",
+   "n_total",
+   "results"
+  ],
+  "version": "1.0"
+ },
+ "voi_assay": {
+  "has_assay_cost": false,
+  "has_failure_payload": false,
+  "input": [
+   "assays",
+   "day",
+   "model",
+   "n_inner",
+   "n_outer",
+   "parameters",
+   "samples",
+   "seed"
+  ],
+  "output": [
+   "day",
+   "n_evaluations",
+   "ranking",
+   "results"
+  ],
+  "version": "1.0"
+ }
+}

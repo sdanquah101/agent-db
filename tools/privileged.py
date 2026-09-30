@@ -28,8 +28,8 @@ from sim.run.artifacts import read_feed_log
 from sim.run.layout import INDEX_FILE, RUNS_ROOT, RunPaths, truth_store_for
 from sim.run.manifest import RunManifest
 from tools.assays import AssayServer
+from tools.background import full_specs
 from tools.fitted import FittedADM1
-from tools.impl import SPECS
 from tools.registry import Budget, Registry, ToolFailure, stream_key
 
 __all__ = ["open_registry", "registry_seed"]
@@ -103,7 +103,7 @@ def open_registry(
     seed = registry_seed(int(manifest.seeds["observation"]))
     assays = AssayServer.from_truth_store(paths.truth, seed=seed)
     return Registry(
-        specs=SPECS,
+        specs=full_specs(),
         budget=Budget.of(scenario.budget),
         seed=seed,
         run_dir=paths.root,

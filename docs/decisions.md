@@ -7125,3 +7125,83 @@ constraints. Its first deliverable is the declared-background tool of decision 1
 own PR, reviewed and merged before any P2 role runs live. P2 as a workflow is not agents
 with prompts: seven procedures written from the review and P0's rules, a model called
 only at typed decision points, coordination as code.
+
+
+## 2026-09-30 — The declared-background tool built (decision 1): the procedure, the seeds, what the band is and is not
+
+**Session:** the P2 component session (`claude/declared-background`, cut from `main` at
+`b611a1b`), the first deliverable of the P2 launch brief §7.0. Not the coordinator.
+
+**Decision (how decision 1 is implemented).** The null band is served by a **new**
+registry tool, `declared_background(plant, tier)` (`tools/background.py`, version `1.0`
+in `configs/tools/registry.yaml`, schemas in `tools/schemas/background.py`, config
+`configs/background.yaml` loaded by `tools/config.py::load_background`), registered
+*beside* the frozen table: `tools.impl.SPECS` is unchanged and `tools/background.py::
+full_specs()` is the one place the entry joins it, read by both registry builders
+(`make_registry`, `open_registry`). It costs no evaluation, is logged like every tool
+(visible and truth-side lines), and is a pure function of `(plant, tier)` and the
+committed configuration: it reads nothing of the run.
+
+**The procedure** (`scripts/declared_background.py`, experimenter side, like the
+positive-control driver), every size read from the frozen P0 and P1 files rather than
+chosen here:
+
+1. Records: the clean row `S0-01` generated with the harness on each plant at the plant's
+   horizon (`at_plant_horizon`), three base seeds **900001–900003** (disjoint from every
+   library seed; tested), at all three tiers; Plant A on both declared community states
+   (`adapted`, `unadapted`). Budget per run 300 evaluations / 300 min / 0 assay units,
+   enforced by the run's registry.
+2. Through the run's registry, on the visible record only (run view: sensors, feed log,
+   redacted manifest): `describe_model`, `feed_loads`, `simulate` at the defaults;
+   `mass_balance` over `balance_window_d` = 30 d windows of the calibration window
+   `[0, 0.75 T]` (P1's convention); `fisher_info` at the defaults on the twenty declared
+   parameters against P0's calibration channels the tier carries, weighted with P0's
+   declared-noise rule (`sd = sqrt((cv·|v|)² + sd_abs²)`, floored at 0.02 × median |v|);
+   P0's identifiability rule on it (relative CRLB ≤ `max_relative_crlb` 0.5, a null
+   direction drops, at most `morris_keep` 4, at least `min_subset` 2) — the bottom rung of
+   P0's screening ladder, "below that, screen by the Fisher information at the defaults";
+   `fit_lsq` on the subset from the defaults with P0's ruled sizes (1 start, 40
+   evaluations, `seeds.lsq`); `simulate` at the optimum. Bound under 100 evaluations per
+   run; the same seeds give the same band on any machine (fixed sizes, never the measured
+   rate).
+3. Per sensor of the tier, over the calibration window: `mean_z` and `rms_z` of
+   `(observed − predicted) / declared sd` at the defaults and after the fit (P1's
+   `sim_summary` arithmetic); per run the mean COD closure, every window's closure, the
+   inadmissible-window count, the N closure, the charge drift and its verdict; the fitted
+   subset and whether it ended at a bound.
+4. Aggregation per (plant, tier) over the runs — Plant A's two states pooled — as mean,
+   sd, min and max (`BandStat`), counts as min/mean/max (`IntBand`); the yaml regenerates
+   from `reports/background/runs.jsonl` and a test compares; the benchmark card's §5.5
+   tables regenerate from the yaml and a test compares.
+
+**What the band is not.** Not per cell or per scenario (rule 1): keys are plant and tier;
+no run id, no library seed, no scenario but `S0-01` in the file; the tool answers
+identically on registries of different runs, and differently for different plants and
+tiers (the negative control). Not a change to any existing tool: the nineteen frozen
+tools' versions and input/output fields are pinned in `tests/tool_contracts_v1.json`;
+P0's pipeline, `p0.yaml` and P1's committed tool list never name it, and P1's tool digest
+`11d8e352…` is the one every frozen summary carries (tested); the two-head P0 freeze test
+runs on the PR's head (result in the PR body). Not a threshold: what a workflow requires a
+fault to exceed is its own declared rule (P2's design document); P0 and the frozen P1
+never read it. Not a QC'd record: no quarantine is applied, so the band describes the
+record before cleaning, a conservative reference for a workflow that quarantines spikes.
+
+**Reason.** Decision 1's own: without a declared reference no model-backed workflow can
+tell the plant's background from a fault, and `none` stays unscoreable; a tool result is
+the channel every workflow shares and the evaluator can audit. The screened fit is
+declared at P0's bottom rung rather than by running P0 itself because P0's plan reads
+the measured evaluation rate (its fallbacks are machine-dependent, the freeze test's own
+finding of 2026-09-29), and a published band must be reproducible from its seeds.
+
+**Alternatives.** Carry the band in `mass_balance` / `residual_diag` results (rejected by
+decision 1: breaks P0's freeze). Run the full P0 procedure per clean run (rejected:
+machine-dependent plan, 4–6× the cost). A hand-picked fitted subset per plant (rejected:
+a number of this session's own; the Fisher rung is P0's declared rule). One band per
+Plant A state (rejected: leaks the state, which ruling B5 keeps undeclared). Fewer than
+three seeds (rejected: no sd). More (deferred: the record is incremental; the lead may
+ask for more seeds and the yaml regenerates).
+
+**Not changed:** `sim/`, `scenarios/`, the G1-frozen configs, `workflows/p0_scripted/`,
+`configs/workflows/p0.yaml`, `eval/`, `tools/impl/`. Two tests that enumerate the tool
+table gained the new name (`tests/test_tool_registry.py`; `tests/test_p1_agent.py`,
+which now says the frozen P1 leaves `declared_background` uncalled).
