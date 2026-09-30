@@ -142,6 +142,9 @@ class BandRecord(ToolOutput):
     cod_closure: BandStat | None = Field(
         description="Per-run mean COD closure (in - out) / in over the evaluable windows, -"
     )
+    cod_closure_worst: BandStat | None = Field(
+        description="Per-run closure of the window with the largest |closure|, sign kept, -"
+    )
     cod_closure_windows: BandStat | None = Field(
         description="Every evaluable window's COD closure, pooled over the runs, -"
     )

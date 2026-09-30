@@ -159,6 +159,8 @@ def synthetic_config(tmp_path_factory) -> BackgroundConfig:
             "record": "synthetic",
             "n_runs": len(SYNTHETIC),
             "evaluations": 8 * 72,
+            "status": "PROVISIONAL",
+            "seeds": [1, 2],
         },
     )
     path = tmp_path_factory.mktemp("bg") / "background.yaml"
@@ -262,7 +264,15 @@ def test_plant_a_pools_its_two_declared_states_into_one_band_without_naming_them
     assert gas["min"] == 4.0 and gas["max"] == 6.0 and gas["mean"] == 5.0
     text = bg.render_config(
         bands,
-        {"git_commit": "t", "computed": "2026-09-30", "record": "s", "n_runs": 8, "evaluations": 1},
+        {
+            "git_commit": "t",
+            "computed": "2026-09-30",
+            "record": "s",
+            "n_runs": 8,
+            "evaluations": 1,
+            "status": "PROVISIONAL",
+            "seeds": [1, 2],
+        },
     )
     body = text.split("bands:", 1)[1]
     assert "baseline" not in body and "adapted" not in body
@@ -279,6 +289,8 @@ def test_plant_a_pools_its_two_declared_states_into_one_band_without_naming_them
                     "record": "r",
                     "n_runs": 1,
                     "evaluations": 0,
+                    "status": "PROVISIONAL",
+                    "seeds": [1],
                 },
                 "bands": {"S0-01": {"A": bands["A"]["A"]}},
             }
@@ -297,6 +309,11 @@ def test_the_aggregation_is_the_plain_sample_statistics_and_refuses_a_mixed_reco
     assert closure["mean"] == pytest.approx(0.11, rel=1e-5)
     assert closure["sd"] == pytest.approx(np.std([-0.14, 0.36], ddof=1), rel=1e-5)
     assert bb["cod_closure_windows"]["n"] == 10
+    # the worst window keeps its sign and is the largest |closure| of each run
+    assert bb["cod_closure_worst"]["min"] == -0.2 and bb["cod_closure_worst"]["max"] == 0.4
+    assert bg.worst_window({"balance": {"cod_closure_windows": [0.1, -0.3, 0.25]}}) == -0.3
+    assert bg.worst_window({"balance": {"cod_closure_windows": []}}) is None
+    assert bands["B"]["A"]["cod_closure_worst"] is None
     assert bb["n_cod_inadmissible"] == {"n": 2, "mean": 2.0, "min": 2, "max": 2}
     assert bb["charge_consistent_fraction"] == 0.5
     assert bb["fitted_parameters"] == {"Y_ac": 2, "k_dec_X_ac": 1}
@@ -371,8 +388,14 @@ def test_the_background_seeds_are_the_benchmarks_own_and_the_runs_are_ordered_de
     library_seeds = {s.seed for s in load_library().values()}
     assert not set(bg.SEEDS) & library_seeds
     runs = bg.all_runs()
-    assert len(runs) == 36 and len({r.key for r in runs}) == 36
-    first = [(r.plant, r.baseline, r.tier) for r in runs[: len(bg.DEV_FIRST) * len(bg.SEEDS)]]
+    # ten seeds per truth group, fixed by the lead's ruling of 2026-09-30
+    assert tuple(range(900001, 900011)) == bg.SEEDS
+    assert len(runs) == 120 and len({r.key for r in runs}) == 120
+    # the first three seeds of every truth group run first, the development combinations
+    # first among them
+    head = runs[:36]
+    assert {r.seed for r in head} == set(bg.SEEDS[: bg.FIRST_SEEDS])
+    first = [(r.plant, r.baseline, r.tier) for r in head[: len(bg.DEV_FIRST) * bg.FIRST_SEEDS]]
     assert set(first) == set(bg.DEV_FIRST)
     assert bg.PLANT_BASELINES["A"] == ("adapted", "unadapted")
     settings = BackgroundProcedure.model_validate(bg.procedure_settings())
@@ -440,8 +463,13 @@ def test_the_committed_band_regenerates_from_the_committed_record():
     assert config.provenance.n_runs == len(records)
     assert config.provenance.evaluations == sum(int(r["evaluations_used"]) for r in records)
     assert config.provenance.record == "reports/background/runs.jsonl"
+    # every run of every published seed, once; only complete seeds are published
+    seeds = list(config.provenance.seeds)
+    assert seeds == bg.complete_seeds(records) and seeds == list(bg.SEEDS[: len(seeds)])
     keys = {r["key"] for r in records}
-    assert keys == {r.key for r in bg.all_runs()}  # every declared run, once
+    assert keys == {r.key for r in bg.all_runs() if r.seed in seeds}
+    # FINAL exactly when all ten declared seeds are in
+    assert (config.provenance.status == "FINAL") == (seeds == list(bg.SEEDS))
     # the csv beside it lists the same runs
     csv_keys = {
         line.split(",")[0]
@@ -461,7 +489,7 @@ def test_the_committed_band_is_per_plant_and_tier_and_carries_nothing_per_cell()
         assert set(tiers) == {"A", "B", "C"}, plant
         n = {b.n_runs for b in tiers.values()}
         assert len(n) == 1, (plant, n)  # every tier of a plant shares its truth groups
-        expected = len(bg.SEEDS) * len(bg.PLANT_BASELINES[plant])
+        expected = len(config.provenance.seeds) * len(bg.PLANT_BASELINES[plant])
         assert n == {expected}, (plant, n)
     assert not re.findall(r"run_[0-9a-f]{12}", text)
     assert set(re.findall(r"S\d-\d\d", text)) == {bg.SCENARIO_ID}

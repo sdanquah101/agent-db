@@ -105,6 +105,10 @@ class BackgroundProvenance(_Frozen):
     evaluations: Annotated[int, Field(ge=0)] = Field(
         description="Simulator evaluations the computation charged, all runs"
     )
+    status: Literal["PROVISIONAL", "FINAL"] = Field(
+        description="FINAL once every declared seed is in (the lead's ruling of 2026-09-30)"
+    )
+    seeds: tuple[int, ...] = Field(min_length=1, description="The seeds the band is over")
 
 
 class BackgroundConfig(_Frozen):

@@ -80,8 +80,13 @@ CARD_END = "<!-- END GENERATED: declared background -->"
 SCENARIO_ID = "S0-01"
 """The clean Level-0 row; staged on every plant at the plant's horizon."""
 
-SEEDS: tuple[int, ...] = (900001, 900002, 900003)
-"""The background's own base seeds: disjoint from every seed of the library (tested)."""
+SEEDS: tuple[int, ...] = tuple(range(900001, 900011))
+"""The background's own base seeds, ten per truth group (the lead's ruling of 2026-09-30,
+``docs/decisions.md``): disjoint from every seed of the library (tested). Fixed before any
+result of seeds 900004-900010 and never chosen by where a development cell falls."""
+
+FIRST_SEEDS = 3
+"""The seeds computed first, whose band is published PROVISIONAL while the rest run."""
 
 PLANT_BASELINES: dict[str, tuple[str | None, ...]] = {
     "A": ("adapted", "unadapted"),
@@ -140,10 +145,11 @@ def all_runs() -> list[BackgroundRun]:
         for seed in SEEDS
     ]
 
-    def rank(run: BackgroundRun) -> tuple[int, int, str]:
+    def rank(run: BackgroundRun) -> tuple[int, int, int, str]:
         combo = (run.plant, run.baseline, run.tier)
         first = DEV_FIRST.index(combo) if combo in DEV_FIRST else len(DEV_FIRST)
-        return (first, SEEDS.index(run.seed), run.key)
+        late = int(SEEDS.index(run.seed) >= FIRST_SEEDS)
+        return (late, first, SEEDS.index(run.seed), run.key)
 
     return sorted(runs, key=rank)
 
@@ -582,6 +588,23 @@ def _int_stat(values: Iterable[int]) -> dict[str, Any]:
     return {"n": len(xs), "mean": _round(np.mean(xs)), "min": min(xs), "max": max(xs)}
 
 
+def worst_window(record: dict[str, Any]) -> float | None:
+    """The closure of a run's window with the largest |closure|, sign kept (None: no window).
+
+    The lead's ruling of 2026-09-30 publishes it as its own statistic of the band.
+    """
+    windows = [float(c) for c in record["balance"]["cod_closure_windows"] if c is not None]
+    if not windows:
+        return None
+    return max(windows, key=abs)
+
+
+def complete_seeds(records: Sequence[dict[str, Any]]) -> list[int]:
+    """The seeds every one of whose declared runs has a record, in declared order."""
+    have = {r["key"] for r in records}
+    return [s for s in SEEDS if all(run.key in have for run in all_runs() if run.seed == s)]
+
+
 def aggregate(records: Sequence[dict[str, Any]]) -> dict[str, dict[str, dict[str, Any]]]:
     """The bands, per plant and tier, from the per-run records (Plant A's baselines pooled).
 
@@ -647,6 +670,7 @@ def aggregate(records: Sequence[dict[str, Any]]) -> dict[str, dict[str, dict[str
             "cod_closure_windows": _stat(
                 c for r in runs for c in r["balance"]["cod_closure_windows"]
             ),
+            "cod_closure_worst": _stat(worst_window(r) for r in runs),
             "n_closure": _stat(r["balance"]["n_closure_mean"] for r in runs),
             "charge_drift": _stat(r["balance"]["charge_drift"] for r in runs),
             "charge_consistent_fraction": (
@@ -739,9 +763,11 @@ def publish(store: Path) -> None:
         path = _result_path(store, run)
         if path.is_file():
             records.append(json.loads(path.read_text(encoding="utf-8")))
-    if not records:
-        raise SystemExit("nothing computed yet")
-    records.sort(key=lambda r: r["key"])
+    seeds = complete_seeds(records)
+    if not seeds:
+        raise SystemExit("no seed has all its runs computed yet")
+    # only complete seeds are published: a band is never a mixture of partial seeds
+    records = sorted((r for r in records if r["seed"] in seeds), key=lambda r: r["key"])
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     (REPORT_DIR / "calls").mkdir(exist_ok=True)
     with RECORD_FILE.open("w", encoding="utf-8") as fh:
@@ -763,6 +789,8 @@ def publish(store: Path) -> None:
         "record": "reports/background/runs.jsonl",
         "n_runs": len(records),
         "evaluations": int(sum(r["evaluations_used"] for r in records)),
+        "status": "FINAL" if seeds == list(SEEDS) else "PROVISIONAL",
+        "seeds": seeds,
     }
     CONFIG_FILE.write_text(render_config(bands, provenance), encoding="utf-8")
     card()
@@ -781,11 +809,18 @@ def _fmt(stat: dict[str, Any] | None, digits: int = 3) -> str:
 
 def render_card_section(config: Any) -> str:
     """The benchmark card's generated tables from a loaded ``BackgroundConfig``."""
+    p = config.provenance
     lines = [
-        "| plant / tier | runs | COD closure, per-run mean [min, max] | inadmissible "
-        "windows, max of n | charge drift [min, max] | charge-consistent share | "
-        "parameters fitted (runs) |",
-        "|---|---|---|---|---|---|---|",
+        f"**Status: {p.status}.** {p.n_runs} clean runs, seeds "
+        f"{', '.join(str(s) for s in p.seeds)} ({len(p.seeds)} of the declared "
+        f"{len(config.procedure.seeds)} per truth group; Plant A pools its two declared "
+        "states). The band is the **min-max envelope** over the runs (the lead's ruling of "
+        "2026-09-30); the mean beside each envelope is for reading only.",
+        "",
+        "| plant / tier | runs | COD closure, per-run mean: mean [min, max] | worst window: "
+        "mean [min, max] | inadmissible windows [min, max] of n | charge drift [min, max] "
+        "| charge-consistent share | parameters fitted (runs) |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     for plant in sorted(config.bands):
         for tier in sorted(config.bands[plant]):
@@ -793,16 +828,18 @@ def render_card_section(config: Any) -> str:
             bad = (
                 "n/a"
                 if b.n_cod_inadmissible is None
-                else f"{b.n_cod_inadmissible.max} of {b.n_cod_windows}"
+                else f"[{b.n_cod_inadmissible.min}, {b.n_cod_inadmissible.max}] of "
+                f"{b.n_cod_windows}"
             )
+            worst = _fmt(None if b.cod_closure_worst is None else b.cod_closure_worst.model_dump())
             fitted = ", ".join(f"{k} ({v})" for k, v in b.fitted_parameters.items())
             share = b.charge_consistent_fraction
             share_text = "n/a" if share is None else f"{share:.2f}"
             closure = _fmt(None if b.cod_closure is None else b.cod_closure.model_dump())
             drift = _fmt(None if b.charge_drift is None else b.charge_drift.model_dump())
             lines.append(
-                f"| {plant} / {tier} | {b.n_runs} | {closure} | {bad} | {drift} | {share_text} "
-                f"| {fitted} |"
+                f"| {plant} / {tier} | {b.n_runs} | {closure} | {worst} | {bad} | {drift} "
+                f"| {share_text} | {fitted} |"
             )
     lines += [
         "",
