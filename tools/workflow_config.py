@@ -21,7 +21,19 @@ from typing import Annotated, Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-__all__ = ["WORKFLOW_CONFIG_DIR", "P0Config", "load_p0", "sandbox_config"]
+__all__ = [
+    "WORKFLOW_CONFIG_DIR",
+    "ModelSettings",
+    "P0Config",
+    "P1Config",
+    "check_prompt_hash",
+    "load_p0",
+    "load_p1",
+    "load_prompts",
+    "load_workflow_config",
+    "prompt_digest",
+    "sandbox_config",
+]
 
 WORKFLOW_CONFIG_DIR = Path(__file__).resolve().parents[1] / "configs" / "workflows"
 
@@ -263,14 +275,340 @@ def load_p0(path: Path = WORKFLOW_CONFIG_DIR / "p0.yaml") -> P0Config:
     return P0Config.model_validate(raw)
 
 
-def sandbox_config(config: P0Config) -> dict[str, Any]:
-    """What the runner writes into the sandbox as ``p0_config.json``.
+# ------------------------------------------------------------------ P1
+
+
+class P1Calibration(_Frozen):
+    """How the harness weights a sample of an observed series (the P0 convention)."""
+
+    min_relative_sd: _Frac
+    sd_floor_abs: _Pos
+
+
+class P1Defaults(_Frozen):
+    """What a harness-built tool argument takes when the agent names none."""
+
+    event_load_quantile: Annotated[float, Field(gt=0.0, lt=1.0)]
+    balance_window_d: _Pos
+    transient_d: _Pos
+
+
+class Retry(_Frozen):
+    """The retry policy of one model turn (every attempt is logged)."""
+
+    max_attempts: _PosInt
+    backoff_s: Annotated[float, Field(ge=0.0)]
+    max_backoff_s: Annotated[float, Field(ge=0.0)]
+
+
+class Pricing(_Frozen):
+    """USD per million tokens, for reporting the cost of a run (never read by the agent)."""
+
+    input: Annotated[float, Field(ge=0.0)]
+    output: Annotated[float, Field(ge=0.0)]
+    cache_write: Annotated[float, Field(ge=0.0)]
+    cache_read: Annotated[float, Field(ge=0.0)]
+
+
+class ModelSettings(_Frozen):
+    """The model and how it is called: privileged side only (``tools.llm``)."""
+
+    provider: Literal["anthropic", "openai"]
+    model_id: str = Field(min_length=1)
+    max_tokens: _PosInt
+    temperature: Annotated[float, Field(ge=0.0, le=1.0)] | None
+    effort: Literal["low", "medium", "high", "xhigh", "max"] | None
+    prompt_caching: bool
+    request_timeout_s: _Pos
+    retry: Retry
+    pricing_usd_per_mtok: Pricing | None = Field(
+        description="USD per million tokens; null when no published price is recorded "
+        "(the cost is then reported as unknown, never guessed)"
+    )
+
+
+class Loop(_Frozen):
+    """The agent loop's limits."""
+
+    max_turns: _PosInt
+    max_tool_calls: _PosInt
+    max_total_tokens: _PosInt
+    wall_clock_reserve_min: Annotated[float, Field(ge=0.0)]
+    conclude_grace_turns: _PosInt
+    max_points_shown: _PosInt
+    array_preview: _PosInt
+
+
+class DurationGuard(_Frozen):
+    """The per-call duration guard (the coordinator's decision of 2026-09-29)."""
+
+    seconds_per_evaluation_default: Annotated[float, Field(gt=0.0)]
+    min_evaluations_measured: _PosInt
+    safety_factor: Annotated[float, Field(ge=1.0)]
+    tools: tuple[str, ...] = Field(min_length=1)
+
+
+class P1Uncertainty(_Frozen):
+    """How a reported interval is checked against the call that produced it."""
+
+    z: _Pos
+    rel_tolerance: Annotated[float, Field(gt=0.0, lt=0.1)]
+
+
+class P1Seeds(_Frozen):
+    """Rule 4: a stochastic call's seed is ``base`` plus its registry call index."""
+
+    base: int
+
+
+class Prompts(_Frozen):
+    """Prompt files, relative to ``configs/workflows/``."""
+
+    system: str
+    task: str
+    brief: str | None = Field(
+        default=None,
+        description="The expert brief, appended to the system prompt in the expert-brief "
+        "arm only (the lead's ruling of 2026-09-28); absent in the plain P1 arm",
+    )
+
+
+class Frozen(_Frozen):
+    """The freeze record of P1 (the lead's word of 2026-09-30): what was frozen, verbatim.
+
+    Every field is checked against the configuration and the prompts on disk before a run
+    (:func:`check_frozen`); a mismatch refuses the run, because a post-freeze change to a
+    prompt or a model setting invalidates the runs (the P1 prompt rule of 2026-09-24).
+    """
+
+    date: str = Field(min_length=1)
+    word: str = Field(min_length=1, description="The lead's word, as relayed")
+    prompt_sha256: str = Field(min_length=64, max_length=64)
+    system_sha256: str = Field(
+        min_length=64,
+        max_length=64,
+        description="The sha256 of the system text the model is sent (the summaries' value)",
+    )
+    model_id: str = Field(min_length=1)
+    effort: Literal["low", "medium", "high", "xhigh", "max"] | None
+    max_tokens: _PosInt
+    retry: Retry
+
+
+class P1Config(_Frozen):
+    """``configs/workflows/p1.yaml``."""
+
+    version: int
+    workflow: Literal["p1"]
+    workflow_version: str
+    labels: Labels
+    windows: Windows
+    calibration: P1Calibration
+    defaults: P1Defaults
+    model: ModelSettings
+    loop: Loop
+    duration_guard: DurationGuard
+    uncertainty: P1Uncertainty
+    seeds: P1Seeds
+    evidence_keys: dict[str, tuple[str, ...]] = Field(min_length=1)
+    prompts: Prompts
+    prompt_sha256: str = Field(
+        default="",
+        description="The prompts' fingerprint (prompt_digest), committed at the freeze; "
+        "empty until then. When set, the runner refuses prompts that do not match it",
+    )
+    brief_sha256: str = Field(
+        default="",
+        description="The expert brief's fingerprint (sha256 of the file), committed at the "
+        "freeze; empty until then. When set, the runner refuses a brief that does not match it",
+    )
+    frozen: Frozen | None = Field(
+        default=None,
+        description="The freeze record (the frozen P1 only; None in a development arm). "
+        "When set, the runner refuses a run whose prompts or model settings differ from it",
+    )
+    runner: Runner
+
+
+def load_p1(path: Path = WORKFLOW_CONFIG_DIR / "p1.yaml") -> P1Config:
+    """Parse and validate ``p1.yaml``."""
+    raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"{path}: expected a YAML mapping")
+    return P1Config.model_validate(raw)
+
+
+def load_prompts(config: P1Config, root: Path = WORKFLOW_CONFIG_DIR) -> dict[str, str]:
+    """The prompt texts P1's configuration names, by role.
+
+    ``system`` and ``task`` always; ``brief`` only in the expert-brief arm, whose
+    configuration names one.
+    """
+    return {
+        role: (Path(root) / rel).read_text(encoding="utf-8")
+        for role, rel in config.prompts.model_dump().items()
+        if rel is not None
+    }
+
+
+def model_system_text(prompts: dict[str, str]) -> str:
+    """The system text the model is sent: the system prompt, then the brief when there is one.
+
+    The brief is appended on the privileged side, so the jailed agent and the gateway's
+    system-text check see one text; ``prompt_sha256`` covers the system and task prompts
+    only, so the brief arm shares it with the plain arm and differs in ``brief_sha256``.
+    """
+    brief = prompts.get("brief")
+    if brief:
+        return prompts["system"].rstrip("\n") + "\n\n" + brief
+    return prompts["system"]
+
+
+def prompt_digest(prompts: dict[str, str]) -> str:
+    """The fingerprint of the system and task prompts: sha256 of their sorted-key JSON.
+
+    The brief, when present, is fingerprinted separately (``check_brief_hash``).
+    """
+    import hashlib
+    import json
+
+    core = {role: prompts[role] for role in ("system", "task")}
+    blob = json.dumps(core, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def check_brief_hash(config: P1Config) -> str:
+    """The expert brief's fingerprint (empty when the arm has no brief), refused on a mismatch.
+
+    Raises:
+        ValueError: If ``brief_sha256`` is set and the brief on disk does not hash to it,
+            or is set while the configuration names no brief.
+    """
+    import hashlib
+
+    brief = load_prompts(config).get("brief")
+    digest = hashlib.sha256(brief.encode("utf-8")).hexdigest() if brief else ""
+    if config.brief_sha256 and config.brief_sha256 != digest:
+        raise ValueError(
+            f"the brief does not match the committed brief_sha256 ({config.brief_sha256}); "
+            f"it hashes to {digest or 'nothing (no brief is configured)'}: a post-freeze "
+            "change invalidates the runs"
+        )
+    return digest
+
+
+def check_prompt_hash(config: P1Config) -> str:
+    """The prompts' fingerprint, refused when a committed one does not match it.
+
+    Raises:
+        ValueError: If ``prompt_sha256`` is set and differs from the prompts on disk.
+    """
+    digest = prompt_digest(load_prompts(config))
+    if config.prompt_sha256 and config.prompt_sha256 != digest:
+        raise ValueError(
+            f"the prompts do not match the committed prompt_sha256 ({config.prompt_sha256}); "
+            f"they hash to {digest}: a post-freeze prompt change invalidates the runs"
+        )
+    return digest
+
+
+def system_digest(system: str) -> str:
+    """The sha256 of the system text the model is sent (as ``tools.llm.system_digest``)."""
+    import hashlib
+
+    return hashlib.sha256(system.encode("utf-8")).hexdigest()
+
+
+def check_frozen(config: P1Config) -> Frozen | None:
+    """The freeze record, refused when the configuration or the prompts on disk differ from it.
+
+    Raises:
+        ValueError: Naming the first field of the record that the configuration breaks.
+    """
+    frozen = config.frozen
+    if frozen is None:
+        return None
+    prompts = load_prompts(config)
+    found = {
+        "prompt_sha256": prompt_digest(prompts),
+        "system_sha256": system_digest(model_system_text(prompts)),
+        "model_id": config.model.model_id,
+        "effort": config.model.effort,
+        "max_tokens": config.model.max_tokens,
+        "retry": config.model.retry,
+    }
+    if config.prompt_sha256 != frozen.prompt_sha256:
+        raise ValueError(
+            f"prompt_sha256 ({config.prompt_sha256!r}) is not the frozen record's "
+            f"({frozen.prompt_sha256}): the frozen P1 commits one hash"
+        )
+    for key, value in found.items():
+        if getattr(frozen, key) != value:
+            raise ValueError(
+                f"frozen.{key} is {getattr(frozen, key)!r} but the configuration and the "
+                f"prompts on disk give {value!r}: a post-freeze change invalidates the runs"
+            )
+    return frozen
+
+
+def tool_size_ceilings() -> dict[str, dict[str, Any]]:
+    """The registry's size ceilings per sized tool, from ``configs/tools/`` (see the guard)."""
+    from tools.config import load_fitters, load_gsa, load_identifiability, load_mcmc, load_voi
+
+    fitters, gsa, ident, mcmc, voi = (
+        load_fitters(),
+        load_gsa(),
+        load_identifiability(),
+        load_mcmc(),
+        load_voi(),
+    )
+    return {
+        "gsa_morris": {"n_trajectories": int(gsa.morris.n_trajectories)},
+        "gsa_sobol": {
+            "n_samples": int(gsa.sobol.n_samples),
+            "second_order": bool(gsa.sobol.second_order),
+        },
+        "profile_likelihood": {
+            "n_grid": int(ident.profile.n_grid),
+            "n_starts": int(ident.profile.n_starts),
+            "max_nfev_per_start": int(ident.profile.max_nfev_per_start),
+        },
+        "fit_lsq": {
+            "n_starts": int(fitters.lsq.n_starts),
+            "max_nfev_per_start": int(fitters.lsq.max_nfev_per_start),
+        },
+        "fit_de": {
+            "popsize": int(fitters.de.popsize),
+            "max_generations": int(fitters.de.max_generations),
+        },
+        "fit_cmaes": {
+            "max_evaluations": int(fitters.cmaes.max_evaluations),
+            "popsize": None if fitters.cmaes.popsize is None else int(fitters.cmaes.popsize),
+        },
+        "bayes_mcmc": {"n_walkers": int(mcmc.n_walkers), "n_steps": int(mcmc.n_steps)},
+        "voi_assay": {"n_outer": int(voi.n_outer), "n_inner": int(voi.n_inner)},
+    }
+
+
+def load_workflow_config(workflow: str, path: Path | None = None) -> P0Config | P1Config:
+    """The configuration of a workflow by name (``p0`` or ``p1``)."""
+    loaders = {"p0": load_p0, "p1": load_p1}
+    if workflow not in loaders:
+        raise KeyError(f"no configuration schema for workflow {workflow!r}")
+    return loaders[workflow]() if path is None else loaders[workflow](path)
+
+
+def sandbox_config(config: P0Config | P1Config) -> dict[str, Any]:
+    """What the runner writes into the sandbox as ``<workflow>_config.json``.
 
     The configuration itself, plus the declared sensor noise (``cv``, ``sd_abs`` per
     sensor of ``configs/observation/sensors.yaml``) and the declared geometry of every
     plant (``V_liq_m3``, ``T_op_K``), and the controlled abstention vocabulary (term ->
     one-line meaning, ``configs/abstentions.yaml``); nothing keyed by the run, so the same
-    document goes into every cell's sandbox.
+    document goes into every cell's sandbox. For P1 the ``model`` block stays on the
+    privileged side (the agent does not choose its model or sampling) and the prompt
+    texts are added under ``prompts`` and the requestable assays' price list under
+    ``assay_catalogue``.
     """
     from sim.observation import load_observation_config
     from sim.plants import declared_geometry, load_plant_config
@@ -294,7 +632,32 @@ def sandbox_config(config: P0Config) -> dict[str, Any]:
         g = declared_geometry(load_plant_config(plant_id))
         geometry[plant_id] = {"V_liq_m3": float(g.V_liq), "T_op_K": float(g.T_op)}
     payload = config.model_dump(mode="json")
-    if not payload["screening"].get("force_include"):
+    if isinstance(config, P1Config):
+        from tools.config import load_assays
+
+        del payload["model"]
+        # the freeze record repeats the model settings: privileged side only, as the block
+        payload.pop("frozen", None)
+        prompts = load_prompts(config)
+        payload["prompts"] = {
+            "system": model_system_text(prompts),  # the brief, when the arm has one, joined
+            "task": prompts["task"],
+        }
+        # the public price list of requestable assays (proposal §6.4: "at a declared cost
+        # and turnaround"), which P0 carries as its own preference list
+        # the size ceilings the registry applies to a sized call (its default when the
+        # agent omits a size, its maximum otherwise): what the duration guard's estimate
+        # of the registry's evaluation bound needs (the coordinator's decision of 2026-09-29)
+        payload["tool_size_ceilings"] = tool_size_ceilings()
+        payload["assay_catalogue"] = {
+            name: {
+                "channel": spec.channel,
+                "unit_cost": int(spec.unit_cost),
+                "turnaround_d": float(spec.turnaround_d),
+            }
+            for name, spec in load_assays().assays.items()
+        }
+    elif not payload["screening"].get("force_include"):
         payload["screening"].pop("force_include", None)
     payload["sensor_noise"] = noise
     payload["plant_geometry"] = geometry

@@ -1,0 +1,246 @@
+{
+ "workflow": "p1",
+ "label": "influent",
+ "secondary_labels": [],
+ "confidence": 0.7,
+ "completed": true,
+ "stop": "concluded",
+ "abstentions": [
+  "kinetic_attribution",
+  "parameter_values",
+  "ch4_yield",
+  "missing_transient"
+ ],
+ "parameters": {
+  "k_m_ac": {
+   "estimate": 0.88767,
+   "lower": 0.73383,
+   "upper": 1.0415,
+   "method": "fisher",
+   "at_bound": false,
+   "unit": "- (multiplier of the BSM2 default 8)"
+  },
+  "Y_ac": {
+   "estimate": 1.2729,
+   "lower": 1.0937,
+   "upper": 1.4521,
+   "method": "fisher",
+   "at_bound": false,
+   "unit": "- (multiplier of the BSM2 default 0.05)"
+  },
+  "k_m_h2": {
+   "estimate": 1.1532,
+   "lower": 1.0588,
+   "upper": 1.2477,
+   "method": "fisher",
+   "at_bound": false,
+   "unit": "- (multiplier of the BSM2 default 35)"
+  },
+  "k_m_pro": {
+   "estimate": 1.1079,
+   "lower": 1.0074,
+   "upper": 1.2084,
+   "method": "fisher",
+   "at_bound": false,
+   "unit": "- (multiplier of the BSM2 default 13)"
+  }
+ },
+ "validation": {
+  "holdout": [
+   150.0,
+   200.0
+  ],
+  "ensemble": false,
+  "ensemble_size": 0,
+  "metrics": {
+   "alkalinity_total": {
+    "n": 7.0,
+    "mae": 0.5018325041549383,
+    "rmse": 0.5365911886160276,
+    "nrmse": 2.4197883192790233,
+    "bias": 0.4686817930741847,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "ch4_fraction": {
+    "n": 49.0,
+    "mae": 0.013297222823965532,
+    "rmse": 0.01628899687120251,
+    "nrmse": 1.1865161687972028,
+    "bias": -0.0118571174267472,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "cod_total": {
+    "n": 7.0,
+    "mae": 2.8818556664982125,
+    "rmse": 3.1092956412849606,
+    "nrmse": 2.327721582594985,
+    "bias": -2.8818556664982125,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "ts": {
+    "n": 7.0,
+    "mae": 2.6559247986147825,
+    "rmse": 3.013604294771718,
+    "nrmse": 1.9759421154610166,
+    "bias": -2.6559247986147825,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "vs": {
+    "n": 7.0,
+    "mae": 1.645038312158876,
+    "rmse": 1.6632711239379854,
+    "nrmse": 4.419680673817102,
+    "bias": -1.645038312158876,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "q_gas_stp_dry": {
+    "n": 51.0,
+    "mae": 376.4452048305017,
+    "rmse": 469.0451760588544,
+    "nrmse": 0.5441905868246303,
+    "bias": -168.05557137900792,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "h2_ppm": {
+    "n": 50.0,
+    "mae": 2.2452995125352007,
+    "rmse": 2.6593195024431546,
+    "nrmse": 0.7579768276551014,
+    "bias": -0.5965611993504577,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "pH": {
+    "n": 51.0,
+    "mae": 0.036217632691627526,
+    "rmse": 0.044777371350387736,
+    "nrmse": 1.1176037139903103,
+    "bias": 0.01619592721136346,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "tan": {
+    "n": 7.0,
+    "mae": 0.11060145847691293,
+    "rmse": 0.11696989764731774,
+    "nrmse": 1.0860307028896263,
+    "bias": 0.11060145847691293,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "vfa_ac": {
+    "n": 7.0,
+    "mae": 0.007560110037200344,
+    "rmse": 0.009305202852086051,
+    "nrmse": 1.0165567700210856,
+    "bias": 0.005110423242268242,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "vfa_bu": {
+    "n": 7.0,
+    "mae": 0.0018171380913689832,
+    "rmse": 0.0019614808375867337,
+    "nrmse": 0.7456087200818712,
+    "bias": 0.0013979688789762007,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "vfa_pro": {
+    "n": 7.0,
+    "mae": 0.002179933364054139,
+    "rmse": 0.002471751983378736,
+    "nrmse": 0.672098985381687,
+    "bias": 0.0014540449683395872,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "vfa_titrimetric": {
+    "n": 7.0,
+    "mae": 0.06765713197876047,
+    "rmse": 0.0837750582209452,
+    "nrmse": 2.1504512030910714,
+    "bias": 0.06765713197876047,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "vfa_va": {
+    "n": 7.0,
+    "mae": 0.060092983429452095,
+    "rmse": 0.07185437984789272,
+    "nrmse": 1.0232857027876052,
+    "bias": -0.03014472995981554,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   }
+  },
+  "constraint_violations": 0,
+  "calls": [
+   17
+  ]
+ },
+ "annotations": [
+  "agent summary: The COD balance does not close: measured methane plus effluent COD exceed the feed COD the log and catalogue declare (mean closure -0.142, 2 windows inadmissible; call 3). The kinetic fit (call 10) moved Y_ac to 1.27 but left gas flow, VS and TAN biased from day 0 to the end (bias_z 8.45, 14.9 and -6.1; calls 12-14), so the fitted values are compensation and are not offered as the plant's parameters. An independent VS assay agrees with the routine VS record (disagreement_z 4.1 against the model; call 15), so the most likely cause is influent composition (more COD/solids and relatively less N than declared); the prediction is the default-kinetics simulation (call 4), and no claim is made about the high-load windows where pH is informatively missing.",
+  "duration guard: 14.28 s per evaluation (measured; 67 evaluations measured so far)"
+ ],
+ "tool_failures": [
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "`assay` = 15.907 is not what the cited calls produced",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "conclude",
+   "name": "p1.conclude",
+   "call_index": null,
+   "kind": "error",
+   "message": "k_m_ac: estimate 1.0 with interval [0.81511, 1.1849] is not what a fisher call of this run produced (estimates and intervals produced: [[0.88767, [0.73383, 1.0415]]]); Y_ac: estimate 1.0 with interval [0.91391, 1.0861] is not what a fisher call of this run produced (estimates and intervals produced:",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "conclude",
+   "name": "p1.conclude",
+   "call_index": null,
+   "kind": "error",
+   "message": "k_m_ac: estimate 1.0 with interval [None, None] is not what a none call of this run produced (estimates and intervals produced: [[0.88767]]); Y_ac: estimate 1.0 with interval [None, None] is not what a none call of this run produced (estimates and intervals produced: [[1.2729]]); k_m_h2: estimate 1.",
+   "fallback": "refused by the harness"
+  }
+ ]
+}

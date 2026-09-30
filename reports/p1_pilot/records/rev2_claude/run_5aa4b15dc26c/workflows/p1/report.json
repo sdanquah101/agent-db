@@ -1,0 +1,127 @@
+{
+ "workflow": "p1",
+ "label": "influent",
+ "secondary_labels": [],
+ "confidence": 0.7,
+ "completed": true,
+ "stop": "concluded",
+ "abstentions": [
+  "kinetic_attribution",
+  "ch4_yield",
+  "q_gas_stp_dry_budget"
+ ],
+ "parameters": {},
+ "validation": {
+  "holdout": [
+   150.0,
+   200.0
+  ],
+  "ensemble": false,
+  "ensemble_size": 0,
+  "metrics": {
+   "alkalinity_total": {
+    "n": 7.0,
+    "mae": 0.21712626754920208,
+    "rmse": 0.2309841685577117,
+    "nrmse": 0.5077063195783644,
+    "bias": -0.12044963902494603,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "ch4_fraction": {
+    "n": 50.0,
+    "mae": 0.017737154353534405,
+    "rmse": 0.02193158498324633,
+    "nrmse": 0.919525495199532,
+    "bias": -0.00951786552297868,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "cod_total": {
+    "n": 6.0,
+    "mae": 1.6480105383662114,
+    "rmse": 2.0348595861331478,
+    "nrmse": 1.3833457133736442,
+    "bias": 1.6480105383662114,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "q_gas_stp_dry": {
+    "n": 46.0,
+    "mae": 363.3093720389039,
+    "rmse": 455.0545053696703,
+    "nrmse": 0.28974139956374584,
+    "bias": -315.6191146909667,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "pH": {
+    "n": 46.0,
+    "mae": 0.05906485516155723,
+    "rmse": 0.0708348620820275,
+    "nrmse": 0.8087204272312066,
+    "bias": -0.022259899948078504,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "tan": {
+    "n": 6.0,
+    "mae": 0.0935613125678101,
+    "rmse": 0.10741303506152229,
+    "nrmse": 1.2865964563633563,
+    "bias": -0.0935613125678101,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "vfa_titrimetric": {
+    "n": 6.0,
+    "mae": 0.2054523773958775,
+    "rmse": 0.22552243182174272,
+    "nrmse": 1.2210706602156873,
+    "bias": -0.021086230789364595,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   }
+  },
+  "constraint_violations": 0,
+  "calls": [
+   17
+  ]
+ },
+ "annotations": [
+  "agent summary: I attribute the mismatch to the influent: more material reached the digester than the feed log and catalogue declare. The COD balance does not close (call 3: mean closure -0.19, 2 windows inadmissible, and methane alone exceeds the declared COD in over days 30-60). Measured gas runs about 25% above the model (call 5: bias_z 13.6), and that gap tracks time and feed mix, not load. Two independent lab TAN tests (calls 14 and 15) confirm the digester holds more ammonia than the declared feed supplies, which a gas-meter fault could not cause. No kinetic parameter in bounds moves gas flow by more than about 91 m3/d (call 13), against a gap of about 650 m3/d. So I keep the default kinetics (no kinetic update) and recommend revising the feed-to-model mapping; the forecast is the default-parameter ",
+  "duration guard: 12.00 s per evaluation (the default; 1 evaluations measured so far)"
+ ],
+ "tool_failures": [
+  {
+   "step": "conclude",
+   "name": "p1.conclude",
+   "call_index": null,
+   "kind": "error",
+   "message": "Y_ac: no successful call of this run produced a fisher interval for it (posterior: a converged sampler; profile: a closed profile; fisher: a fit or a Fisher call with a finite sd); k_m_ac: no successful call of this run produced a fisher interval for it (posterior: a converged sampler; profile: a cl",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "conclude",
+   "name": "p1.conclude",
+   "call_index": null,
+   "kind": "error",
+   "message": "Y_ac: no successful call of this run produced a none interval for it (posterior: a converged sampler; profile: a closed profile; fisher: a fit or a Fisher call with a finite sd); k_m_ac: no successful call of this run produced a none interval for it (posterior: a converged sampler; profile: a closed",
+   "fallback": "refused by the harness"
+  }
+ ]
+}

@@ -37,6 +37,15 @@ __all__ = [
 ]
 
 
+class RunCancelled(RuntimeError):
+    """The run was cancelled (its jail killed); the in-flight call must stop.
+
+    Raised by the meter at the call's next evaluation, so a fit or a sampler that outran
+    the wall-clock allowance stops within one evaluation instead of computing on for the
+    rest of its size on the registry's thread (the coordinator's decision of 2026-09-29).
+    """
+
+
 class BudgetExhausted(RuntimeError):
     """Raised inside a model call when the next evaluation would exceed the budget."""
 
@@ -172,6 +181,11 @@ class EvaluationMeter:
         """Start an empty meter with ``limit`` evaluations available in total."""
         self.limit = int(limit)
         self.used = 0
+        self.cancelled = False
+
+    def cancel(self) -> None:
+        """Stop the run: every later charge raises :class:`RunCancelled`."""
+        self.cancelled = True
 
     @property
     def remaining(self) -> int:
@@ -179,7 +193,14 @@ class EvaluationMeter:
         return max(self.limit - self.used, 0)
 
     def charge(self, n: int = 1) -> None:
-        """Charge ``n`` evaluations, or raise :class:`BudgetExhausted` without charging."""
+        """Charge ``n`` evaluations, or raise :class:`BudgetExhausted` without charging.
+
+        Raises:
+            RunCancelled: If the run was cancelled; nothing is charged.
+            BudgetExhausted: If the charge would exceed the limit; nothing is charged.
+        """
+        if self.cancelled:
+            raise RunCancelled("the run was cancelled; the call stops here")
         if self.used + n > self.limit:
             raise BudgetExhausted(
                 f"simulator budget exhausted: {self.used} of {self.limit} evaluations used, "

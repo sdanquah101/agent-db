@@ -1,0 +1,150 @@
+{
+ "workflow": "p1",
+ "label": "influent",
+ "secondary_labels": [],
+ "confidence": 0.65,
+ "completed": true,
+ "stop": "concluded",
+ "abstentions": [
+  "kinetic_attribution",
+  "parameter_values"
+ ],
+ "parameters": {},
+ "validation": {
+  "holdout": [
+   150.0,
+   200.0
+  ],
+  "ensemble": false,
+  "ensemble_size": 0,
+  "metrics": {
+   "alkalinity_total": {
+    "n": 7.0,
+    "mae": 0.5018325041549383,
+    "rmse": 0.5365911886160276,
+    "nrmse": 2.4197883192790233,
+    "bias": 0.4686817930741847,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "ch4_fraction": {
+    "n": 47.0,
+    "mae": 0.013679372304809062,
+    "rmse": 0.016600036521004165,
+    "nrmse": 1.2045445368352103,
+    "bias": -0.01225489094316094,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "cod_total": {
+    "n": 7.0,
+    "mae": 2.8818556664982125,
+    "rmse": 3.1092956412849606,
+    "nrmse": 2.327721582594985,
+    "bias": -2.8818556664982125,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "q_gas_stp_dry": {
+    "n": 50.0,
+    "mae": 382.9300261168856,
+    "rmse": 473.654873596834,
+    "nrmse": 0.5504760858088114,
+    "bias": -170.37259999636188,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "pH": {
+    "n": 49.0,
+    "mae": 0.03618829993225685,
+    "rmse": 0.04475845910989398,
+    "nrmse": 1.1038129994806156,
+    "bias": 0.015349381983410574,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "tan": {
+    "n": 7.0,
+    "mae": 0.11060145847691293,
+    "rmse": 0.11696989764731774,
+    "nrmse": 1.0860307028896263,
+    "bias": 0.11060145847691293,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "vfa_titrimetric": {
+    "n": 7.0,
+    "mae": 0.06765713197876047,
+    "rmse": 0.0837750582209452,
+    "nrmse": 2.1504512030910714,
+    "bias": 0.06765713197876047,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   }
+  },
+  "constraint_violations": 0,
+  "calls": [
+   21
+  ]
+ },
+ "annotations": [
+  "agent summary: From day 0 onward, the channels are off in one consistent direction. Gas flow is high (bias_z 7.6), digestate COD is high (bias_z 10.0), and TAN is low (bias_z -7.8), with a TAN assay agreeing with the TAN sensor. The COD balance also closes negative (mean -0.136, 2 windows inadmissible), so more COD and less nitrogen reached the digester than the feed log and catalogue declare. Fitting kinetics (k_hyd_li driven to its bound 4.0; the fit did not converge) and scaling the initial biomass left these offsets essentially unchanged. So the default parameters are kept, the fitted values are not offered as plant parameters, no kinetic update is made, and the influent mapping should be revised.",
+  "duration guard: 14.35 s per evaluation (measured; 65 evaluations measured so far)"
+ ],
+ "tool_failures": [
+  {
+   "step": "fisher_info",
+   "name": "p1.fisher_info",
+   "call_index": null,
+   "kind": "error",
+   "message": "fisher_info: missing required field 'parameters'",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "`assay` = 0.49555 is not what the cited calls produced",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "conclude",
+   "name": "p1.conclude",
+   "call_index": null,
+   "kind": "error",
+   "message": "Y_ac: no successful call of this run produced a fisher interval for it (posterior: a converged sampler; profile: a closed profile; fisher: a fit or a Fisher call with a finite sd)",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "conclude",
+   "name": "p1.conclude",
+   "call_index": null,
+   "kind": "error",
+   "message": "Y_ac: no successful call of this run produced a fisher interval for it (posterior: a converged sampler; profile: a closed profile; fisher: a fit or a Fisher call with a finite sd)",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "conclude",
+   "name": "p1.conclude",
+   "call_index": null,
+   "kind": "error",
+   "message": "Y_ac: no successful call of this run produced a none interval for it (posterior: a converged sampler; profile: a closed profile; fisher: a fit or a Fisher call with a finite sd)",
+   "fallback": "refused by the harness"
+  }
+ ]
+}

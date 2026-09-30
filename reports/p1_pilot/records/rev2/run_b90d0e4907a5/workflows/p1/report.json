@@ -1,0 +1,155 @@
+{
+ "workflow": "p1",
+ "label": "sensor",
+ "secondary_labels": [
+  "structural"
+ ],
+ "confidence": 0.86,
+ "completed": true,
+ "stop": "concluded",
+ "abstentions": [
+  "parameter_values",
+  "kinetic_attribution",
+  "structural_adequacy",
+  "posterior_intervals",
+  "inhibition_constant_magnitude",
+  "acetoclastic_parameters",
+  "ch4_yield",
+  "methanogenic_pathway_split",
+  "gas_flow_claims",
+  "q_gas_stp_dry_budget",
+  "ch4_fraction_claims",
+  "ch4_fraction_budget",
+  "ph_claims",
+  "pH_budget",
+  "temperature_claims",
+  "temperature_budget",
+  "missing_transient",
+  "transient_response",
+  "cod_total_budget",
+  "tan_budget",
+  "vfa_titrimetric_budget"
+ ],
+ "parameters": {
+  "Y_ac": {
+   "estimate": 0.63112,
+   "lower": 0.5746,
+   "upper": 0.68764,
+   "method": "fisher",
+   "at_bound": false,
+   "unit": "- (multiplier of the BSM2 default 0.05)"
+  }
+ },
+ "validation": {
+  "holdout": [
+   150.0,
+   200.0
+  ],
+  "ensemble": false,
+  "ensemble_size": 0,
+  "metrics": {
+   "alkalinity_total": {
+    "n": 7.0,
+    "mae": 0.2930094379455258,
+    "rmse": 0.3282965264800635,
+    "nrmse": 0.9283726896526959,
+    "bias": -0.07677994663902586,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "cod_total": {
+    "n": 7.0,
+    "mae": 0.781120731639528,
+    "rmse": 0.8872723096719329,
+    "nrmse": 0.744438969934016,
+    "bias": 0.23776774353012545,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "tan": {
+    "n": 7.0,
+    "mae": 0.042789934350323064,
+    "rmse": 0.0490079243858858,
+    "nrmse": 0.9716081888620696,
+    "bias": -0.042789934350323064,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "vfa_titrimetric": {
+    "n": 7.0,
+    "mae": 0.04699129573905725,
+    "rmse": 0.062361077508087844,
+    "nrmse": 0.5663380192785552,
+    "bias": -0.005383706368446571,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   }
+  },
+  "constraint_violations": 0,
+  "calls": [
+   31
+  ]
+ },
+ "annotations": [
+  "agent summary: The gas-flow channel is faulty: its residual bias is 13.205 standardised units and its rms is 11.112, with a persistent time pattern; it was excluded and its implied scale is about 1.28. Independently, the day-49 VFA speciation assay disagrees for acetate by -16.161 standard deviations and the fitted titrimetric-VFA residual retains a 3.5378-unit step, supporting a structural review. Y_ac=0.63112 is retained only as a calibration/prediction setting with its Fisher interval, not offered as a plant kinetic update.",
+  "duration guard: 19.78 s per evaluation (measured; 142 evaluations measured so far)"
+ ],
+ "tool_failures": [
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "sensor 'ch4_fraction, gas_flow, ph, temperature' is not one of ['alkalinity', 'ch4_fraction', 'cod_total', 'gas_flow', 'ph', 'tan', 'temperature', 'vfa_total']",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `end_d` for ['ch4_fraction']; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "channel 'vfa_ac / vfa_titrimetric' is not one of ['alkalinity_total', 'ch4_fraction', 'co2_fraction', 'cod_total', 'fos_tac', 'h2_ppm', 'pH', 'q_gas_stp_dry', 'tan', 'temperature', 'ts', 'vfa_ac', 'vfa_bu', 'vfa_pro', 'vfa_titrimetric', 'vfa_va', 'vs']",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "the sensor and channel tags disagree, or no sensor observes 'vfa_ac'",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `slope_per_d` for ['vfa_total']; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `slope_per_d` for ['vfa_total']; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  }
+ ]
+}

@@ -1,0 +1,25 @@
+{"seq":0,"name":"sim.generate_influent","version":"1.0","args_hash":"95ce78487365a57c","outcome":"ok","detail":""}
+{"seq":1,"name":"sim.burn_in","version":"1.0","args_hash":"e178ebd96ee86b76","outcome":"ok","detail":""}
+{"seq":2,"name":"sim.simulate_truth","version":"1.0","args_hash":"95ce78487365a57c","outcome":"ok","detail":""}
+{"seq":3,"name":"sim.channel_series","version":"1.0","args_hash":"f1e13066040745f5","outcome":"ok","detail":""}
+{"seq":4,"name":"sim.observe","version":"1.0","args_hash":"01bff8082752100e","outcome":"ok","detail":""}
+{"seq":5,"name":"registry.open","version":"1.0","args_hash":"1fcea27ab5c989e6","outcome":"ok","detail":"clock start: the wall-clock allowance runs from this record"}
+{"seq":6,"name":"describe_model","version":"1.0","args_hash":"6e46ab5fd289f281","outcome":"ok","detail":""}
+{"seq":7,"name":"describe_model","version":"1.0","args_hash":"6e46ab5fd289f281","outcome":"ok","detail":""}
+{"seq":8,"name":"feed_loads","version":"1.0","args_hash":"6e46ab5fd289f281","outcome":"ok","detail":""}
+{"seq":9,"name":"data_qc","version":"1.0","args_hash":"ef29df9b3bdc740b","outcome":"ok","detail":""}
+{"seq":10,"name":"mass_balance","version":"1.0","args_hash":"5ba5302a87e1f5ba","outcome":"ok","detail":""}
+{"seq":11,"name":"gsa_morris","version":"1.0","args_hash":"1fa36512041d7453","outcome":"ok","detail":""}
+{"seq":12,"name":"fisher_info","version":"1.0","args_hash":"dcd33c60a27a02e6","outcome":"ok","detail":""}
+{"seq":13,"name":"fit_lsq","version":"1.0","args_hash":"4a3154e72ff56433","outcome":"ok","detail":""}
+{"seq":14,"name":"simulate","version":"1.0","args_hash":"f4a78483d5d73825","outcome":"ok","detail":""}
+{"seq":15,"name":"residual_diag","version":"1.0","args_hash":"d03e927ae42d24d8","outcome":"ok","detail":""}
+{"seq":16,"name":"residual_diag","version":"1.0","args_hash":"d5a583c930462781","outcome":"ok","detail":""}
+{"seq":17,"name":"residual_diag","version":"1.0","args_hash":"f76138e4acde6857","outcome":"ok","detail":""}
+{"seq":18,"name":"residual_diag","version":"1.0","args_hash":"837f3cc7b852939f","outcome":"ok","detail":""}
+{"seq":19,"name":"request_assay","version":"1.0","args_hash":"66439fa8a7fdaafb","outcome":"ok","detail":""}
+{"seq":20,"name":"simulate","version":"1.0","args_hash":"c040426ee330eb8c","outcome":"ok","detail":""}
+{"seq":21,"name":"fit_lsq","version":"1.0","args_hash":"8ca6cd25681fe2f3","outcome":"ok","detail":""}
+{"seq":22,"name":"simulate","version":"1.0","args_hash":"f4a78483d5d73825","outcome":"ok","detail":""}
+{"seq":23,"name":"fisher_info","version":"1.0","args_hash":"e56cd4ccbe3f2cd2","outcome":"ok","detail":""}
+{"seq":24,"name":"validate","version":"1.0","args_hash":"95c7792a9f3cf3a2","outcome":"ok","detail":""}

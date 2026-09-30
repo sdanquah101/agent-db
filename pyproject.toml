@@ -34,6 +34,12 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.6",
 ]
+# P1's live model client (tools/llm.py): OpenAI's Responses API, by the lead's choice of
+# 2026-09-25. Not needed for the tests, which run on deterministic doubles.
+llm = [
+    "openai>=2.0",
+    "anthropic>=1.0",
+]
 
 [tool.setuptools]
 packages = [
@@ -96,12 +102,17 @@ known-first-party = ["anchor", "eval", "scenarios", "sim", "state", "tools", "wo
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
-addopts = "-ra --strict-markers --strict-config -m 'not g1'"
+addopts = "-ra --strict-markers --strict-config -m 'not g1 and not p0_freeze'"
 markers = [
     # The gate-G1 realism panel: twelve 180-day Level-0 runs plus a two-year generator
     # draw, ~3 min. Deselected by default so an ordinary PR is not slowed by it; CI runs
     # it nightly and on any pull request that touches sim/ (lead's ruling, 2026-09-03).
     # Run it locally with `pytest -m g1`.
     "g1: gate-G1 anchor comparison; slow, deselected unless -m g1 is given",
+    # The P0 freeze check: one P0 pilot cell (S0-01 B/A) run at the reviewed base and at
+    # the head, back to back on one machine, and compared (tests/test_p0_freeze.py; the
+    # stored golden of 3ea1dee was machine-bound and dropped, 2026-09-29). Run it, alone
+    # on the machine, before any live P1 cell: `pytest -m p0_freeze`.
+    "p0_freeze: the two-head P0 freeze comparison; about two hours (63 + 60 min on record), deselected unless -m p0_freeze is given",
 ]
 filterwarnings = ["error::DeprecationWarning:(scenarios|sim|tools|state|eval|anchor|workflows).*"]

@@ -13,6 +13,11 @@ privileged process:
 ``call`` returns the tool's Pydantic output (validated on this side too); a refused call
 raises :class:`BudgetExceededError`, a bad argument :class:`ToolArgumentError`, any
 other failure :class:`ToolError` -- the same names the in-process registry raises.
+
+An LLM workflow (P1) sends its model turns through the same socket with :func:`llm`: the
+privileged side's gateway holds the model, its settings and its key, logs every request
+and response, and refuses a turn over the run's turn or token budget
+(:class:`BudgetExceededError`); a failed model call raises :class:`ModelError`.
 """
 
 from __future__ import annotations
@@ -28,12 +33,14 @@ from tools.transport import decode_arrays, encode_arrays, read_message, write_me
 
 __all__ = [
     "BudgetExceededError",
+    "ModelError",
     "ToolArgumentError",
     "ToolError",
     "UnknownToolError",
     "call",
     "describe",
     "last_call",
+    "llm",
     "remaining",
     "run",
     "tools",
@@ -58,10 +65,15 @@ class UnknownToolError(ToolError):
     """No such tool."""
 
 
+class ModelError(ToolError):
+    """A model turn failed after the gateway's declared retries (LLM workflows only)."""
+
+
 _KINDS = {
     "ToolArgumentError": ToolArgumentError,
     "BudgetExceededError": BudgetExceededError,
     "UnknownToolError": UnknownToolError,
+    "ModelError": ModelError,
 }
 
 
@@ -149,6 +161,22 @@ def call(name: str, **args: Any) -> ToolOutput:
         raise kind(str(envelope.get("error")))
     output_model = TOOL_OUTPUTS.get(name, ToolOutput)
     return output_model.model_validate(envelope["output"])
+
+
+def llm(request: dict[str, Any]) -> dict[str, Any]:
+    """One model turn through the privileged gateway (P1).
+
+    ``request`` carries ``system``, ``messages`` and ``tools`` in the Messages API's shape
+    and nothing else: the model, its settings and its budget are the gateway's.
+
+    Returns:
+        ``{"response": <the Messages API response>, "status": <turns and tokens left>}``.
+
+    Raises:
+        BudgetExceededError: The run's model turns or tokens are spent.
+        ModelError: The call failed.
+    """
+    return dict(_connection.request({"op": "llm", "request": request}))
 
 
 class _Run:

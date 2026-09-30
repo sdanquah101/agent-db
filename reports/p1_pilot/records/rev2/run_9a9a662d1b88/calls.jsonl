@@ -1,0 +1,25 @@
+{"seq":0,"name":"sim.generate_influent","version":"1.0","args_hash":"10658fb977741a87","outcome":"ok","detail":""}
+{"seq":1,"name":"sim.burn_in","version":"1.0","args_hash":"2148f2db2c6b4c4f","outcome":"ok","detail":""}
+{"seq":2,"name":"sim.simulate_truth","version":"1.0","args_hash":"10658fb977741a87","outcome":"ok","detail":""}
+{"seq":3,"name":"sim.channel_series","version":"1.0","args_hash":"7253c84add800287","outcome":"ok","detail":""}
+{"seq":4,"name":"sim.observe","version":"1.0","args_hash":"aa8cc45fcbc8a71f","outcome":"ok","detail":""}
+{"seq":5,"name":"registry.open","version":"1.0","args_hash":"cc90b11e854f13f7","outcome":"ok","detail":"clock start: the wall-clock allowance runs from this record"}
+{"seq":6,"name":"describe_model","version":"1.0","args_hash":"6e46ab5fd289f281","outcome":"ok","detail":""}
+{"seq":7,"name":"feed_loads","version":"1.0","args_hash":"6e46ab5fd289f281","outcome":"ok","detail":""}
+{"seq":8,"name":"data_qc","version":"1.0","args_hash":"6247b2feaba0ae6f","outcome":"ok","detail":""}
+{"seq":9,"name":"mass_balance","version":"1.0","args_hash":"5b8d49301df52504","outcome":"ok","detail":""}
+{"seq":10,"name":"describe_model","version":"1.0","args_hash":"6e46ab5fd289f281","outcome":"ok","detail":""}
+{"seq":11,"name":"feed_loads","version":"1.0","args_hash":"6e46ab5fd289f281","outcome":"ok","detail":""}
+{"seq":12,"name":"gsa_morris","version":"1.0","args_hash":"ba16d7f8979cd0bf","outcome":"ok","detail":""}
+{"seq":13,"name":"gsa_sobol","version":"1.0","args_hash":"ea993c36371e0856","outcome":"ok","detail":""}
+{"seq":14,"name":"fisher_info","version":"1.0","args_hash":"0f81f4a11c7e0a84","outcome":"ok","detail":""}
+{"seq":15,"name":"fit_lsq","version":"1.0","args_hash":"428b49ecea61af37","outcome":"ok","detail":""}
+{"seq":16,"name":"simulate","version":"1.0","args_hash":"61b92f401be3a7f8","outcome":"ok","detail":""}
+{"seq":17,"name":"residual_diag","version":"1.0","args_hash":"0b8347d6ebedae3c","outcome":"ok","detail":""}
+{"seq":18,"name":"request_assay","version":"1.0","args_hash":"98a69af9df1089c6","outcome":"ok","detail":""}
+{"seq":19,"name":"request_assay","version":"1.0","args_hash":"2d21fc0aed57ff8c","outcome":"ok","detail":""}
+{"seq":20,"name":"request_assay","version":"1.0","args_hash":"44ef8cab10e95aeb","outcome":"ok","detail":""}
+{"seq":21,"name":"request_assay","version":"1.0","args_hash":"282b08bcc61da8bd","outcome":"ok","detail":""}
+{"seq":22,"name":"simulate","version":"1.0","args_hash":"e081973e6c694e6f","outcome":"ok","detail":""}
+{"seq":23,"name":"simulate","version":"1.0","args_hash":"cff3e955b1c96749","outcome":"ok","detail":""}
+{"seq":24,"name":"simulate","version":"1.0","args_hash":"2374dcaf9eadfb0e","outcome":"ok","detail":""}

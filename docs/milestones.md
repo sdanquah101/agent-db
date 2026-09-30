@@ -2520,3 +2520,857 @@ Level 0–5 cells.
 
 **Blocked:** nothing. **The next session starts on:** whatever the lead rules on the
 results (`docs/distinguishability.md` §7).
+
+## Milestone 7 — P1, the single constrained agent (weeks 21–25)
+
+### Session 2026-09-25 — P1 built and tested against the test double (`claude/p1-single-agent`, draft PR #26)
+
+**Done.**
+- **The agent** (`workflows/p1_single_agent/agent.py`). It runs in the same jail as P0,
+  against the same registry, budgets and record, and writes the same task state.
+- **The model gateway** (`tools/llm.py`), on the privileged side, reached through a new
+  `llm` op on the registry socket. It holds the model settings, the turn and token
+  budgets, the retry policy, a verbatim log (`llm_calls.jsonl`) and the token meter the
+  runner reports.
+- **Config and prompts, as a development draft:** `configs/workflows/p1.yaml` and the
+  prompts in `configs/workflows/p1_prompts/`.
+- **Tests without a network or a key:** a scripted double and a recorded double.
+  `tests/test_p1_agent.py` has 24 tests and runs through the jail in about 12 s. They
+  check that:
+  - every action names its log line;
+  - the evaluator scores the run with 0 unsupported claims;
+  - a transcript replay reproduces the state;
+  - a run that never concludes is recorded as incomplete.
+- **Docs:** `docs/p1_design.md`, a decisions entry, and benchmark card §4.3.
+
+**Blocked:**
+- **The live pilot on the development cells** (P0's ten pilot cells) is blocked:
+  `ANTHROPIC_API_KEY` is not set in this environment. When it is:
+  - add the `anthropic` SDK to `pyproject.toml`;
+  - generate the ten cells and run them;
+  - report tokens, dollars and wall time per cell against the budgets.
+- **Five questions for the coordinator**, listed in PR #26: the model id, temperature,
+  how harness refusals are counted, no refusal fallback, and approval of the pilot.
+
+**Not done, by instruction:** no sweep scoring, no P0 comparison, no prompt freeze or
+hash.
+
+**The next session starts on:** the live pilot once the key and the lead's answers are
+in; prompt development on development cells only; then the freeze before the held-out
+variants.
+
+### Session 2026-09-25 (continued) — two review rounds, the switch to OpenAI `gpt-5.6-luna`, the first live development cell
+
+**Done.**
+- The coordinator's review at `0528698` and re-review at `63b58b1` were applied, and the
+  lead's ruling made the prompt examples generic (decisions, 2026-09-25).
+- By the lead's direct instruction, P1 now runs on OpenAI `gpt-5.6-luna` through the
+  Responses API. A client translates the agent's history both ways, and every gateway
+  guarantee is checked on the translated request. The key reaches the runner's process
+  as `OPENAI_API_KEY` and is stored nowhere.
+- **The first live development cell: S0-01, plant B, tier B** (a P0 pilot cell), run on
+  `run_2b118014430e`, before the hold-out-quarantine fix.
+
+  | | used | budget |
+  |---|---|---|
+  | wall clock | 65.4 min (3,925 s; 3,798 s of it in tools) | 90 min |
+  | simulator evaluations | 298 | 450 |
+  | assay units | 2 | 2 |
+  | model turns | 14 (14 attempts, no retry) | 60 |
+  | tokens | 472,434 (42 input, 77,290 cache writes, 384,017 cache reads, 11,085 output) | 6,000,000 |
+  | cost at luna's rates | $0.036 | — |
+
+  - *The run:* completed, state valid. Three evidence items were refused: an
+    unpublished key, a value no cited call produced, and a declared bound misquoted.
+  - *The diagnostic score, development only:* 0 of 8 claims unsupported, 0 invalid
+    actions.
+  - *The label:* `state` with `sensor` secondary, where the truth is `none`.
+  - *The rest:* one false kinetic drift (`k_m_ac` at its bound, reported as a
+    method-`none` estimate) and 8 abstentions outside the answer key.
+  - *The hole it found:* the agent quarantined a hold-out day that `data_qc` had shown
+    it, which led to the quarantine and validation fix.
+  - Model latency took about 2 min of the 65.
+
+**Blocked:** nothing technical. The other nine development cells wait for the lead's
+word. **Next:** the other nine cells on the lead's word; prompt development on
+development cells only; the freeze and hash before the held-out variants.
+
+**Note on the first live cell (the coordinator's re-review of `e4fc44a`).** The S0-01
+B/B cell ran on a working tree with uncommitted changes, between `4859bc5` and
+`7096fbc`. It is development evidence only. It predates both the hold-out quarantine fix
+and the calibration-window restriction on QC, balance and notes. Its figures show cost,
+wall time and mechanics, not P1's behaviour at any committed head. From the commit that
+fixes the re-review of `e4fc44a` on, every run records its commit, and its prompt and tool hashes, in `summary.json` and the
+model log.
+
+### Session 2026-09-25/28 — the development pilot: both prompts on ten cells at `c1e5829`
+
+**Superseded as the baseline (2026-09-28).** The coordinator's re-review of `c1e5829` asked
+for both prompts to be re-run at its fix head (`4ef57c0`: fixes at `ef55ed5`, prompt
+revision 1b at `4ef57c0`). The runs below are kept as labelled extra development
+evidence, and their files were renamed `reports/p1_pilot_c1e5829*`. The baseline is the
+`4ef57c0` pilot (next entry).
+
+**Done.**
+- The coordinator's re-review at `1624e4d` was applied at `8207ed6`, and prompt revision
+  1a was committed on its own at `c1e5829` (decisions, 2026-09-25).
+- **The development pilot (the lead's plan, as amended by that re-review).** Ten
+  development cells were run once per prompt version, both at `c1e5829`, from a clean
+  worktree:
+  - *old:* `0e178d5`'s `system.md` and `task.md`, prompt sha256
+    `b0b43e80f62350991014855d44332cb8eedc63e807d347461576c69657b17a4a`;
+  - *new:* revision 1a, prompt sha256
+    `f8e888f46147e88b013751f0918bffeaf9f9e0aa36c34279ba28b78404f24ef5`.
+
+  Every row's `summary.json` records commit `c1e5829` and its version's prompt hash, and
+  the report refused any row whose hash differed. Three lanes ran on a 4-core container.
+  Within each lane the two versions of a cell ran back to back, with the order
+  alternating. All 20 runs completed. The per-cell rows are in `reports/p1_pilot_c1e5829.csv`,
+  and each run's summary is in `reports/p1_pilot_c1e5829/summaries/`.
+- **These are development diagnostics only.** The label is compared with the truth on
+  development cells; this is not a sweep score and is never set beside P0.
+- **Column notes:**
+  - *refused* counts harness refusals (`p1.*` in `tool_failures`); the evaluator's
+    *invalid* count does not include them (question 1 in the PR).
+  - *kin. update err.* is `None` where the cell has no kinetic answer.
+  - Cost is at luna's rates as recorded in `p1.yaml`.
+
+**Old prompt (`b0b43e80…`):**
+
+| cell | label (truth) | exact | unsupported | invalid | refused | extra abst. | kin. update err. | kin. drift | evals | wall min | turns | tokens | USD |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| S0-01 B/A | sensor (none) | False | 0/6 | 0 | 2 | 11 | None | False | 103/450 | 21.1/90 | 20 | 524982 | 0.02557 |
+| S0-01 B/B | structural+influent (none) | False | 0/6 | 0 | 2 | 17 | None | True | 340/450 | 70.6/90 | 14 | 442309 | 0.026023 |
+| S0-01 B/C | sensor+influent (none) | False | 0/5 | 1 | 1 | 7 | None | False | 450/450 | 83.8/90 | 11 | 577671 | 0.04372 |
+| S1-01 B/B | structural+sensor+influent (none) | False | 0/9 | 0 | 2 | 15 | None | False | 228/450 | 44.9/90 | 15 | 469975 | 0.026259 |
+| S2-01 B/B | influent+sensor+structural (sensor) | False | 0/6 | 0 | 4 | 20 | False | True | 366/450 | 71.1/90 | 18 | 972121 | 0.049067 |
+| S3-01 C/B | sensor+influent (influent) | False | 0/9 | 0 | 10 | 24 | False | True | 179/600 | 36.6/120 | 17 | 665794 | 0.036565 |
+| S4-01 B/B | influent+sensor (state) | False | 0/5 | 1 | 0 | 19 | False | True | 330/600 | 65.2/120 | 17 | 740590 | 0.041702 |
+| S5-01 A/A | state+structural+sensor (parameter) | False | 0/7 | 0 | 6 | 15 | None | None | 151/300 | 52.1/120 | 22 | 714541 | 0.034471 |
+| S6-02 B/B | influent+sensor+state (structural) | False | 0/10 | 0 | 4 | 18 | False | False | 253/750 | 50.2/150 | 16 | 387197 | 0.024715 |
+| S8-01 B/B | sensor+influent+state (sensor) | False | 0/9 | 0 | 3 | 20 | False | False | 467/750 | 94.8/150 | 18 | 658257 | 0.039605 |
+| **total (10 cells)** | exact 0/10 | | 0 | | | 166 | | | | 590.4 | | 6153437 | 0.3477 |
+
+**Revision 1a (`f8e888f4…`):**
+
+| cell | label (truth) | exact | unsupported | invalid | refused | extra abst. | kin. update err. | kin. drift | evals | wall min | turns | tokens | USD |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| S0-01 B/A | sensor (none) | False | 0/4 | 0 | 2 | 9 | None | False | 302/450 | 57.4/90 | 14 | 522054 | 0.0274 |
+| S0-01 B/B | sensor+influent (none) | False | 0/5 | 0 | 0 | 2 | None | False | 204/450 | 43.5/90 | 20 | 1014701 | 0.054365 |
+| S0-01 B/C | influent+sensor+state (none) | False | 0/5 | 1 | 2 | 3 | None | True | 450/450 | 84.5/90 | 12 | 845794 | 0.06242 |
+| S1-01 B/B | sensor+influent+structural (none) | False | 0/4 | 0 | 4 | 9 | None | True | 303/450 | 60.3/90 | 16 | 694384 | 0.043083 |
+| S2-01 B/B | influent+sensor (sensor) | False | 0/6 | 0 | 4 | 16 | False | False | 450/450 | 85.1/90 | 15 | 564246 | 0.04364 |
+| S3-01 C/B | structural+sensor (influent) | False | 0/5 | 0 | 1 | 27 | False | True | 228/600 | 46.3/120 | 16 | 537848 | 0.033721 |
+| S4-01 B/B | influent+state (state) | False | 0/5 | 0 | 2 | 10 | False | False | 433/600 | 80.6/120 | 29 | 1572721 | 0.062513 |
+| S5-01 A/A | state+sensor+structural (parameter) | False | 0/6 | 0 | 2 | 8 | None | None | 253/300 | 86.7/120 | 16 | 418790 | 0.027646 |
+| S6-02 B/B | sensor+influent+structural (structural) | False | 0/4 | 0 | 4 | 11 | False | False | 261/750 | 52.1/150 | 16 | 726900 | 0.035031 |
+| S8-01 B/B | sensor+state (sensor) | False | 0/4 | 0 | 2 | 6 | False | True | 324/750 | 67.6/150 | 18 | 706550 | 0.038975 |
+| **total (10 cells)** | exact 0/10 | | 0 | | | 101 | | | | 664.2 | | 7603988 | 0.4288 |
+
+**Totals and the difference (after − before):**
+
+| total | before | after | after - before |
+|---|---|---|---|
+| cells | 10 | 10 | +0 |
+| exact | 0 | 0 | +0 |
+| unsupported | 0 | 0 | +0 |
+| invalid | 2 | 1 | -1 |
+| refused | 34 | 23 | -11 |
+| extra | 166 | 101 | -65 |
+| kin_err | 0 | 0 | +0 |
+| kin_drift | 4 | 4 | +0 |
+| evals | 2867 | 3208 | +341 |
+| wall | 590.4 | 664.2 | +73.8 |
+| turns | 168 | 172 | +4 |
+| tokens | 6153437 | 7603988 | +1450551 |
+| USD | 0.3477 | 0.4288 | +0.0811 |
+
+Two further label diagnostics come from `reports/p1_pilot_c1e5829.csv`:
+- the primary label equals the truth in 1 of 10 cells on both prompts (S8-01 B/B);
+- the truth is among the labels given in 3 of 10 cells on the old prompt and 4 of 10 on
+  revision 1a.
+
+**Reading (development only, one run per cell, so differences of a cell or two are
+noise):**
+- Revision 1a cut extra abstentions (166 → 101) and harness refusals (34 → 23). Neither
+  prompt produced an unsupported claim or a kinetic-update error.
+- Neither prompt concluded `none` on any of the four `none` cells (S0-01 B/A, B/B, B/C
+  and S1-01 B/B). Revision 1a's `none` criterion did not change that: each of those runs
+  names at least one cause for the background misfit.
+- The agent almost always gives two or three labels (24 and 23 labels over 10 cells), so
+  `attribution_exact` is 0 of 10 on both prompts.
+- Revision 1a used more of the budget: +341 evaluations, +74 min of wall clock, +1.45 M
+  tokens, +$0.08 over ten cells. The total cost is $0.35 for the old prompt and $0.43 for
+  1a.
+- The earlier `0e178d5` cells (four finished before that baseline was stopped) are
+  extra development evidence only and are not in this table.
+
+**Blocked:** nothing technical. The coordinator's fresh re-review at `c1e5829` is under
+way; if it changes tool outputs, the affected cells are re-run at the fix head.
+**Next:** the lead's reading of this table. The prompt stays unfrozen; no sweep scoring
+and no held-out variants without the lead's word.
+
+### Session 2026-09-28 — the re-review of `c1e5829`: fixes, revision 1b, and the pilot at `4ef57c0`
+
+**Done.**
+- **The re-review at `c1e5829` cleared P1 for the pilot runs**, with five follow-ups.
+- **`8207ed6` and `c1e5829`**, recorded here because the milestones had not listed them:
+  - `8207ed6` fixed the re-review of `1624e4d`: calibration-only statistics, a half-open
+    window, converged-only estimates, whole-point Fisher intervals, the wider guard, and
+    raw response logging.
+  - `c1e5829` was prompt revision 1a, `f8e888f4…`.
+- **`ef55ed5`, follow-ups 1, 2, 4 and 5.** No tool output changes.
+  - An optimum at a bound the agent narrowed is not an estimate.
+  - A Fisher call's unnamed `at` coordinates count.
+  - The `data_qc` and `mass_balance` descriptions now say "calibration window".
+  - `missing_fraction` is taken over the calibration window.
+  - Each has a unit test with a negative control.
+- **`4ef57c0`, prompt revision 1b** (follow-up 3), sha256
+  `4b8f830ad0236d9f4ad44ed5300bebf435df73601e1e5f1e59223a8c9a2b4ddd`:
+  - the `none` criterion gets a margin (the coordinator's wording);
+  - the abstention example matches the global meaning of `parameter_values`.
+- **The pilot, revision 1b (`4b8f830a…`), on the ten development cells**, one run per
+  cell, at `4ef57c0`, from a clean worktree. `acf681b` differs from it only in `docs/`
+  and `reports/`.
+  - By the coordinator's decision of 2026-09-28, the old-prompt and 1a runs at
+    `c1e5829` stand as the baseline, because `ef55ed5` changed no tool output.
+  - Old-prompt re-runs that had started at `4ef57c0` were stopped when that decision
+    arrived; none had finished.
+  - Rows are committed as they land, in `reports/p1_pilot.csv` and
+    `reports/p1_pilot/summaries/`. The baseline is in `reports/p1_pilot_c1e5829*`.
+  - The report has three column sets (old / 1a / 1b), with harness refusals counted
+    from the verbatim log and the evidence behind each label (decisions, 2026-09-28).
+
+**Open.** `bayes_mcmc` also accepts narrowed bounds; a rule for a posterior run inside a
+narrow box is left for the coordinator (decisions, 2026-09-28).
+
+### Session 2026-09-28 (continued) — revision 1b complete; the lead's ruling on two new arms; revision 2 running
+
+**Done.**
+- **Revision 1b, ten development cells, at `4ef57c0`** (one run per cell; the old-prompt
+  and 1a runs at `c1e5829` stand as the baseline, decisions 2026-09-28). Rows and
+  summaries are in `reports/p1_pilot.csv` and `reports/p1_pilot/summaries/1b_*`.
+- **Two 1b runs were killed by the runner** (S0-01 B/C at 100.1 of 90 min, S3-01 C/B at
+  130.1 of 120 min: the allowance plus the runner's 10-minute margin) and left no
+  conclusion. Their `state.json` is the harness's interim write, whose placeholder label
+  is `none` with confidence 0 and no evidence. **The evaluator scored that placeholder**
+  (S0-01 B/C as an exact `none`). By the coordinator's answer 2 of 2026-09-28 a run
+  that ends without a conclusion is a failed run and an attribution miss, so the tables
+  below count both that way; the CSV keeps the evaluator's raw columns beside a
+  `run_failed` flag. Two things follow, both raised in PR #26:
+  - the evaluator reads an interim state as a conclusion; scoring a run whose summary
+    says `completed: false` as a miss would close that;
+  - the cause of the kills. Both cells ran while this session's test suites ran on the
+    same 4-core container (one full suite at nice 5); the 1b arm's wall clock (890 min
+    against 664 for 1a, on fewer evaluations) is inflated by that contention, which the
+    earlier arms did not have. The coordinator is asked whether the two cells are re-run
+    alone at `4ef57c0`, the killed rows staying as labelled failures.
+- **Report columns added** (decisions, 2026-09-28): harness refusals counted from the
+  gateway's verbatim log, and the evidence behind each label, *n (t, c)*: items, of
+  which *t* cite a time-localising key or a direct measurement and *c* a sensor or
+  channel tag only.
+
+**Revision 1b (`4b8f830a…`), runs at `4ef57c0`.** Development diagnostics only.
+
+| cell | labels (truth) | evidence per label: n (t, c) | unsupp. | invalid | refused | extra abst. | kin. err. | kin. drift | evals | wall min | turns | tokens | USD |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| S0-01 B/A | sensor (none) | sensor 1 (t 1, c 0) | 0/1 | 1 | 0 | 5 | None | True | 284/450 | 90.6/90.0 | 8 | 222567 | 0.020937 |
+| S0-01 B/B | influent+sensor (none) | influent 2 (t 0, c 0); sensor 1 (t 1, c 0) | 0/5 | 0 | 1 | 16 | None | False | 194/450 | 83.2/90.0 | 14 | 642553 | 0.039381 |
+| S0-01 B/C | KILLED, no conclusion; placeholder none (none) | (no conclusion; the interim state's placeholder) | 0/0 | 0 | 0 | 0 | None | False | 309/450 | 100.1/90.0 | 6 | 131320 | 0.00987 |
+| S1-01 B/B | sensor+structural (none) | sensor 4 (t 3, c 1); structural 2 (t 2, c 0) | 0/6 | 0 | 2 | 9 | None | False | 222/450 | 72.2/90.0 | 11 | 347751 | 0.022856 |
+| S2-01 B/B | sensor+influent+state (sensor) | sensor 4 (t 4, c 0); influent 1 (t 1, c 0); state 1 (t 1, c 0) | 0/6 | 0 | 2 | 6 | False | False | 225/450 | 75.1/90.0 | 15 | 765763 | 0.046937 |
+| S3-01 C/B | KILLED, no conclusion; placeholder none (influent) | (no conclusion; the interim state's placeholder) | 0/0 | 0 | 0 | 0 | False | False | 410/600 | 130.1/120.0 | 9 | 317774 | 0.018378 |
+| S4-01 B/B | influent+sensor (state) | influent 4 (t 3, c 0); sensor 1 (t 1, c 0) | 0/5 | 0 | 0 | 2 | False | False | 200/600 | 64.8/120.0 | 14 | 566435 | 0.031751 |
+| S5-01 A/A | state+sensor (parameter) | state 3 (t 3, c 0); sensor 1 (t 0, c 1) | 0/6 | 0 | 7 | 5 | None | None | 134/300 | 79.7/120.0 | 13 | 256288 | 0.023196 |
+| S6-02 B/B | influent+state+sensor+structural (structural) | influent 2 (t 1, c 0); state 1 (t 1, c 0); sensor 1 (t 1, c 0); structural 2 (t 1, c 0) | 0/6 | 0 | 2 | 22 | False | False | 204/750 | 66.3/150.0 | 13 | 522440 | 0.03661 |
+| S8-01 B/B | sensor (sensor) | sensor 3 (t 2, c 0) | 0/3 | 1 | 1 | 6 | False | False | 231/750 | 128.0/150.0 | 19 | 1009135 | 0.056111 |
+
+**Totals, old / 1a / 1b, with the pairwise differences.** One run per cell; a difference
+of a cell or two is noise. The two killed 1b runs count as misses in every label row.
+
+| total | old | 1a | 1b | 1a − old | 1b − old | 1b − 1a |
+|---|---|---|---|---|---|---|
+| cells | 10 | 10 | 10 | +0 | +0 | +0 |
+| failed runs (killed, no conclusion) | 0 | 0 | 2 | +0 | +2 | +2 |
+| exact attribution | 0 | 0 | 1 | +0 | +1 | +1 |
+| primary label = truth | 1 | 1 | 2 | +0 | +1 | +1 |
+| truth among the labels given | 3 | 4 | 3 | +1 | +0 | -1 |
+| `none` reached on `none` cells | 0 | 0 | 0 | +0 | +0 | +0 |
+| labels given | 24 | 23 | 17 | -1 | -7 | -6 |
+| labels without localised evidence | 2 | 3 | 1 | +1 | -1 | -2 |
+| unsupported claims | 0 | 0 | 0 | +0 | +0 | +0 |
+| invalid actions (evaluator) | 2 | 1 | 2 | -1 | +0 | +1 |
+| harness refusals (verbatim log) | 34 | 23 | 15 | -11 | -19 | -8 |
+| extra abstentions | 166 | 101 | 71 | -65 | -95 | -30 |
+| kinetic-update errors | 0 | 0 | 0 | +0 | +0 | +0 |
+| kinetic drift (cells) | 4 | 4 | 1 | +0 | -3 | -3 |
+| simulator evaluations | 2867 | 3208 | 2413 | +341 | -454 | -795 |
+| wall clock, min | 590.4 | 664.1 | 890.1 | +73.7 | +299.7 | +226.0 |
+| turns | 168 | 172 | 122 | +4 | -46 | -50 |
+| tokens | 6153437 | 7603988 | 4782026 | +1450551 | -1371411 | -2821962 |
+| cost at luna's rates, USD | 0.348 | 0.429 | 0.306 | +0.081 | -0.042 | -0.123 |
+
+**Reading.**
+- Revision 1b did not reach `none` on any of the four `none` cells either; the one
+  `none` in the raw scores was the killed run's placeholder.
+- Its one exact attribution is S8-01 B/B (`sensor`), and the primary label matched on
+  S4-01 B/B as well. It gave fewer labels (17 over 8 concluded runs) with fewer resting
+  on whole-record figures only (1).
+- Extra abstentions and harness refusals fell again (71 and 15). No unsupported claim
+  and no kinetic-update error in any arm.
+- Wall clock and cost are not comparable to the earlier arms because of the contention
+  above.
+
+**The lead's ruling of 2026-09-28** (decisions): a scoring-rule statement (revision 2)
+and an expert-brief arm, the freeze after both on the lead's word.
+- **Revision 2** (`f467963`, prompt sha256 `c80a3752…`): 1b plus one paragraph stating
+  the evaluator's rules from `docs/eval_design.md`. **Running now** on the ten cells at
+  `996825c`, rows committed as they land (`reports/p1_pilot/summaries/rev2_*`).
+- **The expert brief** (`996825c`, brief sha256 `81b89186…`): `expert_brief.md`, from
+  cited literature only, appended to the system text in the arm
+  `configs/workflows/p1_expert_brief.yaml`; `prompt_sha256` is shared with revision 2
+  and `brief_sha256` is the brief's own. The guard's failure-mode patterns are waived
+  for the brief; ids, label frequencies and P0 outcomes still apply, with a test that
+  the waiver applies only to the brief. **No run of this arm until the lead has read
+  the brief.**
+
+**Blocked:** the expert-brief runs wait for the lead's read. **Next:** the revision-2
+rows; then, on the lead's word, the brief arm; then the five-column report.
+
+### Session 2026-09-28 (continued) — revision 2 complete; the finding on killed runs
+
+**Done.**
+- **Revision 2 (`c80a3752…`), ten development cells at `996825c`**, one run per cell.
+  Five concluded. **Three were killed at the runner's margin** (S0-01 B/A, S0-01 B/C,
+  S3-01 C/B) and **two ended on connection errors** (S5-01 A/A on turn 3, S6-02 B/B
+  on turn 4: four `APIConnectionError` attempts each, between about 19:00 and 19:35
+  UTC, around this session's infrastructure restart). All five count as failed runs
+  (attribution misses; the coordinator's answer 2). Rows in `reports/p1_pilot.csv`,
+  summaries in `reports/p1_pilot/summaries/rev2_*`.
+
+**Revision 2, per cell.** Development diagnostics only.
+
+| cell | labels (truth) | evidence per label: n (t, c) | unsupp. | invalid | refused | extra abst. | kin. err. | kin. drift | evals | wall min | turns | tokens | USD |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| S0-01 B/A | KILLED, no conclusion; placeholder none (none) | (no conclusion; the interim state's placeholder) | 0/1 | 0 | 3 | 0 | None | False | 337/450 | 100.1/90.0 | 7 | 209380 | 0.012774 |
+| S0-01 B/B | influent+sensor (none) | influent 4 (t 3, c 0); sensor 1 (t 1, c 0) | 0/5 | 0 | 2 | 19 | None | False | 183/450 | 70.6/90.0 | 16 | 687642 | 0.042902 |
+| S0-01 B/C | KILLED, no conclusion; placeholder none (none) | (no conclusion; the interim state's placeholder) | 0/0 | 0 | 0 | 0 | None | False | 314/450 | 100.1/90.0 | 6 | 236645 | 0.015586 |
+| S1-01 B/B | structural+sensor+influent (none) | structural 2 (t 2, c 0); sensor 1 (t 0, c 1); influent 1 (t 0, c 1) | 0/4 | 0 | 0 | 10 | None | True | 254/450 | 81.7/90.0 | 12 | 524896 | 0.041144 |
+| S2-01 B/B | influent+sensor (sensor) | influent 2 (t 2, c 0); sensor 2 (t 2, c 0) | 0/4 | 0 | 1 | 16 | False | False | 131/450 | 43.3/90.0 | 14 | 439392 | 0.028651 |
+| S3-01 C/B | KILLED, no conclusion; placeholder none (influent) | (no conclusion; the interim state's placeholder) | 0/0 | 0 | 0 | 0 | False | False | 431/600 | 130.1/120.0 | 6 | 197239 | 0.014789 |
+| S4-01 B/B | sensor+state (state) | sensor 1 (t 1, c 0); state 1 (t 1, c 0) | 0/2 | 0 | 1 | 11 | False | False | 292/600 | 92.1/120.0 | 15 | 757719 | 0.05718 |
+| S5-01 A/A | KILLED, no conclusion; placeholder none (parameter) | (no conclusion; the interim state's placeholder) | 0/0 | 0 | 0 | 0 | None | None | 63/300 | 36.7/120.0 | 3 | 69105 | 0.006831 |
+| S6-02 B/B | KILLED, no conclusion; placeholder none (structural) | (no conclusion; the interim state's placeholder) | 0/1 | 0 | 5 | 0 | False | False | 98/750 | 70.8/150.0 | 4 | 107530 | 0.014909 |
+| S8-01 B/B | sensor+influent (sensor) | sensor 2 (t 2, c 0); influent 2 (t 1, c 0) | 0/4 | 1 | 3 | 5 | False | True | 383/750 | 157.1/150.0 | 14 | 532119 | 0.042888 |
+
+**Totals, old / 1a / 1b / rev2, with the pairwise differences.** Failed runs are misses
+in every label row; wall clock, evaluations and cost are not comparable across the
+contended arms (below).
+
+| total | old | 1a | 1b | rev2 | 1a − old | 1b − old | 1b − 1a | rev2 − old | rev2 − 1a | rev2 − 1b |
+|---|---|---|---|---|---|---|---|---|---|---|
+| cells | 10 | 10 | 10 | 10 | +0 | +0 | +0 | +0 | +0 | +0 |
+| failed runs (killed, no conclusion) | 0 | 0 | 2 | 5 | +0 | +2 | +2 | +5 | +5 | +3 |
+| exact attribution | 0 | 0 | 1 | 0 | +0 | +1 | +1 | +0 | +0 | -1 |
+| primary label = truth | 1 | 1 | 2 | 1 | +0 | +1 | +1 | +0 | +0 | -1 |
+| truth among the labels given | 3 | 4 | 3 | 3 | +1 | +0 | -1 | +0 | -1 | +0 |
+| `none` reached on `none` cells | 0 | 0 | 0 | 0 | +0 | +0 | +0 | +0 | +0 | +0 |
+| labels given | 24 | 23 | 17 | 11 | -1 | -7 | -6 | -13 | -12 | -6 |
+| labels without localised evidence | 2 | 3 | 1 | 0 | +1 | -1 | -2 | -2 | -3 | -1 |
+| unsupported claims | 0 | 0 | 0 | 0 | +0 | +0 | +0 | +0 | +0 | +0 |
+| invalid actions (evaluator) | 2 | 1 | 2 | 1 | -1 | +0 | +1 | -1 | +0 | -1 |
+| harness refusals (verbatim log) | 34 | 23 | 15 | 15 | -11 | -19 | -8 | -19 | -8 | +0 |
+| extra abstentions | 166 | 101 | 71 | 61 | -65 | -95 | -30 | -105 | -40 | -10 |
+| kinetic-update errors | 0 | 0 | 0 | 0 | +0 | +0 | +0 | +0 | +0 | +0 |
+| kinetic drift (cells) | 4 | 4 | 1 | 2 | +0 | -3 | -3 | -2 | -2 | +1 |
+| simulator evaluations | 2867 | 3208 | 2413 | 2486 | +341 | -454 | -795 | -381 | -722 | +73 |
+| wall clock, min | 590.4 | 664.1 | 890.1 | 882.6 | +73.7 | +299.7 | +226.0 | +292.2 | +218.5 | -7.5 |
+| turns | 168 | 172 | 122 | 97 | +4 | -46 | -50 | -71 | -75 | -25 |
+| tokens | 6153437 | 7603988 | 4782026 | 3761667 | +1450551 | -1371411 | -2821962 | -2391770 | -3842321 | -1020359 |
+| cost at luna's rates, USD | 0.348 | 0.429 | 0.306 | 0.278 | +0.081 | -0.042 | -0.123 | -0.07 | -0.151 | -0.028 |
+
+**Reading (five concluded revision-2 runs, so weaker still than the other arms).**
+- No exact attribution; the primary matched on S8-01 B/B; the truth was among the
+  labels on three of the five. Neither concluded `none` cell (S0-01 B/B, S1-01 B/B)
+  reached `none`.
+- Fewer labels per run (11 over five runs) and none resting on whole-record figures
+  only; extra abstentions 61 over five runs, refusals 15. No unsupported claim, no
+  kinetic-update error, in any arm.
+- The 1b → revision 2 difference is meant to isolate the scoring statement; with eight
+  and five concluded runs it isolates little. The statement did not change the label
+  behaviour visibly.
+
+**The finding: how the killed runs die** (from the truth-side call logs, which carry
+runtimes and timestamps; the visible log carries neither).
+- Every killed run, under 1b and under revision 2, died inside one `fit_lsq` of 200–320
+  evaluations that the agent started with 30–60 min of allowance left and that ran
+  77–134 min. The registry checks the wall clock when a call starts, so one call can
+  run through the whole allowance; the runner kills the jail at allowance + 10 min.
+- The killed call keeps running: the registry server is a daemon thread of the driver
+  process, and the orphaned fit computed on for 29–84 min after each kill, inside the
+  lane that was already running its next cell.
+- Contention doubled the cost of an evaluation. Median seconds per simulator
+  evaluation: old 11.4, 1a 11.5, 1b 21.2, revision 2 19.8 (max 34.6). The 1b and
+  revision-2 arms ran while this session's test suites ran on the same 4-core container
+  (about 2.5 h, one at nice 5), and then under their own orphaned fits. The two
+  uncontended arms had neither.
+- The same two cells (S0-01 B/C, S3-01 C/B) died the same way under both prompts,
+  each on a fit sized at roughly the cell's whole allowance: the kills are an artefact
+  of load plus a harness gap, not of the prompts.
+
+**Proposals, in PR #26 for the coordinator** (nothing applied): a per-call duration
+guard in P1's harness (estimate a fit, GSA, profile or sampler call from its requested
+evaluations and the run's measured seconds per evaluation, refuse what does not fit in
+the wall clock left); the runner stopping the registry's in-flight call on a kill, or
+one process per cell in the batch driver; re-runs of the failed cells, or not, at the
+coordinator's discretion.
+
+**Operating rule from here (this session's own):** no test suite runs beside live
+cells. The suites run before a batch or after it.
+
+**Blocked:** the expert-brief arm waits for the lead's read; the proposals and re-runs
+for the coordinator. **Next:** on the coordinator's word, the guard and the re-runs;
+on the lead's word, the brief arm; then the five-column report.
+
+### Session 2026-09-29 — the coordinator's decision on the killed runs: the new head; the lead's word on the brief
+
+**Done.**
+- **The coordinator approved the three proposals as one head** (decisions, 2026-09-29):
+  - the harness's per-call duration guard (`estimate_evaluations` mirrors the registry's
+    cost functions, pinned by a fourteen-case test; the recorder measures the run's own
+    seconds per charged evaluation; a sized call that does not fit the wall clock left
+    less the reserve is refused with the estimate and the largest bound that fits;
+    DESIGN values in `p1.yaml`, `duration_guard`; the rate is recorded as an annotation);
+  - a timeout kill cancels the registry's in-flight call (`EvaluationMeter.cancel`,
+    `Registry.cancel`/`wait_idle`, the runner on `TimeoutExpired`); tests: the meter, the
+    registry, and a jail killed mid-Morris whose call stops within one evaluation;
+  - `scripts/p1_pilot.py`, one process per cell, at most three lanes, the operating rules
+    in its docstring: nothing else runs beside live cells.
+- **The P0 freeze check.** `tests/test_p0_freeze.py` (marker `p0_freeze`, deselected by
+  default) re-runs the pilot cell S0-01 B/A in full and compares the positive-control
+  driver's normalised state and the summary without its volatile fields against the
+  golden made at `3ea1dee` with `scripts/p0_freeze_golden.py`: run `run_8f14dcebe5e2`,
+  61 min, label `none`, 202 evaluations, 23 calls, state
+  `156b5c9e…`, summary `57b705d9…`. The check runs alone after the full suite, before
+  any live cell.
+- **The lead's word on the expert brief** (decisions, 2026-09-29): run it, after the
+  revision-2 re-run, at the same head. The brief is fixed at `81b89186…`, pinned by a
+  test; `brief_sha256` and `prompt_sha256` stay empty in the configurations.
+- **Reports:** the contended revision-2 attempt at `996825c` moved to
+  `reports/p1_pilot_rev2_contended*`; `failure_reason` beside `run_failed`.
+
+**Order of work from here** (the coordinator's): the full suite and the push; the freeze
+check alone; the minimal live request; revision 2 on the ten development cells,
+uncontended, one process per cell, three lanes; then the expert-brief arm on the same
+ten cells at the same head; then the five-arm report (old / 1a / 1b / rev2 / rev2+brief),
+failed runs shown as FAILED with their cause and counted as misses.
+
+**2026-09-29, 06:05 UTC — the freeze check passed at `cc256fd`:** S0-01 B/A re-run in
+full (63 min) reproduces the golden's normalised state and summary digests exactly
+(`156b5c9e…`, `57b705d9…`; `none`, 202 evaluations, 23 calls). The live request
+returned OK. The revision-2 re-run started at 06:05, ten cells, three lanes, one process
+per cell, nothing else on the machine; the brief arm follows it at the same head.
+
+### Session 2026-09-29 (continued) — revision 2 re-run; the brief arm's false start; the evaluation rate is the machine
+
+**Done.**
+- **Revision 2 re-run at `cc256fd`, 06:05–11:11**, ten cells, three lanes, one process
+  per cell, nothing else on the machine: **ten of ten concluded, none killed, none
+  lost.** Rows in `reports/p1_pilot.csv` (`rev2`), summaries `rev2_*`. The duration
+  guard refused fourteen oversized calls in seven cells (bounds of 94–417 evaluations
+  asked for); the agent resized and went on; four cells concluded within minutes of
+  their allowance (S0-01 B/C at 92.6 of 90 min, inside the runner's margin).
+- **The brief arm's first attempt (11:11) failed on every cell at turn 0**: the live
+  OpenAI client hashed the system prompt alone, the gateway and the provenance the
+  joined text, so the client's own check rejected the brief arm's requests (decisions,
+  2026-09-29). Fixed at `3499b04` (one line of `tools/runner.py`, a test pinning the
+  client's digest to the provenance's in both arms); the ten rows removed from the
+  reports at `eda0ad5`. The brief arm relaunches at the fixed head after the full suite
+  and the push; the plain arm's text is unchanged by the fix, so the revision-2 re-run
+  stands (the coordinator is asked to confirm the two heads, or to order a second
+  revision-2 re-run).
+- **The evaluation rate is the machine.** Single-evaluation `simulate` calls took
+  11.2–11.6 s (median) in the old and 1a arms and 17.7–19.6 s in every arm since,
+  contended or alone; the boundary is the container reboot of 28 September 06:24 UTC.
+  The re-run alone measured 20.8 s per evaluation over all sized calls. So the suites
+  and the orphaned fits explain the kills (a long call past the allowance) but not the
+  slowdown; wall clock, cost and evaluation counts are comparable within the boundary,
+  not across it. The P0 golden (61 min for 202 evaluations, 29 September) against the
+  original P0 pilot cell (58 min for 271, 21 September) shows the same ratio.
+
+**Revision 2 (re-run), totals against the earlier arms** (failed runs are misses):
+exact attribution 1/10 (S2-01 B/B); primary label = truth 4/10 (S2-01, S3-01, S4-01,
+S8-01: the faulted cells with a single true cause); `none` reached on none of the four
+`none` cells; 16 labels over ten runs, one resting on whole-record figures only; no
+unsupported claim, no kinetic-update error, no kinetic drift; 54 harness refusals (14 the
+guard's); 92 extra abstentions; 2,311 evaluations; 851 min; 7.18 M tokens; $0.419.
+
+### Session 2026-09-29 (continued) — the five-arm report: old / 1a / 1b / rev2 / rev2+brief
+
+**Done.**
+- **The expert-brief arm at `06896dd`** (the lead's word of 2026-09-29), ten development
+  cells, one run per cell, three lanes, one process per cell, nothing else on the
+  machine: started 12:13, interrupted by the container reboot of ~15:27 with one cell
+  landed (S3-01 C/B) and three in flight lost, resumed 15:28 for the other nine from the
+  same worktree, done 19:32. **Ten of ten concluded; none killed, none lost.** Rows in
+  `reports/p1_pilot.csv` (`rev2_brief`), summaries `rev2_brief_*`; every summary carries
+  `brief_sha256` `81b89186…` and `prompt_sha256` `c80a3752…`. The guard refused
+  two oversized calls. **The evaluation rate changed again with the reboot:** the nine
+  resumed cells measured 13.8 s per evaluation (single-evaluation `simulate` calls
+  13.5 s median) on the container instance that came up at 15:27, against ~20 s on the
+  instance the revision-2 re-run and the arm's first cell (S3-01 C/B) ran on.
+- **The review of `cc256fd`** (decisions, 2026-09-29): applied; the freeze check is now
+  the two-head comparison (`06563c5`), pushed with this report after the full suite.
+
+**The two arms of the lead's ruling, per cell.** Development diagnostics only.
+
+Revision 2 (`c80a3752…`), re-run at `cc256fd`:
+
+| cell | labels (truth) | evidence per label: n (t, c) | unsupp. | invalid | refused | extra abst. | kin. err. | kin. drift | evals | wall min | turns | tokens | USD |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| S0-01 B/A | sensor (none) | sensor 5 (t 5, c 0) | 0/5 | 0 | 4 | 7 | None | False | 165/450 | 60.5/90.0 | 17 | 734197 | 0.039823 |
+| S0-01 B/B | sensor+influent (none) | sensor 2 (t 2, c 0); influent 1 (t 0, c 1) | 0/3 | 0 | 5 | 9 | None | False | 130/450 | 45.6/90.0 | 20 | 833038 | 0.042079 |
+| S0-01 B/C | influent (none) | influent 1 (t 0, c 0) | 0/1 | 2 | 2 | 4 | None | False | 270/450 | 92.6/90.0 | 10 | 269010 | 0.021422 |
+| S1-01 B/B | sensor (none) | sensor 2 (t 2, c 0) | 0/3 | 0 | 5 | 2 | None | False | 233/450 | 84.6/90.0 | 10 | 335466 | 0.028728 |
+| S2-01 B/B | sensor (sensor) | sensor 5 (t 5, c 0) | 0/5 | 0 | 5 | 8 | False | False | 218/450 | 77.7/90.0 | 17 | 570799 | 0.035085 |
+| S3-01 C/B | influent+sensor (influent) | influent 4 (t 3, c 0); sensor 2 (t 2, c 0) | 0/8 | 0 | 3 | 12 | False | False | 348/600 | 113.1/120.0 | 15 | 459322 | 0.037595 |
+| S4-01 B/B | state+influent (state) | state 1 (t 1, c 0); influent 1 (t 1, c 0) | 0/2 | 0 | 6 | 7 | False | False | 227/600 | 81.5/120.0 | 22 | 937040 | 0.050659 |
+| S5-01 A/A | influent+sensor (parameter) | influent 2 (t 2, c 0); sensor 1 (t 1, c 0) | 0/7 | 0 | 6 | 7 | None | None | 176/300 | 112.1/120.0 | 14 | 470297 | 0.044319 |
+| S6-02 B/B | sensor+influent (structural) | sensor 10 (t 8, c 0); influent 4 (t 1, c 0) | 0/17 | 0 | 12 | 16 | False | False | 306/750 | 101.3/150.0 | 27 | 1399235 | 0.057049 |
+| S8-01 B/B | sensor+structural (sensor) | sensor 2 (t 1, c 1); structural 3 (t 3, c 0) | 0/6 | 0 | 6 | 20 | False | False | 238/750 | 82.1/150.0 | 22 | 1171261 | 0.062504 |
+
+Revision 2 + the expert brief (`c80a3752…` + `81b89186…`), at `06896dd`:
+
+| cell | labels (truth) | evidence per label: n (t, c) | unsupp. | invalid | refused | extra abst. | kin. err. | kin. drift | evals | wall min | turns | tokens | USD |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| S0-01 B/A | sensor (none) | sensor 3 (t 3, c 0) | 0/4 | 0 | 1 | 6 | None | False | 304/450 | 71.8/90.0 | 17 | 737416 | 0.039777 |
+| S0-01 B/B | influent+sensor (none) | influent 4 (t 2, c 0); sensor 1 (t 1, c 0) | 0/5 | 0 | 1 | 8 | None | False | 248/450 | 57.7/90.0 | 20 | 1013170 | 0.048003 |
+| S0-01 B/C | influent (none) | influent 4 (t 2, c 0) | 0/4 | 0 | 2 | 2 | None | True | 267/450 | 65.3/90.0 | 14 | 697446 | 0.042181 |
+| S1-01 B/B | sensor+structural (none) | sensor 2 (t 2, c 0); structural 2 (t 2, c 0) | 0/4 | 0 | 3 | 11 | None | True | 290/450 | 71.9/90.0 | 18 | 873452 | 0.049483 |
+| S2-01 B/B | sensor+influent (sensor) | sensor 2 (t 2, c 0); influent 2 (t 2, c 0) | 0/4 | 0 | 2 | 11 | False | True | 271/450 | 65.5/90.0 | 16 | 950225 | 0.054604 |
+| S3-01 C/B | influent+sensor (influent) | influent 1 (t 1, c 0); sensor 1 (t 1, c 0) | 0/7 | 0 | 2 | 3 | False | True | 295/600 | 108.1/120.0 | 19 | 1100473 | 0.056036 |
+| S4-01 B/B | influent (state) | influent 3 (t 2, c 0) | 0/3 | 0 | 2 | 3 | False | False | 523/600 | 119.4/120.0 | 16 | 1001941 | 0.057312 |
+| S5-01 A/A | influent (parameter) | influent 5 (t 5, c 0) | 0/5 | 0 | 2 | 5 | None | None | 123/300 | 50.7/120.0 | 12 | 487223 | 0.029016 |
+| S6-02 B/B | influent+sensor (structural) | influent 3 (t 1, c 0); sensor 1 (t 1, c 0) | 0/4 | 0 | 0 | 7 | False | False | 329/750 | 74.2/150.0 | 16 | 647126 | 0.03671 |
+| S8-01 B/B | sensor+influent (sensor) | sensor 2 (t 2, c 0); influent 3 (t 1, c 0) | 0/5 | 0 | 4 | 5 | False | False | 326/750 | 75.5/150.0 | 22 | 1481515 | 0.061032 |
+
+**Totals and pairwise differences** (`rev2_contended` is the `996825c` attempt, on
+record, not in the comparison; the columns to read are old / 1a / 1b / rev2 /
+rev2_brief). Failed runs are misses in every label row; 1b → rev2 isolates the scoring
+statement, rev2 → rev2_brief isolates the brief.
+
+| total | old | 1a | 1b | rev2_contended | rev2 | rev2_brief | 1a − old | 1b − old | 1b − 1a | rev2_contended − old | rev2_contended − 1a | rev2_contended − 1b | rev2 − old | rev2 − 1a | rev2 − 1b | rev2 − rev2_contended | rev2_brief − old | rev2_brief − 1a | rev2_brief − 1b | rev2_brief − rev2_contended | rev2_brief − rev2 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| cells | 10 | 10 | 10 | 10 | 10 | 10 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 |
+| failed runs (no conclusion) | 0 | 0 | 2 | 5 | 0 | 0 | +0 | +2 | +2 | +5 | +5 | +3 | +0 | +0 | -2 | -5 | +0 | +0 | -2 | -5 | +0 |
+|   of which killed | 0 | 0 | 2 | 3 | 0 | 0 | +0 | +2 | +2 | +3 | +3 | +1 | +0 | +0 | -2 | -3 | +0 | +0 | -2 | -3 | +0 |
+|   of which connection | 0 | 0 | 0 | 2 | 0 | 0 | +0 | +0 | +0 | +2 | +2 | +2 | +0 | +0 | +0 | -2 | +0 | +0 | +0 | -2 | +0 |
+| exact attribution | 0 | 0 | 1 | 0 | 1 | 0 | +0 | +1 | +1 | +0 | +0 | -1 | +1 | +1 | +0 | +1 | +0 | +0 | -1 | +0 | -1 |
+| primary label = truth | 1 | 1 | 2 | 1 | 4 | 3 | +0 | +1 | +1 | +0 | +0 | -1 | +3 | +3 | +2 | +3 | +2 | +2 | +1 | +2 | -1 |
+| truth among the labels given | 3 | 4 | 3 | 3 | 4 | 3 | +1 | +0 | -1 | +0 | -1 | +0 | +1 | +0 | +1 | +1 | +0 | -1 | +0 | +0 | -1 |
+| `none` reached on `none` cells | 0 | 0 | 0 | 0 | 0 | 0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 |
+| labels given | 24 | 23 | 17 | 11 | 16 | 16 | -1 | -7 | -6 | -13 | -12 | -6 | -8 | -7 | -1 | +5 | -8 | -7 | -1 | +5 | +0 |
+| labels without localised evidence | 2 | 3 | 1 | 0 | 1 | 0 | +1 | -1 | -2 | -2 | -3 | -1 | -1 | -2 | +0 | +1 | -2 | -3 | -1 | +0 | -1 |
+| unsupported claims | 0 | 0 | 0 | 0 | 0 | 0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 |
+| invalid actions (evaluator) | 2 | 1 | 2 | 1 | 2 | 0 | -1 | +0 | +1 | -1 | +0 | -1 | +0 | +1 | +0 | +1 | -2 | -1 | -2 | -1 | -2 |
+| harness refusals (verbatim log) | 34 | 23 | 15 | 15 | 54 | 19 | -11 | -19 | -8 | -19 | -8 | +0 | +20 | +31 | +39 | +39 | -15 | -4 | +4 | +4 | -35 |
+| extra abstentions | 166 | 101 | 71 | 61 | 92 | 61 | -65 | -95 | -30 | -105 | -40 | -10 | -74 | -9 | +21 | +31 | -105 | -40 | -10 | +0 | -31 |
+| kinetic-update errors | 0 | 0 | 0 | 0 | 0 | 0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 | +0 |
+| kinetic drift (cells) | 4 | 4 | 1 | 2 | 0 | 4 | +0 | -3 | -3 | -2 | -2 | +1 | -4 | -4 | -1 | -2 | +0 | +0 | +3 | +2 | +4 |
+| simulator evaluations | 2867 | 3208 | 2413 | 2486 | 2311 | 2976 | +341 | -454 | -795 | -381 | -722 | +73 | -556 | -897 | -102 | -175 | +109 | -232 | +563 | +490 | +665 |
+| wall clock, min | 590.4 | 664.1 | 890.1 | 882.6 | 851.1 | 760.1 | +73.7 | +299.7 | +226.0 | +292.2 | +218.5 | -7.5 | +260.7 | +187.0 | -39.0 | -31.5 | +169.7 | +96.0 | -130.0 | -122.5 | -91.0 |
+| turns | 168 | 172 | 122 | 97 | 174 | 170 | +4 | -46 | -50 | -71 | -75 | -25 | +6 | +2 | +52 | +77 | +2 | -2 | +48 | +73 | -4 |
+| tokens | 6153437 | 7603988 | 4782026 | 3761667 | 7179665 | 8989987 | +1450551 | -1371411 | -2821962 | -2391770 | -3842321 | -1020359 | +1026228 | -424323 | +2397639 | +3417998 | +2836550 | +1385999 | +4207961 | +5228320 | +1810322 |
+| cost at luna's rates, USD | 0.348 | 0.429 | 0.306 | 0.278 | 0.419 | 0.474 | +0.081 | -0.042 | -0.123 | -0.07 | -0.151 | -0.028 | +0.071 | -0.01 | +0.113 | +0.141 | +0.126 | +0.045 | +0.168 | +0.196 | +0.055 |
+
+**Reading.**
+- **The brief** (rev2 → rev2+brief): no exact attribution (from one), the primary
+  matched on three cells (from four: S2-01, S3-01, S8-01 — S4-01 B/B went from
+  `state+influent` to `influent` alone), the truth among the labels on three (from
+  four). It reached `none` on no `none` cell; no arm has. It gave the same number of
+  labels (16), none of them resting on whole-record figures only (from one), fewer
+  extra abstentions (61, the lowest of any arm, from 92) and fewer harness refusals (19,
+  two of them the guard's, from 54 with 14 the guard's), no invalid action (from two),
+  no unsupported claim, no kinetic-update error — and **four kinetic drifts** (from
+  none): on S0-01 B/C, S1-01 B/B, S2-01 B/B and S3-01 C/B a kinetic estimate left the
+  central part of its declared box. It used more evaluations (2,976 from 2,311), more
+  tokens (8.99 M from 7.18 M: the brief rides every request as cached input) and cost
+  more ($0.474 from $0.419), in less wall clock (760 min from 851) — on a faster
+  instance for nine of its ten cells, so the wall clock does not compare.
+- **The scoring statement** (1b → rev2): the primary matched on four cells from two, no
+  failed run from two, no kinetic drift from one; more refusals (54 from 15: the guard
+  is new, and the agent asked for more sized calls) and more extra abstentions (92 from
+  71). `none` unmoved.
+- **Across the arms**, the movement is in what the agent declines and how many labels
+  it gives, not in reaching `none`: extra abstentions 166 → 101 → 71 → 92 → 61; labels
+  24 → 23 → 17 → 16 → 16. Nothing any arm did produced an unsupported claim or a
+  kinetic-update error.
+
+**Limitations of this report** (the coordinator's review of `cc256fd`, and this
+session's own).
+- One run per cell, ten cells per arm: a difference of a cell or two is noise, and the
+  agent is stochastic at effort `high` with no sampling parameters sent.
+- **Two heads.** Revision 2 ran at `cc256fd`, the brief at `06896dd`; the heads differ
+  only by the live-client hash fix (`3499b04`), which revision 2, sending no brief,
+  never met: what revision 2 sent is byte-identical at both heads.
+- **The machine boundaries.** The evaluation rate follows the container instance,
+  three so far: ~11.5 s per single-evaluation `simulate` until the reboot of 28
+  September 06:24 UTC (old, 1a); ~18–20 s until the reboot of 29 September ~15:27 (1b,
+  the contended rev2, the rev2 re-run, the brief's S3-01 C/B); ~13.5 s since (the
+  brief's other nine cells). Wall clock, evaluation counts (through the guard, which
+  sizes to the measured rate) and cost compare within an instance, not across one; the
+  brief arm straddles the last boundary.
+- **Harness refusals include the guard's** (14 of rev2's 54; two of the brief's 19);
+  they are not registry refusals.
+- **The scoring statement's kinetic sentence merges two evaluator rules:** it says a
+  kinetic update where the cause is not a parameter change is an error, while
+  `false_kinetic_update` keys on the answer key's `kinetic_update_allowed`, which is
+  true on the S0-01 and S1-01 `none` cells; and `false_kinetic_drift` applies only where
+  the truth is not `parameter`. The prompt is pinned; this is a note, not a change.
+- **"An unconcluded run is a miss" is applied by hand** in these tables (the failed
+  rows' credit columns are blank in the CSVs): the evaluator itself scores the interim
+  state's placeholder label. Whether the evaluator should score `completed: false` as a
+  miss is with the coordinator.
+- The 1b arm's two killed cells and the contended revision-2 attempt are on record as
+  failures; they were killed by one long call outrunning the allowance on a loaded
+  machine, before the duration guard existed.
+
+**Blocked:** nothing. **Next:** the two-head freeze check after the suite (unattended);
+the coordinator's answers on the evaluator's treatment of interim states and the
+guard-waiver reading; then the lead's word on the freeze, or the next arm.
+
+**2026-09-29, 19:55 UTC — answers to the coordinator's status question of 19:50.**
+1. *The brief arm* is neither paused nor dead: it finished at 19:32, ten of ten
+   concluded (one cell at 12:13–14:03 before the reboot of ~15:27, the other nine
+   resumed 15:28–19:32). Its rows were committed locally as they landed (`1aed894`, ten
+   rows) but not pushed, because the reports-only pusher holds when a code commit is on
+   the branch ahead of the tested commit — and the freeze-test replacement (`06563c5`)
+   was. Nothing ran beside the arm.
+2. *The freeze-test code* is committed at `06563c5` and lands with the full suite that
+   started at 19:33, alone on the machine, right after the arm finished: the chain
+   pushes everything queued (the brief rows, the five-arm report, this note, the code)
+   on green, expected about 20:30, and only then runs the two-head freeze comparison,
+   alone (about two hours). The order chosen is arm → suite → push → freeze check; the
+   comparison and the arm never overlap.
+
+**2026-09-29, 22:16 UTC — the two-head freeze comparison passed.** `pytest -m p0_freeze
+tests/test_p0_freeze.py` at `66972db` (code head `06563c5`), alone on the machine,
+20:10–22:14: S0-01 plant B tier A at `origin/main` (`b33ef69`, a temporary worktree) and
+then at this checkout, through one standalone cell runner, back to back. Equal final
+label (`none`), equal normalised states (run ids masked), equal `calls.jsonl` on seq,
+name, version, args hash, outcome and detail.
+
+| run | head | simulator evaluations | calls | wall clock |
+|---|---|---|---|---|
+| base | `origin/main` = `b33ef69` | 271 | 24 | 3,796.5 s (63.3 min) |
+| head | `66972db` (code `06563c5`) | 271 | 24 | 3,604.5 s (60.1 min) |
+
+The 271 evaluations are the reviewer's count on their machine, not the 202 of the
+`3ea1dee` golden made on the earlier container instance: the plan sizes to the measured
+rate, and this instance's rate is the reviewer's. The two wall clocks differ by three
+minutes of the same plan on the same machine (the base ran first, its worktree cold);
+nothing in P0's plan depends on the wall clock at this rate. `workflows/p0_scripted/`
+and `configs/workflows/p0.yaml` are untouched on this branch, as the equal call logs show.
+
+**The Anthropic arm (the lead's ruling of ~21:26, relayed by the coordinator)** starts
+now, on a new branch `claude/p1-anthropic-arm` from this one, as its own PR; nothing more
+lands on this branch but notes. The coordinator's relay of 21:29 supplied the lead's key
+for it: stored in a file outside the repository (`~/.config/agentdb/anthropic.env`, mode
+600), sourced only by the driver's shell; `ANTHROPIC_API_KEY` is **True** in a shell that
+sources it and False in every other, never printed, never on a command line. The lead
+has said the key will be rotated; the arm's summaries, logs and CSVs are tested for the
+absence of any `sk-ant-` string before the live run.
+
+### Session 2026-09-29 (continued) — the Anthropic arm: revision 2 with `claude-opus-5-5` (`claude/p1-anthropic-arm`, from the unmerged PR #26)
+
+**The lead's ruling of ~21:26 (relayed by the coordinator):** a second model arm beside
+rev2/`gpt-5.6-luna`, one ten-cell development run, on a new branch from
+`claude/p1-single-agent` as its own PR, started only after the two-head freeze comparison
+passed and its note was pushed (22:16). This branch carries PR #26 whole; it merges after
+it or is rebased if #26 changes.
+
+**Built (`d9755e1`), the design in `docs/decisions.md`:**
+- `configs/workflows/p1_anthropic.yaml`: `p1.yaml` with the `model` block alone replaced
+  (a test pins the rest equal): `claude-opus-5-5`, `max_tokens` 16000, effort `high`, no
+  temperature, prompt caching, the same retry policy, Anthropic's published prices.
+- `tools/llm.py::AnthropicClient`, rewritten in the OpenAI client's shape: the request
+  translated (`to_messages_request`), checked as it will be sent
+  (`check_messages_request`: only the frozen parameters; no `thinking`, no fallback, no
+  metadata, no server tool, no `strict`; `tool_choice` auto; the joined system text's
+  digest), the reply translated back with the raw response kept verbatim
+  (`from_messages_output`); streamed reads; the SDK's retries off. The replay re-checks
+  the translated request for this provider too.
+- **Strict schemas are not sent** (a deviation for the coordinator's record): the API
+  allows 24 optional parameters per request under `strict`, and P1's twenty tools carry
+  61. The committed schemas go unchanged, exactly as the OpenAI arm sends them; the
+  harness validates every input itself, as before.
+- The loop: a reply cut at the token limit is continued once (its tool uses refused, the
+  model told); a second cut ends the run. A refusal ends the run with the API's
+  category. Neither stop occurred in any logged run of the OpenAI arm.
+- Summaries carry `provider`; the pilot CSVs get a `model` column, backfilled from the
+  summaries' `model_id`; a run ended by a refusal is `run_failed` with `failure_reason`
+  `refusal`.
+- `tests/test_p1_anthropic_arm.py` (12 tests, on a stand-in SDK, no key, no network): the
+  configuration, the request and its check, the reply and its refusals, the SDK's error
+  classes against the retry policy, a full run of the arm and its replay, **the key
+  never written** (a marker key in the run's environment, then every file the run wrote,
+  the summary, the provenance and the log scanned for `sk-ant-` and for the variable's
+  name), the two new stops of the loop.
+- The key: `~/.config/agentdb/anthropic.env` (mode 600, outside the repository), sourced
+  by the driver's shell only; `ANTHROPIC_API_KEY` **True** there, False elsewhere. The
+  `anthropic` SDK is 1.9.0 (its HTTP layer `httpx2`), added to the `llm` extra.
+- One live smoke turn through the client (the committed system text and the twenty tool
+  schemas, one user line, no tool called): accepted; `end_turn`, the text `OK`, 10,765
+  tokens written to the cache, USD 0.054. The request shape holds against the API.
+
+**Running:** the full suite alone (started 22:20); on green and ruff clean, the push,
+the PR, then the ten cells of the rev2 comparison (S0-01 B/A, B/B, B/C; S1-01 B/B;
+S2-01 B/B; S3-01 C/B; S4-01 B/B; S5-01 A/A; S6-02 B/B; S8-01 B/B), three lanes, one
+process per cell, from a worktree at the pushed head, nothing else on the machine.
+Expected cost at Anthropic's rates: a few USD per cell (the history is read from the
+cache at 0.20 USD per million tokens; thinking is billed as output at 20).
+
+**2026-09-30, 01:50 UTC — the Anthropic arm's ten cells are done: rev2/`claude-opus-5-5` at `4801f36`.**
+Ten of ten concluded, no failed run, no failed model attempt (164 turns, every stop
+`tool_use`, no cut reply, no refusal; thinking blocks on 148 turns, carried back each
+turn), no guard refusal. Started 22:56, three lanes; the container rebooted at ~23:59
+with three cells done (S3-01 C/B, S6-02 B/B, S8-01 B/B) and three in flight at six to
+seven turns (S0-01 B/B, S4-01 B/B, S5-01 A/A: `run_8fe9dd4f9892`, `run_c91f0ef369cb`,
+`run_fd74a0e24f3b`, discarded, not in the table); the other seven ran 00:00–01:47 at the
+same head from the same worktree, nothing else on the machine. Rows in
+`reports/p1_pilot.csv` (`prompt_version` `rev2_claude`, the new `model` column filled
+for every row from the summaries), summaries in `reports/p1_pilot/summaries/rev2_claude_*`.
+
+| cell | truth | rev2 / luna (`cc256fd`) | rev2 / claude (`4801f36`) | claude: evidence behind the label (n; t = time-localised, c = channel) | evals | wall, min | turns | cost, USD |
+|---|---|---|---|---|---|---|---|---|
+| S0-01 B/A | none | sensor | influent | influent 5 (t 4, c 0) | 115 | 30.2 | 15 | 0.77 |
+| S0-01 B/B | none | sensor + influent | influent | influent 4 (t 3, c 0) | 137 | 35.4 | 18 | 0.92 |
+| S0-01 B/C | none | influent | influent | influent 5 (t 4, c 0) | 233 | 56.5 | 17 | 0.92 |
+| S1-01 B/B | none | sensor | influent | influent 3 (t 2, c 0) | 51 | 15.4 | 13 | 0.92 |
+| S2-01 B/B | sensor | **sensor** (exact) | influent | influent 6 (t 5, c 0) | 123 | 32.6 | 15 | 0.76 |
+| S3-01 C/B | influent | **influent** + sensor | **influent** (exact) | influent 4 (t 3, c 0) | 259 | 55.6 | 14 | 0.81 |
+| S4-01 B/B | state | **state** + influent | influent | influent 3 (t 3, c 0) | 223 | 50.9 | 15 | 0.91 |
+| S5-01 A/A | parameter | influent + sensor | influent | influent 4 (t 4, c 0) | 108 | 46.9 | 16 | 0.85 |
+| S6-02 B/B | structural | sensor + influent | influent | influent 4 (t 3, c 0) | 231 | 53.0 | 18 | 1.19 |
+| S8-01 B/B | sensor | **sensor** + structural | **sensor** (exact) | sensor 3 (t 2, c 0) | 156 | 42.1 | 23 | 1.81 |
+
+| total | rev2 / luna | rev2 / claude | claude − luna |
+|---|---|---|---|
+| failed runs (no conclusion) | 0 | 0 | 0 |
+| exact attribution | 1/10 | 2/10 | +1 |
+| primary label = truth | 4 | 2 | −2 |
+| truth among the labels given | 4 | 2 | −2 |
+| `none` reached on the four `none` cells | 0 | 0 | 0 |
+| labels given | 16 | 10 | −6 |
+| labels without localised evidence | 1 | 0 | −1 |
+| unsupported claims | 0 | 0 | 0 |
+| invalid actions (evaluator) | 2 | 0 | −2 |
+| harness refusals (verbatim log; the guard's) | 54 (14) | 25 (0) | −29 |
+| extra abstentions | 92 | 31 | −61 |
+| kinetic-update errors / kinetic drift (cells) | 0 / 0 | 0 / 0 | 0 |
+| simulator evaluations | 2,311 | 1,636 | −675 |
+| wall clock, min | 851 | 419 | −433 |
+| model turns | 174 | 164 | −10 |
+| tokens | 7.18 M | 7.47 M | +0.29 M |
+| cost at the arm's declared rates, USD | 0.419 | 9.863 | +9.44 |
+
+**Reading (one run per cell; a cell or two is noise).**
+- **One label per cell, and nine times `influent`.** Claude gave a single label on every
+  cell and no secondary label anywhere; nine of its ten primaries are `influent`, the
+  tenth `sensor` (S8-01). Its two exact attributions are the two cells whose truth is
+  the label it favours (S3-01 influent) or the one exception (S8-01 sensor); it lost
+  luna's matches on S2-01 (sensor), S4-01 (state) and the secondary hits. `none` is
+  unreached by both, on all four `none` cells, as by every arm so far.
+- **Fewer, tighter actions.** Every label rests on time-localised evidence (none on
+  whole-record figures), no invalid action, a third of luna's extra abstentions (31 from
+  92), fewer refusals (25 from 54; none from the guard, which luna tripped 14 times),
+  and no kinetic drift. The runs are short: 1,636 evaluations and 419 minutes against
+  2,311 and 851, at the same 13.5 s per evaluation (this instance, since the reboot of
+  29 September 15:27; the reboot of 23:59 did not change the rate).
+- **Cost.** USD 9.86 for the arm at Anthropic's rates against 0.42 for luna's at
+  OpenAI's: 1.24 M tokens written to the cache (6.19), 6.11 M read from it (1.22),
+  122 k output (2.45; thinking billed as output), 348 uncached input. Every token of the
+  growing history is written once and read on each later turn; the split shows the
+  caching working as designed. The row label in the report script says "at luna's
+  rates" for every arm; each arm's cost is at its own configuration's declared rates.
+- **Limitations.** One run per cell; two different models at effort `high` with their
+  own defaults for reasoning; the same prompts, tools, budgets and harness. The three
+  discarded partial runs are the reboot's, not the model's. Strict schemas were not
+  sent (decisions, 2026-09-29); every tool input Claude sent validated at the harness
+  (no `_unparseable_arguments`, no schema refusal).
+
+**Blocked:** nothing. **Next:** the coordinator's review of PR #27; the lead's word on
+what follows (a second run per cell, another prompt revision, or the freeze).
+
+**2026-09-30, ~04:50 UTC — the coordinator's review of `d5f6282` (PASS, four flags): applied.**
+1. *The second cache breakpoint* (last block of the last message) is kept and recorded
+   in `docs/decisions.md` as deliberate: it is what caches the growing history (6.11 M
+   tokens read from the cache against 1.24 M written over the ten cells); a breakpoint
+   on the system text alone would re-read the history at the uncached price every turn.
+2. *A failed run's reason is in the summary*: `WorkflowResult.run_failed` and
+   `failure_reason` (`tools/runner.py::FAILURE_REASONS`: killed, connection, refusal,
+   cut_reply, unhandled_stop, model_error, limits, other), classified from the run's
+   record. The report writer is now committed (`scripts/p1_pilot_report.py`, the
+   scratch script of every table so far, tidied) and reads the fields from the summary;
+   the CSVs and the forty summaries are regenerated with it (the earlier rows backfilled
+   by the same classifier: the 1b arm's two killed cells and the contended attempt's
+   three read `killed`, the contended attempt's two model-transport failures
+   `connection`; the CSVs are byte-identical to the hand-assembled ones). The refusal path is tested end to end
+   (fake refusal → `run_failed` true, `failure_reason` `refusal` in the result and in
+   `summary.json` → the report's row with blank credit columns, and its totals).
+3. *The digests are pinned*: `prompt_sha256` `c80a3752…`, the joined system text's
+   `ab2025e4…c1eb` and the tools digest `11d8e352…`, for both configurations.
+4. `pause_turn` and `model_context_window_exceeded` end the run as `unhandled_stop`;
+   recorded in the decisions as deliberate. The "thinking on 148 turns" figure is marked
+   an observation from the uncommitted stores.
+Full suite alone on the machine before the push; ruff clean. PR #27 stays behind #26.
+
+### Session 2026-09-30 — P1 frozen (the lead's word), on `claude/p1-anthropic-arm` (PR #27)
+
+**The lead's word of 2026-09-30, "Freeze P1"** (relayed by the coordinator at 04:54): the
+frozen P1 is revision 2 (system + task prompts, `prompt_sha256` `c80a3752…`) with
+`gpt-5.6-luna` through `configs/workflows/p1.yaml`, no expert brief. Done on this branch
+so that PR #26's reviewed head stays untouched; the entry in `docs/decisions.md`
+(2026-09-30) has the decision, the reason and the alternatives.
+
+- `configs/workflows/p1.yaml`: STATUS FROZEN; `prompt_sha256` committed; a `frozen` record
+  (date, the word, `prompt_sha256`, `system_sha256` `ab2025e4…c1eb`, model id, effort,
+  response cap, retry policy). `check_frozen` (`tools/workflow_config.py`), called from
+  the runner's provenance before every run, refuses a run whose configuration or prompts
+  differ from the record in any field; `check_prompt_hash` refuses prompts that do not
+  hash to the committed value. `brief_sha256` stays empty.
+- The prompt files carry no header: the hash covers their whole text, so the status is in
+  the yaml only (as the coordinator's relay allowed).
+- `p1_expert_brief.yaml` and `p1_anthropic.yaml`: DEVELOPMENT COMPARISON ARMS, not frozen,
+  kept on record; the six-arm table above (old / 1a / 1b / rev2 / rev2 + brief /
+  rev2 on claude) is the P1 development record.
+- Tests: `test_the_frozen_record_is_what_is_on_disk` (the literal digests equal the
+  computed ones; a negative control per field; the arms carry no record); the brief-arm
+  and Anthropic-arm equality tests allow the frozen P1 its hash and record and nothing
+  else. This closes flag 3 of the `d5f6282` review with the same values.
+- `docs/benchmark_card.md` §4.3, `docs/p1_design.md` (status, §5) say P1 is frozen and
+  what it is.
+
+**Still not authorised:** the held-out variants of §7, the Level 0–5 sweep scoring, any
+further P1 arm or repeat run, the merge of either PR. PR #27 goes behind PR #26.
+
+**2026-09-30, 05:06 UTC — the coordinator's review of PR #26 at `78ecb03`: PASS.** The
+coordinator asks the lead for the merge word on #26; nothing more is pushed to
+`claude/p1-single-agent`. Its two LOW notes are taken here, on PR #27, with the freeze:
+`tests/test_p0_freeze.py` asserts the base call log is not empty before the projection
+comparison; the `p0_freeze` marker's text in `pyproject.toml` now says about two hours
+(63 + 60 min on record), as the test's docstring does.
+
+**2026-09-30, 05:15 UTC — the run records of the two revision-2 arms are committed for the
+knowledge audit** (the lead's word, relayed 05:14): `reports/p1_pilot/records/<prompt_version>/
+<run_id>/` for the ten rev2/luna runs at `cc256fd` and the ten rev2/claude runs at
+`4801f36`, each with its redacted manifest, `calls.jsonl`, `workflows/p1/state.json`,
+`report.json` where present and the model log (`llm_calls.jsonl`; the two over 5 MB as
+`llm_calls.jsonl.gz`); `index.csv` (prompt version, model, cell, run id, commit, the truth
+label from the scenario YAML, the labels given). 49 MB in 101 files, under the 80 MB
+mark, so every log is included. Rule 1: nothing from `truth_store/` and nothing derived
+from it; the tree was scanned for truth-store tokens and key material (clean) and every
+manifest is the redacted one; the static rule-1 checker applies to Python modules and the
+tree holds none. Pushed with the freeze and the two reviews' notes once the full suite
+that started 05:04 is green (the push rule).
+

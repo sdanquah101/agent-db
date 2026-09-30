@@ -1,0 +1,137 @@
+{
+ "workflow": "p1",
+ "label": "sensor",
+ "secondary_labels": [],
+ "confidence": 0.86,
+ "completed": true,
+ "stop": "concluded",
+ "abstentions": [
+  "acetoclastic_parameters",
+  "kinetic_attribution"
+ ],
+ "parameters": {
+  "Y_ac": {
+   "estimate": 1.2797,
+   "lower": 1.0247,
+   "upper": 1.5,
+   "method": "fisher",
+   "at_bound": false,
+   "unit": "- (multiplier of the BSM2 default 0.05)"
+  }
+ },
+ "validation": {
+  "holdout": [
+   150.0,
+   200.0
+  ],
+  "ensemble": false,
+  "ensemble_size": 0,
+  "metrics": {
+   "alkalinity_total": {
+    "n": 7.0,
+    "mae": 0.26493798310705924,
+    "rmse": 0.30356444125987875,
+    "nrmse": 0.6672387384350463,
+    "bias": -0.2312940210459982,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "ch4_fraction": {
+    "n": 50.0,
+    "mae": 0.017353516740843167,
+    "rmse": 0.021620384842177126,
+    "nrmse": 0.9064778078553924,
+    "bias": -0.008732792074493876,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "cod_total": {
+    "n": 6.0,
+    "mae": 2.0211426379057484,
+    "rmse": 2.345765553784161,
+    "nrmse": 1.594706949570593,
+    "bias": 2.0211426379057484,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "pH": {
+    "n": 46.0,
+    "mae": 0.06001204764957054,
+    "rmse": 0.0719063999462011,
+    "nrmse": 0.8209541569772375,
+    "bias": -0.026273276216025453,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "vfa_titrimetric": {
+    "n": 6.0,
+    "mae": 0.20845569073019002,
+    "rmse": 0.22134436776415764,
+    "nrmse": 1.198448913030683,
+    "bias": -0.06779250862797744,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   }
+  },
+  "constraint_violations": 0,
+  "calls": [
+   10
+  ]
+ },
+ "annotations": [
+  "agent summary: The primary diagnosis is sensor error: gas_flow was independently flagged by QC and was kept out of calibration; tan was also excluded for its separate QC failure. The balance inconsistency is therefore not sufficient evidence to revise the influent mapping, and the boundary-seeking acetoclastic rate is not offered as a kinetic update; only the interior Y_ac calibration estimate is retained.",
+  "duration guard: 21.23 s per evaluation (measured; 172 evaluations measured so far)"
+ ],
+ "tool_failures": [
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "sensor 'gas_flow,tan' is not one of ['alkalinity', 'ch4_fraction', 'cod_total', 'gas_flow', 'ph', 'tan', 'temperature', 'vfa_total']",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `end_d` for ['gas_flow']; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `end_d` for ['tan']; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "fit_lsq",
+   "name": "p1.fit_lsq",
+   "call_index": null,
+   "kind": "error",
+   "message": "this call would make up to 94 simulator evaluations, about 42 min at this run's 21.2 s per evaluation (x1.25 margin), but 28.8 min of wall clock remain less the 6 min reserve for concluding: at most 51 evaluations fit; size the call to that, or conclude",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "fit_lsq",
+   "name": "p1.fit_lsq",
+   "call_index": null,
+   "kind": "error",
+   "message": "this call would make up to 54 simulator evaluations, about 24 min at this run's 21.2 s per evaluation (x1.25 margin), but 28.7 min of wall clock remain less the 6 min reserve for concluding: at most 51 evaluations fit; size the call to that, or conclude",
+   "fallback": "refused by the harness"
+  }
+ ]
+}

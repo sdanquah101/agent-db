@@ -9,7 +9,14 @@ resource (budgets, logs) and stays one. Requests are JSON objects with an ``op``
 ``remaining`` --                                                  the budget left
 ``call``      ``name``, ``args`` (arrays tagged)                  the call envelope
 ``run``       ``method``, ``args``: the run view's accessors      contents, never paths
+``llm``       ``request``: ``system``, ``messages``, ``tools``    a model turn (P1)
 ============  ==================================================  ======================
+
+**The model gateway** (P1, 2026-09-25; ``docs/p1_design.md``). An LLM workflow's model
+calls go through the same socket: the ``llm`` op hands the agent's request to a
+:class:`tools.llm.ModelGateway` held on this side (the key, the model id, the settings, the
+turn and token budgets, the verbatim log and the token meter all stay here). The op exists
+only when the server was opened with a gateway; otherwise it is an error reply.
 
 The run view served here is :func:`state.run_view.open_run`, so a workflow gets exactly
 what that loader gives and nothing else; the server never sends a path, a directory, or
@@ -36,6 +43,7 @@ import numpy as np
 
 from state.run_view import RunView, TruthAccessError, open_run
 from state.task_state import OUTPUTS_DIR
+from tools.llm import LLM_LOG_FILE, GatewayRefusal, ModelError, ModelGateway
 from tools.registry import Registry
 from tools.transport import decode_arrays, encode_arrays, read_message, write_message
 
@@ -54,8 +62,13 @@ class OutputSink:
     write into, resolved once, and refuses anything that does not land strictly inside it.
     """
 
-    def __init__(self, run_dir: str | Path, workflow: str) -> None:
+    def __init__(
+        self, run_dir: str | Path, workflow: str, *, reserved: tuple[str, ...] = ()
+    ) -> None:
         """Open (creating) the workflow's output directory under the run.
+
+        ``reserved`` names files in that directory the privileged side writes and the
+        workflow may not (the model gateway's log).
 
         Raises:
             ValueError: If the workflow name is not a plain identifier.
@@ -63,6 +76,7 @@ class OutputSink:
         if not workflow or not workflow.replace("_", "").replace("-", "").isalnum():
             raise ValueError(f"workflow name {workflow!r} must be a plain identifier")
         self.workflow = workflow
+        self._reserved = frozenset(reserved)
         self._root = (Path(run_dir).resolve() / OUTPUTS_DIR / workflow).resolve()
         self._root.mkdir(parents=True, exist_ok=True)
 
@@ -78,6 +92,8 @@ class OutputSink:
             )
         if any(sep in relative for sep in ("\\", "\0")):
             raise TruthAccessError(f"{relative!r}: not a plain file name")
+        if candidate.as_posix() in self._reserved:
+            raise TruthAccessError(f"{relative!r} is written by the privileged side only")
         target = self._root / candidate
         # resolve every existing prefix (a planted symlink would resolve elsewhere)
         resolved = target.resolve()
@@ -146,6 +162,7 @@ class RegistryServer:
         run_dir: str | Path | None = None,
         run_view: RunView | None = None,
         workflow: str | None = None,
+        model_gateway: ModelGateway | None = None,
     ) -> None:
         """Bind the socket; :meth:`start` accepts connections on a thread.
 
@@ -156,13 +173,20 @@ class RegistryServer:
             run_view: An already-open view (takes precedence over ``run_dir``).
             workflow: The workflow's name; when given (with ``run_dir``), the run method
                 ``write_output`` writes into ``runs/<id>/workflows/<workflow>/``.
+            model_gateway: The gateway the ``llm`` op completes model turns through.
         """
         self.registry = registry
         self.socket_path = Path(socket_path)
         if run_view is None and run_dir is not None:
             run_view = open_run(run_dir)
         self._view = run_view
-        self._sink = OutputSink(run_dir, workflow) if workflow and run_dir is not None else None
+        self._gateway = model_gateway
+        reserved = (LLM_LOG_FILE,)
+        self._sink = (
+            OutputSink(run_dir, workflow, reserved=reserved)
+            if workflow and run_dir is not None
+            else None
+        )
         self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._sock.bind(str(self.socket_path))
         self._sock.listen(4)
@@ -261,6 +285,22 @@ class RegistryServer:
                         "kind": type(exc).__name__,
                     }
                 return {"ok": True, "result": encode_arrays(_plain(result))}
+            if op == "llm":
+                if self._gateway is None:
+                    return {
+                        "ok": False,
+                        "error": "this registry serves no model",
+                        "kind": "ModelError",
+                    }
+                try:
+                    return {
+                        "ok": True,
+                        "result": self._gateway.complete(request.get("request") or {}),
+                    }
+                except GatewayRefusal as exc:
+                    return {"ok": False, "error": str(exc), "kind": "BudgetExceededError"}
+                except ModelError as exc:
+                    return {"ok": False, "error": str(exc), "kind": "ModelError"}
             return {"ok": False, "error": f"unknown op {op!r}", "kind": "ProtocolError"}
         except Exception as exc:  # the server never dies on a bad request
             return {"ok": False, "error": str(exc), "kind": type(exc).__name__}

@@ -1,0 +1,117 @@
+{
+ "workflow": "p1",
+ "label": "sensor",
+ "secondary_labels": [
+  "influent"
+ ],
+ "confidence": 0.7,
+ "completed": true,
+ "stop": "concluded",
+ "abstentions": [
+  "tan_claims",
+  "ch4_fraction_claims",
+  "gas_flow_claims",
+  "ph_claims",
+  "temperature_claims",
+  "tan_budget",
+  "vfa_titrimetric_budget",
+  "parameter_values",
+  "kinetic_attribution"
+ ],
+ "parameters": {},
+ "validation": {
+  "holdout": [
+   150.0,
+   200.0
+  ],
+  "ensemble": false,
+  "ensemble_size": 0,
+  "metrics": {
+   "alkalinity_total": {
+    "n": 7.0,
+    "mae": 0.33798587878990943,
+    "rmse": 0.3525426057492782,
+    "nrmse": 1.5898108234698143,
+    "bias": 0.24933731641567572,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "cod_total": {
+    "n": 7.0,
+    "mae": 2.0836056733356396,
+    "rmse": 2.3918290583602855,
+    "nrmse": 1.7906023625087715,
+    "bias": -2.0836056733356396,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "vfa_titrimetric": {
+    "n": 7.0,
+    "mae": 0.04082731459113122,
+    "rmse": 0.0509422965957802,
+    "nrmse": 1.3076555878206315,
+    "bias": 0.02223896296750714,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   }
+  },
+  "constraint_violations": 0,
+  "calls": [
+   18
+  ]
+ },
+ "annotations": [
+  "bounds narrowed (['Y_ac']): Fisher screening (call 6) found only Y_ac practically bounded-identifiable among the Morris-sensitive candidates; retain its declared bounds to avoid unsupported narrowing.",
+  "bounds narrowed (['Y_ac']): The Morris screen (call 5) and Fisher analysis (call 6) support retaining only Y_ac as the bounded-identifiable candidate; its declared bounds are retained without narrowing.",
+  "agent summary: The primary mismatch is assigned to the TAN measurement: its residual has bias_z -4.2554 with a time-explanatory structured pattern (call 11), so TAN was excluded and no kinetic update is offered. A separate influent contribution is supported by the VFA residual being most explained by feed_high_strength_waste (call 12) and the inadmissible COD-balance windows (call 4); the bounded Y_ac fit is used only for prediction and is not treated as a plant parameter.",
+  "duration guard: 19.77 s per evaluation (measured; 97 evaluations measured so far)"
+ ],
+ "tool_failures": [
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `end_d` for ['gas_flow']; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "`signal_to_noise` = 0.051703 is not what the cited calls produced ([0.27082])",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "conclude",
+   "name": "p1.conclude",
+   "call_index": null,
+   "kind": "error",
+   "message": "Y_ac: no successful call of this run produced a fisher interval for it (posterior: a converged sampler; profile: a closed profile; fisher: a fit or a Fisher call with a finite sd)",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "conclude",
+   "name": "p1.conclude",
+   "call_index": null,
+   "kind": "error",
+   "message": "Y_ac: no successful call of this run produced a fisher interval for it (posterior: a converged sampler; profile: a closed profile; fisher: a fit or a Fisher call with a finite sd)",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "conclude",
+   "name": "p1.conclude",
+   "call_index": null,
+   "kind": "error",
+   "message": "Y_ac: no successful call of this run produced a none interval for it (posterior: a converged sampler; profile: a closed profile; fisher: a fit or a Fisher call with a finite sd)",
+   "fallback": "refused by the harness"
+  }
+ ]
+}
