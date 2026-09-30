@@ -3428,3 +3428,20 @@ incrementally (the record and the yaml regenerate).
 
 **Next:** publish the band, generate the card tables, run the suite and the freeze
 test, fill the PR body; then `docs/p2_design.md` on `claude/p2-multi-agent`.
+
+**2026-09-30, 19:58 UTC — the coordinator on Q1, and the container restart.**
+- Q1 goes to the lead. The coordinator recommends fixing the seed count and the band
+  rule in advance, independently of any development cell, and recording the rule in
+  `docs/decisions.md` first. Seeds are never chosen or extended so that a development
+  cell falls inside the band. If S0-01 B/B sits outside a predeclared band, that is a
+  reported finding about the library's clean cell. P2's null rule adds no margin to
+  rescue it. My recommendation above ("at least six more seeds before the go/no-go,
+  because the go/no-go asks for `none` on this cell") is **withdrawn**: it tied the seed
+  count to the answer on one cell.
+- Until the lead rules: three seeds, published on this branch marked **PROVISIONAL**; no
+  extra seeds; no change to the band rule.
+- The container restarted during the afternoon and the four compute processes died
+  (logs stop about 14:14 UTC). The 12 finished runs survived in the scratch store.
+  Relaunched at 19:58 UTC; 24 runs left at about 70 min each, four at a time, so about
+  03:00 UTC. The runs are seeded and fixed-size, so a relaunch only repeats the runs in
+  progress.
