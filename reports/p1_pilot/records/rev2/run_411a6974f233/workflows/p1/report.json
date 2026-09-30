@@ -1,0 +1,88 @@
+{
+ "workflow": "p1",
+ "label": "influent",
+ "secondary_labels": [],
+ "confidence": 0.68,
+ "completed": true,
+ "stop": "concluded",
+ "abstentions": [
+  "kinetic_attribution",
+  "parameter_values",
+  "posterior_intervals",
+  "peak_load_behaviour"
+ ],
+ "parameters": {
+  "Y_ac": {
+   "estimate": 1.1548,
+   "lower": 0.94686,
+   "upper": 1.3627,
+   "method": "fisher",
+   "at_bound": false,
+   "unit": "- (multiplier of the BSM2 default 0.05)"
+  },
+  "k_m_ac": {
+   "estimate": 0.84919,
+   "lower": 0.33,
+   "upper": 2.9361,
+   "method": "fisher",
+   "at_bound": false,
+   "unit": "- (multiplier of the BSM2 default 8)"
+  },
+  "K_I_nh3": {
+   "estimate": 3.4356,
+   "lower": 0.2,
+   "upper": 5.0,
+   "method": "fisher",
+   "at_bound": false,
+   "unit": "- (multiplier of the BSM2 default 0.0018)"
+  },
+  "K_S_ac": {
+   "estimate": 1.0438,
+   "lower": 0.33,
+   "upper": 3.0,
+   "method": "fisher",
+   "at_bound": false,
+   "unit": "- (multiplier of the BSM2 default 0.15)"
+  }
+ },
+ "validation": null,
+ "annotations": [
+  "agent summary: The declared-feed balance is inadmissible in multiple windows while the charge balance remains consistent, supporting an influent/catalogue mismatch rather than a kinetic change; revise the influent mapping. I quarantined the gas-flow spike and other QC-flagged channels, and the fitted kinetic values are retained only as calibration quantities, not offered as plant-parameter updates.",
+  "no final prediction named: no validation",
+  "duration guard: 20.52 s per evaluation (measured; 50 evaluations measured so far)"
+ ],
+ "tool_failures": [
+  {
+   "step": "gsa_morris",
+   "name": "gsa_morris",
+   "call_index": 6,
+   "kind": "error",
+   "message": "duplicate parameter names in ['k_dis', 'k_hyd_ch', 'k_hyd_pr', 'k_hyd_li', 'k_m_su', 'k_m_aa', 'k_m_fa', 'k_m_c4', 'k_m_pro', 'k_m_ac', 'k_m_h2', 'K_S_ac', 'K_S_pro', 'K_S_h2', 'K_I_nh3', 'K_I_h2_pro', 'k_dec_X_ac', 'Y_ac', 'Y_h2', 'f_li_xc', 'K_I_nh3']",
+   "fallback": "reported to the agent"
+  },
+  {
+   "step": "fit_lsq",
+   "name": "p1.fit_lsq",
+   "call_index": null,
+   "kind": "error",
+   "message": "this call would make up to 184 simulator evaluations, about 79 min at this run's 20.5 s per evaluation (x1.25 margin), but 72.5 min of wall clock remain less the 6 min reserve for concluding: at most 155 evaluations fit; size the call to that, or conclude",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "simulate",
+   "name": "simulate",
+   "call_index": 10,
+   "kind": "budget_exceeded",
+   "message": "simulate: wall-clock allowance of 90 min spent (92.10 min elapsed)",
+   "fallback": "nothing ran"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `end_d` for ['gas_flow']; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  }
+ ]
+}

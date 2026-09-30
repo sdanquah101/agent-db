@@ -1,0 +1,17 @@
+{"seq":0,"name":"sim.generate_influent","version":"1.0","args_hash":"95ce78487365a57c","outcome":"ok","detail":""}
+{"seq":1,"name":"sim.burn_in","version":"1.0","args_hash":"e178ebd96ee86b76","outcome":"ok","detail":""}
+{"seq":2,"name":"sim.simulate_truth","version":"1.0","args_hash":"95ce78487365a57c","outcome":"ok","detail":""}
+{"seq":3,"name":"sim.channel_series","version":"1.0","args_hash":"f1e13066040745f5","outcome":"ok","detail":""}
+{"seq":4,"name":"sim.observe","version":"1.0","args_hash":"7be040d46deec137","outcome":"ok","detail":""}
+{"seq":5,"name":"registry.open","version":"1.0","args_hash":"1fcea27ab5c989e6","outcome":"ok","detail":"clock start: the wall-clock allowance runs from this record"}
+{"seq":6,"name":"describe_model","version":"1.0","args_hash":"6e46ab5fd289f281","outcome":"ok","detail":""}
+{"seq":7,"name":"describe_model","version":"1.0","args_hash":"6e46ab5fd289f281","outcome":"ok","detail":""}
+{"seq":8,"name":"feed_loads","version":"1.0","args_hash":"6e46ab5fd289f281","outcome":"ok","detail":""}
+{"seq":9,"name":"data_qc","version":"1.0","args_hash":"9823a865e82b12f9","outcome":"ok","detail":""}
+{"seq":10,"name":"mass_balance","version":"1.0","args_hash":"1082d55c0497cb70","outcome":"ok","detail":""}
+{"seq":11,"name":"feed_loads","version":"1.0","args_hash":"6e46ab5fd289f281","outcome":"ok","detail":""}
+{"seq":12,"name":"gsa_morris","version":"1.0","args_hash":"6ff257ef45a63f11","outcome":"error","detail":"ToolArgumentError: duplicate parameter names in ['k_dis', 'k_hyd_ch', 'k_hyd_pr', 'k_hyd_li', 'k_m_su', 'k_m_aa', 'k_m_fa', 'k_m_c4', 'k_m_pro', 'k_m_ac', 'k_m_h2', 'K_S_ac', 'K_S_pro', 'K_S_h2', 'K_I_nh3', 'K_I_h2_pro', 'k_dec_X_ac', 'Y_ac', 'Y_h2', 'f_li_xc', 'K_I_nh3']"}
+{"seq":13,"name":"gsa_morris","version":"1.0","args_hash":"c3e7af35e7ae0027","outcome":"ok","detail":""}
+{"seq":14,"name":"fisher_info","version":"1.0","args_hash":"b6fcffd85cb7a272","outcome":"ok","detail":""}
+{"seq":15,"name":"fit_lsq","version":"1.0","args_hash":"cedc100dfa821013","outcome":"ok","detail":""}
+{"seq":16,"name":"simulate","version":"1.0","args_hash":"64331d9a4c181959","outcome":"budget_exceeded","detail":"wall-clock allowance of 90 min spent (92.10 min elapsed)"}

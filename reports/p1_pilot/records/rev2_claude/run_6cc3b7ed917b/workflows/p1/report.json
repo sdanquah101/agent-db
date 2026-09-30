@@ -1,0 +1,64 @@
+{
+ "workflow": "p1",
+ "label": "influent",
+ "secondary_labels": [],
+ "confidence": 0.65,
+ "completed": true,
+ "stop": "concluded",
+ "abstentions": [
+  "kinetic_attribution",
+  "parameter_values",
+  "missing_transient"
+ ],
+ "parameters": {},
+ "validation": {
+  "holdout": [
+   150.0,
+   200.0
+  ],
+  "ensemble": false,
+  "ensemble_size": 0,
+  "metrics": {
+   "q_gas_stp_dry": {
+    "n": 47.0,
+    "mae": 391.0296751019025,
+    "rmse": 484.02525217351575,
+    "nrmse": 0.5660236199102309,
+    "bias": -164.9047536970902,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "pH": {
+    "n": 44.0,
+    "mae": 0.06319651377355867,
+    "rmse": 0.0695675744360427,
+    "nrmse": 1.8924891575741882,
+    "bias": 0.06284251846926571,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   }
+  },
+  "constraint_violations": 0,
+  "calls": [
+   16
+  ]
+ },
+ "annotations": [
+  "agent summary: At default parameters, gas flow comes out below prediction from day 0 to the end of the window (bias_z 7.17, call 5). A digestate VS assay on day 130 also comes out above prediction (disagreement_z 4.75, call 11). Both are best explained by more organic load reaching the digester than the feed log and catalogue declare: a gas-meter fault would not raise digestate VS, and slower kinetics would lower gas. Kinetics are not identified (Fisher, call 12), and a Y_ac/k_dis fit ran to its bounds but left the residual structured (calls 13, 15), so no kinetic update or parameter values are offered. Gas samples are informatively missing at high load (call 2), so no claim is made about those windows.",
+  "duration guard: 14.87 s per evaluation (measured; 62 evaluations measured so far)"
+ ],
+ "tool_failures": [
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "`assay` = 15.583 is not what the cited calls produced",
+   "fallback": "refused by the harness"
+  }
+ ]
+}

@@ -1,0 +1,72 @@
+{
+ "workflow": "p1",
+ "label": "influent",
+ "secondary_labels": [],
+ "confidence": 0.7,
+ "completed": true,
+ "stop": "concluded",
+ "abstentions": [
+  "kinetic_attribution",
+  "parameter_values",
+  "q_gas_stp_dry_budget"
+ ],
+ "parameters": {},
+ "validation": {
+  "holdout": [
+   273.75,
+   365.0
+  ],
+  "ensemble": false,
+  "ensemble_size": 0,
+  "metrics": {
+   "q_gas_stp_dry": {
+    "n": 86.0,
+    "mae": 49.332551041551426,
+    "rmse": 61.41829335379029,
+    "nrmse": 0.5943852090983995,
+    "bias": 11.936811583837684,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "pH": {
+    "n": 78.0,
+    "mae": 0.12860845636373958,
+    "rmse": 0.1413343357262977,
+    "nrmse": 2.2733990358533127,
+    "bias": -0.12860845636373958,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   }
+  },
+  "constraint_violations": 0,
+  "calls": [
+   17
+  ]
+ },
+ "annotations": [
+  "agent summary: I attribute the mismatch to the influent: more VS and nitrogen reached the digester than the feed log and catalogue imply. Digestate VS assays were above the model at day 130 (z 2.9) and day 255 (z 6.2), TAN was about 0.4 kg N/m3 high on both days, which explains the pH offset seen from the start, and the gas-flow residual has a time structure that follows the rise in feed TS. A fit of k_dis and k_m_ac put both at their lower bounds with no interval and left the gas structure unchanged (calls 14-16), so I offer no kinetic update or parameter values and use the default-parameter simulation (call 4) as the prediction.",
+  "duration guard: 25.79 s per evaluation (measured; 53 evaluations measured so far)"
+ ],
+ "tool_failures": [
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "`assay` = 38.397 is not what the cited calls produced",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "`assay` = 3.6392 is not what the cited calls produced",
+   "fallback": "refused by the harness"
+  }
+ ]
+}

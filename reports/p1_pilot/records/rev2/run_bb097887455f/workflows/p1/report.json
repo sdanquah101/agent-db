@@ -1,0 +1,58 @@
+{
+ "workflow": "p1",
+ "label": "sensor",
+ "secondary_labels": [],
+ "confidence": 0.88,
+ "completed": true,
+ "stop": "concluded",
+ "abstentions": [
+  "gas_flow_claims",
+  "ph_claims",
+  "q_gas_stp_dry_budget",
+  "pH_budget",
+  "parameter_values",
+  "kinetic_attribution",
+  "posterior_intervals"
+ ],
+ "parameters": {},
+ "validation": null,
+ "annotations": [
+  "agent summary: The primary diagnosis is sensor error, not a kinetic change: gas_flow was independently flagged for informative event-window missingness, and pH residuals remained strongly time-structured after the constrained fit while independent vfa_total and alkalinity assays were comparatively consistent (calls 3, 13\u201315). The constrained fit and Fisher analysis did not support identifiable plant kinetic values, so the final forecast uses the default model prediction (call 16) and no kinetic update is offered.",
+  "no objective sensor has a hold-out sample: no validation",
+  "duration guard: 21.68 s per evaluation (measured; 99 evaluations measured so far)"
+ ],
+ "tool_failures": [
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `end_d` for ['gas_flow']; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "fit_lsq",
+   "name": "p1.fit_lsq",
+   "call_index": null,
+   "kind": "error",
+   "message": "this call would make up to 139 simulator evaluations, about 63 min at this run's 21.7 s per evaluation (x1.25 margin), but 53.7 min of wall clock remain less the 6 min reserve for concluding: at most 105 evaluations fit; size the call to that, or conclude",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "an evidence item carries at least one published value key",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "conclude",
+   "name": "p1.conclude",
+   "call_index": null,
+   "kind": "error",
+   "message": "conclude: missing required field 'interval_method'",
+   "fallback": "refused by the harness"
+  }
+ ]
+}

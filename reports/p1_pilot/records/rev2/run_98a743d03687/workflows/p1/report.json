@@ -1,0 +1,189 @@
+{
+ "workflow": "p1",
+ "label": "sensor",
+ "secondary_labels": [
+  "influent"
+ ],
+ "confidence": 0.84,
+ "completed": true,
+ "stop": "concluded",
+ "abstentions": [
+  "kinetic_attribution",
+  "parameter_values",
+  "inhibition_constant_magnitude",
+  "methanogenic_pathway_split",
+  "ch4_yield",
+  "vfa_total_claims",
+  "vfa_titrimetric_budget",
+  "alkalinity_total_budget",
+  "tan_budget",
+  "gas_flow_claims",
+  "ph_claims",
+  "ch4_fraction_claims",
+  "q_gas_stp_dry_budget",
+  "pH_budget",
+  "ch4_fraction_budget",
+  "peak_load_behaviour",
+  "missing_transient",
+  "inorganic_carbon_balance"
+ ],
+ "parameters": {
+  "Y_ac": {
+   "estimate": 1.0909,
+   "lower": 0.94143,
+   "upper": 1.2403,
+   "method": "fisher",
+   "at_bound": false,
+   "unit": "- (multiplier of the BSM2 default 0.05)"
+  }
+ },
+ "validation": {
+  "holdout": [
+   150.0,
+   200.0
+  ],
+  "ensemble": false,
+  "ensemble_size": 0,
+  "metrics": {
+   "alkalinity_total": {
+    "n": 7.0,
+    "mae": 0.2812164070664969,
+    "rmse": 0.3407565891890647,
+    "nrmse": 0.7037722048897528,
+    "bias": 0.1696840700228659,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "cod_total": {
+    "n": 7.0,
+    "mae": 0.7910288167019601,
+    "rmse": 0.9411133156573053,
+    "nrmse": 0.8397687255958479,
+    "bias": 0.41087901553080897,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "tan": {
+    "n": 7.0,
+    "mae": 0.05139025825256661,
+    "rmse": 0.05838612953619662,
+    "nrmse": 0.6310569618254056,
+    "bias": 0.035249853089798534,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   }
+  },
+  "constraint_violations": 0,
+  "calls": [
+   34
+  ]
+ },
+ "annotations": [
+  "agent summary: The routine vfa_total channel is excluded as a sensor/laboratory bias: independent assays at days 28, 140 and 147 agree with the model while the routine VFA record remains positively biased. After removing flagged sensors and VFA, the only supported parameter is Y_ac = 1.0909 with a 90% Fisher interval of [0.94143, 1.2403], which includes the default and is not offered as a kinetic update; the remaining alkalinity residual is specifically associated with high_strength_waste and the charge balance supports revising the influent mapping.",
+  "duration guard: 19.29 s per evaluation (measured; 262 evaluations measured so far)"
+ ],
+ "tool_failures": [
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `end_d` for ['ch4_fraction']; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `end_d` for ['gas_flow']; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `end_d` for ['ph']; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "`n_inadmissible` = 2 is not what the cited calls produced ([0.0])",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "fit_lsq",
+   "name": "p1.fit_lsq",
+   "call_index": null,
+   "kind": "error",
+   "message": "this call would make up to 417 simulator evaluations, about 166 min at this run's 19.1 s per evaluation (x1.25 margin), but 105.8 min of wall clock remain less the 6 min reserve for concluding: at most 250 evaluations fit; size the call to that, or conclude",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "fit_lsq",
+   "name": "p1.fit_lsq",
+   "call_index": null,
+   "kind": "error",
+   "message": "this call would make up to 254 simulator evaluations, about 101 min at this run's 19.1 s per evaluation (x1.25 margin), but 105.8 min of wall clock remain less the 6 min reserve for concluding: at most 250 evaluations fit; size the call to that, or conclude",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `declared_bound`; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "unknown value key(s) ['Y_ac_estimate', 'Y_ac_lower', 'Y_ac_upper']; use the published evidence keys (and optionally `sensor` or `channel` to name what they concern)",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "`bias_z` = 2.3727 is not what the cited calls produced ([0.62204])",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "fit_lsq",
+   "name": "p1.fit_lsq",
+   "call_index": null,
+   "kind": "error",
+   "message": "this call would make up to 191 simulator evaluations, about 77 min at this run's 19.3 s per evaluation (x1.25 margin), but 63.8 min of wall clock remain less the 6 min reserve for concluding: at most 143 evaluations fit; size the call to that, or conclude",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `bias_z`; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `signal_to_noise`; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  }
+ ]
+}

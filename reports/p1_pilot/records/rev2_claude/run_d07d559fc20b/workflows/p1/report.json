@@ -1,0 +1,111 @@
+{
+ "workflow": "p1",
+ "label": "influent",
+ "secondary_labels": [],
+ "confidence": 0.65,
+ "completed": true,
+ "stop": "concluded",
+ "abstentions": [
+  "kinetic_attribution",
+  "parameter_values",
+  "q_gas_stp_dry_budget",
+  "tan_budget"
+ ],
+ "parameters": {},
+ "validation": {
+  "holdout": [
+   150.0,
+   200.0
+  ],
+  "ensemble": false,
+  "ensemble_size": 0,
+  "metrics": {
+   "alkalinity_total": {
+    "n": 6.0,
+    "mae": 0.5360665832170847,
+    "rmse": 0.6372830609102293,
+    "nrmse": 2.2355877605485115,
+    "bias": 0.5360665832170847,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "ch4_fraction": {
+    "n": 43.0,
+    "mae": 0.011496577432785687,
+    "rmse": 0.013762268595595102,
+    "nrmse": 1.01485012241767,
+    "bias": -0.00636746438480961,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "cod_total": {
+    "n": 7.0,
+    "mae": 3.644060002268992,
+    "rmse": 3.902144614352162,
+    "nrmse": 2.4198433336316003,
+    "bias": -3.644060002268992,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "q_gas_stp_dry": {
+    "n": 46.0,
+    "mae": 126.9053942659145,
+    "rmse": 170.8322852765794,
+    "nrmse": 0.4212307521589079,
+    "bias": 17.330265040450396,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "pH": {
+    "n": 46.0,
+    "mae": 0.060498658140743275,
+    "rmse": 0.07475316302903998,
+    "nrmse": 1.2502131226769382,
+    "bias": 0.038060330211658396,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "tan": {
+    "n": 6.0,
+    "mae": 0.11826799396914262,
+    "rmse": 0.12897983268488358,
+    "nrmse": 2.184883897505055,
+    "bias": 0.11826799396914262,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "vfa_titrimetric": {
+    "n": 7.0,
+    "mae": 0.061163263504762866,
+    "rmse": 0.07086473041002389,
+    "nrmse": 2.116430221218396,
+    "bias": 0.061163263504762866,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   }
+  },
+  "constraint_violations": 0,
+  "calls": [
+   21
+  ]
+ },
+ "annotations": [
+  "agent summary: Gas flow, TAN and alkalinity are over-predicted together (gas bias_z -7.7, mostly after ~day 31, and structured by load and feed batch). Day-138 lab assays confirm the low TAN and alkalinity (TAN disagreement_z -5.4), so the sensors are not at fault, and the feed-implied charge balance is inconsistent (charge_drift 0.30): less degradable COD and nitrogen reached the digester than the feed log and catalogue imply. A four-parameter kinetic fit put every parameter at its bound and left the gas and TAN residuals structured, so no kinetic update is offered, the fitted values are declined, and the forecast uses the default-parameter simulation (call 4).",
+  "duration guard: 13.03 s per evaluation (measured; 61 evaluations measured so far)"
+ ],
+ "tool_failures": []
+}

@@ -1,0 +1,116 @@
+{
+ "workflow": "p1",
+ "label": "sensor",
+ "secondary_labels": [],
+ "confidence": 0.7,
+ "completed": true,
+ "stop": "concluded",
+ "abstentions": [
+  "gas_flow_claims",
+  "parameter_values",
+  "kinetic_attribution"
+ ],
+ "parameters": {},
+ "validation": {
+  "holdout": [
+   150.0,
+   200.0
+  ],
+  "ensemble": false,
+  "ensemble_size": 0,
+  "metrics": {
+   "alkalinity_total": {
+    "n": 7.0,
+    "mae": 0.31422178130008255,
+    "rmse": 0.3724151147536232,
+    "nrmse": 1.0531333531246923,
+    "bias": -0.21304321225915146,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "ch4_fraction": {
+    "n": 45.0,
+    "mae": 0.01015081008235526,
+    "rmse": 0.012762574700864908,
+    "nrmse": 0.6131916365915356,
+    "bias": -0.0061803321364397885,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "cod_total": {
+    "n": 7.0,
+    "mae": 0.9880810594996525,
+    "rmse": 1.1192085409552495,
+    "nrmse": 0.9390380430987939,
+    "bias": 0.711231179294345,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "pH": {
+    "n": 41.0,
+    "mae": 0.0838436268102491,
+    "rmse": 0.10533032115613311,
+    "nrmse": 0.7218815491474102,
+    "bias": -0.047820971769762535,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "tan": {
+    "n": 7.0,
+    "mae": 0.08201496282645201,
+    "rmse": 0.08534307283948797,
+    "nrmse": 1.691971848891022,
+    "bias": -0.08201496282645201,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "vfa_titrimetric": {
+    "n": 7.0,
+    "mae": 0.07888840583744057,
+    "rmse": 0.08439065199306606,
+    "nrmse": 0.7664016820296338,
+    "bias": -0.05362136714784793,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   }
+  },
+  "constraint_violations": 0,
+  "calls": [
+   23
+  ]
+ },
+ "annotations": [
+  "agent summary: The gas meter reads high from about day 10. Before that, measured gas was about 0.84 of the model's value (calls 4 and 17); afterwards it was about 1.30 (bias_z 13.2, step at day 10 with step_z 6.4, call 5). Measured methane COD plus effluent COD exceeds the declared COD input (closure mean -0.163, call 3), yet independent digestate COD and TAN assays on day 105 agree with the default model (disagreement_z -0.61 and 1.29, calls 19 and 20), and no kinetic parameter moves gas by more than about 80 m3/d (Morris, call 13). So the cause is a metering error, not the influent or the kinetics. gas_flow is flagged and the prediction stays at the default parameters. Fitted values are declined because the refit (call 22) pushed Y_ac to 0.675, which compensates for background misfit, and left k_hyd_li",
+  "duration guard: 13.83 s per evaluation (measured; 70 evaluations measured so far)"
+ ],
+ "tool_failures": [
+  {
+   "step": "conclude",
+   "name": "p1.conclude",
+   "call_index": null,
+   "kind": "error",
+   "message": "Y_ac: estimate 1.0 with interval [0.5, 1.5] is not what a fisher call of this run produced (estimates and intervals produced: [[0.67493, [0.60921, 0.74066]]]); k_hyd_li: estimate 1.0 with interval [0.25, 3.6894] is not what a fisher call of this run produced (estimates and intervals produced: [[3.06",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "conclude",
+   "name": "p1.conclude",
+   "call_index": null,
+   "kind": "error",
+   "message": "Y_ac: estimate 1.0 with interval [None, None] is not what a none call of this run produced (estimates and intervals produced: [[0.67493]]); k_hyd_li: estimate 1.0 with interval [None, None] is not what a none call of this run produced (estimates and intervals produced: [[3.0687]])",
+   "fallback": "refused by the harness"
+  }
+ ]
+}

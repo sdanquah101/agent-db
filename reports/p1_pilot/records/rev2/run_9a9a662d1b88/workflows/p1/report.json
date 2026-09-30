@@ -1,0 +1,76 @@
+{
+ "workflow": "p1",
+ "label": "influent",
+ "secondary_labels": [
+  "sensor"
+ ],
+ "confidence": 0.82,
+ "completed": true,
+ "stop": "concluded",
+ "abstentions": [
+  "parameter_values",
+  "kinetic_attribution",
+  "posterior_intervals",
+  "gas_flow_claims",
+  "q_gas_stp_dry_budget",
+  "ph_claims",
+  "temperature_claims"
+ ],
+ "parameters": {},
+ "validation": null,
+ "annotations": [
+  "agent summary: Independent day-220 assays disagree with the fitted model by 3.8876 sd for TAN, 7.0233 sd for titrimetric VFA, and 5.7303 sd for digestate VS (calls 12, 14, 15), a coherent indication that the declared influent mapping/loading is wrong rather than a kinetic change. Separately, gas-flow residuals show a 6.7459-sd step at day 229 with no significant load/feed structure (call 11), so post-step gas flow is quarantined as a sensor fault; the K_I_nh3 fit reaching 0.2 with a full-bound interval (call 9) is not offered as a plant parameter.",
+  "no objective sensor has a hold-out sample: no validation",
+  "duration guard: 37.31 s per evaluation (measured; 123 evaluations measured so far)"
+ ],
+ "tool_failures": [
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `end_d` for ['ph']; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `charge_drift`; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "fit_lsq",
+   "name": "p1.fit_lsq",
+   "call_index": null,
+   "kind": "error",
+   "message": "this call would make up to 114 simulator evaluations, about 89 min at this run's 37.3 s per evaluation (x1.25 margin), but 43.1 min of wall clock remain less the 6 min reserve for concluding: at most 47 evaluations fit; size the call to that, or conclude",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `most_explanatory`; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `declared_bound`; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `declared_bound`; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  }
+ ]
+}
