@@ -3229,3 +3229,75 @@ S2-01 B/B; S3-01 C/B; S4-01 B/B; S5-01 A/A; S6-02 B/B; S8-01 B/B), three lanes, 
 process per cell, from a worktree at the pushed head, nothing else on the machine.
 Expected cost at Anthropic's rates: a few USD per cell (the history is read from the
 cache at 0.20 USD per million tokens; thinking is billed as output at 20).
+
+**2026-09-30, 01:50 UTC — the Anthropic arm's ten cells are done: rev2/`claude-opus-5-5` at `4801f36`.**
+Ten of ten concluded, no failed run, no failed model attempt (164 turns, every stop
+`tool_use`, no cut reply, no refusal; thinking blocks on 148 turns, carried back each
+turn), no guard refusal. Started 22:56, three lanes; the container rebooted at ~23:59
+with three cells done (S3-01 C/B, S6-02 B/B, S8-01 B/B) and three in flight at six to
+seven turns (S0-01 B/B, S4-01 B/B, S5-01 A/A: `run_8fe9dd4f9892`, `run_c91f0ef369cb`,
+`run_fd74a0e24f3b`, discarded, not in the table); the other seven ran 00:00–01:47 at the
+same head from the same worktree, nothing else on the machine. Rows in
+`reports/p1_pilot.csv` (`prompt_version` `rev2_claude`, the new `model` column filled
+for every row from the summaries), summaries in `reports/p1_pilot/summaries/rev2_claude_*`.
+
+| cell | truth | rev2 / luna (`cc256fd`) | rev2 / claude (`4801f36`) | claude: evidence behind the label (n; t = time-localised, c = channel) | evals | wall, min | turns | cost, USD |
+|---|---|---|---|---|---|---|---|---|
+| S0-01 B/A | none | sensor | influent | influent 5 (t 4, c 0) | 115 | 30.2 | 15 | 0.77 |
+| S0-01 B/B | none | sensor + influent | influent | influent 4 (t 3, c 0) | 137 | 35.4 | 18 | 0.92 |
+| S0-01 B/C | none | influent | influent | influent 5 (t 4, c 0) | 233 | 56.5 | 17 | 0.92 |
+| S1-01 B/B | none | sensor | influent | influent 3 (t 2, c 0) | 51 | 15.4 | 13 | 0.92 |
+| S2-01 B/B | sensor | **sensor** (exact) | influent | influent 6 (t 5, c 0) | 123 | 32.6 | 15 | 0.76 |
+| S3-01 C/B | influent | **influent** + sensor | **influent** (exact) | influent 4 (t 3, c 0) | 259 | 55.6 | 14 | 0.81 |
+| S4-01 B/B | state | **state** + influent | influent | influent 3 (t 3, c 0) | 223 | 50.9 | 15 | 0.91 |
+| S5-01 A/A | parameter | influent + sensor | influent | influent 4 (t 4, c 0) | 108 | 46.9 | 16 | 0.85 |
+| S6-02 B/B | structural | sensor + influent | influent | influent 4 (t 3, c 0) | 231 | 53.0 | 18 | 1.19 |
+| S8-01 B/B | sensor | **sensor** + structural | **sensor** (exact) | sensor 3 (t 2, c 0) | 156 | 42.1 | 23 | 1.81 |
+
+| total | rev2 / luna | rev2 / claude | claude − luna |
+|---|---|---|---|
+| failed runs (no conclusion) | 0 | 0 | 0 |
+| exact attribution | 1/10 | 2/10 | +1 |
+| primary label = truth | 4 | 2 | −2 |
+| truth among the labels given | 4 | 2 | −2 |
+| `none` reached on the four `none` cells | 0 | 0 | 0 |
+| labels given | 16 | 10 | −6 |
+| labels without localised evidence | 1 | 0 | −1 |
+| unsupported claims | 0 | 0 | 0 |
+| invalid actions (evaluator) | 2 | 0 | −2 |
+| harness refusals (verbatim log; the guard's) | 54 (14) | 25 (0) | −29 |
+| extra abstentions | 92 | 31 | −61 |
+| kinetic-update errors / kinetic drift (cells) | 0 / 0 | 0 / 0 | 0 |
+| simulator evaluations | 2,311 | 1,636 | −675 |
+| wall clock, min | 851 | 419 | −433 |
+| model turns | 174 | 164 | −10 |
+| tokens | 7.18 M | 7.47 M | +0.29 M |
+| cost at the arm's declared rates, USD | 0.419 | 9.863 | +9.44 |
+
+**Reading (one run per cell; a cell or two is noise).**
+- **One label per cell, and nine times `influent`.** Claude gave a single label on every
+  cell and no secondary label anywhere; nine of its ten primaries are `influent`, the
+  tenth `sensor` (S8-01). Its two exact attributions are the two cells whose truth is
+  the label it favours (S3-01 influent) or the one exception (S8-01 sensor); it lost
+  luna's matches on S2-01 (sensor), S4-01 (state) and the secondary hits. `none` is
+  unreached by both, on all four `none` cells, as by every arm so far.
+- **Fewer, tighter actions.** Every label rests on time-localised evidence (none on
+  whole-record figures), no invalid action, a third of luna's extra abstentions (31 from
+  92), fewer refusals (25 from 54; none from the guard, which luna tripped 14 times),
+  and no kinetic drift. The runs are short: 1,636 evaluations and 419 minutes against
+  2,311 and 851, at the same 13.5 s per evaluation (this instance, since the reboot of
+  29 September 15:27; the reboot of 23:59 did not change the rate).
+- **Cost.** USD 9.86 for the arm at Anthropic's rates against 0.42 for luna's at
+  OpenAI's: 1.24 M tokens written to the cache (6.19), 6.11 M read from it (1.22),
+  122 k output (2.45; thinking billed as output), 348 uncached input. Every token of the
+  growing history is written once and read on each later turn; the split shows the
+  caching working as designed. The row label in the report script says "at luna's
+  rates" for every arm; each arm's cost is at its own configuration's declared rates.
+- **Limitations.** One run per cell; two different models at effort `high` with their
+  own defaults for reasoning; the same prompts, tools, budgets and harness. The three
+  discarded partial runs are the reboot's, not the model's. Strict schemas were not
+  sent (decisions, 2026-09-29); every tool input Claude sent validated at the harness
+  (no `_unparseable_arguments`, no schema refusal).
+
+**Blocked:** nothing. **Next:** the coordinator's review of PR #27; the lead's word on
+what follows (a second run per cell, another prompt revision, or the freeze).
