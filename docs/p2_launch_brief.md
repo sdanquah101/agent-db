@@ -1,186 +1,184 @@
-# P2 launch brief — the task-specialised multi-agent workflow (proposal §6.5)
+# P2 launch brief — procedural roles with model-backed decision points (proposal §6.5)
 
-Status: **DRAFT for the lead's approval, 2026-09-30.** Written by the coordinator
-(`docs/coordinator.md`) after the lead's rulings of 2026-09-30 ("Freeze P1 and prepare
-the P2 launch brief"). Nothing here launches anything: a P2 session starts only when the
-lead sends `launch: p2-multi-agent` to the coordinating session (CLAUDE.md, "Who starts a
-component session"), and only after PR #26 and PR #27 have merged on the lead's word.
+Status: **DRAFT 2 for the lead's approval, 2026-09-30.** Written by the coordinator
+(`docs/coordinator.md`) after the lead's rulings of 2026-09-30: "Freeze P1", "prepare the
+P2 launch brief", "P2 should not be agents with prompts", "run the knowledge audit on the
+P1 transcripts". Draft 1 (seven prompted agents) is withdrawn. Nothing here launches
+anything: a P2 session starts only on `launch: p2-multi-agent` from the lead
+(CLAUDE.md, "Who starts a component session"), after PR #27 has merged on the lead's word.
+
+The audit this draft rests on is `docs/p1_knowledge_audit.md` (rubric:
+`docs/p1_knowledge_audit_rubric.md`), a read-only grading of all twenty revision-2 runs
+(ten on GPT-5.6-luna, ten on Claude Opus 5.5) against eight process signatures.
 
 ## 1. Where the project stands
 
-- **P0** is built, frozen and characterised: 17/78 exact on the Level 0–5 sweep, a
-  one-sided failure (`none` on 43 of 61 faulted cells), no unsupported claims; the
-  positive-control ladder (PR #23) rules the harness out as the cause of its misses; the
-  distinguishability analysis (PR #25) gives the admissible set of every cell.
-- **P1** is frozen on the lead's word of 2026-09-30: revision 2 of the prompts
-  (`prompt_sha256 c80a3752…`) with `gpt-5.6-luna`, no expert brief
-  (`configs/workflows/p1.yaml`; the freeze commit lands on PR #27). Six development arms
-  were run on the ten development cells, one run per cell:
+- **P0** built, frozen, characterised (17/78 exact on the sweep; `none` on 43 of 61
+  faulted cells; no unsupported claims; harness ruled out as the cause of its misses;
+  the admissible set of every cell known).
+- **P1** frozen on 2026-09-30: revision 2 of the prompts (`prompt_sha256 c80a3752…`)
+  with `gpt-5.6-luna`, no brief (PR #27 carries the freeze). Six development arms on the
+  ten development cells, one run each:
 
-  | arm | concluded | exact | primary = truth | `none` on the 4 clean cells | extra abstentions | cost, USD |
-  |---|---|---|---|---|---|---|
-  | old prompt / GPT | 10 | 0 | 1 | 0 | 166 | 0.35 |
-  | revision 1a / GPT | 10 | 0 | 1 | 0 | 101 | 0.43 |
-  | revision 1b / GPT | 8 | 1 | 2 | 0 | 71 | 0.31 |
-  | **revision 2 / GPT (frozen P1)** | 10 | 1 | 4 | 0 | 92 | 0.42 |
-  | revision 2 + brief / GPT | 10 | 0 | 3 | 0 | 61 | 0.47 |
-  | revision 2 / claude-opus-5-5 | 10 | 2 | 2 | 0 | 31 | 9.86 |
+  | arm | concluded | exact | primary = truth | `none` on the 4 clean cells | cost, USD |
+  |---|---|---|---|---|---|
+  | old prompt / GPT | 10 | 0 | 1 | 0 | 0.35 |
+  | revision 1a / GPT | 10 | 0 | 1 | 0 | 0.43 |
+  | revision 1b / GPT | 8 | 1 | 2 | 0 | 0.31 |
+  | **revision 2 / GPT (frozen)** | 10 | 1 | 4 | 0 | 0.42 |
+  | revision 2 + brief / GPT | 10 | 0 | 3 | 0 | 0.47 |
+  | revision 2 / Claude Opus 5.5 | 10 | 2 | 2 | 0 | 9.86 |
 
-  Failed runs are misses. The Claude arm gave one label per cell, nine of them
-  `influent`; its two exact hits are the two cells whose truth matched that answer.
+## 2. What the knowledge audit found, and what it changes
 
-- **The finding P2 is launched against.** Across three prompt revisions, a scoring
-  statement, a 45-citation domain brief and a second model, no single-agent arm ever
-  concluded `none` on a clean cell. P1 always names a cause; P0 has the opposite failure.
-  The pattern is stable across everything varied, so it is not a wording problem and not
-  a model problem. Nothing in a single-agent loop argues the null case.
+**The answer to "do the agents have and use AD knowledge".** Mixed, split by model. The
+Claude arm was process-literate but misapplied: 30 of its 41 evidence items invoke a
+real signature in a form a process engineer would accept (the COD balance as arbiter
+with both alternatives excluded by mechanism; a three-way differential across coupled
+channels; the TAN-to-alkalinity coupling; assays used to acquit a routine channel).
+The GPT arm was not process-based in the majority of its items (29 of 57): a QC flag
+became a `sensor` label, z-statistics were read as verdicts without the magnitude
+beside them, labels were attached to numbers by vocabulary. Where GPT was literate it
+was misapplied in the same way as Claude, and in a second way Claude never showed: the
+true signature seen and outranked (S2-01: pH at −17.5σ listed as one of four flagged
+records, TAN flagged instead; S5-01: the ammonia-inhibition presentation recorded in
+adjacent items and never assembled).
 
-## 2. What the proposal says P2 is (§6.5, §6.6, §6.7, §10)
+**The finding that governs P2's design.** Both arms were wrong for one repeated reason:
+the plant's background misfit was taken as the fault. On the clean development cells the
+tools report gas +11–25 % at default parameters, COD closure −0.14 to −0.19 and two
+inadmissible balance windows; after any fit the channels keep 5–19σ biases. No step in
+either arm asked what a clean record on this plant looks like. P0 hit the same wall and
+was rescued by ruling B (thresholds: at least three inadmissible windows; QC flags and
+charge inconsistency alone never fire). The P1 prompts cannot name thresholds, by the
+prompt rule. So signature S7, the null case, was never reachable by P1 on these cells,
+and every P1 arm's 0/4 on `none` is explained. The failure is the absence of a null
+reference step, not the absence of process knowledge.
 
-- Seven roles from the review: **data quality, influent, identifiability, calibration,
-  experimental design, verification, coordination**, communicating through typed messages
-  and the shared §6.6 task state.
-- **The coordinator routes; it cannot approve its own output.**
-- **The verifier receives the proposed result, the full action log and the frozen
-  validation data and returns pass / fail / abstain.** Week 26–30 row: "role separation
-  enforced; verifier cannot see proposer's reasoning."
-- Common constraints (P1 and P2): no fabricated values, no editing raw data, no
-  parameter-bound change without a logged justification, no bypass of a failed QC gate,
-  no function outside the registry. Prompts, model version, temperature and retry policy
-  frozen before the final run.
-- Research question RQ3 and hypothesis H4: multi-agent decomposition adds reliability or
-  efficiency beyond a single agent only in scenarios with two or more simultaneous fault
-  types; in single-fault scenarios it incurs overhead without gain.
-- Ablations (§6.7 E, P1 and P2): remove persistent state, the verifier, the coordinator,
-  individual specialist roles, self-correction; report deltas on families A–D.
-- Descope clause (§10 risks): if week 26 is missed, P2 is three roles — QC, calibration,
-  verifier — and the paper is still viable. Gate G4 (week 30): P1 and P2 run inside
-  budget with frozen prompts; fail → publish P0 + P1, P2 becomes Phase 2.
+**Consequences for P2.**
+1. P2's roles are procedures. Eight signatures the models never supplied in 20/20 runs
+   become steps (§4); the decisions the transcripts show the models doing well stay
+   with a model (§5).
+2. P2 needs a **declared background**, the way it already has declared instrument noise:
+   a per-plant null band for balance closure and residual profile, published in the
+   benchmark card and carried in the tool results (`mass_balance` returns closure with
+   its band; `residual_diag` returns the profile with the plant's background envelope).
+   This is a benchmark decision, not a P2 one (§6, decision 1). Without it, `none` stays
+   unscoreable for any model-backed workflow, and P2 would inherit P1's wall.
+3. The first P2 metric is `none` on the clean cells, before exact attribution.
 
-## 3. Design requirements the coordinator adds from the P1 evidence
+## 3. The roles: which are code, which have a model behind them
 
-These are for the lead to approve or strike. Each follows from something P1 showed.
+Seven roles from §6.5. Each is a procedure written from the review and from P0's rules,
+with typed inputs and outputs. A model is called only at the decision points the
+procedure exposes, each with a fixed output schema; it cannot skip, add or reorder
+steps, and writes no free text into the task state.
 
-1. **The null case is a role's job, and it is scored first.** The verifier's mandate
-   includes the null hypothesis: before any label passes, the verifier must state,
-   with evidence from the log and the frozen validation data, whether the record shows any
-   pattern beyond the declared instrument noise and the background misfit of the fitted
-   model. A label passes only over an explicit `none` case that failed. `none` reached on
-   the clean development cells is the first number in every P2 report, before exact
-   attribution.
-2. **Role separation is enforced by the harness, not the prompt.** Each role runs in its
-   own gateway context with its own hashed system prompt and its own tool allow-list taken
-   from the one registry. A first cut, to be fixed in the design document:
-   data quality → `data_qc`, record inspection; influent → `mass_balance`, the feed
-   tools; identifiability → `gsa_morris`, `gsa_sobol`, `profile_likelihood`,
-   `fisher_info`; calibration → `fit_lsq`, `fit_de`, `fit_cmaes`, `bayes_mcmc`;
-   experimental design → `voi_assay` and assay requests; verification → `validate`,
-   read-only state and log; coordination → no numerical tool at all, routing and the
-   stopping actions only. The verifier is given the state, the log and the frozen
-   validation data, and nothing the proposing roles wrote in free text.
-3. **One run, one budget.** The registry's evaluation meter, the wall-clock allowance, the
-   assay units, the token cap (`loop.max_total_tokens`, 6 M per run in P1) and the
-   duration guard are per run, summed over roles, not per role. Equal budgets is the
-   point of RQ3; a P2 that spends seven P1 budgets has answered a different question.
-4. **Typed messages, no free-text summaries in place of results (§6.6).** Message schemas
-   in Pydantic beside the task state; every message logged to
-   `runs/<id>/workflows/p2/messages.jsonl` with sender, recipient, schema, digest and the
-   call indices it cites, beside `llm_calls.jsonl`. The evaluator reads logs only.
-5. **Same jail, same gateway, same provider settings.** P2 reuses `tools/llm.py`
-   (the gateway, the request checker, the verbatim log, the replay) and the P1 sandbox.
-   The frozen P1 model (`gpt-5.6-luna`, effort high, no temperature) is the default for
-   every role; a Claude comparison arm is a later, separate decision. The live-client
-   hash lesson of PR #26 (hash the text actually sent) applies to every role's prompt.
-6. **Ablations are configuration switches from day one.** Verifier off, coordinator off,
-   each specialist off, persistent state off, self-correction off: each a flag in
-   `configs/workflows/p2.yaml`, each with a test, so that §6.7 E costs runs, not code.
-   The three-role minimum (QC, calibration, verifier) is the first thing that runs live.
-7. **The P1 prompt rule applies to all seven prompts.** Content from the proposal, the
-   benchmark card, the tool documentation and the published vocabularies only; no scenario
-   ids, no label frequencies, no per-cell P0 or P1 outcomes. The guard of PR #26 runs on
-   every role prompt. The expert brief is not carried into P2.
-8. **Same records.** `reports/p2_pilot.csv` with the P1 columns plus `workflow`, `role
-   count` and the verifier verdict; summaries carry every role's token and turn counts;
-   verifier rejections are counted (family D). Failed runs stay in the denominator and
-   are never credited with a placeholder label.
-9. **Two runs per cell for P2 development runs.** P1's one-run-per-cell tables left every
-   difference inside the noise. P2's development runs use two seeds per cell from the
-   start, on the same ten development cells, so its comparison with the frozen P1 and
-   with its own ablations has a variance estimate.
+| Role | Procedure (code) | Model-backed decisions | Tools it may call |
+|---|---|---|---|
+| **Coordination** | A state machine over the §6.6 task state: QC gate → balance → screening → fit → residual profile → verification → conclude or abstain. Evidence hygiene: one label per cited call; no relabelling of an item between turns; a refusal budget with the vocabulary shown once. Cannot approve its own output. | None. | None numerical; the stopping actions only. |
+| **Data quality** | QC produces quarantines and abstentions, never a label (P0 rulings B(a), B(b)). Mandatory S1 table before any `sensor` label: the candidate channel's residual beside its physically coupled channels' residuals and any assay of them. The first-HRT excursions the QC flags as spikes go to the state test, not to quarantine. | Which windows to trust; which assay to buy against a suspected channel and on which day; the coupled-channel reading, written into a typed field. | `data_qc`, record inspection, `set_sensor_status` (quarantine only), assay request via the design role. |
+| **Influent** | S8 with the null band: an `influent` label requires closure outside the plant's band **and** an onset or feed-covariate pattern; charge inconsistency alone never fires. The feed-log inspection is a step, with operator notes read as negative anchors. | Reading the feed log and notes; which balance window; the mechanistic statement once the table exists. | `mass_balance`, feed characterisation, record inspection. |
+| **Identifiability** | A physics-forced candidate list per plant (on Plant A, the ammonia inhibition constant and the hydrolysis constants are always screened, so a Morris on pH cannot drop the parameter a scenario is about); Morris → Sobol → profiles / FIM; early-window vs late-window residual on every channel **before** any early quarantine (S4). | The fitted subset within the candidate list; whether an early/late difference warrants the state test. | `gsa_morris`, `gsa_sobol`, `profile_likelihood`, `fisher_info`, `residual_diag`. |
+| **Calibration** | Screened fit; a split-window fit at the best common step across two or more channels (P0's R4); the inhibited-steady-state check when TAN and VFA are both high (S3); a `simulate(biomass_scale)` pair whenever the early window differs (S4); `bayes_mcmc` by procedure on the approved subset (Level-8 discipline: `posterior_intervals` abstained only after a failed call). A bound-hit is never a kinetic update. | Accept or reject a fit; interpret a bound-hit; the split-window reading. | `fit_lsq`, `fit_de`, `fit_cmaes`, `bayes_mcmc`, `simulate`, `residual_diag`. |
+| **Experimental design** | Value-of-information on request; the assay budget enforced by the registry. | Which assay, which day, against which prediction: the audit found these choices apt in 9 of 10 Claude runs. | `voi_assay`, assay requests. |
+| **Verification** | S7 first: the residual profile at defaults and after the fit against the plant's background envelope, and the balance against its band; a label passes only over an explicit null case that failed. Hold-out validation (the verifier alone sees it). S6 only on P0's R3 criterion (two or more channels structured after the fit, or a parameter at a bound) **and** a failed hold-out. Receives the proposed result, the full action log and the frozen validation data; sees no free text from proposing roles. Returns pass / fail / abstain. | One decision: the mechanistic differential, written from the tables (the audit found this correct in form whenever the reference was right). | `validate`, read-only state and log. |
 
-## 4. What the P2 session is asked to deliver, in order
+Four roles have a model behind them (data quality, influent, identifiability,
+calibration) plus two narrow model decisions (experimental design; the verifier's
+differential). Coordination is code. The three-role minimum of the proposal's descope
+clause is data quality, calibration and verification.
 
-1. `docs/p2_design.md`: the roles, the message schemas, the tool allow-lists, the
-   routing rules, the verifier protocol including the null case, the budget accounting,
-   the ablation switches, the record schema. Reviewed by the coordinator before any live
-   call. No live call in this step.
-2. The three-role minimum (QC, calibration, verifier) running offline on the scripted and
-   recorded doubles, with tests: role separation (a role cannot call a tool outside its
-   list, tested with a negative control), the verifier's blindness to free text, the
-   budget summed across roles, the message log, the null case in the verifier's output.
+## 4. The eight steps P2 encodes (from the audit, §7)
+
+1. **S7, the null reference**, before any label: channel residual profile at defaults and
+   after the screened fit against the plant's background envelope, not against
+   instrument noise. Removes the whole Claude-arm failure mode and three of GPT's six
+   wrong primaries.
+2. **S8 with a null band**: `influent` needs closure outside the band and an onset or
+   feed-covariate pattern; charge alone never fires.
+3. **S1 as a mandatory table** before any `sensor` label; QC flags produce quarantines and
+   abstentions, never a label. Six of GPT's eight sensor labels came from this gap.
+4. **S4 as a step**: early vs late residual on every channel before quarantining early
+   spikes; the `biomass_scale` pair when the early window differs.
+5. **S3/S5 change-point and inhibition tests**: split-window fit at the best common step;
+   physics-forced candidates per plant; the VFA/TAN/pH inhibited-steady-state check.
+6. **S6 in the verifier only**, on R3 plus a failed hold-out.
+7. **Level-8 discipline**: the sampler by procedure; the abstention only after a failure.
+8. **Evidence hygiene** in the coordinator.
+
+## 5. What is left to the model, on the audit's evidence
+
+Assay choice; the mechanistic differential once the tables exist; reading operator notes
+as evidence and negative anchors; the fitted subset within a physics-forced list, and
+declining a bound-hit as a kinetic update (0 false kinetic updates in 20 runs);
+abstention wording once the scored terms are procedural.
+
+## 6. Decisions the lead is asked for before launch
+
+1. **The declared background.** Publish a per-plant null band (balance closure and
+   residual envelope) in the benchmark card and carry it in the tool results, as
+   declared noise is carried today. It applies to every workflow. P0 already runs on
+   ruling B's thresholds; the frozen P1 cannot use it (its prompts are fixed), so P1's
+   0/4 on `none` stands as its record. Alternatives: state the band numerically in the
+   P2 prompts (weaker: a prompt, not a tool result); or leave `none` unscoreable for
+   model-backed workflows (then RQ3 cannot be answered on the null cells).
+2. **S5-01's injected magnitude** multiplies K_I_nh3 by 0.1; the fitted model's declared
+   box is [0.2, 5.0]. No bounded update can reach the truth. Record it, and decide
+   whether the scenario's magnitude or the box moves (a G1-frozen change either way).
+3. **S6-02 at tier B** shows no alkalinity/pH deficit in any tool output (inside the
+   clean-cell envelope); P0 also read `none`. Decide whether Level-6 needs tier C or a
+   larger magnitude to be visible, or whether S6-02 B/B is admissible-`none` by design.
+4. **`data_qc` labels the Level-4 start-up transient as spikes** (S4-01 days 0, 1, 7).
+   P2's step 4 works around it; a tool change (a first-HRT flag class) would be cleaner
+   and is a `tools/impl/` change, so it is the lead's.
+5. **Two runs per cell** for all P2 development runs (one run per cell left every P1
+   difference inside the noise).
+
+## 7. What the P2 session delivers, in order
+
+1. `docs/p2_design.md`: the seven procedures as step lists with their decision points and
+   output schemas, the message schemas, the tool allow-lists, the routing state machine,
+   the null-reference step and where the band comes from, the budget accounting (one run,
+   one budget, summed over roles: evaluations, wall clock, tokens, assay units), the
+   ablation switches (§6.7 E: verifier off, coordinator off, each specialist off,
+   persistent state off, self-correction off; each a flag with a test), the record
+   schema. Reviewed by the coordinator before any live call.
+2. The three-role minimum (data quality, calibration, verification) offline on the
+   scripted and recorded doubles, with tests: a role cannot call a tool outside its
+   list (negative control); the verifier never receives free text (a planted claim);
+   the budget summed across roles; the message log; the null case in the verifier's
+   output; every decision point's schema.
 3. The three-role minimum live on three development cells (one clean, two faulted), two
-   seeds each. Report: `none` on the clean cell, labels on the faulted ones, the verifier's
-   verdicts, cost. This is the first go / no-go point.
-4. The seven roles, offline then live on the ten development cells, two seeds each. The
-   P2 development report against the frozen P1 rows, with the same totals and the
-   verifier's counts.
-5. The ablations of §6.7 E on the ten cells (verifier off first, then coordinator off,
-   then each specialist), two seeds each where budget allows.
-6. Then, on the lead's word only: the P2 freeze, and the held-out variants of §7 for both
-   P1 and P2.
+   seeds each. **Go / no-go:** if the null reference does not produce `none` on the clean
+   cell, stop and report; that is a benchmark finding about the band, not a P2 task.
+4. The seven roles offline, then live on the ten development cells, two seeds each; the
+   P2 development report against the frozen P1 rows.
+5. The ablations, verifier-off first.
+6. On the lead's word only: the P2 freeze; the held-out variants of §7 for P1 and P2.
 
-## 5. Success criteria for the development phase
+## 8. Success criteria, cost, risks
 
-- `none` reached on at least two of the four clean development cells, with no loss of
-  primary-label hits on the faulted cells against the frozen P1 (4/10).
-- No unsupported claim, no false kinetic update, no kinetic drift on faulted cells.
-- Budget parity shown from the logs: evaluations, wall clock, tokens and assay units per
-  run within the P1 caps.
-- Every ablation switch tested and at least the verifier-off ablation run.
-- The verifier's abstentions have precision: an `abstain` verdict on a cell whose truth
-  is representable is a miss, counted.
+- `none` on at least two of the four clean development cells with no loss of primary
+  hits on the faulted cells against the frozen P1 (4/10); no unsupported claim, no
+  false kinetic update; budget parity from the logs; every ablation switch tested;
+  abstention precision scored (`abstain` on a representable cell is a miss).
+- Cost: the frozen P1 arm was about USD 0.42 and 14 runner-hours per ten cells on GPT.
+  P2 under the same per-run token cap, two seeds per cell: tens of USD and a few
+  runner-days for the development phase including ablations. Wall clock is bounded by
+  the same per-cell allowance as P1.
+- Risks and mitigations: the verifier abstains on everything (abstention precision is
+  scored); the coordinator smuggles a conclusion (it holds no numerical tool and the
+  verifier sees no free text; tested); message overhead eats the token budget (per-run
+  cap, per-role attribution in the log); seven procedures is a lot of writing (the
+  three-role minimum first, and P0 already contains those three in scripted form);
+  P2 built twice (the launch protocol); machine-instance effects (comparisons on counts
+  and labels, never wall clock across instances).
 
-If the three-role minimum reaches `none` on no clean cell in step 3, the P2 session stops
-and reports before building the other four roles: that result would say the null case is
-not reachable with these tools and this task framing, which is a benchmark finding, not
-a P2 engineering task.
+## 9. What the coordinator needs from the lead
 
-## 6. Cost and time
-
-- P1 revision 2 on GPT: about USD 0.42 and about 14 runner-hours per ten cells at
-  three lanes. P2 with seven roles under the same per-run token cap should cost no more
-  than two to three times that per cell in practice; two seeds per cell doubles it.
-  Order of magnitude for the whole development phase including ablations: tens of USD,
-  a few runner-days.
-- Wall clock per cell is bounded by the same allowance as P1 (90–150 min by tier);
-  message passing adds model turns, not simulator evaluations.
-- Elapsed time, from the P1 record (one session, one machine): the design document and
-  the offline three-role minimum in the first two or three days, the live minimum by
-  day four, the seven roles and the ten-cell run within the second week, ablations in the
-  third. The proposal's week 26–30 window is the outer bound.
-
-## 7. Risks and their mitigations
-
-- **The verifier abstains on everything.** Scored: abstention precision is a metric;
-  `abstain` on a representable cell is a miss.
-- **The coordinator smuggles its own conclusion through the verifier.** The verifier sees
-  no free text from any proposing role; the coordinator holds no numerical tool and
-  cannot conclude; a test plants a free-text claim and asserts the verifier never
-  receives it.
-- **Message overhead eats the token budget.** Per-run cap, with the guard's conclude
-  notice and grace turns as in P1; the message log makes the spend attributable per role.
-- **Seven roles built as seven single agents.** Step 3's go / no-go on the three-role
-  minimum, before the other four exist.
-- **P2 built twice.** The launch protocol: one launch word, one session, the open-PR
-  check first, questions through the coordinator.
-- **Machine-instance effects.** The evaluation rate changes with the container instance
-  (P1 record, 2026-09-29): P2's comparisons with P1 are on counts and labels, not on
-  wall clock across instances.
-
-## 8. What the coordinator needs from the lead
-
-1. Approval of this brief, or edits to §3–§5.
-2. The merge word for PR #26, then PR #27 (the Claude arm and the P1 freeze).
-3. `launch: p2-multi-agent`, after the merges. The coordinator then starts one P2
-   session with this brief, the proposal, `docs/p1_design.md`, `docs/coordinator.md` and
-   the standing constraints, and reviews its design document before any live call.
+1. Decisions 1–5 of §6, or edits to §3–§5.
+2. The merge word for PR #27 once its review passes.
+3. `launch: p2-multi-agent`. The coordinator then starts one P2 session with this brief,
+   the audit, the proposal, `docs/p1_design.md`, `docs/coordinator.md` and the standing
+   constraints, and reviews its design document before any live call.
