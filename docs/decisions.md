@@ -7214,3 +7214,57 @@ ask for more seeds and the yaml regenerates).
 `configs/workflows/p0.yaml`, `eval/`, `tools/impl/`. Two tests that enumerate the tool
 table gained the new name (`tests/test_tool_registry.py`; `tests/test_p1_agent.py`,
 which now says the frozen P1 leaves `declared_background` uncalled).
+
+
+## 2026-09-30 — RULING (the lead): the declared background's band rule, fixed before any further result
+
+**The lead's word** of 2026-09-30 on the P2 session's Q1 ("implement your
+recommendations"), relayed by the coordinator (session_01Cu6G2kQjP2QSzvtkyP8cPr) at
+20:11 UTC. Recorded here **before** any run of seeds 900004–900010 starts. At the time of
+this entry, 12 of the 36 three-seed runs are done (Plant B at all tiers; Plant C at
+tier B).
+
+**The rule.**
+1. **N = 10 clean seeds per truth group**: seeds 900001–900010. A truth group is one
+   (plant, declared community state, seed): Plants B and C, and Plant A on each of its two
+   declared states. That is 3 existing seeds plus 7 more, with the same driver
+   (`scripts/declared_background.py`), the same sizes and the same procedure (the entry
+   above, "The declared-background tool built"), and no other change.
+2. **The band** for each (plant, tier) and each published statistic is the **min–max
+   envelope over the runs**, published as such, with N and the seeds in
+   `configs/background.yaml` and in the benchmark card. That is 10 runs on Plants B and C,
+   and 20 on Plant A, whose two states pool (ruling B5). The statistics:
+   - the per-run mean COD closure over the calibration window;
+   - the per-run count of inadmissible COD windows;
+   - the per-run worst window, meaning the closure of the window with the largest
+     |closure|, sign kept. This statistic is added by this ruling;
+   - per sensor, `mean_z` and `rms_z`, at the defaults and after the screened fit.
+
+   The yaml keeps each statistic's mean and sd beside its min and max, for reading only.
+   The band is `[min, max]`.
+3. **Final for this benchmark version.** No seed is added or dropped, and no statistic or
+   envelope is changed, after seeing where any development cell falls. The clean
+   development cells (S0-01 B/A, B/B and B/C, and S1-01 B/B) are **not inputs** and are
+   not consulted in building the band.
+4. **A clean development cell outside the band is a finding**, reported in
+   `docs/milestones.md`, the card and the PR, and never corrected by widening the band.
+   P2's null rule uses the band exactly as published, with no margin of its own.
+
+**Until the ten seeds are in**, the three-seed band is published on the P2 branch
+labelled **PROVISIONAL** (`provenance.status` in the yaml, and the card). When the ten
+seeds are in, the band is regenerated, the label becomes FINAL, and the PR states where
+each clean development cell falls, inside or outside, per statistic. The development
+cells are measured with the same procedure through their own registries.
+
+**Reason.** A reference that is widened or narrowed after looking at the cell it will
+judge is fitted to the answer. The P2 session's earlier recommendation ("more seeds
+because the go/no-go asks for `none` on this cell") is withdrawn for that reason
+(`docs/milestones.md`, 19:58 UTC). Ten seeds give the envelope a declared size, fixed in
+advance. The min–max envelope is the simplest rule that states what clean runs were
+actually seen.
+
+**Alternatives.** A quantile band, rejected: at N = 10 a 5–95 % quantile is the second
+and ninth order statistics, a narrower claim than "seen on a clean run". A mean ± k·sd
+band, rejected: it assumes a shape that ten runs cannot check. Three seeds, rejected:
+the envelope is too thin to be a reference. More than ten seeds, not now: the cost is
+about 70 min per run on this machine.
