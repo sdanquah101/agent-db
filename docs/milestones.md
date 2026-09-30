@@ -3361,3 +3361,16 @@ coordinator asks the lead for the merge word on #26; nothing more is pushed to
 comparison; the `p0_freeze` marker's text in `pyproject.toml` now says about two hours
 (63 + 60 min on record), as the test's docstring does.
 
+**2026-09-30, 05:15 UTC — the run records of the two revision-2 arms are committed for the
+knowledge audit** (the lead's word, relayed 05:14): `reports/p1_pilot/records/<prompt_version>/
+<run_id>/` for the ten rev2/luna runs at `cc256fd` and the ten rev2/claude runs at
+`4801f36`, each with its redacted manifest, `calls.jsonl`, `workflows/p1/state.json`,
+`report.json` where present and the model log (`llm_calls.jsonl`; the two over 5 MB as
+`llm_calls.jsonl.gz`); `index.csv` (prompt version, model, cell, run id, commit, the truth
+label from the scenario YAML, the labels given). 49 MB in 101 files, under the 80 MB
+mark, so every log is included. Rule 1: nothing from `truth_store/` and nothing derived
+from it; the tree was scanned for truth-store tokens and key material (clean) and every
+manifest is the redacted one; the static rule-1 checker applies to Python modules and the
+tree holds none. Pushed with the freeze and the two reviews' notes once the full suite
+that started 05:04 is green (the push rule).
+
