@@ -1,0 +1,112 @@
+{
+ "workflow": "p1",
+ "label": "sensor",
+ "secondary_labels": [],
+ "confidence": 0.9,
+ "completed": true,
+ "stop": "concluded",
+ "abstentions": [
+  "ch4_fraction_claims",
+  "gas_flow_claims",
+  "kinetic_attribution",
+  "missing_transient",
+  "parameter_values",
+  "ph_claims",
+  "tan_claims",
+  "temperature_claims"
+ ],
+ "parameters": {},
+ "validation": {
+  "holdout": [
+   150.0,
+   200.0
+  ],
+  "ensemble": false,
+  "ensemble_size": 0,
+  "metrics": {
+   "alkalinity_total": {
+    "n": 7.0,
+    "mae": 0.482454360963292,
+    "rmse": 0.5724530559300901,
+    "nrmse": 1.401145612084664,
+    "bias": 0.482454360963292,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "cod_total": {
+    "n": 7.0,
+    "mae": 1.6065539722915534,
+    "rmse": 2.1208295582734635,
+    "nrmse": 0.8520085649213696,
+    "bias": -0.7129901645672356,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "vfa_titrimetric": {
+    "n": 6.0,
+    "mae": 0.084106989487933,
+    "rmse": 0.0873615007711885,
+    "nrmse": 1.0186803022451973,
+    "bias": 0.06173922168296838,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   }
+  },
+  "constraint_violations": 0,
+  "calls": [
+   21
+  ]
+ },
+ "annotations": [
+  "agent summary: The primary mismatch is a sensor problem, strongest in TAN: the routine TAN residual is strongly negative while the independent day-84 TAN assay agrees with the model. Gas flow, pH and methane-fraction channels were also excluded after QC and show large structured residuals; the boundary-seeking fit is therefore treated as compensation, not a kinetic update, and the final forecast uses the default-parameter simulation.",
+  "duration guard: 20.86 s per evaluation (measured; 156 evaluations measured so far)"
+ ],
+ "tool_failures": [
+  {
+   "step": "fit_lsq",
+   "name": "p1.fit_lsq",
+   "call_index": null,
+   "kind": "error",
+   "message": "this call would make up to 124 simulator evaluations, about 54 min at this run's 20.9 s per evaluation (x1.25 margin), but 35.3 min of wall clock remain less the 6 min reserve for concluding: at most 67 evaluations fit; size the call to that, or conclude",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "fit_lsq",
+   "name": "p1.fit_lsq",
+   "call_index": null,
+   "kind": "error",
+   "message": "this call would make up to 79 simulator evaluations, about 34 min at this run's 20.9 s per evaluation (x1.25 margin), but 35.3 min of wall clock remain less the 6 min reserve for concluding: at most 67 evaluations fit; size the call to that, or conclude",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "`bias_z` = -17.496 is not what the cited calls produced ([-7.7804])",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "`bias_z` = -25.65 is not what the cited calls produced ([-17.496])",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "`most_explanatory` = 'temperature' is not what the cited calls produced",
+   "fallback": "refused by the harness"
+  }
+ ]
+}

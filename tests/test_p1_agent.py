@@ -69,10 +69,12 @@ from tools.server import OUTPUTS_DIR, OutputSink
 from tools.workflow_config import (
     WORKFLOW_CONFIG_DIR,
     check_brief_hash,
+    check_frozen,
     check_prompt_hash,
     load_p1,
     load_prompts,
     model_system_text,
+    prompt_digest,
     sandbox_config,
     tool_size_ceilings,
 )
@@ -279,6 +281,10 @@ def test_the_expert_brief_arm_differs_from_p1_only_in_the_brief():
     arm = yaml.safe_load((WORKFLOW_CONFIG_DIR / "p1_expert_brief.yaml").read_text("utf-8"))
     assert arm["prompts"].pop("brief") == f"p1_prompts/{BRIEF_FILE}"
     assert arm.pop("brief_sha256") == ""  # not frozen
+    # the frozen P1 commits its hash and its record; the comparison arm carries neither
+    assert plain.pop("frozen")["prompt_sha256"] == plain["prompt_sha256"] != ""
+    assert arm["prompt_sha256"] == "" and "frozen" not in arm
+    plain["prompt_sha256"] = ""
     assert arm == plain
 
 
@@ -371,7 +377,7 @@ def test_what_the_runner_hands_the_jail_carries_nothing_of_a_run_and_no_model_se
     config = load_p1()
     payload = sandbox_config(config)
     assert "model" not in payload
-    assert set(payload) == (set(config.model_dump()) - {"model"}) | {
+    assert set(payload) == (set(config.model_dump()) - {"model", "frozen"}) | {
         "sensor_noise",
         "plant_geometry",
         "abstentions",
@@ -1378,13 +1384,65 @@ def test_provenance_is_in_the_summary_and_every_model_record(p1_result):
         assert line["provenance"]["git_commit"] == summary["git_commit"]
 
 
+FROZEN_PROMPT_SHA256 = "c80a37521e81487012b7a7ebc13e179b616216060d93f1ae45aa8791daf661d1"
+FROZEN_SYSTEM_SHA256 = "ab2025e4d00db06eac2b146bb175ab5fd1cfb744c71af21b14d816608324c1eb"
+
+
 def test_a_committed_prompt_hash_refuses_changed_prompts():
     config = load_p1()
-    assert config.prompt_sha256 == ""  # not frozen yet
+    assert config.prompt_sha256 == FROZEN_PROMPT_SHA256  # frozen 2026-09-30
     digest = check_prompt_hash(config)
-    assert check_prompt_hash(config.model_copy(update={"prompt_sha256": digest})) == digest
+    assert digest == FROZEN_PROMPT_SHA256
     with pytest.raises(ValueError, match="do not match the committed prompt_sha256"):
         check_prompt_hash(config.model_copy(update={"prompt_sha256": "0" * 64}))
+
+
+def test_the_frozen_record_is_what_is_on_disk():
+    # the lead's word of 2026-09-30, "Freeze P1": revision 2 with gpt-5.6-luna, no brief.
+    # The committed digests equal the computed ones, so a silent edit of a prompt or a
+    # model setting fails here before it can invalidate a run (and the runner refuses it).
+    config = load_p1()
+    frozen = check_frozen(config)
+    assert frozen is not None and frozen.date == "2026-09-30"
+    assert frozen.prompt_sha256 == FROZEN_PROMPT_SHA256 == prompt_digest(load_prompts(config))
+    assert frozen.system_sha256 == FROZEN_SYSTEM_SHA256
+    assert frozen.system_sha256 == system_digest(model_system_text(load_prompts(config)))
+    assert p1_provenance(config)["system_sha256"] == FROZEN_SYSTEM_SHA256
+    assert (frozen.model_id, frozen.effort, frozen.max_tokens) == ("gpt-5.6-luna", "high", 16000)
+    assert frozen.retry == config.model.retry
+    assert config.model.provider == "openai" and config.prompts.brief is None
+    # every field of the record is enforced (a negative control for each)
+    changed = {
+        "prompt_sha256": config.model_copy(update={"prompt_sha256": "0" * 64}),
+        "frozen.system_sha256": config.model_copy(
+            update={"frozen": frozen.model_copy(update={"system_sha256": "0" * 64})}
+        ),
+        "frozen.model_id": config.model_copy(
+            update={"frozen": frozen.model_copy(update={"model_id": "gpt-5.6-sol"})}
+        ),
+        "frozen.effort": config.model_copy(
+            update={"frozen": frozen.model_copy(update={"effort": "medium"})}
+        ),
+        "frozen.max_tokens": config.model_copy(
+            update={"frozen": frozen.model_copy(update={"max_tokens": 8000})}
+        ),
+        "frozen.retry": config.model_copy(
+            update={
+                "frozen": frozen.model_copy(
+                    update={"retry": config.model.retry.model_copy(update={"max_attempts": 1})}
+                )
+            }
+        ),
+    }
+    for name, bad in changed.items():
+        with pytest.raises(ValueError, match=name.split(".")[-1]):
+            check_frozen(bad)
+        with pytest.raises(ValueError):
+            p1_provenance(bad)
+    # the comparison arms are not frozen: no record, no committed hash
+    for arm in ("p1_expert_brief.yaml", "p1_anthropic.yaml"):
+        cfg = load_p1(WORKFLOW_CONFIG_DIR / arm)
+        assert cfg.frozen is None and cfg.prompt_sha256 == "" and check_frozen(cfg) is None
 
 
 def test_the_gateway_accepts_only_the_committed_tool_list(tmp_path):

@@ -1,0 +1,1295 @@
+{
+ "abstentions": [
+  "kinetic_attribution",
+  "parameter_values",
+  "inhibition_constant_magnitude",
+  "methanogenic_pathway_split",
+  "ch4_yield",
+  "vfa_total_claims",
+  "vfa_titrimetric_budget",
+  "alkalinity_total_budget",
+  "tan_budget",
+  "gas_flow_claims",
+  "ph_claims",
+  "ch4_fraction_claims",
+  "q_gas_stp_dry_budget",
+  "pH_budget",
+  "ch4_fraction_budget",
+  "peak_load_behaviour",
+  "missing_transient",
+  "inorganic_carbon_balance"
+ ],
+ "actions": [
+  {
+   "args_hash": "6e46ab5fd289f281",
+   "call_index": 0,
+   "detail": "",
+   "name": "describe_model",
+   "outcome": "ok",
+   "seq": 6,
+   "step": "read",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "6e46ab5fd289f281",
+   "call_index": 1,
+   "detail": "",
+   "name": "describe_model",
+   "outcome": "ok",
+   "seq": 7,
+   "step": "describe_model",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "6e46ab5fd289f281",
+   "call_index": 2,
+   "detail": "",
+   "name": "feed_loads",
+   "outcome": "ok",
+   "seq": 8,
+   "step": "feed_loads",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "13619c90ffee4923",
+   "call_index": 3,
+   "detail": "",
+   "name": "data_qc",
+   "outcome": "ok",
+   "seq": 9,
+   "step": "data_qc",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "38abd3df30b055d1",
+   "call_index": 4,
+   "detail": "",
+   "name": "mass_balance",
+   "outcome": "ok",
+   "seq": 10,
+   "step": "mass_balance",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "8aa3c0d29a15451a",
+   "call_index": 5,
+   "detail": "",
+   "name": "gsa_morris",
+   "outcome": "ok",
+   "seq": 11,
+   "step": "gsa_morris",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "43ffc3860b4b73c1",
+   "call_index": 6,
+   "detail": "",
+   "name": "gsa_sobol",
+   "outcome": "ok",
+   "seq": 12,
+   "step": "gsa_sobol",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "3726e44f585b94b9",
+   "call_index": 7,
+   "detail": "",
+   "name": "fisher_info",
+   "outcome": "ok",
+   "seq": 13,
+   "step": "fisher_info",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "2b5d52a5b8bd0995",
+   "call_index": 8,
+   "detail": "",
+   "name": "simulate",
+   "outcome": "ok",
+   "seq": 14,
+   "step": "simulate",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "47129cd7dae4c7e5",
+   "call_index": 9,
+   "detail": "",
+   "name": "residual_diag",
+   "outcome": "ok",
+   "seq": 15,
+   "step": "residual_diag",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "78b7108795b6f92f",
+   "call_index": 10,
+   "detail": "",
+   "name": "residual_diag",
+   "outcome": "ok",
+   "seq": 16,
+   "step": "residual_diag",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "128c2a27a913cb49",
+   "call_index": 11,
+   "detail": "",
+   "name": "residual_diag",
+   "outcome": "ok",
+   "seq": 17,
+   "step": "residual_diag",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "84450dabe2c417a4",
+   "call_index": 12,
+   "detail": "",
+   "name": "residual_diag",
+   "outcome": "ok",
+   "seq": 18,
+   "step": "residual_diag",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "20e3a6de7e8fcfc1",
+   "call_index": 13,
+   "detail": "",
+   "name": "request_assay",
+   "outcome": "ok",
+   "seq": 19,
+   "step": "request_assay",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "3659840a21192435",
+   "call_index": 14,
+   "detail": "",
+   "name": "request_assay",
+   "outcome": "ok",
+   "seq": 20,
+   "step": "request_assay",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "3166e3820d405c77",
+   "call_index": 15,
+   "detail": "",
+   "name": "request_assay",
+   "outcome": "ok",
+   "seq": 21,
+   "step": "request_assay",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "3107a45f875d206c",
+   "call_index": 16,
+   "detail": "",
+   "name": "fit_lsq",
+   "outcome": "ok",
+   "seq": 22,
+   "step": "fit_lsq",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "0689a771fb83ade4",
+   "call_index": 17,
+   "detail": "",
+   "name": "simulate",
+   "outcome": "ok",
+   "seq": 23,
+   "step": "simulate",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "b9ac11e385e30ad3",
+   "call_index": 18,
+   "detail": "",
+   "name": "residual_diag",
+   "outcome": "ok",
+   "seq": 24,
+   "step": "residual_diag",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "9fa02ed0c2917136",
+   "call_index": 19,
+   "detail": "",
+   "name": "residual_diag",
+   "outcome": "ok",
+   "seq": 25,
+   "step": "residual_diag",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "1afa5434dc12402f",
+   "call_index": 20,
+   "detail": "",
+   "name": "residual_diag",
+   "outcome": "ok",
+   "seq": 26,
+   "step": "residual_diag",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "5127a25002dde1e4",
+   "call_index": 21,
+   "detail": "",
+   "name": "residual_diag",
+   "outcome": "ok",
+   "seq": 27,
+   "step": "residual_diag",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "f0e573a527df7779",
+   "call_index": 22,
+   "detail": "",
+   "name": "request_assay",
+   "outcome": "ok",
+   "seq": 28,
+   "step": "request_assay",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "32fad83e74af00d2",
+   "call_index": 23,
+   "detail": "",
+   "name": "request_assay",
+   "outcome": "ok",
+   "seq": 29,
+   "step": "request_assay",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "e69c5220f4631c99",
+   "call_index": 24,
+   "detail": "",
+   "name": "fit_lsq",
+   "outcome": "ok",
+   "seq": 30,
+   "step": "fit_lsq",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "21766cf6845dc9b7",
+   "call_index": 25,
+   "detail": "",
+   "name": "simulate",
+   "outcome": "ok",
+   "seq": 31,
+   "step": "simulate",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "71f52a29019f5597",
+   "call_index": 26,
+   "detail": "",
+   "name": "residual_diag",
+   "outcome": "ok",
+   "seq": 32,
+   "step": "residual_diag",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "30374faf47622b23",
+   "call_index": 27,
+   "detail": "",
+   "name": "residual_diag",
+   "outcome": "ok",
+   "seq": 33,
+   "step": "residual_diag",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "7db9040add98ced0",
+   "call_index": 28,
+   "detail": "",
+   "name": "residual_diag",
+   "outcome": "ok",
+   "seq": 34,
+   "step": "residual_diag",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "be0475f304d2bcad",
+   "call_index": 29,
+   "detail": "",
+   "name": "residual_diag",
+   "outcome": "ok",
+   "seq": 35,
+   "step": "residual_diag",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "a80c1859246622c4",
+   "call_index": 30,
+   "detail": "",
+   "name": "request_assay",
+   "outcome": "ok",
+   "seq": 36,
+   "step": "request_assay",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "a58567f069104148",
+   "call_index": 31,
+   "detail": "",
+   "name": "fit_lsq",
+   "outcome": "ok",
+   "seq": 37,
+   "step": "fit_lsq",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "b9e8565f7624e76a",
+   "call_index": 32,
+   "detail": "",
+   "name": "mass_balance",
+   "outcome": "ok",
+   "seq": 38,
+   "step": "mass_balance",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "9e339bf781ce34fa",
+   "call_index": 33,
+   "detail": "",
+   "name": "simulate",
+   "outcome": "ok",
+   "seq": 39,
+   "step": "simulate",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "2ad07ccafac516bf",
+   "call_index": 34,
+   "detail": "",
+   "name": "validate",
+   "outcome": "ok",
+   "seq": 40,
+   "step": "validate",
+   "version": "1.0"
+  }
+ ],
+ "annotations": [
+  "agent summary: The routine vfa_total channel is excluded as a sensor/laboratory bias: independent assays at days 28, 140 and 147 agree with the model while the routine VFA record remains positively biased. After removing flagged sensors and VFA, the only supported parameter is Y_ac = 1.0909 with a 90% Fisher interval of [0.94143, 1.2403], which includes the default and is not offered as a kinetic update; the remaining alkalinity residual is specifically associated with high_strength_waste and the charge balance supports revising the influent mapping.",
+  "duration guard: 19.29 s per evaluation (measured; 262 evaluations measured so far)"
+ ],
+ "assay_checks": [
+  {
+   "assay": "vfa_total",
+   "channel": "vfa_titrimetric",
+   "predicted": 0.7286554648140985,
+   "report_day": 148.0,
+   "sample_day": 147.0,
+   "sd": 0.058752606723906683,
+   "unit": "kg/m3 as acetic acid, as a two-point Nordmann/Kapp FOS titration would report it (the plant's own convention; mostly bicarbonate carry-over)",
+   "value": 0.7478974243779807,
+   "z": 0.3275081845186038
+  },
+  {
+   "assay": "tan",
+   "channel": "tan",
+   "predicted": 0.6942952703685862,
+   "report_day": 148.0,
+   "sample_day": 147.0,
+   "sd": 0.034987374878120515,
+   "unit": "kg N/m3 (total ammoniacal nitrogen, S_IN)",
+   "value": 0.668697583360678,
+   "z": -0.7316263965810084
+  },
+  {
+   "assay": "alkalinity",
+   "channel": "alkalinity_total",
+   "predicted": 5.646648591973458,
+   "report_day": 29.0,
+   "sample_day": 28.0,
+   "sd": 0.2894233366871007,
+   "unit": "kg CaCO3/m3 (bicarbonate + VFA anions)",
+   "value": 6.218081712910465,
+   "z": 1.9743850909810727
+  },
+  {
+   "assay": "vfa_total",
+   "channel": "vfa_titrimetric",
+   "predicted": 0.7379701974714394,
+   "report_day": 141.0,
+   "sample_day": 140.0,
+   "sd": 0.059685516041168105,
+   "unit": "kg/m3 as acetic acid, as a two-point Nordmann/Kapp FOS titration would report it (the plant's own convention; mostly bicarbonate carry-over)",
+   "value": 0.7274852401564208,
+   "z": -0.17567004543927603
+  },
+  {
+   "assay": "tan",
+   "channel": "tan",
+   "predicted": 0.7524031864511732,
+   "report_day": 141.0,
+   "sample_day": 140.0,
+   "sd": 0.03746067252346027,
+   "unit": "kg N/m3 (total ammoniacal nitrogen, S_IN)",
+   "value": 0.7533945742597268,
+   "z": 0.026464762690330698
+  },
+  {
+   "assay": "vfa_total",
+   "channel": "vfa_titrimetric",
+   "predicted": 0.8163694120583143,
+   "report_day": 29.0,
+   "sample_day": 28.0,
+   "sd": 0.06768962560937221,
+   "unit": "kg/m3 as acetic acid, as a two-point Nordmann/Kapp FOS titration would report it (the plant's own convention; mostly bicarbonate carry-over)",
+   "value": 0.8264583591082271,
+   "z": 0.1490471687365325
+  }
+ ],
+ "budget": {
+  "assay_units": 0,
+  "assay_units_total": 6,
+  "assay_units_used": 6,
+  "n_calls": 35,
+  "simulator_evals": 444,
+  "simulator_evals_total": 750,
+  "simulator_evals_used": 306,
+  "wall_clock_min": 48.728005676249964,
+  "wall_clock_min_total": 150.0
+ },
+ "calibrated_outputs": [
+  "alkalinity_total",
+  "cod_total",
+  "tan"
+ ],
+ "calibration_window": [
+  0.0,
+  150.0
+ ],
+ "candidate_model": "adm1_fitted",
+ "classification": {
+  "confidence": 0.84,
+  "evidence": [
+   {
+    "calls": [
+     3
+    ],
+    "label": "sensor",
+    "rule": "p1",
+    "statement": "The QC screen identifies three flagged sensor records; the flagged records are not used for calibration.",
+    "values": {
+     "event_missing_ratio": 6.4286,
+     "sensor": "ch4_fraction",
+     "signal_to_noise": 0.2217
+    }
+   },
+   {
+    "calls": [
+     4
+    ],
+    "label": "influent",
+    "rule": "p1",
+    "statement": "Observed-window checks report a nonzero charge drift and negative mean COD closure, while the summary marks no inadmissible windows; the charge inconsistency is evidence to test the influent/accounting mapping.",
+    "values": {
+     "charge_drift": 0.42559,
+     "cod_closure_mean": -0.059323,
+     "n_inadmissible": 0.0
+    }
+   },
+   {
+    "calls": [
+     9
+    ],
+    "label": "influent",
+    "rule": "p1",
+    "statement": "Against the default simulation, alkalinity residuals are structured by load and high_strength_waste fraction, with high_strength_waste the most explanatory covariate.",
+    "values": {
+     "bias_z": 0.36564,
+     "most_explanatory": "feed_high_strength_waste",
+     "rmse_z": 1.2028
+    }
+   },
+   {
+    "calls": [
+     11
+    ],
+    "label": "state",
+    "rule": "p1",
+    "statement": "TAN residuals are serially structured and change from early negative to late positive, with a significant time structure, indicating a state/time mismatch rather than a uniform kinetic shift.",
+    "values": {
+     "early_bias_z": -1.9008,
+     "late_bias_z": 1.3507,
+     "step_day": 112.0,
+     "step_z": 3.048
+    }
+   },
+   {
+    "calls": [
+     12
+    ],
+    "label": "influent",
+    "rule": "p1",
+    "statement": "Titrimetric VFA residuals have a positive channel bias, strongest late in the record, while no feed covariate is individually structured; this is independent evidence of a persistent channel-level mismatch to test.",
+    "values": {
+     "bias_z": 2.545,
+     "late_bias_z": 2.6039,
+     "rmse_z": 1.1086
+    }
+   },
+   {
+    "calls": [
+     13
+    ],
+    "label": "sensor",
+    "rule": "p1",
+    "statement": "An independent vfa_total assay on day 147 is close to the model prediction, not the high routine observation, so the late routine VFA record is not reliable evidence for kinetics.",
+    "values": {
+     "assay": "vfa_total",
+     "disagreement_z": 0.32751
+    }
+   },
+   {
+    "calls": [
+     14
+    ],
+    "label": "sensor",
+    "rule": "p1",
+    "statement": "An independent TAN assay on day 147 is close to the model prediction and below the routine observation, supporting a late routine-sampling/channel problem rather than a kinetic shift.",
+    "values": {
+     "assay": "tan",
+     "disagreement_z": -0.73163
+    }
+   },
+   {
+    "calls": [
+     15
+    ],
+    "label": "state",
+    "rule": "p1",
+    "statement": "The independent alkalinity assay at day 28 is higher than the default prediction, but this single disagreement does not establish a time-localized sensor or state fault.",
+    "values": {
+     "assay": "alkalinity",
+     "disagreement_z": 1.9744
+    }
+   },
+   {
+    "calls": [
+     22
+    ],
+    "label": "sensor",
+    "rule": "p1",
+    "statement": "The day-140 independent VFA assay agrees with the model, while the routine late value is higher; this supports quarantine of the post-day-133 VFA routine window.",
+    "values": {
+     "assay": "vfa_total",
+     "disagreement_z": -0.17567
+    }
+   },
+   {
+    "calls": [
+     30
+    ],
+    "label": "sensor",
+    "rule": "p1",
+    "statement": "At day 28 the independent VFA assay is close to the fitted-model prediction, whereas the routine VFA sample is materially higher; together with the late checks this supports a VFA sensor/laboratory channel bias.",
+    "values": {
+     "assay": "vfa_total",
+     "disagreement_z": 0.14905
+    }
+   },
+   {
+    "calls": [
+     29
+    ],
+    "label": "sensor",
+    "rule": "p1",
+    "statement": "After quarantining the late VFA window, the remaining routine VFA record still has a positive bias beyond declared noise, so the channel is excluded rather than used to move kinetics.",
+    "values": {
+     "bias_z": 2.3727,
+     "rmse_z": 1.119
+    }
+   },
+   {
+    "calls": [
+     28
+    ],
+    "label": "state",
+    "rule": "p1",
+    "statement": "After the fit, TAN retains serial structure and a time-associated early-to-late shift, which is evidence for a transient/state component not removed by the identifiable kinetic fit.",
+    "values": {
+     "early_bias_z": -1.6352,
+     "late_bias_z": 1.9879,
+     "step_day": 112.0,
+     "step_z": 2.9878
+    }
+   },
+   {
+    "calls": [
+     30
+    ],
+    "label": "sensor",
+    "rule": "p1",
+    "statement": "An independent VFA assay at day 28 is close to the final-model prediction, while the routine VFA channel is high; this independently confirms the VFA channel bias from the start of the record.",
+    "values": {
+     "assay": "vfa_total",
+     "disagreement_z": 0.14905
+    }
+   },
+   {
+    "calls": [
+     29
+    ],
+    "label": "sensor",
+    "rule": "p1",
+    "statement": "The retained pre-day-133 VFA samples still show a positive standardised bias after fitting, so the full VFA channel is excluded rather than used to infer kinetics.",
+    "values": {
+     "bias_z": 2.3727,
+     "rmse_z": 1.119
+    }
+   },
+   {
+    "calls": [
+     26
+    ],
+    "label": "influent",
+    "rule": "p1",
+    "statement": "The final-fit alkalinity residual remains structured by high_strength_waste fraction and load; this feed-specific pattern persists after calibration and is more consistent with influent mapping than a uniform kinetic change.",
+    "values": {
+     "most_explanatory": "feed_high_strength_waste",
+     "rmse_z": 1.2108
+    }
+   },
+   {
+    "calls": [
+     3
+    ],
+    "label": "sensor",
+    "rule": "p1",
+    "statement": "QC also flagged gas_flow for spikes and informative missingness, so it was kept out of the objective and is not used to infer plant kinetics.",
+    "values": {
+     "event_missing_ratio": 2.1429,
+     "sensor": "gas_flow"
+    }
+   },
+   {
+    "calls": [
+     3
+    ],
+    "label": "sensor",
+    "rule": "p1",
+    "statement": "QC flagged pH for spikes and informative missingness, so it was kept out of the objective and is not used to infer plant kinetics.",
+    "values": {
+     "event_missing_ratio": 3.75,
+     "sensor": "ph"
+    }
+   }
+  ],
+  "flag_sensor": "vfa_total",
+  "kinetic_update": false,
+  "label": "sensor",
+  "recommend_structural_review": false,
+  "revise_influent_mapping": true,
+  "rule": "p1",
+  "scale_factor": {},
+  "secondary_labels": [
+   "influent"
+  ]
+ },
+ "data_quality": {
+  "alkalinity": {
+   "flags": [],
+   "in_objective": true,
+   "missing_fraction": 0.045454545454545456,
+   "notes": "",
+   "quarantined_windows": [],
+   "status": "ok"
+  },
+  "ch4_fraction": {
+   "flags": [
+    "informative_missingness"
+   ],
+   "in_objective": false,
+   "missing_fraction": 0.10666666666666667,
+   "notes": "QC flagged informative missingness during high-load windows; missing fraction 0.10667 and event missing ratio 6.4286. Exclude the sensor rather than fit through its non-random gaps.",
+   "quarantined_windows": [
+    [
+     0.0,
+     150.0
+    ]
+   ],
+   "status": "flagged"
+  },
+  "cod_total": {
+   "flags": [],
+   "in_objective": true,
+   "missing_fraction": 0.0,
+   "notes": "",
+   "quarantined_windows": [],
+   "status": "ok"
+  },
+  "gas_flow": {
+   "flags": [
+    "spikes",
+    "informative_missingness"
+   ],
+   "in_objective": false,
+   "missing_fraction": 0.06666666666666667,
+   "notes": "QC flagged spikes at days 23 and 73 and informative missingness; missing fraction 0.066667 and event missing ratio 2.1429. Exclude rather than fit through flagged flow data.",
+   "quarantined_windows": [
+    [
+     23.0,
+     23.0
+    ],
+    [
+     73.0,
+     73.0
+    ]
+   ],
+   "status": "flagged"
+  },
+  "ph": {
+   "flags": [
+    "spikes",
+    "informative_missingness"
+   ],
+   "in_objective": false,
+   "missing_fraction": 0.09333333333333334,
+   "notes": "QC flagged spike at day 95 and informative missingness; missing fraction 0.093333 and event missing ratio 3.75. Exclude rather than fit through flagged pH data.",
+   "quarantined_windows": [
+    [
+     95.0,
+     95.0
+    ]
+   ],
+   "status": "flagged"
+  },
+  "tan": {
+   "flags": [],
+   "in_objective": true,
+   "missing_fraction": 0.0,
+   "notes": "",
+   "quarantined_windows": [],
+   "status": "ok"
+  },
+  "temperature": {
+   "flags": [],
+   "in_objective": false,
+   "missing_fraction": 0.09333333333333334,
+   "notes": "",
+   "quarantined_windows": [],
+   "status": "ok"
+  },
+  "vfa_total": {
+   "flags": [],
+   "in_objective": false,
+   "missing_fraction": 0.045454545454545456,
+   "notes": "Independent vfa_total assays at days 28, 140 and 147 are close to model predictions while routine VFA samples are high; the entire routine VFA sensor record is excluded as a channel bias, not fitted through.",
+   "quarantined_windows": [
+    [
+     133.0,
+     150.0
+    ],
+    [
+     0.0,
+     150.0
+    ]
+   ],
+   "status": "excluded"
+  }
+ },
+ "duration_days": 200.0,
+ "final": {
+  "abstentions": [
+   "kinetic_attribution",
+   "parameter_values",
+   "inhibition_constant_magnitude",
+   "methanogenic_pathway_split",
+   "ch4_yield",
+   "vfa_total_claims",
+   "vfa_titrimetric_budget",
+   "alkalinity_total_budget",
+   "tan_budget",
+   "gas_flow_claims",
+   "ph_claims",
+   "ch4_fraction_claims",
+   "q_gas_stp_dry_budget",
+   "pH_budget",
+   "ch4_fraction_budget",
+   "peak_load_behaviour",
+   "missing_transient",
+   "inorganic_carbon_balance"
+  ],
+  "completed": true,
+  "confidence": 0.84,
+  "interval_method": "fisher",
+  "label": "sensor",
+  "parameters": {
+   "Y_ac": {
+    "at_bound": false,
+    "estimate": 1.0909,
+    "lower": 0.94143,
+    "method": "fisher",
+    "unit": "- (multiplier of the BSM2 default 0.05)",
+    "upper": 1.2403
+   }
+  },
+  "secondary_labels": [
+   "influent"
+  ]
+ },
+ "holdout_window": [
+  150.0,
+  200.0
+ ],
+ "mass_balance": {
+  "admissible": false,
+  "charge_consistent": null,
+  "charge_drift": null,
+  "cod_closure_mean": null,
+  "n_closure_mean": 0.6307181797713312,
+  "n_cod_evaluable": 0,
+  "n_cod_inadmissible": 0,
+  "n_windows": 10
+ },
+ "model_parameters": [
+  "k_dis",
+  "k_hyd_ch",
+  "k_hyd_pr",
+  "k_hyd_li",
+  "k_m_su",
+  "k_m_aa",
+  "k_m_fa",
+  "k_m_c4",
+  "k_m_pro",
+  "k_m_ac",
+  "k_m_h2",
+  "K_S_ac",
+  "K_S_pro",
+  "K_S_h2",
+  "K_I_nh3",
+  "K_I_h2_pro",
+  "k_dec_X_ac",
+  "Y_ac",
+  "Y_h2",
+  "f_li_xc"
+ ],
+ "notes_seen": [
+  {
+   "author": "operator",
+   "day": 4,
+   "length": 43
+  },
+  {
+   "author": "operator",
+   "day": 29,
+   "length": 67
+  },
+  {
+   "author": "operator",
+   "day": 37,
+   "length": 60
+  },
+  {
+   "author": "operator",
+   "day": 53,
+   "length": 73
+  },
+  {
+   "author": "operator",
+   "day": 62,
+   "length": 38
+  },
+  {
+   "author": "operator",
+   "day": 75,
+   "length": 44
+  },
+  {
+   "author": "operator",
+   "day": 82,
+   "length": 54
+  },
+  {
+   "author": "operator",
+   "day": 114,
+   "length": 45
+  },
+  {
+   "author": "operator",
+   "day": 116,
+   "length": 67
+  },
+  {
+   "author": "operator",
+   "day": 119,
+   "length": 73
+  },
+  {
+   "author": "operator",
+   "day": 133,
+   "length": 81
+  },
+  {
+   "author": "operator",
+   "day": 146,
+   "length": 68
+  }
+ ],
+ "plan": {
+  "eval_seconds_assumed": null,
+  "fallbacks": [],
+  "guards_tripped": [],
+  "sizes": {
+   "model_turns": 27,
+   "refused_actions": 12,
+   "tool_uses": 81
+  },
+  "steps_completed": [
+   "describe_model",
+   "feed_loads",
+   "data_qc",
+   "mass_balance",
+   "inspect_record",
+   "inspect_record",
+   "inspect_record",
+   "inspect_record",
+   "inspect_record",
+   "inspect_record",
+   "inspect_record",
+   "inspect_record",
+   "set_sensor_status",
+   "set_sensor_status",
+   "set_sensor_status",
+   "inspect_record",
+   "inspect_record",
+   "inspect_record",
+   "inspect_record",
+   "inspect_record",
+   "gsa_morris",
+   "gsa_sobol",
+   "fisher_info",
+   "simulate",
+   "residual_diag",
+   "residual_diag",
+   "residual_diag",
+   "residual_diag",
+   "record_evidence",
+   "record_evidence",
+   "request_assay",
+   "request_assay",
+   "request_assay",
+   "record_evidence",
+   "record_evidence",
+   "record_evidence",
+   "fit_lsq",
+   "simulate",
+   "residual_diag",
+   "residual_diag",
+   "residual_diag",
+   "residual_diag",
+   "request_assay",
+   "request_assay",
+   "record_evidence",
+   "record_evidence",
+   "record_evidence",
+   "set_sensor_status",
+   "fit_lsq",
+   "simulate",
+   "residual_diag",
+   "residual_diag",
+   "residual_diag",
+   "residual_diag",
+   "record_evidence",
+   "request_assay",
+   "set_sensor_status",
+   "record_evidence",
+   "record_evidence",
+   "fit_lsq",
+   "mass_balance",
+   "record_evidence",
+   "simulate",
+   "record_evidence",
+   "record_evidence",
+   "record_evidence",
+   "record_evidence",
+   "record_evidence",
+   "conclude",
+   "validate"
+  ],
+  "steps_skipped": {}
+ },
+ "plant": "B",
+ "residuals": {
+  "alkalinity_total": {
+   "bias_z": 0.8575626998752427,
+   "covariate_eta2": {
+    "feed_high_strength_waste": 0.4812343532767401,
+    "load": 0.4569069490826179
+   },
+   "early_bias_z": 0.28146449009503516,
+   "lag1_autocorrelation": 0.22853523488549835,
+   "late_bias_z": 0.8025180510337725,
+   "most_explanatory": "feed_high_strength_waste",
+   "n": 21,
+   "rmse_z": 1.2108184848214851,
+   "serially_structured": false,
+   "step_day": 91.0,
+   "step_z": 1.294045392306732,
+   "trend_slope_per_d": 0.0007114308875787136
+  },
+  "cod_total": {
+   "bias_z": -1.3422952659802216,
+   "covariate_eta2": {},
+   "early_bias_z": -0.6937452913907687,
+   "lag1_autocorrelation": 0.20862639262724209,
+   "late_bias_z": -1.1589646930200914,
+   "most_explanatory": null,
+   "n": 22,
+   "rmse_z": 1.7405124574848203,
+   "serially_structured": false,
+   "step_day": 112.0,
+   "step_z": 2.6384500249055187,
+   "trend_slope_per_d": 0.008450765336369986
+  },
+  "tan": {
+   "bias_z": 0.6220354564313203,
+   "covariate_eta2": {
+    "feed_high_strength_waste": 0.42101039155466863,
+    "time": 0.5047528052755462
+   },
+   "early_bias_z": -1.6351891896347075,
+   "lag1_autocorrelation": 0.6164537261074908,
+   "late_bias_z": 1.9879079373844066,
+   "most_explanatory": "time",
+   "n": 22,
+   "rmse_z": 2.3143672317375032,
+   "serially_structured": true,
+   "step_day": 112.0,
+   "step_z": 2.987845345626899,
+   "trend_slope_per_d": 0.000727849930530813
+  },
+  "vfa_titrimetric": {
+   "bias_z": 2.372718769580083,
+   "covariate_eta2": {},
+   "early_bias_z": 0.7857825344945991,
+   "lag1_autocorrelation": 0.06327059843294885,
+   "late_bias_z": 2.2640956834615107,
+   "most_explanatory": null,
+   "n": 18,
+   "rmse_z": 1.119039769977567,
+   "serially_structured": false,
+   "step_day": 70.0,
+   "step_z": 1.5446915457216475,
+   "trend_slope_per_d": -0.00023955207663429797
+  }
+ },
+ "run_id": "run_98a743d03687",
+ "schema_version": "1.0",
+ "screening": {
+  "approved": [
+   "Y_ac"
+  ],
+  "declared": [
+   "k_dis",
+   "k_hyd_ch",
+   "k_hyd_pr",
+   "k_hyd_li",
+   "k_m_su",
+   "k_m_aa",
+   "k_m_fa",
+   "k_m_c4",
+   "k_m_pro",
+   "k_m_ac",
+   "k_m_h2",
+   "K_S_ac",
+   "K_S_pro",
+   "K_S_h2",
+   "K_I_nh3",
+   "K_I_h2_pro",
+   "k_dec_X_ac",
+   "Y_ac",
+   "Y_h2",
+   "f_li_xc"
+  ],
+  "fisher_relative_crlb": {
+   "K_I_nh3": 2.1459064775799703,
+   "Y_ac": 0.0496105438089065,
+   "k_m_ac": 1.059941686563302,
+   "k_m_h2": 12.528637421610313
+  },
+  "morris_ranking": [
+   "k_m_ac",
+   "Y_ac",
+   "K_I_nh3",
+   "K_S_ac",
+   "Y_h2",
+   "k_m_fa",
+   "k_dec_X_ac",
+   "k_m_h2",
+   "k_hyd_pr",
+   "f_li_xc",
+   "K_S_h2",
+   "k_dis",
+   "k_hyd_li",
+   "k_m_pro",
+   "k_m_c4",
+   "k_hyd_ch",
+   "k_m_aa",
+   "K_S_pro",
+   "k_m_su",
+   "K_I_h2_pro"
+  ],
+  "sobol_total_order": {
+   "K_I_nh3": 184.71109192873283,
+   "K_S_ac": 0.004824856130784521,
+   "Y_ac": 1.0804608851777995,
+   "k_m_ac": 0.012395149707809703,
+   "k_m_fa": 0.005707311453420326,
+   "k_m_h2": 0.18771665931829898
+  }
+ },
+ "tier": "B",
+ "tool_failures": [
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "no cited call produced a `end_d` for ['ch4_fraction']; cite the call the number rests on",
+   "name": "p1.record_evidence",
+   "step": "record_evidence"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "no cited call produced a `end_d` for ['gas_flow']; cite the call the number rests on",
+   "name": "p1.record_evidence",
+   "step": "record_evidence"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "no cited call produced a `end_d` for ['ph']; cite the call the number rests on",
+   "name": "p1.record_evidence",
+   "step": "record_evidence"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "`n_inadmissible` = 2 is not what the cited calls produced ([0.0])",
+   "name": "p1.record_evidence",
+   "step": "record_evidence"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "this call would make up to 417 simulator evaluations, about 166 min at this run's 19.1 s per evaluation (x1.25 margin), but 105.8 min of wall clock remain less the 6 min reserve for concluding: at most 250 evaluations fit; size the call to that, or conclude",
+   "name": "p1.fit_lsq",
+   "step": "fit_lsq"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "this call would make up to 254 simulator evaluations, about 101 min at this run's 19.1 s per evaluation (x1.25 margin), but 105.8 min of wall clock remain less the 6 min reserve for concluding: at most 250 evaluations fit; size the call to that, or conclude",
+   "name": "p1.fit_lsq",
+   "step": "fit_lsq"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "no cited call produced a `declared_bound`; cite the call the number rests on",
+   "name": "p1.record_evidence",
+   "step": "record_evidence"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "unknown value key(s) ['Y_ac_estimate', 'Y_ac_lower', 'Y_ac_upper']; use the published evidence keys (and optionally `sensor` or `channel` to name what they concern)",
+   "name": "p1.record_evidence",
+   "step": "record_evidence"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "`bias_z` = 2.3727 is not what the cited calls produced ([0.62204])",
+   "name": "p1.record_evidence",
+   "step": "record_evidence"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "this call would make up to 191 simulator evaluations, about 77 min at this run's 19.3 s per evaluation (x1.25 margin), but 63.8 min of wall clock remain less the 6 min reserve for concluding: at most 143 evaluations fit; size the call to that, or conclude",
+   "name": "p1.fit_lsq",
+   "step": "fit_lsq"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "no cited call produced a `bias_z`; cite the call the number rests on",
+   "name": "p1.record_evidence",
+   "step": "record_evidence"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "no cited call produced a `signal_to_noise`; cite the call the number rests on",
+   "name": "p1.record_evidence",
+   "step": "record_evidence"
+  }
+ ],
+ "validation": {
+  "calls": [
+   34
+  ],
+  "constraint_violations": 0,
+  "ensemble": false,
+  "ensemble_size": 0,
+  "holdout": [
+   150.0,
+   200.0
+  ],
+  "metrics": {
+   "alkalinity_total": {
+    "bias": 0.1696840700228659,
+    "coverage_50": null,
+    "coverage_90": null,
+    "crps": null,
+    "interval_score_90": null,
+    "mae": 0.2812164070664969,
+    "n": 7.0,
+    "nrmse": 0.7037722048897528,
+    "rmse": 0.3407565891890647
+   },
+   "cod_total": {
+    "bias": 0.41087901553080897,
+    "coverage_50": null,
+    "coverage_90": null,
+    "crps": null,
+    "interval_score_90": null,
+    "mae": 0.7910288167019601,
+    "n": 7.0,
+    "nrmse": 0.8397687255958479,
+    "rmse": 0.9411133156573053
+   },
+   "tan": {
+    "bias": 0.035249853089798534,
+    "coverage_50": null,
+    "coverage_90": null,
+    "crps": null,
+    "interval_score_90": null,
+    "mae": 0.05139025825256661,
+    "n": 7.0,
+    "nrmse": 0.6310569618254056,
+    "rmse": 0.05838612953619662
+   }
+  }
+ },
+ "workflow": "p1",
+ "workflow_version": "0.1"
+}

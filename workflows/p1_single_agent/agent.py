@@ -2230,6 +2230,7 @@ class Agent:
         self.messages: list[dict[str, Any]] = [{"role": "user", "content": self.task_text()}]
         self.state = {"turns": 0, "tool_uses": 0, "refused": 0, "guards": []}
         self.grace: int | None = None
+        self.truncated = 0  # replies cut at the token limit: one is continued, two end the run
         self.stop_reason = ""
 
     def task_text(self) -> str:
@@ -2416,12 +2417,44 @@ class Agent:
             response = reply["response"]
             content = list(response.get("content") or [])
             self.messages.append({"role": "assistant", "content": _assistant_blocks(content)})
-            if response.get("stop_reason") == "refusal":
-                self.stop_reason = "the model refused"
+            stop = response.get("stop_reason")
+            if stop == "refusal":
+                category = (response.get("stop_details") or {}).get("category")
+                self.stop_reason = "the model refused" + (f" ({category})" if category else "")
                 break
             uses = [b for b in content if b.get("type") == "tool_use"]
             if self.grace is not None:
                 self.grace -= 1
+            if stop == "max_tokens":
+                # a reply cut at the token limit: its tool uses are not run (an input may be
+                # incomplete); the model is told once and continues; a second cut ends the run
+                self.truncated += 1
+                self.state["guards"].append(
+                    f"reply cut at the token limit at turn {self.state['turns']}"
+                )
+                if self.truncated > 1:
+                    self.stop_reason = "the model's reply was cut at the token limit twice"
+                    break
+                results = [
+                    self.refuse(b, "the reply was cut at the token limit; the tool was not run")
+                    for b in uses
+                ]
+                text = (
+                    "HARNESS: your reply was cut at the token limit; continue, more briefly, "
+                    "and call a tool."
+                )
+                self.messages.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            *results,
+                            {"type": "text", "text": text},
+                            *self._notice_blocks(),
+                        ],
+                    }
+                )
+                self.write(completed=False)
+                continue
             if not uses:
                 text = "HARNESS: continue by calling a tool; the run ends only with `conclude`."
                 self.messages.append(

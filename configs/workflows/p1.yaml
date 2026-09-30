@@ -8,9 +8,16 @@
 # jailed agent never chooses its model, its sampling settings or its retry policy.
 # Schema: tools/workflow_config.py::P1Config.
 #
-# STATUS: DEVELOPMENT (2026-09-25). Not frozen, not hashed: the prompts and this file are
-# frozen, and their hash committed, on the lead's word before the held-out variants of §7
-# are generated (the P1 prompt rule of 2026-09-24). Every value is DESIGN unless marked.
+# STATUS: FROZEN (2026-09-30, the lead's word "Freeze P1", relayed by the coordinator).
+# The frozen P1 is revision 2 of the prompts (system + task; prompt_sha256 below) with
+# gpt-5.6-luna through this file, no expert brief. The `frozen` record at the end holds
+# what was frozen; tools/workflow_config.py::check_frozen refuses a run whose prompts or
+# model settings differ from it, and check_prompt_hash refuses prompts that do not hash to
+# prompt_sha256. The prompt files carry no status header: the hash covers their whole
+# text, so the status lives here only. A post-freeze change to a prompt or a model setting
+# invalidates the runs (the P1 prompt rule of 2026-09-24). The comparison arms
+# (p1_expert_brief.yaml, p1_anthropic.yaml) are development arms, not frozen, on record.
+# Every value is DESIGN unless marked.
 version: 1
 workflow: p1
 workflow_version: "0.1"
@@ -160,11 +167,30 @@ evidence_keys:
 prompts:
   system: p1_prompts/system.md
   task: p1_prompts/task.md
-prompt_sha256: ""             # the prompts' fingerprint (tools/workflow_config.py::
-                              # prompt_digest), committed at the freeze on the lead's word;
-                              # empty until then. Once set, the runner refuses any prompt
-                              # that does not hash to it.
+prompt_sha256: c80a37521e81487012b7a7ebc13e179b616216060d93f1ae45aa8791daf661d1
+                              # FROZEN 2026-09-30: the prompts' fingerprint (tools/
+                              # workflow_config.py::prompt_digest over system.md and
+                              # task.md); the runner refuses any prompt that does not hash
+                              # to it.
 
 runner:
   timeout_margin_min: 10.0    # DESIGN  min past the cell's wall-clock allowance before the
                               # jail is killed (model latency counts on the registry clock)
+
+# The freeze record (the lead's word of 2026-09-30, relayed by the coordinator). Every
+# field is checked against this file and the prompts on disk before a run
+# (tools/workflow_config.py::check_frozen); a mismatch refuses the run.
+frozen:
+  date: "2026-09-30"
+  word: "Freeze P1 (the lead, 2026-09-30, relayed by the coordinator)"
+  prompt_sha256: c80a37521e81487012b7a7ebc13e179b616216060d93f1ae45aa8791daf661d1
+  system_sha256: ab2025e4d00db06eac2b146bb175ab5fd1cfb744c71af21b14d816608324c1eb
+                              # the sha256 of the system text the model is sent (system.md
+                              # alone: no brief), the value every summary carries
+  model_id: gpt-5.6-luna
+  effort: high
+  max_tokens: 16000
+  retry:
+    max_attempts: 4
+    backoff_s: 2.0
+    max_backoff_s: 30.0

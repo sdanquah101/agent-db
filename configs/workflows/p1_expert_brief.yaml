@@ -8,9 +8,12 @@
 # jailed agent never chooses its model, its sampling settings or its retry policy.
 # Schema: tools/workflow_config.py::P1Config.
 #
-# STATUS: DEVELOPMENT (2026-09-25). Not frozen, not hashed: the prompts and this file are
-# frozen, and their hash committed, on the lead's word before the held-out variants of §7
-# are generated (the P1 prompt rule of 2026-09-24). Every value is DESIGN unless marked.
+# STATUS: DEVELOPMENT COMPARISON ARM (2026-09-30), not frozen, kept on record. The frozen
+# P1 is configs/workflows/p1.yaml (revision 2 with gpt-5.6-luna, no brief; the lead's
+# word of 2026-09-30). This arm is p1.yaml with the expert brief appended to the system prompt;
+# its ten-cell development run is in the six-arm table of docs/milestones.md, the P1
+# development record. It carries no freeze record and no committed prompt hash, and runs
+# only on the lead's word. Every value is DESIGN unless marked.
 version: 1
 workflow: p1
 workflow_version: "0.1"

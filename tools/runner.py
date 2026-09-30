@@ -48,11 +48,13 @@ from scenarios.schema import Scenario, load_scenario
 from sim.run.layout import INDEX_FILE, RUNS_ROOT, RunPaths, truth_store_for
 from state.task_state import TaskState
 from tools.llm import (
+    LLM_LOG_FILE,
     AnthropicClient,
     ModelClient,
     ModelGateway,
     OpenAIResponsesClient,
     RecordedClient,
+    read_transcript,
     system_digest,
     tools_digest,
 )
@@ -63,6 +65,7 @@ from tools.server import OUTPUTS_DIR
 from tools.workflow_config import (
     P1Config,
     check_brief_hash,
+    check_frozen,
     check_prompt_hash,
     load_prompts,
     load_workflow_config,
@@ -106,6 +109,8 @@ class WorkflowResult:
     wall_clock_min_total: float | None
     n_calls: int | None
     label: str | None
+    run_failed: bool = False
+    failure_reason: str = ""
     cost_source: str = "registry_meter"
     self_reported_simulator_evals_used: int | None = None
     self_reported_assay_units_used: int | None = None
@@ -118,6 +123,7 @@ class WorkflowResult:
     llm_turns: int | None = None
     llm_attempts: int | None = None
     llm_cost_usd: float | None = None
+    provider: str | None = None
     model_id: str | None = None
     model_client: str | None = None
     system_sha256: str | None = None
@@ -194,13 +200,15 @@ def p1_provenance(config: P1Config) -> dict[str, str]:
 
     Raises:
         ValueError: If the configuration's ``prompt_sha256`` is set and the prompts on
-            disk do not hash to it.
+            disk do not hash to it, or its freeze record differs from the configuration
+            and the prompts (:func:`tools.workflow_config.check_frozen`).
     """
     import hashlib
 
     from workflows.p1_single_agent.agent import tool_specs
 
     prompts = load_prompts(config)
+    check_frozen(config)  # the frozen P1: the record must be what is on disk
     return {
         "prompt_sha256": check_prompt_hash(config),
         "brief_sha256": check_brief_hash(config),  # "" in the plain arm
@@ -212,15 +220,18 @@ def p1_provenance(config: P1Config) -> dict[str, str]:
 
 
 def live_client(config: P1Config) -> ModelClient:
-    """The provider's live client for the configuration's ``model`` block."""
+    """The provider's live client for the configuration's ``model`` block.
+
+    Each client checks, on every call, that the system text it sends is the one the
+    gateway and the provenance hash: the system prompt with the brief joined in the
+    expert-brief arm (2026-09-29: hashing the system prompt alone here rejected every
+    request of the brief arm). The key comes from the provider's environment variable
+    (``OPENAI_API_KEY``, ``ANTHROPIC_API_KEY``) and is read by the SDK alone.
+    """
+    digest = system_digest(model_system_text(load_prompts(config)))
     if config.model.provider == "openai":
-        # the text the model is sent: the system prompt, with the brief joined in the
-        # expert-brief arm, as the gateway and the provenance hash it (2026-09-29: hashing
-        # the system prompt alone here rejected every request of the brief arm)
-        return OpenAIResponsesClient(
-            config.model, system_sha256=system_digest(model_system_text(load_prompts(config)))
-        )
-    return AnthropicClient(config.model)
+        return OpenAIResponsesClient(config.model, system_sha256=digest)
+    return AnthropicClient(config.model, system_sha256=digest)
 
 
 def run_workflow(
@@ -335,16 +346,88 @@ def run_workflow(
         summary.llm_attempts = meter.attempts
         cost = gateway.cost_usd()
         summary.llm_cost_usd = None if cost is None else round(cost, 6)
+        summary.provider = gateway.settings.provider
         summary.model_id = gateway.settings.model_id
         summary.model_client = gateway.client.name
         for key, value in provenance.items():
             setattr(summary, key, value)
     out_dir = paths.root / OUTPUTS_DIR / out_name
     out_dir.mkdir(parents=True, exist_ok=True)
+    summary.run_failed = not summary.completed
+    summary.failure_reason = (
+        failure_reason(summary.error, annotations_of(out_dir), llm_log_of(out_dir))
+        if summary.run_failed
+        else ""
+    )
     (out_dir / "summary.json").write_text(
         json.dumps(summary.as_dict(), indent=1, sort_keys=True) + "\n", encoding="utf-8"
     )
     return summary
+
+
+FAILURE_REASONS = (
+    "killed",
+    "connection",
+    "refusal",
+    "cut_reply",
+    "unhandled_stop",
+    "model_error",
+    "limits",
+    "other",
+)
+"""Why a run left no conclusion (``WorkflowResult.failure_reason``; the coordinator's review
+of ``d5f6282``, 2026-09-30, flag 2). ``killed``: the runner's timeout; ``connection``: the
+model's transport failed past the retries; ``refusal``: the model refused; ``cut_reply``:
+two replies cut at the token limit; ``unhandled_stop``: a stop reason or content block the
+client does not translate (``pause_turn``, a server tool's block); ``model_error``: any
+other model error (a 400, an authentication failure); ``limits``: the loop's turns,
+tokens or tool calls ran out without a conclusion; ``other``: none of these (a state the
+workflow never wrote, an exit without a reason)."""
+
+
+def annotations_of(out_dir: Path) -> list[str]:
+    """The task state's annotations under ``out_dir`` (empty when no state is readable)."""
+    try:
+        state = json.loads((out_dir / "state.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [str(a) for a in state.get("annotations") or []]
+
+
+def llm_log_of(out_dir: Path) -> list[dict[str, Any]]:
+    """The gateway's log lines under ``out_dir`` (empty when the workflow has no model)."""
+    try:
+        return read_transcript(out_dir / LLM_LOG_FILE)
+    except OSError:
+        return []
+
+
+def failure_reason(error: str, annotations: Sequence[str], llm_log: Sequence[dict]) -> str:
+    """Classify why a run left no conclusion: one of :data:`FAILURE_REASONS`.
+
+    Read from the run's own record: the runner's error, the loop's last ``run ended:``
+    annotation and the last failed attempt in the gateway's log.
+    """
+    if "killed" in error:
+        return "killed"
+    ended = [a[len("run ended: ") :] for a in annotations if a.startswith("run ended: ")]
+    last = ended[-1] if ended else ""
+    failed = [line for line in llm_log if line.get("response") is None]
+    last_error = str(failed[-1].get("error") or "") if failed else ""
+    connection = any(
+        token in last_error for token in ("APIConnectionError", "Connection", "Timeout")
+    )
+    if last.startswith("the model refused"):
+        return "refusal"
+    if "cut at the token limit" in last:
+        return "cut_reply"
+    if last.startswith("model error"):
+        if "unhandled" in last:
+            return "unhandled_stop"
+        return "connection" if connection else "model_error"
+    if last.startswith("model budget") or last.startswith("stopped: limits"):
+        return "limits"
+    return "connection" if connection else "other"
 
 
 def _summarise(

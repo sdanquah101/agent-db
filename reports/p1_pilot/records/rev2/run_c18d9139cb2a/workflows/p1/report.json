@@ -1,0 +1,135 @@
+{
+ "workflow": "p1",
+ "label": "influent",
+ "secondary_labels": [
+  "sensor"
+ ],
+ "confidence": 0.78,
+ "completed": true,
+ "stop": "concluded",
+ "abstentions": [
+  "parameter_values",
+  "kinetic_attribution",
+  "posterior_intervals",
+  "tan_claims",
+  "tan_budget",
+  "alkalinity_total_budget",
+  "ch4_fraction_budget",
+  "cod_total_budget",
+  "q_gas_stp_dry_budget",
+  "pH_budget",
+  "vfa_titrimetric_budget",
+  "structural_adequacy"
+ ],
+ "parameters": {},
+ "validation": {
+  "holdout": [
+   150.0,
+   200.0
+  ],
+  "ensemble": false,
+  "ensemble_size": 0,
+  "metrics": {
+   "alkalinity_total": {
+    "n": 6.0,
+    "mae": 0.5360665832170847,
+    "rmse": 0.6372830609102293,
+    "nrmse": 2.2355877605485115,
+    "bias": 0.5360665832170847,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "ch4_fraction": {
+    "n": 43.0,
+    "mae": 0.011496577432785687,
+    "rmse": 0.013762268595595102,
+    "nrmse": 1.01485012241767,
+    "bias": -0.00636746438480961,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "cod_total": {
+    "n": 7.0,
+    "mae": 3.644060002268992,
+    "rmse": 3.902144614352162,
+    "nrmse": 2.4198433336316003,
+    "bias": -3.644060002268992,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "q_gas_stp_dry": {
+    "n": 46.0,
+    "mae": 126.9053942659145,
+    "rmse": 170.8322852765794,
+    "nrmse": 0.4212307521589079,
+    "bias": 17.330265040450396,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "pH": {
+    "n": 46.0,
+    "mae": 0.060498658140743275,
+    "rmse": 0.07475316302903998,
+    "nrmse": 1.2502131226769382,
+    "bias": 0.038060330211658396,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "vfa_titrimetric": {
+    "n": 7.0,
+    "mae": 0.061163263504762866,
+    "rmse": 0.07086473041002389,
+    "nrmse": 2.116430221218396,
+    "bias": 0.061163263504762866,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   }
+  },
+  "constraint_violations": 0,
+  "calls": [
+   21
+  ]
+ },
+ "annotations": [
+  "agent summary: The primary mismatch is an influent/feed-mapping problem: COD and gas residuals have strong time/load structure with steps at days 28 and 31, and the declared-feed balance is charge-inconsistent. TAN independently shows sustained sensor drift and was excluded; the bounded four-parameter fit is compensatory rather than evidence for a kinetic update, so the forecast uses the default-parameter prediction while the feed mapping is reviewed.",
+  "duration guard: 19.19 s per evaluation (measured; 188 evaluations measured so far)"
+ ],
+ "tool_failures": [
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `end_d` for ['tan']; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "fit_lsq",
+   "name": "p1.fit_lsq",
+   "call_index": null,
+   "kind": "error",
+   "message": "this call would make up to 144 simulator evaluations, about 58 min at this run's 19.2 s per evaluation (x1.25 margin), but 59.3 min of wall clock remain less the 6 min reserve for concluding: at most 133 evaluations fit; size the call to that, or conclude",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "no cited call produced a `declared_bound`; cite the call the number rests on",
+   "fallback": "refused by the harness"
+  }
+ ]
+}

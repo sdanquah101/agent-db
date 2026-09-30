@@ -15,6 +15,7 @@
  "confidence": 0.9,
  "cost_source": "registry_meter",
  "error": "",
+ "failure_reason": "",
  "fallbacks": [],
  "flag_sensor": "ph",
  "git_commit": "4ef57c045eccccd32bca5bcaf0847efef3468773",
@@ -29,6 +30,7 @@
  "output_name": "p1",
  "prompt_sha256": "4b8f830ad0236d9f4ad44ed5300bebf435df73601e1e5f1e59223a8c9a2b4ddd",
  "returncode": 0,
+ "run_failed": false,
  "run_id": "run_38bb47fef5c0",
  "secondary_labels": [
   "sensor"

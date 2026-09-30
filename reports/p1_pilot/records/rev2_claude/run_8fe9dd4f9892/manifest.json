@@ -1,0 +1,38 @@
+{
+  "run_id": "run_8fe9dd4f9892",
+  "plant": "B",
+  "tier": "B",
+  "duration_days": 200.0,
+  "n_days": 200,
+  "start_doy": 1,
+  "start_weekday": 0,
+  "harness_version": "1.0",
+  "git_sha": "4801f36e46ad735ead8d3685306ab1e979521047",
+  "configs": {
+    "versions": {
+      "adm1_extensions": 2,
+      "faults_injection": 1,
+      "faults_log_notes": 1,
+      "harness": 1,
+      "influent_feed_fractionation": 2,
+      "influent_generator": 1,
+      "observation_sensors": 2
+    },
+    "sha256": {
+      "adm1_extensions": "4ec752ffa6e3ad6e",
+      "adm1_initial_state": "6da809b690fea0ce",
+      "adm1_parameters": "1d94985ecebbf5a2",
+      "adm1_petersen": "d4a49e59544b18a7",
+      "adm1_solver": "076adbc3c7a8ce9d",
+      "faults_injection": "fc505a9bce0fc33d",
+      "faults_log_notes": "87e9b4ffffd81083",
+      "harness": "d70d86105d9c1731",
+      "influent_feed_fractionation": "9644a334556eb7ed",
+      "influent_generator": "70686eba7c30a85b",
+      "observation_sensors": "170c64d6766b2230",
+      "plant_A": "65017ad0e3b6dbee",
+      "plant_B": "5dee97748cb4dfe0",
+      "plant_C": "01a0560cb4e94f42"
+    }
+  }
+}

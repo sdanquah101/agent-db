@@ -1,0 +1,144 @@
+{
+ "workflow": "p1",
+ "label": "influent",
+ "secondary_labels": [],
+ "confidence": 0.65,
+ "completed": true,
+ "stop": "concluded",
+ "abstentions": [
+  "kinetic_attribution",
+  "tan_budget",
+  "cod_total_budget",
+  "missing_transient"
+ ],
+ "parameters": {},
+ "validation": {
+  "holdout": [
+   150.0,
+   200.0
+  ],
+  "ensemble": false,
+  "ensemble_size": 0,
+  "metrics": {
+   "alkalinity_total": {
+    "n": 7.0,
+    "mae": 0.6636249584086009,
+    "rmse": 0.7241488193782248,
+    "nrmse": 1.4912385213669463,
+    "bias": -0.6636249584086009,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "ch4_fraction": {
+    "n": 45.0,
+    "mae": 0.01154911423436514,
+    "rmse": 0.014372515256314786,
+    "nrmse": 0.8056042601426836,
+    "bias": 0.006287472871864792,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "cod_total": {
+    "n": 7.0,
+    "mae": 1.5947717348113528,
+    "rmse": 1.8037997779703974,
+    "nrmse": 0.9546081983263089,
+    "bias": -1.3989680498561978,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "q_gas_stp_dry": {
+    "n": 42.0,
+    "mae": 340.11105975508883,
+    "rmse": 521.4144658216653,
+    "nrmse": 0.5811285736312427,
+    "bias": 52.21887732810344,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "pH": {
+    "n": 43.0,
+    "mae": 0.09521090777243081,
+    "rmse": 0.12300757417731563,
+    "nrmse": 1.6022041439218455,
+    "bias": -0.09305250677079206,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "tan": {
+    "n": 6.0,
+    "mae": 0.18931029481266384,
+    "rmse": 0.1994044739683378,
+    "nrmse": 2.682054547652062,
+    "bias": -0.18931029481266384,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   },
+   "vfa_titrimetric": {
+    "n": 7.0,
+    "mae": 0.13352873682811478,
+    "rmse": 0.14892185949028275,
+    "nrmse": 1.6786278389445484,
+    "bias": -0.13352873682811478,
+    "coverage_50": null,
+    "coverage_90": null,
+    "interval_score_90": null,
+    "crps": null
+   }
+  },
+  "constraint_violations": 0,
+  "calls": [
+   19
+  ]
+ },
+ "annotations": [
+  "agent summary: Reactor TAN (bias_z 19.1 in call 5), alkalinity and total COD sit above the default-model prediction from day 0, with no pattern in time, load or feed. A lab TAN assay confirmed the plant value (disagreement_z 5.49, call 11), and a kinetic refit pushed Y_ac and k_hyd_li to their lower bounds while leaving the TAN bias in place (bias_z 13.4, call 17). So the mismatch is attributed to the influent: more nitrogen and more COD reached the digester than the feed catalogue says (COD closure -0.078). The kinetics stay at their defaults, no kinetic update is offered, the influent mapping should be revised, and no claim is made for the transient windows where data are informatively missing (pH, gas flow, CH4).",
+  "duration guard: 13.88 s per evaluation (measured; 57 evaluations measured so far)"
+ ],
+ "tool_failures": [
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "`assay` = 0.7415 is not what the cited calls produced",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "record_evidence",
+   "name": "p1.record_evidence",
+   "call_index": null,
+   "kind": "error",
+   "message": "`assay` = 6.0943 is not what the cited calls produced",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "conclude",
+   "name": "p1.conclude",
+   "call_index": null,
+   "kind": "error",
+   "message": "Y_ac: no successful call of this run produced a fisher interval for it (posterior: a converged sampler; profile: a closed profile; fisher: a fit or a Fisher call with a finite sd); k_hyd_li: no successful call of this run produced a fisher interval for it (posterior: a converged sampler; profile: a ",
+   "fallback": "refused by the harness"
+  },
+  {
+   "step": "conclude",
+   "name": "p1.conclude",
+   "call_index": null,
+   "kind": "error",
+   "message": "Y_ac: no successful call of this run produced a none interval for it (posterior: a converged sampler; profile: a closed profile; fisher: a fit or a Fisher call with a finite sd); k_hyd_li: no successful call of this run produced a none interval for it (posterior: a converged sampler; profile: a clos",
+   "fallback": "refused by the harness"
+  }
+ ]
+}

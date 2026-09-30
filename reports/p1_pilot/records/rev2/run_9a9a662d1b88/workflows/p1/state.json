@@ -1,0 +1,717 @@
+{
+ "abstentions": [
+  "parameter_values",
+  "kinetic_attribution",
+  "posterior_intervals",
+  "gas_flow_claims",
+  "q_gas_stp_dry_budget",
+  "ph_claims",
+  "temperature_claims"
+ ],
+ "actions": [
+  {
+   "args_hash": "6e46ab5fd289f281",
+   "call_index": 0,
+   "detail": "",
+   "name": "describe_model",
+   "outcome": "ok",
+   "seq": 6,
+   "step": "read",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "6e46ab5fd289f281",
+   "call_index": 1,
+   "detail": "",
+   "name": "feed_loads",
+   "outcome": "ok",
+   "seq": 7,
+   "step": "data_qc",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "6247b2feaba0ae6f",
+   "call_index": 2,
+   "detail": "",
+   "name": "data_qc",
+   "outcome": "ok",
+   "seq": 8,
+   "step": "data_qc",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "5b8d49301df52504",
+   "call_index": 3,
+   "detail": "",
+   "name": "mass_balance",
+   "outcome": "ok",
+   "seq": 9,
+   "step": "mass_balance",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "6e46ab5fd289f281",
+   "call_index": 4,
+   "detail": "",
+   "name": "describe_model",
+   "outcome": "ok",
+   "seq": 10,
+   "step": "describe_model",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "6e46ab5fd289f281",
+   "call_index": 5,
+   "detail": "",
+   "name": "feed_loads",
+   "outcome": "ok",
+   "seq": 11,
+   "step": "feed_loads",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "ba16d7f8979cd0bf",
+   "call_index": 6,
+   "detail": "",
+   "name": "gsa_morris",
+   "outcome": "ok",
+   "seq": 12,
+   "step": "gsa_morris",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "ea993c36371e0856",
+   "call_index": 7,
+   "detail": "",
+   "name": "gsa_sobol",
+   "outcome": "ok",
+   "seq": 13,
+   "step": "gsa_sobol",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "0f81f4a11c7e0a84",
+   "call_index": 8,
+   "detail": "",
+   "name": "fisher_info",
+   "outcome": "ok",
+   "seq": 14,
+   "step": "fisher_info",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "428b49ecea61af37",
+   "call_index": 9,
+   "detail": "",
+   "name": "fit_lsq",
+   "outcome": "ok",
+   "seq": 15,
+   "step": "fit_lsq",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "61b92f401be3a7f8",
+   "call_index": 10,
+   "detail": "",
+   "name": "simulate",
+   "outcome": "ok",
+   "seq": 16,
+   "step": "simulate",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "0b8347d6ebedae3c",
+   "call_index": 11,
+   "detail": "",
+   "name": "residual_diag",
+   "outcome": "ok",
+   "seq": 17,
+   "step": "residual_diag",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "98a69af9df1089c6",
+   "call_index": 12,
+   "detail": "",
+   "name": "request_assay",
+   "outcome": "ok",
+   "seq": 18,
+   "step": "request_assay",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "2d21fc0aed57ff8c",
+   "call_index": 13,
+   "detail": "",
+   "name": "request_assay",
+   "outcome": "ok",
+   "seq": 19,
+   "step": "request_assay",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "44ef8cab10e95aeb",
+   "call_index": 14,
+   "detail": "",
+   "name": "request_assay",
+   "outcome": "ok",
+   "seq": 20,
+   "step": "request_assay",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "282b08bcc61da8bd",
+   "call_index": 15,
+   "detail": "",
+   "name": "request_assay",
+   "outcome": "ok",
+   "seq": 21,
+   "step": "request_assay",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "e081973e6c694e6f",
+   "call_index": 16,
+   "detail": "",
+   "name": "simulate",
+   "outcome": "ok",
+   "seq": 22,
+   "step": "simulate",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "cff3e955b1c96749",
+   "call_index": 17,
+   "detail": "",
+   "name": "simulate",
+   "outcome": "ok",
+   "seq": 23,
+   "step": "simulate",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "2374dcaf9eadfb0e",
+   "call_index": 18,
+   "detail": "",
+   "name": "simulate",
+   "outcome": "ok",
+   "seq": 24,
+   "step": "simulate",
+   "version": "1.0"
+  }
+ ],
+ "annotations": [
+  "agent summary: Independent day-220 assays disagree with the fitted model by 3.8876 sd for TAN, 7.0233 sd for titrimetric VFA, and 5.7303 sd for digestate VS (calls 12, 14, 15), a coherent indication that the declared influent mapping/loading is wrong rather than a kinetic change. Separately, gas-flow residuals show a 6.7459-sd step at day 229 with no significant load/feed structure (call 11), so post-step gas flow is quarantined as a sensor fault; the K_I_nh3 fit reaching 0.2 with a full-bound interval (call 9) is not offered as a plant parameter.",
+  "no objective sensor has a hold-out sample: no validation",
+  "duration guard: 37.31 s per evaluation (measured; 123 evaluations measured so far)"
+ ],
+ "assay_checks": [
+  {
+   "assay": "tan",
+   "channel": "tan",
+   "predicted": 3.2550350087248137,
+   "report_day": 221.0,
+   "sample_day": 220.0,
+   "sd": 0.19542328890298144,
+   "unit": "kg N/m3 (total ammoniacal nitrogen, S_IN)",
+   "value": 4.014757745614186,
+   "z": 3.887575227876444
+  },
+  {
+   "assay": "alkalinity",
+   "channel": "alkalinity_total",
+   "predicted": 14.705586199846957,
+   "report_day": 221.0,
+   "sample_day": 220.0,
+   "sd": 0.8457606379096995,
+   "unit": "kg CaCO3/m3 (bicarbonate + VFA anions)",
+   "value": 16.40522917976342,
+   "z": 2.0096028400152757
+  },
+  {
+   "assay": "vfa_total",
+   "channel": "vfa_titrimetric",
+   "predicted": 2.3149801186857966,
+   "report_day": 221.0,
+   "sample_day": 220.0,
+   "sd": 0.38261634175736736,
+   "unit": "kg/m3 as acetic acid, as a two-point Nordmann/Kapp FOS titration would report it (the plant's own convention; mostly bicarbonate carry-over)",
+   "value": 5.002218855061009,
+   "z": 7.023324524071948
+  },
+  {
+   "assay": "digestate_vs",
+   "channel": "vs",
+   "predicted": 31.37081000135131,
+   "report_day": 221.0,
+   "sample_day": 220.0,
+   "sd": 1.100092061227676,
+   "unit": "kg VS/m3 of digestate",
+   "value": 37.67461537053108,
+   "z": 5.730252577356913
+  }
+ ],
+ "budget": {
+  "assay_units": 0,
+  "assay_units_total": 4,
+  "assay_units_used": 4,
+  "n_calls": 19,
+  "simulator_evals": 124,
+  "simulator_evals_total": 300,
+  "simulator_evals_used": 176,
+  "wall_clock_min": 7.871675458616664,
+  "wall_clock_min_total": 120.0
+ },
+ "calibrated_outputs": [],
+ "calibration_window": [
+  0.0,
+  273.75
+ ],
+ "candidate_model": "adm1_fitted",
+ "classification": {
+  "confidence": 0.82,
+  "evidence": [
+   {
+    "calls": [
+     11
+    ],
+    "label": "sensor",
+    "rule": "p1",
+    "statement": "Against the constrained fit, gas-flow residuals are strongly structured in time with a large step at day 229, serial dependence, and no significant load/feed structure; this is a channel-specific sensor-like pattern.",
+    "values": {
+     "bias_z": -5.1972,
+     "early_bias_z": -3.091,
+     "late_bias_z": -4.5831,
+     "most_explanatory": "time",
+     "rmse_z": 5.4801,
+     "step_day": 229.0,
+     "step_z": 6.7459
+    }
+   },
+   {
+    "calls": [
+     12
+    ],
+    "label": "state",
+    "rule": "p1",
+    "statement": "An independent TAN assay at day 220 is substantially above the model prediction at the gas-fit point.",
+    "values": {
+     "assay": "tan",
+     "disagreement_z": 3.8876
+    }
+   },
+   {
+    "calls": [
+     13
+    ],
+    "label": "state",
+    "rule": "p1",
+    "statement": "An independent alkalinity assay at day 220 is above the model prediction at the gas-fit point.",
+    "values": {
+     "assay": "alkalinity",
+     "disagreement_z": 2.0096
+    }
+   },
+   {
+    "calls": [
+     14
+    ],
+    "label": "state",
+    "rule": "p1",
+    "statement": "An independent titrimetric VFA assay at day 220 is far above the model prediction at the gas-fit point.",
+    "values": {
+     "assay": "vfa_total",
+     "disagreement_z": 7.0233
+    }
+   },
+   {
+    "calls": [
+     15
+    ],
+    "label": "state",
+    "rule": "p1",
+    "statement": "An independent digestate VS assay at day 220 is far above the model prediction at the gas-fit point, providing a second internal-state channel independent of gas flow.",
+    "values": {
+     "assay": "digestate_vs",
+     "disagreement_z": 5.7303
+    }
+   },
+   {
+    "calls": [
+     12
+    ],
+    "label": "influent",
+    "rule": "p1",
+    "statement": "Independent TAN is 3.8876 sd above the model value at day 220, consistent with the declared feed mapping understating nitrogen reaching the digester rather than a gas-sensor explanation.",
+    "values": {
+     "assay": "tan",
+     "disagreement_z": 3.8876
+    }
+   },
+   {
+    "calls": [
+     15
+    ],
+    "label": "influent",
+    "rule": "p1",
+    "statement": "Independent digestate VS is 5.7303 sd above the model value at day 220; together with the high TAN this points to an influent/state-loading mismatch that the gas channel alone cannot resolve.",
+    "values": {
+     "assay": "digestate_vs",
+     "disagreement_z": 5.7303
+    }
+   }
+  ],
+  "flag_sensor": "gas_flow",
+  "kinetic_update": false,
+  "label": "influent",
+  "recommend_structural_review": false,
+  "revise_influent_mapping": true,
+  "rule": "p1",
+  "scale_factor": {},
+  "secondary_labels": [
+   "sensor"
+  ]
+ },
+ "data_quality": {
+  "gas_flow": {
+   "flags": [],
+   "in_objective": false,
+   "missing_fraction": 0.08394160583941605,
+   "notes": "Residual diagnostics show a gas-only step at day 229 (6.7459 sd units), significant time structure and no load/feed structure; quarantine the post-step gas-flow samples rather than fit a sensor step with kinetics.",
+   "quarantined_windows": [
+    [
+     229.0,
+     273.75
+    ]
+   ],
+   "status": "quarantined"
+  },
+  "ph": {
+   "flags": [
+    "spikes"
+   ],
+   "in_objective": false,
+   "missing_fraction": 0.10583941605839416,
+   "notes": "data_qc flagged an isolated spike at day 270; quarantine the offending sample and exclude pH from calibration objective rather than fit through it.",
+   "quarantined_windows": [
+    [
+     270.0,
+     270.0
+    ]
+   ],
+   "status": "quarantined"
+  },
+  "temperature": {
+   "flags": [
+    "spikes"
+   ],
+   "in_objective": false,
+   "missing_fraction": 0.12773722627737227,
+   "notes": "data_qc flagged an isolated spike at day 192; sensor was already outside the objective, and the offending sample is quarantined.",
+   "quarantined_windows": [
+    [
+     192.0,
+     192.0
+    ]
+   ],
+   "status": "quarantined"
+  }
+ },
+ "duration_days": 365.0,
+ "final": {
+  "abstentions": [
+   "parameter_values",
+   "kinetic_attribution",
+   "posterior_intervals",
+   "gas_flow_claims",
+   "q_gas_stp_dry_budget",
+   "ph_claims",
+   "temperature_claims"
+  ],
+  "completed": true,
+  "confidence": 0.82,
+  "interval_method": "none",
+  "label": "influent",
+  "parameters": {},
+  "secondary_labels": [
+   "sensor"
+  ]
+ },
+ "holdout_window": [
+  273.75,
+  365.0
+ ],
+ "mass_balance": {
+  "admissible": true,
+  "charge_consistent": null,
+  "charge_drift": null,
+  "cod_closure_mean": null,
+  "n_closure_mean": null,
+  "n_cod_evaluable": 0,
+  "n_cod_inadmissible": 0,
+  "n_windows": 9
+ },
+ "model_parameters": [
+  "k_dis",
+  "k_hyd_ch",
+  "k_hyd_pr",
+  "k_hyd_li",
+  "k_m_su",
+  "k_m_aa",
+  "k_m_fa",
+  "k_m_c4",
+  "k_m_pro",
+  "k_m_ac",
+  "k_m_h2",
+  "K_S_ac",
+  "K_S_pro",
+  "K_S_h2",
+  "K_I_nh3",
+  "K_I_h2_pro",
+  "k_dec_X_ac",
+  "Y_ac",
+  "Y_h2",
+  "f_li_xc"
+ ],
+ "notes_seen": [
+  {
+   "author": "operator",
+   "day": 28,
+   "length": 81
+  },
+  {
+   "author": "operator",
+   "day": 49,
+   "length": 68
+  },
+  {
+   "author": "operator",
+   "day": 73,
+   "length": 54
+  },
+  {
+   "author": "operator",
+   "day": 78,
+   "length": 73
+  },
+  {
+   "author": "operator",
+   "day": 85,
+   "length": 43
+  },
+  {
+   "author": "operator",
+   "day": 111,
+   "length": 44
+  },
+  {
+   "author": "operator",
+   "day": 118,
+   "length": 73
+  },
+  {
+   "author": "operator",
+   "day": 124,
+   "length": 60
+  },
+  {
+   "author": "operator",
+   "day": 127,
+   "length": 67
+  },
+  {
+   "author": "operator",
+   "day": 140,
+   "length": 67
+  },
+  {
+   "author": "operator",
+   "day": 151,
+   "length": 38
+  },
+  {
+   "author": "operator",
+   "day": 154,
+   "length": 45
+  }
+ ],
+ "plan": {
+  "eval_seconds_assumed": null,
+  "fallbacks": [],
+  "guards_tripped": [],
+  "sizes": {
+   "model_turns": 14,
+   "refused_actions": 6,
+   "tool_uses": 39
+  },
+  "steps_completed": [
+   "inspect_record",
+   "inspect_record",
+   "inspect_record",
+   "inspect_record",
+   "inspect_record",
+   "data_qc",
+   "mass_balance",
+   "describe_model",
+   "feed_loads",
+   "set_sensor_status",
+   "set_sensor_status",
+   "gsa_morris",
+   "gsa_sobol",
+   "fisher_info",
+   "fit_lsq",
+   "simulate",
+   "residual_diag",
+   "request_assay",
+   "request_assay",
+   "request_assay",
+   "request_assay",
+   "simulate",
+   "simulate",
+   "record_evidence",
+   "record_evidence",
+   "record_evidence",
+   "record_evidence",
+   "record_evidence",
+   "set_sensor_status",
+   "simulate",
+   "record_evidence",
+   "record_evidence",
+   "conclude"
+  ],
+  "steps_skipped": {}
+ },
+ "plant": "A",
+ "residuals": {
+  "q_gas_stp_dry": {
+   "bias_z": -5.1972322108170665,
+   "covariate_eta2": {
+    "time": 0.19496925483160046
+   },
+   "early_bias_z": -3.09098518060427,
+   "lag1_autocorrelation": 0.3852117745624875,
+   "late_bias_z": -4.583092018851046,
+   "most_explanatory": "time",
+   "n": 251,
+   "rmse_z": 5.480058240773115,
+   "serially_structured": true,
+   "step_day": 229.0,
+   "step_z": 6.74590343618031,
+   "trend_slope_per_d": 0.16318224071172543
+  }
+ },
+ "run_id": "run_9a9a662d1b88",
+ "schema_version": "1.0",
+ "screening": {
+  "approved": [],
+  "declared": [
+   "k_dis",
+   "k_hyd_ch",
+   "k_hyd_pr",
+   "k_hyd_li",
+   "k_m_su",
+   "k_m_aa",
+   "k_m_fa",
+   "k_m_c4",
+   "k_m_pro",
+   "k_m_ac",
+   "k_m_h2",
+   "K_S_ac",
+   "K_S_pro",
+   "K_S_h2",
+   "K_I_nh3",
+   "K_I_h2_pro",
+   "k_dec_X_ac",
+   "Y_ac",
+   "Y_h2",
+   "f_li_xc"
+  ],
+  "fisher_relative_crlb": {
+   "K_I_nh3": 27.65282818573264,
+   "k_m_ac": 42.890283482091334
+  },
+  "morris_ranking": [
+   "K_I_nh3",
+   "k_m_ac",
+   "Y_h2",
+   "Y_ac",
+   "K_S_ac",
+   "k_dis",
+   "f_li_xc",
+   "k_m_fa",
+   "k_hyd_ch",
+   "k_hyd_li",
+   "k_hyd_pr",
+   "k_m_pro",
+   "K_S_h2",
+   "K_S_pro",
+   "k_m_su",
+   "k_dec_X_ac",
+   "k_m_h2",
+   "k_m_c4",
+   "k_m_aa",
+   "K_I_h2_pro"
+  ],
+  "sobol_total_order": {
+   "K_I_nh3": 0.9071444404005563,
+   "K_S_ac": 0.032227208328572766,
+   "Y_ac": 0.44878776023157085,
+   "Y_h2": 0.38223700197427307,
+   "k_m_ac": 1.6273124665431795
+  }
+ },
+ "tier": "A",
+ "tool_failures": [
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "no cited call produced a `end_d` for ['ph']; cite the call the number rests on",
+   "name": "p1.record_evidence",
+   "step": "record_evidence"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "no cited call produced a `charge_drift`; cite the call the number rests on",
+   "name": "p1.record_evidence",
+   "step": "record_evidence"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "this call would make up to 114 simulator evaluations, about 89 min at this run's 37.3 s per evaluation (x1.25 margin), but 43.1 min of wall clock remain less the 6 min reserve for concluding: at most 47 evaluations fit; size the call to that, or conclude",
+   "name": "p1.fit_lsq",
+   "step": "fit_lsq"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "no cited call produced a `most_explanatory`; cite the call the number rests on",
+   "name": "p1.record_evidence",
+   "step": "record_evidence"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "no cited call produced a `declared_bound`; cite the call the number rests on",
+   "name": "p1.record_evidence",
+   "step": "record_evidence"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "no cited call produced a `declared_bound`; cite the call the number rests on",
+   "name": "p1.record_evidence",
+   "step": "record_evidence"
+  }
+ ],
+ "validation": null,
+ "workflow": "p1",
+ "workflow_version": "0.1"
+}

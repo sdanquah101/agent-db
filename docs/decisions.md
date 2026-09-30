@@ -6925,3 +6925,131 @@ the live-client hash fix that revision 2, sending no brief, never met.
    `completed: false` as a miss (credit columns blank, `run_failed` carried through).
    Until the lead rules, the hand-applied rule and the blank credit columns in
    `reports/p1_pilot*.csv` stand as the record.
+## 2026-09-29 — P1: the Anthropic arm (revision 2 with `claude-opus-5-5`)
+
+**Decision.** A second model arm of P1: the revision 2 prompts, the same tools, budgets,
+jail, loop and evaluation, with Anthropic's `claude-opus-5-5` through the Messages API
+in place of `gpt-5.6-luna` through OpenAI's Responses API. One ten-cell development run,
+compared pairwise with the rev2/luna run of `cc256fd`. The lead's ruling of 2026-09-29
+(relayed by the coordinator), on the branch `claude/p1-anthropic-arm` from the unmerged
+`claude/p1-single-agent` (PR #26), as its own PR.
+
+**How the arm is built.**
+- `configs/workflows/p1_anthropic.yaml` is `p1.yaml` with the `model` block replaced
+  (tested): provider `anthropic`, model id `claude-opus-5-5` exactly, `max_tokens`
+  16000 as the OpenAI arm, `temperature` null (the model refuses sampling parameters),
+  effort `high` (`output_config.effort`; the API's default is `medium`), prompt caching
+  on, the same timeout and retry policy, Anthropic's published prices (4 / 20 USD per
+  million input / output tokens, cache write 5, cache read 0.20) for reporting only.
+- `tools/llm.py::AnthropicClient` is rewritten in the shape of the OpenAI client: a
+  translation (`to_messages_request`), a check on the request as it will be sent
+  (`check_messages_request`), a translation back (`from_messages_output`), the raw
+  response and the request as sent kept verbatim under `provider`, and the SDK's own
+  retries off. The reply is read from a stream (`messages.stream` and
+  `get_final_message`), because the SDK refuses a long non-streaming request; nothing
+  is sent for thinking (the model's own default), no fallback model, no metadata, no
+  server tool; `tool_choice` is `auto` (the model refuses a forced choice). The system
+  text is one block with a cache breakpoint; the last block of the last message carries
+  the other, so the whole prefix is read from the cache next turn: the prefix caching
+  OpenAI does unasked. The client checks the sha256 of the whole system text it sends
+  against the provenance's `system_sha256`, as the OpenAI client does since `3499b04`.
+- **Strict tool schemas are not used.** The API's structured-output limits (its
+  documentation, read 2026-09-29) allow at most 20 strict tools, 24 optional parameters
+  and 16 union-typed parameters per request; P1 sends 20 tools with 92 parameters, 61
+  of them optional. So the committed schemas go unchanged, exactly as the OpenAI arm
+  sends them, and the harness validates every input itself (`check()` and the guards),
+  as it always did. A deviation for the coordinator's record, not a design choice.
+- The loop handles two stop reasons it did not: a reply cut at the token limit
+  (`max_tokens`) has its tool uses refused (an input may be incomplete), the model is
+  told once and continues; a second cut ends the run. A refusal (`refusal`) ends the run
+  as before, now with the API's category in the annotation. Neither occurred in any
+  logged run of the OpenAI arm (checked over the rev2 and brief stores), so the recorded
+  runs are unchanged by this.
+- The summary carries `provider`; the pilot CSVs carry a `model` column (backfilled from
+  the summaries' `model_id`); a run ended by a refusal is a failed run with
+  `failure_reason` `refusal`.
+- The key is read only from `ANTHROPIC_API_KEY`, as the OpenAI key from
+  `OPENAI_API_KEY`: never in the repository, a run directory, a log, a summary, a CSV
+  or a message. The pilot driver checks the arm's own variable before a batch.
+
+**Alternatives.** The SDK's tool runner (`beta.messages.tool_runner`): it would run the
+loop the jailed agent owns, so no. Strict schemas on the tools that fit the limits: a
+mixed set, and not the OpenAI arm's; no. `thinking: adaptive` sent explicitly: the same
+as omitting it on this model, and the check refuses the key; no.
+
+**Amendments after the coordinator's review of `d5f6282` (2026-09-30, PASS with four
+flags).**
+- *The second cache breakpoint is deliberate* (flag 1). The spec named a breakpoint on
+  the last system block; the client also puts one on the last block of the last message
+  (`to_messages_request`). Reason: the breakpoint marks where the cache lookup ends, so
+  one on the system text alone caches the system text and the tools and re-reads the
+  whole growing history at the uncached price every turn; one on the last message caches
+  the history up to it, and the API finds the hit at the previous turn's breakpoint. That
+  is the prefix caching the OpenAI arm gets unasked, so the two arms are billed alike in
+  kind. Two breakpoints of the four allowed; the ten cells showed 6.11 M tokens read from
+  the cache against 1.24 M written. Kept.
+- *A failed run's reason is in the summary* (flag 2): `WorkflowResult.run_failed` and
+  `failure_reason` (`tools/runner.py::FAILURE_REASONS`: killed, connection, refusal,
+  cut_reply, unhandled_stop, model_error, limits, other), classified from the run's own
+  record; the report writer (`scripts/p1_pilot_report.py`, committed) reads them from the
+  summary and blanks the credit columns of a failed row; the refusal path is tested end
+  to end. Rows recorded before the fields existed are backfilled by the same classifier
+  from their stored records.
+- *The digests are pinned* (flag 3): `tests/test_p1_anthropic_arm.py` holds the literal
+  `prompt_sha256`, the joined system text's digest and the tools digest of both
+  configurations; a silent edit fails the test.
+- *Stops the client does not translate* (flag 4): `pause_turn` and
+  `model_context_window_exceeded` end the run as `unhandled_stop` (a `ModelError` from
+  `from_messages_output`), not as a continuation. Deliberate: P1 sends no server tool, so
+  `pause_turn` cannot occur, and the loop's token budget holds the history far under the
+  context window; if either ever appears it is a finding, not a case to paper over.
+- *The thinking count is an observation.* "Thinking blocks on 148 of 164 turns" in the
+  milestones was read from the stores' logs, which are not committed; it is not a table
+  figure and no committed artefact carries it.
+
+## 2026-09-30 — P1 is frozen: revision 2 with `gpt-5.6-luna`, no brief (the lead's word)
+
+**Decision.** The lead's word of 2026-09-30, "Freeze P1", relayed by the coordinator. The
+frozen P1 is revision 2 of the prompts (`configs/workflows/p1_prompts/system.md` and
+`task.md`; `prompt_sha256`
+`c80a37521e81487012b7a7ebc13e179b616216060d93f1ae45aa8791daf661d1`) with OpenAI's
+`gpt-5.6-luna` through `configs/workflows/p1.yaml` (effort `high`, `max_tokens` 16000,
+the retry policy as it stands), no expert brief. The system text the model is sent hashes
+to `ab2025e4d00db06eac2b146bb175ab5fd1cfb744c71af21b14d816608324c1eb`, the value every
+summary of the revision-2 runs carries. Done on `claude/p1-anthropic-arm` (PR #27, which
+carries PR #26 whole), so that PR #26's reviewed head stays untouched.
+
+**How.** `p1.yaml` says STATUS FROZEN, commits `prompt_sha256`, and carries a `frozen`
+record (`tools/workflow_config.py::Frozen`: date, the word, the two digests, the model
+id, effort, response cap and retry policy). `check_prompt_hash` refuses prompts that do
+not hash to the committed value, as before; `check_frozen` (called from the runner's
+provenance before every run) refuses a run whose configuration or prompts on disk differ
+from the record in any field. `tests/test_p1_agent.py::test_the_frozen_record_is_what_is_on_disk`
+holds the literal digests and a negative control for every field; the digest pins of the
+`d5f6282` review (flag 3) are the same values. **The prompt files carry no FROZEN
+header**: the hash covers their whole text, so a header line would change it; the status
+lives in the yaml only. `brief_sha256` stays empty: the brief is not part of the frozen
+P1. `p1_expert_brief.yaml` and `p1_anthropic.yaml` are marked DEVELOPMENT COMPARISON
+ARMS, not frozen, kept on record with no freeze record and no committed hash; the six-arm
+table in `docs/milestones.md` is the P1 development record.
+
+**Reason.** Six development arms on the same ten cells — three prompt revisions (old,
+1a, 1b), a scoring statement (revision 2), a domain brief (revision 2 + brief) and a
+second model (revision 2 on `claude-opus-5-5`) — moved primary-label accuracy at most to
+4/10, and none reached `none` on a clean cell. Revision 2 on GPT is the best of them on
+primary labels (4/10) and on kinetic discipline (no kinetic drift, no kinetic-update
+error), with no failed run. Further development would tune the prompt to the development
+cells; the prompt rule of 2026-09-24 says the hash is committed before the held-out
+variants are generated, and that point is now.
+
+**Alternatives.** Revision 2 + the brief: fewer abstentions and refusals, but four
+kinetic drifts and one fewer primary match. Revision 2 on `claude-opus-5-5`: tighter
+actions, two exact attributions, but one label per cell and `influent` nine times in
+ten. A further revision: every revision so far moved what the agent declines and how
+many labels it gives, not the one-sided failure (`none` unreached). Rejected because none
+of them moved that failure.
+
+**Still not authorised** (the lead's word): generating the held-out variants of §7,
+scoring on the Level 0–5 sweep, any further P1 arm or a repeat run, the merge of either
+PR.
+

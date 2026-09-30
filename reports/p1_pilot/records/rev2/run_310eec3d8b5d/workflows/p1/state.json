@@ -1,0 +1,717 @@
+{
+ "abstentions": [
+  "tan_claims",
+  "ch4_fraction_claims",
+  "gas_flow_claims",
+  "ph_claims",
+  "temperature_claims",
+  "tan_budget",
+  "vfa_titrimetric_budget",
+  "parameter_values",
+  "kinetic_attribution"
+ ],
+ "actions": [
+  {
+   "args_hash": "6e46ab5fd289f281",
+   "call_index": 0,
+   "detail": "",
+   "name": "describe_model",
+   "outcome": "ok",
+   "seq": 6,
+   "step": "read",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "6e46ab5fd289f281",
+   "call_index": 1,
+   "detail": "",
+   "name": "describe_model",
+   "outcome": "ok",
+   "seq": 7,
+   "step": "describe_model",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "6e46ab5fd289f281",
+   "call_index": 2,
+   "detail": "",
+   "name": "feed_loads",
+   "outcome": "ok",
+   "seq": 8,
+   "step": "feed_loads",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "ef29df9b3bdc740b",
+   "call_index": 3,
+   "detail": "",
+   "name": "data_qc",
+   "outcome": "ok",
+   "seq": 9,
+   "step": "data_qc",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "5ba5302a87e1f5ba",
+   "call_index": 4,
+   "detail": "",
+   "name": "mass_balance",
+   "outcome": "ok",
+   "seq": 10,
+   "step": "mass_balance",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "1fa36512041d7453",
+   "call_index": 5,
+   "detail": "",
+   "name": "gsa_morris",
+   "outcome": "ok",
+   "seq": 11,
+   "step": "gsa_morris",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "dcd33c60a27a02e6",
+   "call_index": 6,
+   "detail": "",
+   "name": "fisher_info",
+   "outcome": "ok",
+   "seq": 12,
+   "step": "fisher_info",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "4a3154e72ff56433",
+   "call_index": 7,
+   "detail": "",
+   "name": "fit_lsq",
+   "outcome": "ok",
+   "seq": 13,
+   "step": "fit_lsq",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "f4a78483d5d73825",
+   "call_index": 8,
+   "detail": "",
+   "name": "simulate",
+   "outcome": "ok",
+   "seq": 14,
+   "step": "simulate",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "d03e927ae42d24d8",
+   "call_index": 9,
+   "detail": "",
+   "name": "residual_diag",
+   "outcome": "ok",
+   "seq": 15,
+   "step": "residual_diag",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "d5a583c930462781",
+   "call_index": 10,
+   "detail": "",
+   "name": "residual_diag",
+   "outcome": "ok",
+   "seq": 16,
+   "step": "residual_diag",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "f76138e4acde6857",
+   "call_index": 11,
+   "detail": "",
+   "name": "residual_diag",
+   "outcome": "ok",
+   "seq": 17,
+   "step": "residual_diag",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "837f3cc7b852939f",
+   "call_index": 12,
+   "detail": "",
+   "name": "residual_diag",
+   "outcome": "ok",
+   "seq": 18,
+   "step": "residual_diag",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "66439fa8a7fdaafb",
+   "call_index": 13,
+   "detail": "",
+   "name": "request_assay",
+   "outcome": "ok",
+   "seq": 19,
+   "step": "request_assay",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "c040426ee330eb8c",
+   "call_index": 14,
+   "detail": "",
+   "name": "simulate",
+   "outcome": "ok",
+   "seq": 20,
+   "step": "simulate",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "8ca6cd25681fe2f3",
+   "call_index": 15,
+   "detail": "",
+   "name": "fit_lsq",
+   "outcome": "ok",
+   "seq": 21,
+   "step": "fit_lsq",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "f4a78483d5d73825",
+   "call_index": 16,
+   "detail": "",
+   "name": "simulate",
+   "outcome": "ok",
+   "seq": 22,
+   "step": "simulate",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "e56cd4ccbe3f2cd2",
+   "call_index": 17,
+   "detail": "",
+   "name": "fisher_info",
+   "outcome": "ok",
+   "seq": 23,
+   "step": "fisher_info",
+   "version": "1.0"
+  },
+  {
+   "args_hash": "95c7792a9f3cf3a2",
+   "call_index": 18,
+   "detail": "",
+   "name": "validate",
+   "outcome": "ok",
+   "seq": 24,
+   "step": "validate",
+   "version": "1.0"
+  }
+ ],
+ "annotations": [
+  "bounds narrowed (['Y_ac']): Fisher screening (call 6) found only Y_ac practically bounded-identifiable among the Morris-sensitive candidates; retain its declared bounds to avoid unsupported narrowing.",
+  "bounds narrowed (['Y_ac']): The Morris screen (call 5) and Fisher analysis (call 6) support retaining only Y_ac as the bounded-identifiable candidate; its declared bounds are retained without narrowing.",
+  "agent summary: The primary mismatch is assigned to the TAN measurement: its residual has bias_z -4.2554 with a time-explanatory structured pattern (call 11), so TAN was excluded and no kinetic update is offered. A separate influent contribution is supported by the VFA residual being most explained by feed_high_strength_waste (call 12) and the inadmissible COD-balance windows (call 4); the bounded Y_ac fit is used only for prediction and is not treated as a plant parameter.",
+  "duration guard: 19.77 s per evaluation (measured; 97 evaluations measured so far)"
+ ],
+ "assay_checks": [
+  {
+   "assay": "cod_total",
+   "channel": "cod_total",
+   "predicted": 20.88405557907987,
+   "report_day": 102.0,
+   "sample_day": 100.0,
+   "sd": 1.0954334435661135,
+   "unit": "kg COD/m3 (every COD-bearing liquid state, extensions included)",
+   "value": 21.890767570222003,
+   "z": 0.9190079023558442
+  }
+ ],
+ "budget": {
+  "assay_units": 0,
+  "assay_units_total": 2,
+  "assay_units_used": 2,
+  "n_calls": 19,
+  "simulator_evals": 320,
+  "simulator_evals_total": 450,
+  "simulator_evals_used": 130,
+  "wall_clock_min": 44.36764117718334,
+  "wall_clock_min_total": 90.0
+ },
+ "calibrated_outputs": [
+  "alkalinity_total",
+  "cod_total",
+  "vfa_titrimetric"
+ ],
+ "calibration_window": [
+  0.0,
+  150.0
+ ],
+ "candidate_model": "adm1_fitted",
+ "classification": {
+  "confidence": 0.7,
+  "evidence": [
+   {
+    "calls": [
+     11
+    ],
+    "label": "sensor",
+    "rule": "p1",
+    "statement": "The clean TAN channel has a large negative residual bias and a strong time-associated step/serial pattern, while no feed covariate is explanatory; this supports a TAN measurement problem rather than a kinetic update.",
+    "values": {
+     "bias_z": -4.2554,
+     "most_explanatory": "time",
+     "rmse_z": 2.679,
+     "sensor": "tan",
+     "step_z": 4.8923
+    }
+   },
+   {
+    "calls": [
+     12,
+     4
+    ],
+    "label": "influent",
+    "rule": "p1",
+    "statement": "The independent VFA residual is structured by the high-strength-waste feed, and the window balances are inadmissible in two windows with nonzero COD closure drift; together these support an influent composition/mapping mismatch.",
+    "values": {
+     "bias_z": -2.0746,
+     "charge_drift": 0.14511,
+     "cod_closure_mean": -0.13615,
+     "most_explanatory": "feed_high_strength_waste",
+     "n_inadmissible": 2.0,
+     "sensor": "vfa_total"
+    }
+   },
+   {
+    "calls": [
+     3
+    ],
+    "label": "sensor",
+    "rule": "p1",
+    "statement": "QC identified informative missingness in the ch4 fraction during high-load windows; the ch4 sensor was kept out of the objective.",
+    "values": {
+     "event_missing_ratio": 2.625,
+     "sensor": "ch4_fraction"
+    }
+   }
+  ],
+  "flag_sensor": "tan",
+  "kinetic_update": false,
+  "label": "sensor",
+  "recommend_structural_review": false,
+  "revise_influent_mapping": true,
+  "rule": "p1",
+  "scale_factor": {},
+  "secondary_labels": [
+   "influent"
+  ]
+ },
+ "data_quality": {
+  "alkalinity": {
+   "flags": [],
+   "in_objective": true,
+   "missing_fraction": 0.09090909090909091,
+   "notes": "",
+   "quarantined_windows": [],
+   "status": "ok"
+  },
+  "ch4_fraction": {
+   "flags": [
+    "informative_missingness"
+   ],
+   "in_objective": false,
+   "missing_fraction": 0.06,
+   "notes": "QC flagged informative missingness: event_missing_ratio 2.625; exclude from calibration objective pending independent verification.",
+   "quarantined_windows": [],
+   "status": "flagged"
+  },
+  "cod_total": {
+   "flags": [],
+   "in_objective": true,
+   "missing_fraction": 0.045454545454545456,
+   "notes": "",
+   "quarantined_windows": [],
+   "status": "ok"
+  },
+  "gas_flow": {
+   "flags": [
+    "spikes"
+   ],
+   "in_objective": false,
+   "missing_fraction": 0.03333333333333333,
+   "notes": "QC flagged a spike at day 44; quarantine that sample and exclude sensor from objective.",
+   "quarantined_windows": [
+    [
+     44.0,
+     44.0
+    ]
+   ],
+   "status": "flagged"
+  },
+  "ph": {
+   "flags": [
+    "informative_missingness"
+   ],
+   "in_objective": false,
+   "missing_fraction": 0.09333333333333334,
+   "notes": "QC flagged informative missingness: event_missing_ratio 2.9167; exclude from objective.",
+   "quarantined_windows": [],
+   "status": "flagged"
+  },
+  "tan": {
+   "flags": [],
+   "in_objective": false,
+   "missing_fraction": 0.045454545454545456,
+   "notes": "Post-fit residual diagnosis shows persistent large TAN bias (bias_z -4.2554) and structured time/step residual; exclude this suspect measurement from kinetic calibration pending independent TAN assay.",
+   "quarantined_windows": [],
+   "status": "flagged"
+  },
+  "temperature": {
+   "flags": [
+    "informative_missingness"
+   ],
+   "in_objective": false,
+   "missing_fraction": 0.06,
+   "notes": "QC flagged informative missingness and drift signal-to-noise 1.7334; not in objective and excluded from claims.",
+   "quarantined_windows": [],
+   "status": "flagged"
+  },
+  "vfa_total": {
+   "flags": [],
+   "in_objective": true,
+   "missing_fraction": 0.0,
+   "notes": "",
+   "quarantined_windows": [],
+   "status": "ok"
+  }
+ },
+ "duration_days": 200.0,
+ "final": {
+  "abstentions": [
+   "tan_claims",
+   "ch4_fraction_claims",
+   "gas_flow_claims",
+   "ph_claims",
+   "temperature_claims",
+   "tan_budget",
+   "vfa_titrimetric_budget",
+   "parameter_values",
+   "kinetic_attribution"
+  ],
+  "completed": true,
+  "confidence": 0.7,
+  "interval_method": "none",
+  "label": "sensor",
+  "parameters": {},
+  "secondary_labels": [
+   "influent"
+  ]
+ },
+ "holdout_window": [
+  150.0,
+  200.0
+ ],
+ "mass_balance": {
+  "admissible": false,
+  "charge_consistent": true,
+  "charge_drift": 0.1451067149848229,
+  "cod_closure_mean": -0.13615289856760043,
+  "n_closure_mean": 0.7052656905598432,
+  "n_cod_evaluable": 5,
+  "n_cod_inadmissible": 2,
+  "n_windows": 5
+ },
+ "model_parameters": [
+  "k_dis",
+  "k_hyd_ch",
+  "k_hyd_pr",
+  "k_hyd_li",
+  "k_m_su",
+  "k_m_aa",
+  "k_m_fa",
+  "k_m_c4",
+  "k_m_pro",
+  "k_m_ac",
+  "k_m_h2",
+  "K_S_ac",
+  "K_S_pro",
+  "K_S_h2",
+  "K_I_nh3",
+  "K_I_h2_pro",
+  "k_dec_X_ac",
+  "Y_ac",
+  "Y_h2",
+  "f_li_xc"
+ ],
+ "notes_seen": [
+  {
+   "author": "operator",
+   "day": 17,
+   "length": 45
+  },
+  {
+   "author": "operator",
+   "day": 43,
+   "length": 43
+  },
+  {
+   "author": "operator",
+   "day": 144,
+   "length": 67
+  },
+  {
+   "author": "operator",
+   "day": 147,
+   "length": 73
+  }
+ ],
+ "plan": {
+  "eval_seconds_assumed": null,
+  "fallbacks": [],
+  "guards_tripped": [],
+  "sizes": {
+   "model_turns": 20,
+   "refused_actions": 5,
+   "tool_uses": 37
+  },
+  "steps_completed": [
+   "describe_model",
+   "feed_loads",
+   "data_qc",
+   "mass_balance",
+   "inspect_record",
+   "inspect_record",
+   "set_sensor_status",
+   "set_sensor_status",
+   "set_sensor_status",
+   "set_sensor_status",
+   "gsa_morris",
+   "fisher_info",
+   "fit_lsq",
+   "simulate",
+   "residual_diag",
+   "residual_diag",
+   "residual_diag",
+   "residual_diag",
+   "request_assay",
+   "inspect_record",
+   "inspect_record",
+   "inspect_record",
+   "inspect_record",
+   "simulate",
+   "record_evidence",
+   "record_evidence",
+   "record_evidence",
+   "set_sensor_status",
+   "fit_lsq",
+   "simulate",
+   "fisher_info",
+   "conclude",
+   "validate"
+  ],
+  "steps_skipped": {}
+ },
+ "plant": "B",
+ "residuals": {
+  "alkalinity_total": {
+   "bias_z": -1.9163797368183533,
+   "covariate_eta2": {},
+   "early_bias_z": -2.3730648689622207,
+   "lag1_autocorrelation": 0.2827053796706346,
+   "late_bias_z": -0.9630382517172749,
+   "most_explanatory": null,
+   "n": 20,
+   "rmse_z": 1.56241049785239,
+   "serially_structured": false,
+   "step_day": 112.0,
+   "step_z": 3.745639493694906,
+   "trend_slope_per_d": 0.0034823148459740155
+  },
+  "cod_total": {
+   "bias_z": 6.7236441137041325,
+   "covariate_eta2": {},
+   "early_bias_z": 1.671123275140001,
+   "lag1_autocorrelation": 0.21149850141741025,
+   "late_bias_z": 7.485024660215496,
+   "most_explanatory": null,
+   "n": 21,
+   "rmse_z": 1.8456206935139094,
+   "serially_structured": false,
+   "step_day": 105.0,
+   "step_z": 1.4297723218599638,
+   "trend_slope_per_d": 0.00013152243145261782
+  },
+  "tan": {
+   "bias_z": -4.255383802920637,
+   "covariate_eta2": {
+    "temperature": 0.4551478317892053,
+    "time": 0.6316674183256459
+   },
+   "early_bias_z": -3.1100182581810563,
+   "lag1_autocorrelation": 0.6142839503117457,
+   "late_bias_z": -3.1794562582253034,
+   "most_explanatory": "time",
+   "n": 21,
+   "rmse_z": 2.6789684899149218,
+   "serially_structured": true,
+   "step_day": 112.0,
+   "step_z": 4.89230461412511,
+   "trend_slope_per_d": 0.0004930484880970266
+  },
+  "vfa_titrimetric": {
+   "bias_z": -2.0745824921639757,
+   "covariate_eta2": {
+    "feed_high_strength_waste": 0.45389475245019345
+   },
+   "early_bias_z": -0.3077596560069589,
+   "lag1_autocorrelation": -0.27174867363884514,
+   "late_bias_z": -2.1197552988952304,
+   "most_explanatory": "feed_high_strength_waste",
+   "n": 22,
+   "rmse_z": 1.1115855505937693,
+   "serially_structured": false,
+   "step_day": 49.0,
+   "step_z": 1.0064247348820619,
+   "trend_slope_per_d": 9.577966734743328e-06
+  }
+ },
+ "run_id": "run_310eec3d8b5d",
+ "schema_version": "1.0",
+ "screening": {
+  "approved": [],
+  "declared": [
+   "k_dis",
+   "k_hyd_ch",
+   "k_hyd_pr",
+   "k_hyd_li",
+   "k_m_su",
+   "k_m_aa",
+   "k_m_fa",
+   "k_m_c4",
+   "k_m_pro",
+   "k_m_ac",
+   "k_m_h2",
+   "K_S_ac",
+   "K_S_pro",
+   "K_S_h2",
+   "K_I_nh3",
+   "K_I_h2_pro",
+   "k_dec_X_ac",
+   "Y_ac",
+   "Y_h2",
+   "f_li_xc"
+  ],
+  "fisher_relative_crlb": {
+   "Y_ac": 0.0911992519645748
+  },
+  "morris_ranking": [
+   "k_m_ac",
+   "K_I_nh3",
+   "K_S_ac",
+   "Y_ac",
+   "Y_h2",
+   "k_dec_X_ac",
+   "k_hyd_pr",
+   "f_li_xc",
+   "k_m_h2",
+   "K_S_h2",
+   "k_hyd_li",
+   "k_m_fa",
+   "k_dis",
+   "k_m_pro",
+   "k_m_c4",
+   "k_m_aa",
+   "k_hyd_ch",
+   "K_S_pro",
+   "k_m_su",
+   "K_I_h2_pro"
+  ]
+ },
+ "tier": "B",
+ "tool_failures": [
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "no cited call produced a `end_d` for ['gas_flow']; cite the call the number rests on",
+   "name": "p1.record_evidence",
+   "step": "record_evidence"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "`signal_to_noise` = 0.051703 is not what the cited calls produced ([0.27082])",
+   "name": "p1.record_evidence",
+   "step": "record_evidence"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "Y_ac: no successful call of this run produced a fisher interval for it (posterior: a converged sampler; profile: a closed profile; fisher: a fit or a Fisher call with a finite sd)",
+   "name": "p1.conclude",
+   "step": "conclude"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "Y_ac: no successful call of this run produced a fisher interval for it (posterior: a converged sampler; profile: a closed profile; fisher: a fit or a Fisher call with a finite sd)",
+   "name": "p1.conclude",
+   "step": "conclude"
+  },
+  {
+   "call_index": null,
+   "fallback": "refused by the harness",
+   "kind": "error",
+   "message": "Y_ac: no successful call of this run produced a none interval for it (posterior: a converged sampler; profile: a closed profile; fisher: a fit or a Fisher call with a finite sd)",
+   "name": "p1.conclude",
+   "step": "conclude"
+  }
+ ],
+ "validation": {
+  "calls": [
+   18
+  ],
+  "constraint_violations": 0,
+  "ensemble": false,
+  "ensemble_size": 0,
+  "holdout": [
+   150.0,
+   200.0
+  ],
+  "metrics": {
+   "alkalinity_total": {
+    "bias": 0.24933731641567572,
+    "coverage_50": null,
+    "coverage_90": null,
+    "crps": null,
+    "interval_score_90": null,
+    "mae": 0.33798587878990943,
+    "n": 7.0,
+    "nrmse": 1.5898108234698143,
+    "rmse": 0.3525426057492782
+   },
+   "cod_total": {
+    "bias": -2.0836056733356396,
+    "coverage_50": null,
+    "coverage_90": null,
+    "crps": null,
+    "interval_score_90": null,
+    "mae": 2.0836056733356396,
+    "n": 7.0,
+    "nrmse": 1.7906023625087715,
+    "rmse": 2.3918290583602855
+   },
+   "vfa_titrimetric": {
+    "bias": 0.02223896296750714,
+    "coverage_50": null,
+    "coverage_90": null,
+    "crps": null,
+    "interval_score_90": null,
+    "mae": 0.04082731459113122,
+    "n": 7.0,
+    "nrmse": 1.3076555878206315,
+    "rmse": 0.0509422965957802
+   }
+  }
+ },
+ "workflow": "p1",
+ "workflow_version": "0.1"
+}

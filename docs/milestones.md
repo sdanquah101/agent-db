@@ -3180,3 +3180,197 @@ for it: stored in a file outside the repository (`~/.config/agentdb/anthropic.en
 sources it and False in every other, never printed, never on a command line. The lead
 has said the key will be rotated; the arm's summaries, logs and CSVs are tested for the
 absence of any `sk-ant-` string before the live run.
+
+### Session 2026-09-29 (continued) — the Anthropic arm: revision 2 with `claude-opus-5-5` (`claude/p1-anthropic-arm`, from the unmerged PR #26)
+
+**The lead's ruling of ~21:26 (relayed by the coordinator):** a second model arm beside
+rev2/`gpt-5.6-luna`, one ten-cell development run, on a new branch from
+`claude/p1-single-agent` as its own PR, started only after the two-head freeze comparison
+passed and its note was pushed (22:16). This branch carries PR #26 whole; it merges after
+it or is rebased if #26 changes.
+
+**Built (`d9755e1`), the design in `docs/decisions.md`:**
+- `configs/workflows/p1_anthropic.yaml`: `p1.yaml` with the `model` block alone replaced
+  (a test pins the rest equal): `claude-opus-5-5`, `max_tokens` 16000, effort `high`, no
+  temperature, prompt caching, the same retry policy, Anthropic's published prices.
+- `tools/llm.py::AnthropicClient`, rewritten in the OpenAI client's shape: the request
+  translated (`to_messages_request`), checked as it will be sent
+  (`check_messages_request`: only the frozen parameters; no `thinking`, no fallback, no
+  metadata, no server tool, no `strict`; `tool_choice` auto; the joined system text's
+  digest), the reply translated back with the raw response kept verbatim
+  (`from_messages_output`); streamed reads; the SDK's retries off. The replay re-checks
+  the translated request for this provider too.
+- **Strict schemas are not sent** (a deviation for the coordinator's record): the API
+  allows 24 optional parameters per request under `strict`, and P1's twenty tools carry
+  61. The committed schemas go unchanged, exactly as the OpenAI arm sends them; the
+  harness validates every input itself, as before.
+- The loop: a reply cut at the token limit is continued once (its tool uses refused, the
+  model told); a second cut ends the run. A refusal ends the run with the API's
+  category. Neither stop occurred in any logged run of the OpenAI arm.
+- Summaries carry `provider`; the pilot CSVs get a `model` column, backfilled from the
+  summaries' `model_id`; a run ended by a refusal is `run_failed` with `failure_reason`
+  `refusal`.
+- `tests/test_p1_anthropic_arm.py` (12 tests, on a stand-in SDK, no key, no network): the
+  configuration, the request and its check, the reply and its refusals, the SDK's error
+  classes against the retry policy, a full run of the arm and its replay, **the key
+  never written** (a marker key in the run's environment, then every file the run wrote,
+  the summary, the provenance and the log scanned for `sk-ant-` and for the variable's
+  name), the two new stops of the loop.
+- The key: `~/.config/agentdb/anthropic.env` (mode 600, outside the repository), sourced
+  by the driver's shell only; `ANTHROPIC_API_KEY` **True** there, False elsewhere. The
+  `anthropic` SDK is 1.9.0 (its HTTP layer `httpx2`), added to the `llm` extra.
+- One live smoke turn through the client (the committed system text and the twenty tool
+  schemas, one user line, no tool called): accepted; `end_turn`, the text `OK`, 10,765
+  tokens written to the cache, USD 0.054. The request shape holds against the API.
+
+**Running:** the full suite alone (started 22:20); on green and ruff clean, the push,
+the PR, then the ten cells of the rev2 comparison (S0-01 B/A, B/B, B/C; S1-01 B/B;
+S2-01 B/B; S3-01 C/B; S4-01 B/B; S5-01 A/A; S6-02 B/B; S8-01 B/B), three lanes, one
+process per cell, from a worktree at the pushed head, nothing else on the machine.
+Expected cost at Anthropic's rates: a few USD per cell (the history is read from the
+cache at 0.20 USD per million tokens; thinking is billed as output at 20).
+
+**2026-09-30, 01:50 UTC — the Anthropic arm's ten cells are done: rev2/`claude-opus-5-5` at `4801f36`.**
+Ten of ten concluded, no failed run, no failed model attempt (164 turns, every stop
+`tool_use`, no cut reply, no refusal; thinking blocks on 148 turns, carried back each
+turn), no guard refusal. Started 22:56, three lanes; the container rebooted at ~23:59
+with three cells done (S3-01 C/B, S6-02 B/B, S8-01 B/B) and three in flight at six to
+seven turns (S0-01 B/B, S4-01 B/B, S5-01 A/A: `run_8fe9dd4f9892`, `run_c91f0ef369cb`,
+`run_fd74a0e24f3b`, discarded, not in the table); the other seven ran 00:00–01:47 at the
+same head from the same worktree, nothing else on the machine. Rows in
+`reports/p1_pilot.csv` (`prompt_version` `rev2_claude`, the new `model` column filled
+for every row from the summaries), summaries in `reports/p1_pilot/summaries/rev2_claude_*`.
+
+| cell | truth | rev2 / luna (`cc256fd`) | rev2 / claude (`4801f36`) | claude: evidence behind the label (n; t = time-localised, c = channel) | evals | wall, min | turns | cost, USD |
+|---|---|---|---|---|---|---|---|---|
+| S0-01 B/A | none | sensor | influent | influent 5 (t 4, c 0) | 115 | 30.2 | 15 | 0.77 |
+| S0-01 B/B | none | sensor + influent | influent | influent 4 (t 3, c 0) | 137 | 35.4 | 18 | 0.92 |
+| S0-01 B/C | none | influent | influent | influent 5 (t 4, c 0) | 233 | 56.5 | 17 | 0.92 |
+| S1-01 B/B | none | sensor | influent | influent 3 (t 2, c 0) | 51 | 15.4 | 13 | 0.92 |
+| S2-01 B/B | sensor | **sensor** (exact) | influent | influent 6 (t 5, c 0) | 123 | 32.6 | 15 | 0.76 |
+| S3-01 C/B | influent | **influent** + sensor | **influent** (exact) | influent 4 (t 3, c 0) | 259 | 55.6 | 14 | 0.81 |
+| S4-01 B/B | state | **state** + influent | influent | influent 3 (t 3, c 0) | 223 | 50.9 | 15 | 0.91 |
+| S5-01 A/A | parameter | influent + sensor | influent | influent 4 (t 4, c 0) | 108 | 46.9 | 16 | 0.85 |
+| S6-02 B/B | structural | sensor + influent | influent | influent 4 (t 3, c 0) | 231 | 53.0 | 18 | 1.19 |
+| S8-01 B/B | sensor | **sensor** + structural | **sensor** (exact) | sensor 3 (t 2, c 0) | 156 | 42.1 | 23 | 1.81 |
+
+| total | rev2 / luna | rev2 / claude | claude − luna |
+|---|---|---|---|
+| failed runs (no conclusion) | 0 | 0 | 0 |
+| exact attribution | 1/10 | 2/10 | +1 |
+| primary label = truth | 4 | 2 | −2 |
+| truth among the labels given | 4 | 2 | −2 |
+| `none` reached on the four `none` cells | 0 | 0 | 0 |
+| labels given | 16 | 10 | −6 |
+| labels without localised evidence | 1 | 0 | −1 |
+| unsupported claims | 0 | 0 | 0 |
+| invalid actions (evaluator) | 2 | 0 | −2 |
+| harness refusals (verbatim log; the guard's) | 54 (14) | 25 (0) | −29 |
+| extra abstentions | 92 | 31 | −61 |
+| kinetic-update errors / kinetic drift (cells) | 0 / 0 | 0 / 0 | 0 |
+| simulator evaluations | 2,311 | 1,636 | −675 |
+| wall clock, min | 851 | 419 | −433 |
+| model turns | 174 | 164 | −10 |
+| tokens | 7.18 M | 7.47 M | +0.29 M |
+| cost at the arm's declared rates, USD | 0.419 | 9.863 | +9.44 |
+
+**Reading (one run per cell; a cell or two is noise).**
+- **One label per cell, and nine times `influent`.** Claude gave a single label on every
+  cell and no secondary label anywhere; nine of its ten primaries are `influent`, the
+  tenth `sensor` (S8-01). Its two exact attributions are the two cells whose truth is
+  the label it favours (S3-01 influent) or the one exception (S8-01 sensor); it lost
+  luna's matches on S2-01 (sensor), S4-01 (state) and the secondary hits. `none` is
+  unreached by both, on all four `none` cells, as by every arm so far.
+- **Fewer, tighter actions.** Every label rests on time-localised evidence (none on
+  whole-record figures), no invalid action, a third of luna's extra abstentions (31 from
+  92), fewer refusals (25 from 54; none from the guard, which luna tripped 14 times),
+  and no kinetic drift. The runs are short: 1,636 evaluations and 419 minutes against
+  2,311 and 851, at the same 13.5 s per evaluation (this instance, since the reboot of
+  29 September 15:27; the reboot of 23:59 did not change the rate).
+- **Cost.** USD 9.86 for the arm at Anthropic's rates against 0.42 for luna's at
+  OpenAI's: 1.24 M tokens written to the cache (6.19), 6.11 M read from it (1.22),
+  122 k output (2.45; thinking billed as output), 348 uncached input. Every token of the
+  growing history is written once and read on each later turn; the split shows the
+  caching working as designed. The row label in the report script says "at luna's
+  rates" for every arm; each arm's cost is at its own configuration's declared rates.
+- **Limitations.** One run per cell; two different models at effort `high` with their
+  own defaults for reasoning; the same prompts, tools, budgets and harness. The three
+  discarded partial runs are the reboot's, not the model's. Strict schemas were not
+  sent (decisions, 2026-09-29); every tool input Claude sent validated at the harness
+  (no `_unparseable_arguments`, no schema refusal).
+
+**Blocked:** nothing. **Next:** the coordinator's review of PR #27; the lead's word on
+what follows (a second run per cell, another prompt revision, or the freeze).
+
+**2026-09-30, ~04:50 UTC — the coordinator's review of `d5f6282` (PASS, four flags): applied.**
+1. *The second cache breakpoint* (last block of the last message) is kept and recorded
+   in `docs/decisions.md` as deliberate: it is what caches the growing history (6.11 M
+   tokens read from the cache against 1.24 M written over the ten cells); a breakpoint
+   on the system text alone would re-read the history at the uncached price every turn.
+2. *A failed run's reason is in the summary*: `WorkflowResult.run_failed` and
+   `failure_reason` (`tools/runner.py::FAILURE_REASONS`: killed, connection, refusal,
+   cut_reply, unhandled_stop, model_error, limits, other), classified from the run's
+   record. The report writer is now committed (`scripts/p1_pilot_report.py`, the
+   scratch script of every table so far, tidied) and reads the fields from the summary;
+   the CSVs and the forty summaries are regenerated with it (the earlier rows backfilled
+   by the same classifier: the 1b arm's two killed cells and the contended attempt's
+   three read `killed`, the contended attempt's two model-transport failures
+   `connection`; the CSVs are byte-identical to the hand-assembled ones). The refusal path is tested end to end
+   (fake refusal → `run_failed` true, `failure_reason` `refusal` in the result and in
+   `summary.json` → the report's row with blank credit columns, and its totals).
+3. *The digests are pinned*: `prompt_sha256` `c80a3752…`, the joined system text's
+   `ab2025e4…c1eb` and the tools digest `11d8e352…`, for both configurations.
+4. `pause_turn` and `model_context_window_exceeded` end the run as `unhandled_stop`;
+   recorded in the decisions as deliberate. The "thinking on 148 turns" figure is marked
+   an observation from the uncommitted stores.
+Full suite alone on the machine before the push; ruff clean. PR #27 stays behind #26.
+
+### Session 2026-09-30 — P1 frozen (the lead's word), on `claude/p1-anthropic-arm` (PR #27)
+
+**The lead's word of 2026-09-30, "Freeze P1"** (relayed by the coordinator at 04:54): the
+frozen P1 is revision 2 (system + task prompts, `prompt_sha256` `c80a3752…`) with
+`gpt-5.6-luna` through `configs/workflows/p1.yaml`, no expert brief. Done on this branch
+so that PR #26's reviewed head stays untouched; the entry in `docs/decisions.md`
+(2026-09-30) has the decision, the reason and the alternatives.
+
+- `configs/workflows/p1.yaml`: STATUS FROZEN; `prompt_sha256` committed; a `frozen` record
+  (date, the word, `prompt_sha256`, `system_sha256` `ab2025e4…c1eb`, model id, effort,
+  response cap, retry policy). `check_frozen` (`tools/workflow_config.py`), called from
+  the runner's provenance before every run, refuses a run whose configuration or prompts
+  differ from the record in any field; `check_prompt_hash` refuses prompts that do not
+  hash to the committed value. `brief_sha256` stays empty.
+- The prompt files carry no header: the hash covers their whole text, so the status is in
+  the yaml only (as the coordinator's relay allowed).
+- `p1_expert_brief.yaml` and `p1_anthropic.yaml`: DEVELOPMENT COMPARISON ARMS, not frozen,
+  kept on record; the six-arm table above (old / 1a / 1b / rev2 / rev2 + brief /
+  rev2 on claude) is the P1 development record.
+- Tests: `test_the_frozen_record_is_what_is_on_disk` (the literal digests equal the
+  computed ones; a negative control per field; the arms carry no record); the brief-arm
+  and Anthropic-arm equality tests allow the frozen P1 its hash and record and nothing
+  else. This closes flag 3 of the `d5f6282` review with the same values.
+- `docs/benchmark_card.md` §4.3, `docs/p1_design.md` (status, §5) say P1 is frozen and
+  what it is.
+
+**Still not authorised:** the held-out variants of §7, the Level 0–5 sweep scoring, any
+further P1 arm or repeat run, the merge of either PR. PR #27 goes behind PR #26.
+
+**2026-09-30, 05:06 UTC — the coordinator's review of PR #26 at `78ecb03`: PASS.** The
+coordinator asks the lead for the merge word on #26; nothing more is pushed to
+`claude/p1-single-agent`. Its two LOW notes are taken here, on PR #27, with the freeze:
+`tests/test_p0_freeze.py` asserts the base call log is not empty before the projection
+comparison; the `p0_freeze` marker's text in `pyproject.toml` now says about two hours
+(63 + 60 min on record), as the test's docstring does.
+
+**2026-09-30, 05:15 UTC — the run records of the two revision-2 arms are committed for the
+knowledge audit** (the lead's word, relayed 05:14): `reports/p1_pilot/records/<prompt_version>/
+<run_id>/` for the ten rev2/luna runs at `cc256fd` and the ten rev2/claude runs at
+`4801f36`, each with its redacted manifest, `calls.jsonl`, `workflows/p1/state.json`,
+`report.json` where present and the model log (`llm_calls.jsonl`; the two over 5 MB as
+`llm_calls.jsonl.gz`); `index.csv` (prompt version, model, cell, run id, commit, the truth
+label from the scenario YAML, the labels given). 49 MB in 101 files, under the 80 MB
+mark, so every log is included. Rule 1: nothing from `truth_store/` and nothing derived
+from it; the tree was scanned for truth-store tokens and key material (clean) and every
+manifest is the redacted one; the static rule-1 checker applies to Python modules and the
+tree holds none. Pushed with the freeze and the two reviews' notes once the full suite
+that started 05:04 is green (the push rule).
+
