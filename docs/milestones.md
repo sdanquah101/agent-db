@@ -3324,3 +3324,33 @@ what follows (a second run per cell, another prompt revision, or the freeze).
    recorded in the decisions as deliberate. The "thinking on 148 turns" figure is marked
    an observation from the uncommitted stores.
 Full suite alone on the machine before the push; ruff clean. PR #27 stays behind #26.
+
+### Session 2026-09-30 — P1 frozen (the lead's word), on `claude/p1-anthropic-arm` (PR #27)
+
+**The lead's word of 2026-09-30, "Freeze P1"** (relayed by the coordinator at 04:54): the
+frozen P1 is revision 2 (system + task prompts, `prompt_sha256` `c80a3752…`) with
+`gpt-5.6-luna` through `configs/workflows/p1.yaml`, no expert brief. Done on this branch
+so that PR #26's reviewed head stays untouched; the entry in `docs/decisions.md`
+(2026-09-30) has the decision, the reason and the alternatives.
+
+- `configs/workflows/p1.yaml`: STATUS FROZEN; `prompt_sha256` committed; a `frozen` record
+  (date, the word, `prompt_sha256`, `system_sha256` `ab2025e4…c1eb`, model id, effort,
+  response cap, retry policy). `check_frozen` (`tools/workflow_config.py`), called from
+  the runner's provenance before every run, refuses a run whose configuration or prompts
+  differ from the record in any field; `check_prompt_hash` refuses prompts that do not
+  hash to the committed value. `brief_sha256` stays empty.
+- The prompt files carry no header: the hash covers their whole text, so the status is in
+  the yaml only (as the coordinator's relay allowed).
+- `p1_expert_brief.yaml` and `p1_anthropic.yaml`: DEVELOPMENT COMPARISON ARMS, not frozen,
+  kept on record; the six-arm table above (old / 1a / 1b / rev2 / rev2 + brief /
+  rev2 on claude) is the P1 development record.
+- Tests: `test_the_frozen_record_is_what_is_on_disk` (the literal digests equal the
+  computed ones; a negative control per field; the arms carry no record); the brief-arm
+  and Anthropic-arm equality tests allow the frozen P1 its hash and record and nothing
+  else. This closes flag 3 of the `d5f6282` review with the same values.
+- `docs/benchmark_card.md` §4.3, `docs/p1_design.md` (status, §5) say P1 is frozen and
+  what it is.
+
+**Still not authorised:** the held-out variants of §7, the Level 0–5 sweep scoring, any
+further P1 arm or repeat run, the merge of either PR. PR #27 goes behind PR #26.
+

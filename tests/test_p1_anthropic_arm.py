@@ -136,6 +136,10 @@ def test_the_anthropic_arm_differs_from_p1_only_in_the_model_block():
     arm = yaml.safe_load(ARM.read_text("utf-8"))
     model = arm.pop("model")
     plain_model = plain.pop("model")
+    # the frozen P1 commits its hash and its record; the comparison arm carries neither
+    assert plain.pop("frozen")["prompt_sha256"] == plain["prompt_sha256"] != ""
+    assert arm["prompt_sha256"] == "" and "frozen" not in arm
+    plain["prompt_sha256"] = ""
     assert arm == plain
     assert model["provider"] == "anthropic" and model["model_id"] == "claude-opus-5-5"
     assert model["temperature"] is None and model["effort"] == "high"
@@ -149,15 +153,15 @@ def test_the_anthropic_arm_differs_from_p1_only_in_the_model_block():
         "cache_read": 0.2,
     }
     config = load_p1(ARM)
-    assert config.prompt_sha256 == "" and config.brief_sha256 == ""  # not frozen
+    assert config.prompt_sha256 == "" and config.brief_sha256 == ""  # a comparison arm
     assert p1_provenance(config) == p1_provenance(load_p1())  # the same prompts and tools
 
 
 def test_the_digests_of_both_configurations_are_the_ones_the_summaries_carry():
     # the coordinator's review of d5f6282 (flag 3): the literal values, so that a silent
     # edit of a prompt or a tool specification fails a test rather than moving a runtime
-    # value. Not the freeze: prompt_sha256 in the configurations stays empty until the
-    # lead's word. The pins move with a deliberate edit, recorded in docs/decisions.md.
+    # value. Since the freeze of 2026-09-30 the prompt and system digests are also the
+    # frozen record's (tests/test_p1_agent.py); the comparison arm shares the prompts.
     pins = {
         "prompt_sha256": "c80a37521e81487012b7a7ebc13e179b616216060d93f1ae45aa8791daf661d1",
         "system_sha256": "ab2025e4d00db06eac2b146bb175ab5fd1cfb744c71af21b14d816608324c1eb",

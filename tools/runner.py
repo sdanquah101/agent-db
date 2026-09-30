@@ -65,6 +65,7 @@ from tools.server import OUTPUTS_DIR
 from tools.workflow_config import (
     P1Config,
     check_brief_hash,
+    check_frozen,
     check_prompt_hash,
     load_prompts,
     load_workflow_config,
@@ -199,13 +200,15 @@ def p1_provenance(config: P1Config) -> dict[str, str]:
 
     Raises:
         ValueError: If the configuration's ``prompt_sha256`` is set and the prompts on
-            disk do not hash to it.
+            disk do not hash to it, or its freeze record differs from the configuration
+            and the prompts (:func:`tools.workflow_config.check_frozen`).
     """
     import hashlib
 
     from workflows.p1_single_agent.agent import tool_specs
 
     prompts = load_prompts(config)
+    check_frozen(config)  # the frozen P1: the record must be what is on disk
     return {
         "prompt_sha256": check_prompt_hash(config),
         "brief_sha256": check_brief_hash(config),  # "" in the plain arm

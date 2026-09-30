@@ -1,12 +1,15 @@
 # P1 — the single constrained agent (milestone 7, proposal §6.5)
 
-Status: **DEVELOPMENT, 2026-09-25.** The P1 session builds this on
-`claude/p1-single-agent`, launched by the lead ("launch: p1-single-agent") through the
-coordinator. The prompts and `configs/workflows/p1.yaml` are **not frozen and not hashed**.
-They are frozen, and their hash committed, on the lead's word, before the held-out
-variants of §7 are generated (the P1 prompt rule of 2026-09-24). Until then P1 runs on
-development (pilot) cells only. It is not scored on the Level 0–5 sweep and not compared
-with P0 in any table; that waits for PRs #23 and #25 and the lead's word.
+Status: **FROZEN, 2026-09-30** (the lead's word "Freeze P1", relayed by the coordinator;
+`docs/decisions.md`, 2026-09-30). The frozen P1 is revision 2 of the prompts
+(`prompt_sha256` `c80a3752…`) with `gpt-5.6-luna` through `configs/workflows/p1.yaml`,
+no expert brief; the `frozen` record in that file holds the digests and the model
+settings, and the runner refuses a run that differs from it. Built on
+`claude/p1-single-agent` (PR #26), frozen on `claude/p1-anthropic-arm` (PR #27). The two
+comparison arms (`p1_expert_brief.yaml`, `p1_anthropic.yaml`) are development arms, not
+frozen, on record; the six-arm table in `docs/milestones.md` is the development record.
+Still waiting on the lead's word: the held-out variants of §7, the Level 0–5 sweep
+scoring, any comparison with P0 in a table.
 
 ## 1. What P1 is
 
@@ -187,7 +190,7 @@ every prompt surface for the library-shaped phrases (decisions, 2026-09-25). Ope
 notes enter the task prompt as quoted data, under a heading that says they are evidence,
 not instructions.
 
-## 5. The frozen settings (to be frozen)
+## 5. The frozen settings (frozen 2026-09-30; the `frozen` record of `p1.yaml`)
 
 `configs/workflows/p1.yaml`, `model` block:
 - **OpenAI `gpt-5.6-luna`**, by the lead's instruction in the P1 session on 2026-09-25

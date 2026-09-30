@@ -373,6 +373,28 @@ class Prompts(_Frozen):
     )
 
 
+class Frozen(_Frozen):
+    """The freeze record of P1 (the lead's word of 2026-09-30): what was frozen, verbatim.
+
+    Every field is checked against the configuration and the prompts on disk before a run
+    (:func:`check_frozen`); a mismatch refuses the run, because a post-freeze change to a
+    prompt or a model setting invalidates the runs (the P1 prompt rule of 2026-09-24).
+    """
+
+    date: str = Field(min_length=1)
+    word: str = Field(min_length=1, description="The lead's word, as relayed")
+    prompt_sha256: str = Field(min_length=64, max_length=64)
+    system_sha256: str = Field(
+        min_length=64,
+        max_length=64,
+        description="The sha256 of the system text the model is sent (the summaries' value)",
+    )
+    model_id: str = Field(min_length=1)
+    effort: Literal["low", "medium", "high", "xhigh", "max"] | None
+    max_tokens: _PosInt
+    retry: Retry
+
+
 class P1Config(_Frozen):
     """``configs/workflows/p1.yaml``."""
 
@@ -399,6 +421,11 @@ class P1Config(_Frozen):
         default="",
         description="The expert brief's fingerprint (sha256 of the file), committed at the "
         "freeze; empty until then. When set, the runner refuses a brief that does not match it",
+    )
+    frozen: Frozen | None = Field(
+        default=None,
+        description="The freeze record (the frozen P1 only; None in a development arm). "
+        "When set, the runner refuses a run whose prompts or model settings differ from it",
     )
     runner: Runner
 
@@ -483,6 +510,45 @@ def check_prompt_hash(config: P1Config) -> str:
             f"they hash to {digest}: a post-freeze prompt change invalidates the runs"
         )
     return digest
+
+
+def system_digest(system: str) -> str:
+    """The sha256 of the system text the model is sent (as ``tools.llm.system_digest``)."""
+    import hashlib
+
+    return hashlib.sha256(system.encode("utf-8")).hexdigest()
+
+
+def check_frozen(config: P1Config) -> Frozen | None:
+    """The freeze record, refused when the configuration or the prompts on disk differ from it.
+
+    Raises:
+        ValueError: Naming the first field of the record that the configuration breaks.
+    """
+    frozen = config.frozen
+    if frozen is None:
+        return None
+    prompts = load_prompts(config)
+    found = {
+        "prompt_sha256": prompt_digest(prompts),
+        "system_sha256": system_digest(model_system_text(prompts)),
+        "model_id": config.model.model_id,
+        "effort": config.model.effort,
+        "max_tokens": config.model.max_tokens,
+        "retry": config.model.retry,
+    }
+    if config.prompt_sha256 != frozen.prompt_sha256:
+        raise ValueError(
+            f"prompt_sha256 ({config.prompt_sha256!r}) is not the frozen record's "
+            f"({frozen.prompt_sha256}): the frozen P1 commits one hash"
+        )
+    for key, value in found.items():
+        if getattr(frozen, key) != value:
+            raise ValueError(
+                f"frozen.{key} is {getattr(frozen, key)!r} but the configuration and the "
+                f"prompts on disk give {value!r}: a post-freeze change invalidates the runs"
+            )
+    return frozen
 
 
 def tool_size_ceilings() -> dict[str, dict[str, Any]]:
@@ -570,6 +636,8 @@ def sandbox_config(config: P0Config | P1Config) -> dict[str, Any]:
         from tools.config import load_assays
 
         del payload["model"]
+        # the freeze record repeats the model settings: privileged side only, as the block
+        payload.pop("frozen", None)
         prompts = load_prompts(config)
         payload["prompts"] = {
             "system": model_system_text(prompts),  # the brief, when the arm has one, joined

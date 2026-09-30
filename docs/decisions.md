@@ -7006,3 +7006,50 @@ flags).**
 - *The thinking count is an observation.* "Thinking blocks on 148 of 164 turns" in the
   milestones was read from the stores' logs, which are not committed; it is not a table
   figure and no committed artefact carries it.
+
+## 2026-09-30 — P1 is frozen: revision 2 with `gpt-5.6-luna`, no brief (the lead's word)
+
+**Decision.** The lead's word of 2026-09-30, "Freeze P1", relayed by the coordinator. The
+frozen P1 is revision 2 of the prompts (`configs/workflows/p1_prompts/system.md` and
+`task.md`; `prompt_sha256`
+`c80a37521e81487012b7a7ebc13e179b616216060d93f1ae45aa8791daf661d1`) with OpenAI's
+`gpt-5.6-luna` through `configs/workflows/p1.yaml` (effort `high`, `max_tokens` 16000,
+the retry policy as it stands), no expert brief. The system text the model is sent hashes
+to `ab2025e4d00db06eac2b146bb175ab5fd1cfb744c71af21b14d816608324c1eb`, the value every
+summary of the revision-2 runs carries. Done on `claude/p1-anthropic-arm` (PR #27, which
+carries PR #26 whole), so that PR #26's reviewed head stays untouched.
+
+**How.** `p1.yaml` says STATUS FROZEN, commits `prompt_sha256`, and carries a `frozen`
+record (`tools/workflow_config.py::Frozen`: date, the word, the two digests, the model
+id, effort, response cap and retry policy). `check_prompt_hash` refuses prompts that do
+not hash to the committed value, as before; `check_frozen` (called from the runner's
+provenance before every run) refuses a run whose configuration or prompts on disk differ
+from the record in any field. `tests/test_p1_agent.py::test_the_frozen_record_is_what_is_on_disk`
+holds the literal digests and a negative control for every field; the digest pins of the
+`d5f6282` review (flag 3) are the same values. **The prompt files carry no FROZEN
+header**: the hash covers their whole text, so a header line would change it; the status
+lives in the yaml only. `brief_sha256` stays empty: the brief is not part of the frozen
+P1. `p1_expert_brief.yaml` and `p1_anthropic.yaml` are marked DEVELOPMENT COMPARISON
+ARMS, not frozen, kept on record with no freeze record and no committed hash; the six-arm
+table in `docs/milestones.md` is the P1 development record.
+
+**Reason.** Six development arms on the same ten cells — three prompt revisions (old,
+1a, 1b), a scoring statement (revision 2), a domain brief (revision 2 + brief) and a
+second model (revision 2 on `claude-opus-5-5`) — moved primary-label accuracy at most to
+4/10, and none reached `none` on a clean cell. Revision 2 on GPT is the best of them on
+primary labels (4/10) and on kinetic discipline (no kinetic drift, no kinetic-update
+error), with no failed run. Further development would tune the prompt to the development
+cells; the prompt rule of 2026-09-24 says the hash is committed before the held-out
+variants are generated, and that point is now.
+
+**Alternatives.** Revision 2 + the brief: fewer abstentions and refusals, but four
+kinetic drifts and one fewer primary match. Revision 2 on `claude-opus-5-5`: tighter
+actions, two exact attributions, but one label per cell and `influent` nine times in
+ten. A further revision: every revision so far moved what the agent declines and how
+many labels it gives, not the one-sided failure (`none` unreached). Rejected because none
+of them moved that failure.
+
+**Still not authorised** (the lead's word): generating the held-out variants of §7,
+scoring on the Level 0–5 sweep, any further P1 arm or a repeat run, the merge of either
+PR.
+
