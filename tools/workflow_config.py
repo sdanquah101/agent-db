@@ -23,16 +23,21 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 __all__ = [
     "WORKFLOW_CONFIG_DIR",
+    "Frozen",
     "ModelSettings",
     "P0Config",
     "P1Config",
+    "check_brief_hash",
+    "check_frozen",
     "check_prompt_hash",
     "load_p0",
     "load_p1",
     "load_prompts",
     "load_workflow_config",
+    "model_system_text",
     "prompt_digest",
     "sandbox_config",
+    "system_digest",
 ]
 
 WORKFLOW_CONFIG_DIR = Path(__file__).resolve().parents[1] / "configs" / "workflows"
@@ -428,24 +433,42 @@ class P1Config(_Frozen):
         "When set, the runner refuses a run whose prompts or model settings differ from it",
     )
     runner: Runner
+    prompt_root: Path | None = Field(
+        default=None,
+        exclude=True,
+        description="Where the prompt paths resolve: the directory the yaml was loaded from "
+        "(set by load_p1; never in the file, never in the jail payload). None means "
+        "configs/workflows/",
+    )
 
 
 def load_p1(path: Path = WORKFLOW_CONFIG_DIR / "p1.yaml") -> P1Config:
-    """Parse and validate ``p1.yaml``."""
-    raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+    """Parse and validate ``p1.yaml``.
+
+    The prompt paths in the file resolve against the file's own directory
+    (``prompt_root``), so a configuration loaded from a worktree or a copy hashes and
+    sends the prompts beside it, never the repository's (the review of ``dbf2e45``,
+    2026-09-30, note 2). ``prompt_root`` is not a field of the file.
+    """
+    path = Path(path)
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError(f"{path}: expected a YAML mapping")
-    return P1Config.model_validate(raw)
+    if "prompt_root" in raw:
+        raise ValueError(f"{path}: prompt_root is set by the loader, not the file")
+    return P1Config.model_validate({**raw, "prompt_root": path.resolve().parent})
 
 
-def load_prompts(config: P1Config, root: Path = WORKFLOW_CONFIG_DIR) -> dict[str, str]:
+def load_prompts(config: P1Config, root: Path | None = None) -> dict[str, str]:
     """The prompt texts P1's configuration names, by role.
 
     ``system`` and ``task`` always; ``brief`` only in the expert-brief arm, whose
-    configuration names one.
+    configuration names one. The paths resolve against ``root`` if given, else the
+    directory the configuration was loaded from, else ``configs/workflows/``.
     """
+    base = Path(root) if root is not None else config.prompt_root or WORKFLOW_CONFIG_DIR
     return {
-        role: (Path(root) / rel).read_text(encoding="utf-8")
+        role: (base / rel).read_text(encoding="utf-8")
         for role, rel in config.prompts.model_dump().items()
         if rel is not None
     }

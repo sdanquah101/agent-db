@@ -40,3 +40,7 @@ anchor/raw/**
 .idea/
 .vscode/
 .DS_Store
+
+# Local run stores rebuilt from reports/p1_pilot/records/ for the pilot report (see
+# reports/README.md); never committed.
+/reports/p1_pilot/stores/

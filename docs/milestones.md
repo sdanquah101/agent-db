@@ -3374,3 +3374,55 @@ manifest is the redacted one; the static rule-1 checker applies to Python module
 tree holds none. Pushed with the freeze and the two reviews' notes once the full suite
 that started 05:04 is green (the push rule).
 
+**2026-09-30, 08:44 UTC — the coordinator's review of PR #27 at `dbf2e45`: PASS**; the
+coordinator has asked the lead for the merge word at that head. Its four LOW notes are
+one small follow-up:
+1. The CSVs' inputs are committed: `reports/p1_pilot/results/<prompt_version>.jsonl`,
+   the pilot driver's results files of all seven arms (old, 1a, 1b, rev2_contended,
+   rev2, rev2_brief, rev2_claude; summary and evaluator row per cell, ~60 KB each;
+   scanned for key material and truth-store content: none; the evaluator's columns are
+   the ones the public P0 scored tables carry, seed, truth label and recovery detail
+   included). `reports/README.md` says what regenerates from what.
+2. `load_p1` records the yaml's directory as `prompt_root` (set by the loader only,
+   never in the file, never in the jail payload) and `load_prompts` resolves the prompt
+   paths against it, so a configuration loaded from a worktree or a copy hashes and
+   sends the prompts beside it; tested with a copied frozen configuration whose prompt
+   is edited by one character (refused) beside the repository's (passes).
+3. `check_frozen`, `check_brief_hash`, `system_digest`, `model_system_text` and `Frozen`
+   are in `tools.workflow_config.__all__`.
+4. `reports/p1_pilot/records/README.md` says the index's `truth_label` is the public
+   scenario label, at the records root, outside every run directory.
+The observation stands as an observation: the summaries carry the model id and the
+digests, not effort, response cap or retry; the frozen record was matched against
+`cc256fd`'s yaml.
+
+
+### Session 2026-09-30 — the P1 session closes (`claude/p1-followup`, from `main` after #27)
+
+**Done.** PR #27 merged on the lead's word at `dbf2e45` (`ad94b65`); PR #28 (the knowledge
+audit, the P2 launch brief, the lead's decisions of 2026-09-30) merged after it
+(`b611a1b`). `main` carries the frozen P1 (revision 2 with `gpt-5.6-luna`, no brief; the
+`frozen` record checked before every run), the Anthropic comparison arm, the six-arm
+development record and the run records of the two revision-2 arms. The lead has launched
+P2 as its own session.
+
+This branch is the one small follow-up the coordinator asked for, cut from `main` after
+#27 and #28: the four LOW notes of the `dbf2e45` review (above, 08:44), and nothing
+else. No P1 arm, no re-run, no prompt or configuration change: `check_frozen` passes on
+`main` and here. Full suite alone on the machine and ruff clean before the push.
+
+**Blocked:** nothing. **Next:** nothing without the lead's word. The P1 component work
+is complete; this session stands down once the follow-up PR is open.
+
+**2026-09-30, 16:05 UTC — the coordinator's review of PR #29 at `5e30362`: fixes needed,
+documentation only; applied.** (1) `reports/README.md` now says plainly that only the
+rev2 and rev2_claude rows regenerate byte for byte (their stores are committed) and the
+other five arms do not; rev2_contended's two `connection` rows carry `run_failed` and
+`failure_reason` explicitly in the results file, copied from the committed CSV, since the
+classifier reads them from a model log that is not committed. (2) The report's spec is
+committed (`reports/p1_pilot/results/spec.json`, repository-relative paths), the README
+gives the store-building snippet (records `<ver>/<run_id>` → `stores/<ver>/runs/<run_id>`,
+the stores ignored), and `tools.llm.read_transcript` reads a gzipped log when the plain
+one is absent (tested), so the two packed logs need no unpacking. Verified in a temporary
+copy: the rev2 and rev2_claude rows come back identical; the other arms differ only in
+the three store-read columns.
