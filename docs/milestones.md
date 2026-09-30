@@ -3354,3 +3354,10 @@ so that PR #26's reviewed head stays untouched; the entry in `docs/decisions.md`
 **Still not authorised:** the held-out variants of §7, the Level 0–5 sweep scoring, any
 further P1 arm or repeat run, the merge of either PR. PR #27 goes behind PR #26.
 
+**2026-09-30, 05:06 UTC — the coordinator's review of PR #26 at `78ecb03`: PASS.** The
+coordinator asks the lead for the merge word on #26; nothing more is pushed to
+`claude/p1-single-agent`. Its two LOW notes are taken here, on PR #27, with the freeze:
+`tests/test_p0_freeze.py` asserts the base call log is not empty before the projection
+comparison; the `p0_freeze` marker's text in `pyproject.toml` now says about two hours
+(63 + 60 min on record), as the test's docstring does.
+

@@ -96,6 +96,7 @@ def test_the_p0_pilot_cell_is_the_same_run_at_the_base_and_at_the_head(tmp_path)
             capture_output=True,
         )
     assert base_state["final"]["label"] == head_state["final"]["label"]
+    assert base_calls  # two empty call logs must not pass the comparison (review of 78ecb03)
     assert _projection(base_calls) == _projection(head_calls)
     assert normalised_state_digest(base_state, base_id) == normalised_state_digest(
         head_state, head_id
