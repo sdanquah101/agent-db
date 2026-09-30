@@ -1,11 +1,13 @@
 # P2 launch brief — procedural roles with model-backed decision points (proposal §6.5)
 
-Status: **DRAFT 2 for the lead's approval, 2026-09-30.** Written by the coordinator
+Status: **APPROVED AND LAUNCHED, 2026-09-30.** Written by the coordinator
 (`docs/coordinator.md`) after the lead's rulings of 2026-09-30: "Freeze P1", "prepare the
 P2 launch brief", "P2 should not be agents with prompts", "run the knowledge audit on the
-P1 transcripts". Draft 1 (seven prompted agents) is withdrawn. Nothing here launches
-anything: a P2 session starts only on `launch: p2-multi-agent` from the lead
-(CLAUDE.md, "Who starts a component session"), after PR #27 has merged on the lead's word.
+P1 transcripts"; then "Merge PR #27, implement your recommendation, and launch p2 multi
+agent". Draft 1 (seven prompted agents) is withdrawn. PR #27 merged at `dbf2e45`; the five
+decisions of §6 are taken as recommended (`docs/decisions.md`, 2026-09-30, "the lead's
+word"); the P2 session is launched by the coordinator with this brief. This is the P2
+session's charter.
 
 The audit this draft rests on is `docs/p1_knowledge_audit.md` (rubric:
 `docs/p1_knowledge_audit_rubric.md`), a read-only grading of all twenty revision-2 runs
@@ -114,29 +116,43 @@ as evidence and negative anchors; the fitted subset within a physics-forced list
 declining a bound-hit as a kinetic update (0 false kinetic updates in 20 runs);
 abstention wording once the scored terms are procedural.
 
-## 6. Decisions the lead is asked for before launch
+## 6. Decisions — taken on the lead's word of 2026-09-30 (`docs/decisions.md`)
 
-1. **The declared background.** Publish a per-plant null band (balance closure and
-   residual envelope) in the benchmark card and carry it in the tool results, as
-   declared noise is carried today. It applies to every workflow. P0 already runs on
-   ruling B's thresholds; the frozen P1 cannot use it (its prompts are fixed), so P1's
-   0/4 on `none` stands as its record. Alternatives: state the band numerically in the
-   P2 prompts (weaker: a prompt, not a tool result); or leave `none` unscoreable for
-   model-backed workflows (then RQ3 cannot be answered on the null cells).
-2. **S5-01's injected magnitude** multiplies K_I_nh3 by 0.1; the fitted model's declared
-   box is [0.2, 5.0]. No bounded update can reach the truth. Record it, and decide
-   whether the scenario's magnitude or the box moves (a G1-frozen change either way).
-3. **S6-02 at tier B** shows no alkalinity/pH deficit in any tool output (inside the
-   clean-cell envelope); P0 also read `none`. Decide whether Level-6 needs tier C or a
-   larger magnitude to be visible, or whether S6-02 B/B is admissible-`none` by design.
-4. **`data_qc` labels the Level-4 start-up transient as spikes** (S4-01 days 0, 1, 7).
-   P2's step 4 works around it; a tool change (a first-HRT flag class) would be cleaner
-   and is a `tools/impl/` change, so it is the lead's.
-5. **Two runs per cell** for all P2 development runs (one run per cell left every P1
-   difference inside the noise).
+1. **The declared background — DECIDED: a new registry tool.** The benchmark publishes,
+   per plant and tier, a null band (the COD-closure band and the per-channel residual
+   envelope at default parameters and after the screened fit that a clean record on that
+   plant shows under the tools' own model), computed offline from seeded clean generator
+   runs, stored in a new `configs/background.yaml`, published in the benchmark card
+   beside the declared noise, and served by a **new** versioned registry tool. Per plant
+   and tier only, never per cell. **No existing tool output changes**: P0's plan and
+   outputs stay byte-identical (the two-head freeze test must pass on the PR that adds
+   it); P0 and the frozen P1 do not call it; P1's 0/4 on `none` stands as its record.
+   P2's verifier and influent role read it. This is the P2 session's first deliverable.
+2. **S5-01's injected magnitude — DECIDED: recorded, no change now.** K_I_nh3 × 0.1
+   against a declared box of [0.2, 5.0]: no bounded update can reach the truth. The
+   scenario (G1-frozen) and the box (the frozen P0 and P1 ran with it) stay; the
+   benchmark card states that S5-01's parameter-recovery metric is not reachable by a
+   bounded update while its attribution is. Revisit at the held-out generation.
+3. **S6-02 at tier B — DECIDED: recorded, no change.** The P2 verifier, the first role
+   that sees the hold-out, is the first workflow that can test S6; if it cannot, the cell
+   is admissible-`none` at tier B and the distinguishability analysis is amended then.
+4. **`data_qc` and the Level-4 transient — DECIDED: no tool change.** `tools/impl/` stays
+   frozen; P2 routes the first-HRT QC flags to the state test in the workflow (step 4).
+   Revisit at the held-out generation.
+5. **Two seeds per cell — DECIDED** for every P2 development run and every comparison
+   with the frozen P1 rows.
 
 ## 7. What the P2 session delivers, in order
 
+0. **The declared-background tool (decision 1), as its own PR first.** The offline
+   computation of the null band from seeded clean generator runs (the runs recorded under
+   `reports/`), `configs/background.yaml`, the new registry tool with its schema, version
+   and log line, the benchmark-card section, a decisions entry, tests including a
+   negative control that no per-cell or per-scenario information is in the band, and the
+   two-head P0 freeze test run once on the PR's head to show P0 unchanged. Reviewed by
+   the coordinator and merged on the lead's word before any P2 role runs live. Nothing
+   under `sim/`, `scenarios/`, the G1-frozen configs, `workflows/p0_scripted/`, `eval/`
+   or `tools/impl/` changes; the tool lives beside the registry as a new entry.
 1. `docs/p2_design.md`: the seven procedures as step lists with their decision points and
    output schemas, the message schemas, the tool allow-lists, the routing state machine,
    the null-reference step and where the band comes from, the budget accounting (one run,
@@ -175,10 +191,13 @@ abstention wording once the scored terms are procedural.
   P2 built twice (the launch protocol); machine-instance effects (comparisons on counts
   and labels, never wall clock across instances).
 
-## 9. What the coordinator needs from the lead
+## 9. Given by the lead, 2026-09-30
 
-1. Decisions 1–5 of §6, or edits to §3–§5.
-2. The merge word for PR #27 once its review passes.
-3. `launch: p2-multi-agent`. The coordinator then starts one P2 session with this brief,
-   the audit, the proposal, `docs/p1_design.md`, `docs/coordinator.md` and the standing
-   constraints, and reviews its design document before any live call.
+Decisions 1–5 of §6 as recommended; the merge of PR #27; `launch: p2-multi-agent`. The
+coordinator starts one P2 session with this brief, the audit, the proposal,
+`docs/p1_design.md`, `docs/coordinator.md` and the standing constraints, and reviews its
+design document before any live call. The P2 session's standing rules: development cells
+only; no sweep scoring, no P2 freeze, no held-out variants without the lead's word; never
+call any coordinator or session-management tool; never merge; questions to the
+coordinator through `docs/milestones.md` and the PR body; list the open PRs before
+writing code.

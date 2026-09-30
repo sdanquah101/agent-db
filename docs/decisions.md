@@ -7053,3 +7053,75 @@ of them moved that failure.
 scoring on the Level 0–5 sweep, any further P1 arm or a repeat run, the merge of either
 PR.
 
+
+
+## 2026-09-30 — THE LEAD'S WORD: PR #27 merged, the P2 recommendations implemented, P2 launched
+
+The lead, 2026-09-30: "Merge PR #27, implement your recommendation, and launch p2 multi
+agent." PR #27 merged at `dbf2e45` (merge commit `ad94b65`): the Claude Opus 5.5
+comparison arm, the P1 freeze, the twenty run records. The recommendations are the five
+decisions of `docs/p2_launch_brief.md` §6, written by the coordinator from the knowledge
+audit (`docs/p1_knowledge_audit.md`); each is recorded here as decided, with its reason
+and the alternatives.
+
+**Context (the audit's governing finding).** On the clean development cells the tools
+report the plant's own background misfit — gas +11–25 % at default parameters, COD
+closure −0.14 to −0.19, two inadmissible balance windows; after any fit the channels keep
+5–19σ biases — and both P1 models read that background as the fault in every clean cell.
+P0 hit the same wall and was rescued by ruling B's thresholds. The P1 prompts cannot name
+thresholds (the prompt rule), so signature S7, the null case, was never reachable by P1:
+every P1 arm's 0/4 on `none` is explained. The failure is a missing null reference, not
+missing process knowledge.
+
+**Decision 1 — a declared background, as a new registry tool.** The benchmark publishes,
+per plant and per tier, a null band: the COD-closure band and the per-channel residual
+envelope (mean_z and rms_z at default parameters and after the screened fit) that a clean
+record on that plant shows under the tools' own model. It is computed offline by the
+benchmark from seeded clean generator runs (the runs recorded), stored in a new
+`configs/background.yaml` (not among the G1-frozen configs), published in
+`docs/benchmark_card.md` beside the declared instrument noise, and served by a **new**
+registry tool (`declared_background` or a name the builder chooses, versioned, logged
+like every tool). It is per plant and tier only, never per cell or scenario (rule 1: a
+workflow learns nothing about which cell it is on). **No existing tool's output changes**,
+so P0's plan and outputs stay byte-identical (the two-head freeze test must pass on the
+PR that adds it); P0 does not call it; the frozen P1 does not call it, and P1's 0/4 on
+`none` stands as its record. P2's verifier and influent role read it.
+*Reason:* without a declared reference no model-backed workflow can distinguish the
+plant's background from a fault, and `none` stays unscoreable; a tool result is the
+channel every workflow shares and the evaluator can audit. *Alternatives:* state the band
+numerically in the P2 prompts (a prompt, not a tool result, and unauditable in the log);
+leave `none` unscoreable for model-backed workflows (then RQ3 has no answer on the null
+cells); change `mass_balance`/`residual_diag` to carry the band (breaks P0's freeze).
+Rejected for those reasons.
+
+**Decision 2 — S5-01's injected magnitude.** The fault multiplies K_I_nh3 by 0.1 from day
+120; the fitted model's declared box is [0.2, 5.0], so no bounded update can reach the
+truth. Recorded; no change now to the scenario (G1-frozen) or the box (the frozen P0 and
+P1 ran with it). The benchmark card states that S5-01's parameter-recovery metric is not
+reachable by a bounded update while its attribution (`parameter`) is. Revisit when the
+held-out variants of §7 are generated. *Alternative:* widen the box or shrink the
+magnitude now — rejected because either changes a frozen workflow's behaviour.
+
+**Decision 3 — S6-02 B/B at tier B.** The Level-6 signature (alkalinity and pH below the
+model, gas right) does not appear in any tool output at tier B (inside the clean-cell
+envelope); P0 also read `none`. Recorded; no change. The P2 verifier, the first role that
+sees the hold-out, is the first workflow that can test S6; if P2 cannot either, the cell
+is admissible-`none` at tier B and the distinguishability analysis is amended then.
+
+**Decision 4 — `data_qc` labels the Level-4 start-up transient as spikes.** No tool change
+(`tools/impl/` stays frozen for P0/P1 comparability). P2 handles it in the workflow: the
+QC flags of the first hydraulic retention time are routed to the state test (the
+early/late residual split and the `biomass_scale` pair), never to quarantine. Revisit for
+the held-out generation.
+
+**Decision 5 — two seeds per cell** for every P2 development run, and for P2's
+comparisons with the frozen P1 rows (one run per cell left every P1 difference inside the
+noise).
+
+**The launch.** `launch: p2-multi-agent` given 2026-09-30. One P2 session, started by the
+coordinator with the brief (draft 2: procedural roles with model-backed decision points),
+the audit, the proposal, `docs/p1_design.md`, `docs/coordinator.md` and the standing
+constraints. Its first deliverable is the declared-background tool of decision 1 as its
+own PR, reviewed and merged before any P2 role runs live. P2 as a workflow is not agents
+with prompts: seven procedures written from the review and P0's rules, a model called
+only at typed decision points, coordination as code.
