@@ -3374,3 +3374,57 @@ manifest is the redacted one; the static rule-1 checker applies to Python module
 tree holds none. Pushed with the freeze and the two reviews' notes once the full suite
 that started 05:04 is green (the push rule).
 
+
+## Milestone 8 — P2, the task-specialised multi-agent workflow (proposal §6.5; `docs/p2_launch_brief.md`)
+
+### Session 2026-09-30 — deliverable 0, the declared-background tool (`claude/declared-background`, from `main` at `b611a1b`; work in progress)
+
+The P2 component session (not the coordinator). Open PRs at start: none.
+
+**Done (on the branch):**
+- The registry tool `declared_background(plant, tier)` beside the frozen table
+  (`tools/background.py`, `tools/schemas/background.py`, `tools/config.py::load_background`,
+  version 1.0 in `configs/tools/registry.yaml`); `tools.impl.SPECS` is unchanged.
+- The offline driver `scripts/declared_background.py`: 36 clean `S0-01` runs (seeds
+  900001–900003; Plants B and C, and Plant A on both declared states; all tiers), each
+  through its own registry: default `simulate`, `mass_balance` on the calibration window,
+  P0's Morris rule then P0's Fisher rule (Sobol at its declared fallback), `fit_lsq` at
+  P0's sizes, `simulate` at the optimum; `mean_z` / `rms_z` per sensor at the defaults
+  and after the fit. A first version screened by Fisher alone; it was degenerate on
+  twenty parameters and was dropped after one run (`docs/decisions.md`).
+- `tests/test_declared_background.py`: registration, logging, the per-(plant, tier) purity
+  with a negative control, rule-1 checks on the yaml, regeneration from the record, the
+  card section, and no existing tool changed (`tests/tool_contracts_v1.json`; P1's tool
+  digest `11d8e352…`). The two enumeration tests gained the new name.
+- Docs: benchmark card §5.5 (tables still to generate), the decisions entry,
+  `docs/tool_registry_design.md`, `configs/README.md`.
+
+**Running:** the clean reference runs, four at a time, in the container (not committed:
+the store is outside the repository). At 16:06 UTC, 12 of 36 are done (all of Plant B,
+Plant C tier B). About 70 min per run here (one evaluation ≈ 29 s against the 12 s on
+record), so about 6 more hours. The runs are seeded and fixed-size: a lost container
+reruns them identically.
+
+**Not yet done:** `configs/background.yaml` and `reports/background/` (after the runs);
+the card's tables; the full `pytest -q` on the final head (the base run on this branch:
+674 passed, the only 2 failures were the two enumeration tests before their amendment);
+the two-head P0 freeze test (after the runs, alone on the machine); the draft PR body.
+Until the band is committed, the four tests that read it fail by design.
+
+**Question for the coordinator (Q1, the band's width).** On Plant B tier B, three clean
+seeds give a per-run mean COD closure of −0.03 to −0.06 over the calibration window, at
+most 1 of 5 windows inadmissible, worst window about −0.22. The clean development cell
+S0-01 B/B (library seed 1001) shows −0.136, 2 inadmissible windows, worst −0.275 (the
+P1 audit, §0). So on balance the clean development cell would sit **outside** a
+three-seed band. The gas envelope does cover it (band rms_z 5.8–6.6 at the defaults
+against 7.35). Options: (a) publish at three seeds and let P2's null rule use a margin
+of its own (a P2 design choice, reviewed with its design document); (b) raise the seed
+count (each extra seed is 9 truth groups, about 21 runs, about 6 h here); (c) both.
+Recommendation: (b) with at least six more seeds on B and C before P2's go/no-go,
+because the brief's go/no-go asks the null reference to produce `none` on exactly this
+cell, and a band that excludes it would make that test a statement about seed count.
+I will publish at three seeds on this PR unless told otherwise, and add seeds
+incrementally (the record and the yaml regenerate).
+
+**Next:** publish the band, generate the card tables, run the suite and the freeze
+test, fill the PR body; then `docs/p2_design.md` on `claude/p2-multi-agent`.
