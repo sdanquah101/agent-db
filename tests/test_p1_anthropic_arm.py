@@ -645,3 +645,21 @@ def test_a_refusal_ends_the_run_with_its_category(p1_cell):
     row = row_of(version, {**line, "summary": older})
     assert row["run_failed"] is True and row["failure_reason"] == "refusal"
     assert older["run_failed"] is True  # and the copy the report keeps carries them
+
+
+def test_a_gzipped_log_reads_as_the_plain_one(tmp_path):
+    # the review of PR #29 (note 2): the two records over 5 MB are committed gzipped
+    import gzip
+
+    lines = [{"turn": 0, "response": {"content": []}}, {"turn": 1, "response": None}]
+    text = "".join(json.dumps(x) + "\n" for x in lines)
+    plain = tmp_path / "llm_calls.jsonl"
+    plain.write_text(text, encoding="utf-8")
+    assert read_transcript(plain) == lines
+    packed = tmp_path / "packed" / "llm_calls.jsonl"
+    packed.parent.mkdir()
+    with gzip.open(packed.with_name("llm_calls.jsonl.gz"), "wt", encoding="utf-8") as fh:
+        fh.write(text)
+    assert read_transcript(packed) == lines  # the plain name, the packed file
+    with pytest.raises(FileNotFoundError):  # neither: the error, not an empty log
+        read_transcript(tmp_path / "missing" / "llm_calls.jsonl")

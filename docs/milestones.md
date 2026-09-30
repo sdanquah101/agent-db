@@ -3413,3 +3413,16 @@ else. No P1 arm, no re-run, no prompt or configuration change: `check_frozen` pa
 
 **Blocked:** nothing. **Next:** nothing without the lead's word. The P1 component work
 is complete; this session stands down once the follow-up PR is open.
+
+**2026-09-30, 16:05 UTC — the coordinator's review of PR #29 at `5e30362`: fixes needed,
+documentation only; applied.** (1) `reports/README.md` now says plainly that only the
+rev2 and rev2_claude rows regenerate byte for byte (their stores are committed) and the
+other five arms do not; rev2_contended's two `connection` rows carry `run_failed` and
+`failure_reason` explicitly in the results file, copied from the committed CSV, since the
+classifier reads them from a model log that is not committed. (2) The report's spec is
+committed (`reports/p1_pilot/results/spec.json`, repository-relative paths), the README
+gives the store-building snippet (records `<ver>/<run_id>` → `stores/<ver>/runs/<run_id>`,
+the stores ignored), and `tools.llm.read_transcript` reads a gzipped log when the plain
+one is absent (tested), so the two packed logs need no unpacking. Verified in a temporary
+copy: the rev2 and rev2_claude rows come back identical; the other arms differ only in
+the three store-read columns.

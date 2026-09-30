@@ -1,0 +1,61 @@
+{
+ "versions": [
+  {
+   "label": "old",
+   "results": "reports/p1_pilot/results/old.jsonl",
+   "store": "reports/p1_pilot/stores/old",
+   "sha": "b0b43e80f62350991014855d44332cb8eedc63e807d347461576c69657b17a4a",
+   "csv": "reports/p1_pilot_c1e5829.csv",
+   "summaries": "reports/p1_pilot/summaries"
+  },
+  {
+   "label": "1a",
+   "results": "reports/p1_pilot/results/1a.jsonl",
+   "store": "reports/p1_pilot/stores/1a",
+   "sha": "f8e888f46147e88b013751f0918bffeaf9f9e0aa36c34279ba28b78404f24ef5",
+   "csv": "reports/p1_pilot_c1e5829.csv",
+   "summaries": "reports/p1_pilot/summaries"
+  },
+  {
+   "label": "1b",
+   "results": "reports/p1_pilot/results/1b.jsonl",
+   "store": "reports/p1_pilot/stores/1b",
+   "sha": "4b8f830ad0236d9f4ad44ed5300bebf435df73601e1e5f1e59223a8c9a2b4ddd",
+   "csv": "reports/p1_pilot.csv",
+   "summaries": "reports/p1_pilot/summaries"
+  },
+  {
+   "label": "rev2_contended",
+   "results": "reports/p1_pilot/results/rev2_contended.jsonl",
+   "store": "reports/p1_pilot/stores/rev2_contended",
+   "sha": "c80a37521e81487012b7a7ebc13e179b616216060d93f1ae45aa8791daf661d1",
+   "csv": "reports/p1_pilot_rev2_contended.csv",
+   "summaries": "reports/p1_pilot/summaries"
+  },
+  {
+   "label": "rev2",
+   "results": "reports/p1_pilot/results/rev2.jsonl",
+   "store": "reports/p1_pilot/stores/rev2",
+   "sha": "c80a37521e81487012b7a7ebc13e179b616216060d93f1ae45aa8791daf661d1",
+   "csv": "reports/p1_pilot.csv",
+   "summaries": "reports/p1_pilot/summaries"
+  },
+  {
+   "label": "rev2_brief",
+   "results": "reports/p1_pilot/results/rev2_brief.jsonl",
+   "store": "reports/p1_pilot/stores/rev2_brief",
+   "sha": "c80a37521e81487012b7a7ebc13e179b616216060d93f1ae45aa8791daf661d1",
+   "brief_sha": "81b89186a77f6ce1bb6cf1283a6a111335949ef8bd5ac2ac82b2cac1650eac7d",
+   "csv": "reports/p1_pilot.csv",
+   "summaries": "reports/p1_pilot/summaries"
+  },
+  {
+   "label": "rev2_claude",
+   "results": "reports/p1_pilot/results/rev2_claude.jsonl",
+   "store": "reports/p1_pilot/stores/rev2_claude",
+   "sha": "c80a37521e81487012b7a7ebc13e179b616216060d93f1ae45aa8791daf661d1",
+   "csv": "reports/p1_pilot.csv",
+   "summaries": "reports/p1_pilot/summaries"
+  }
+ ]
+}
