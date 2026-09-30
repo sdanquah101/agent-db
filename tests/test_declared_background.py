@@ -59,7 +59,7 @@ FROZEN_TOOLS = (
 )  # fmt: skip
 SEQUENCE = (
     "registry.open", "describe_model", "feed_loads", "simulate", "mass_balance",
-    "fisher_info", "fit_lsq", "simulate",
+    "gsa_morris", "fisher_info", "fit_lsq", "simulate",
 )  # fmt: skip
 
 
@@ -116,11 +116,7 @@ def _record(
             "charge_consistent": (shift == 0.0) if cod else None,
             "admissible": False,
         },
-        "screening": {
-            "relative_crlb": {"Y_ac": 0.1},
-            "ranking": ["Y_ac", "k_dec_X_ac"],
-            "kept": [],
-        },
+        "screening": {"morris_kept": ["Y_ac", "k_dec_X_ac"], "approved": ["Y_ac"]},
         "fit": {
             "parameters": ["Y_ac", "k_dec_X_ac"] if shift == 0.0 else ["Y_ac"],
             "optimum": {"Y_ac": 0.9},
@@ -381,6 +377,7 @@ def test_the_background_seeds_are_the_benchmarks_own_and_the_runs_are_ordered_de
     assert bg.PLANT_BASELINES["A"] == ("adapted", "unadapted")
     settings = BackgroundProcedure.model_validate(bg.procedure_settings())
     assert settings.subset_max == 4 and settings.subset_min == 2 and settings.lsq_starts == 1
+    assert settings.morris_trajectories == 4 and settings.morris_seed == 101
 
 
 # ------------------------------------------------------------------ 4. nothing existing changed
@@ -518,7 +515,9 @@ def test_the_committed_record_shows_the_declared_call_sequence_and_nothing_else(
         assert all("t_utc" not in x and "runtime_s" not in x for x in lines), rec["key"]
         assert rec["n_calls"] == len(SEQUENCE) - 1
         assert rec["evaluations_used"] <= bg.BUDGET["simulator_evals"]
-        assert rec["fit"]["parameters"] == rec["screening"]["kept"]
+        assert rec["fit"]["parameters"] == rec["screening"]["approved"]
+        assert set(rec["screening"]["approved"]) <= set(rec["screening"]["morris_kept"])
+        assert len(rec["screening"]["morris_kept"]) <= 4
         assert 2 <= len(rec["fit"]["parameters"]) <= 4
         assert rec["balance"]["n_windows"] == int(
             rec["calibration_window"][1] // rec["balance_window_d"]

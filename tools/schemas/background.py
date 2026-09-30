@@ -106,6 +106,12 @@ class BackgroundProcedure(ToolOutput):
         description="Sensors that weight the fit when the tier carries them"
     )
     screening: str = Field(description="How the fitted subset was chosen")
+    morris_trajectories: int = Field(description="Morris trajectories of the screen, count")
+    morris_min_relative: float = Field(
+        description="mu* over the largest mu* of an output a parameter needs to stay, -"
+    )
+    morris_seed: int = Field(description="Seed of the Morris trajectories (rule 4)")
+    gsa_summary: str = Field(description="The scalar of each output the screen is on")
     max_relative_crlb: float = Field(
         description="CRLB sd over the bound width above which a parameter is dropped, -"
     )

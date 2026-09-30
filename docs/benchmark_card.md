@@ -523,12 +523,14 @@ band the union of the two (which state a run is in is not declared, ruling B5). 
 was read the way a workflow reads it (the tier's sensors, the feed log, the redacted
 manifest) and taken through one declared, fixed-size procedure through the run's own
 registry: `simulate` at the defaults; `mass_balance` over 30-day windows of the
-calibration window `[0, 0.75 T]`; `fisher_info` at the defaults on the twenty declared
-parameters against P0's calibration channels with P0's declared-noise weights, and P0's
-identifiability rule on it (relative CRLB ≤ 0.5, at most 4 and at least 2 parameters:
-the bottom rung of P0's own screening ladder, §4 of `docs/p0_design.md`); `fit_lsq` on
-that subset from the defaults with P0's ruled sizes (one start, 40 evaluations); one
-`simulate` at the optimum. For every sensor of the tier the band records the mean and
+calibration window `[0, 0.75 T]`; P0's screening on P0's calibration channels with P0's
+declared-noise weights — `gsa_morris` at P0's ruled size (4 trajectories, the mean over
+the calibration window) and P0's Morris rule (μ* at least 0.10 of the largest on any
+output, at most 4 kept, at least 2), then `fisher_info` at the defaults on the kept set
+with P0's identifiability rule (relative CRLB ≤ 0.5, a null direction drops, at least 2
+stay), Sobol at its declared fallback ("skip Sobol and take the Morris subset", §4 of
+`docs/p0_design.md`); `fit_lsq` on the approved subset from the defaults with P0's ruled
+sizes (one start, 40 evaluations); one `simulate` at the optimum. For every sensor of the tier the band records the mean and
 the root-mean-square of the standardised residual `(observed − predicted) / declared sd`
 over the calibration window, at the defaults and after the fit, and for the balance the
 per-run mean COD closure, every window's closure, the count of inadmissible windows and

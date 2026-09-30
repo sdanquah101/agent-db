@@ -7154,16 +7154,22 @@ chosen here:
 2. Through the run's registry, on the visible record only (run view: sensors, feed log,
    redacted manifest): `describe_model`, `feed_loads`, `simulate` at the defaults;
    `mass_balance` over `balance_window_d` = 30 d windows of the calibration window
-   `[0, 0.75 T]` (P1's convention); `fisher_info` at the defaults on the twenty declared
-   parameters against P0's calibration channels the tier carries, weighted with P0's
-   declared-noise rule (`sd = sqrt((cv·|v|)² + sd_abs²)`, floored at 0.02 × median |v|);
-   P0's identifiability rule on it (relative CRLB ≤ `max_relative_crlb` 0.5, a null
-   direction drops, at most `morris_keep` 4, at least `min_subset` 2) — the bottom rung of
-   P0's screening ladder, "below that, screen by the Fisher information at the defaults";
-   `fit_lsq` on the subset from the defaults with P0's ruled sizes (1 start, 40
-   evaluations, `seeds.lsq`); `simulate` at the optimum. Bound under 100 evaluations per
-   run; the same seeds give the same band on any machine (fixed sizes, never the measured
-   rate).
+   `[0, 0.75 T]` (P1's convention); P0's screening against P0's calibration channels the
+   tier carries, weighted with P0's declared-noise rule (`sd = sqrt((cv·|v|)² + sd_abs²)`,
+   floored at 0.02 × median |v|): `gsa_morris` at P0's ruled size (`morris_trajectories`
+   4, `summary` mean over the calibration window, `seeds.morris`) and P0's Morris rule
+   (μ* over the largest μ* of that output, on any output, ≥ `morris_min_relative` 0.10;
+   at most `morris_keep` 4; at least `min_subset` 2), then `fisher_info` at the defaults
+   on the kept set with P0's identifiability rule (relative CRLB ≤ `max_relative_crlb`
+   0.5, a null direction drops, at least `min_subset` stay by rank) — Sobol at its
+   declared fallback ("skip Sobol and take the Morris subset"); `fit_lsq` on the approved
+   subset from the defaults with P0's ruled sizes (1 start, 40 evaluations, `seeds.lsq`);
+   `simulate` at the optimum. Bound under 160 evaluations per run; the same seeds give the
+   same band on any machine (fixed sizes, never the measured rate). The Fisher-only
+   bottom rung was tried first and dropped: on twenty parameters the information at the
+   defaults is rank-deficient and every relative CRLB a null direction, so "at least two
+   stay by rank" kept the first two in declared order (`k_dis`, `k_hyd_ch` at B/A), which
+   is P0's fallback as written but not a screened fit.
 3. Per sensor of the tier, over the calibration window: `mean_z` and `rms_z` of
    `(observed − predicted) / declared sd` at the defaults and after the fit (P1's
    `sim_summary` arithmetic); per run the mean COD closure, every window's closure, the
@@ -7189,14 +7195,17 @@ record before cleaning, a conservative reference for a workflow that quarantines
 **Reason.** Decision 1's own: without a declared reference no model-backed workflow can
 tell the plant's background from a fault, and `none` stays unscoreable; a tool result is
 the channel every workflow shares and the evaluator can audit. The screened fit is
-declared at P0's bottom rung rather than by running P0 itself because P0's plan reads
-the measured evaluation rate (its fallbacks are machine-dependent, the freeze test's own
-finding of 2026-09-29), and a published band must be reproducible from its seeds.
+declared at P0's own sizes with Sobol at its fallback rather than by running P0 itself
+because P0's plan reads the measured evaluation rate (its fallbacks are
+machine-dependent, the freeze test's own finding of 2026-09-29), and a published band
+must be reproducible from its seeds; Sobol's 80 evaluations per run would double the
+cost for a subset the Morris rule already bounds at four.
 
 **Alternatives.** Carry the band in `mass_balance` / `residual_diag` results (rejected by
 decision 1: breaks P0's freeze). Run the full P0 procedure per clean run (rejected:
-machine-dependent plan, 4–6× the cost). A hand-picked fitted subset per plant (rejected:
-a number of this session's own; the Fisher rung is P0's declared rule). One band per
+machine-dependent plan, 2–3× the cost). A hand-picked fitted subset per plant (rejected:
+a number of this session's own; the Morris and Fisher rules are P0's declared ones).
+The Fisher-only rung (rejected after one run: degenerate, above). One band per
 Plant A state (rejected: leaks the state, which ruling B5 keeps undeclared). Fewer than
 three seeds (rejected: no sd). More (deferred: the record is incremental; the lead may
 ask for more seeds and the yaml regenerates).

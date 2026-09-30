@@ -8,12 +8,18 @@ so that every call is budgeted and logged like a workflow's:
 
 1. ``describe_model``, ``feed_loads``, ``simulate`` at the defaults;
 2. ``mass_balance`` over ``balance_window_d`` windows inside the calibration window;
-3. ``fisher_info`` at the defaults on every declared parameter against the objective
-   channels (P0's calibration channels the tier carries; P0's declared-noise weights),
-   and P0's identifiability rule on it (``max_relative_crlb``, ``subset_max``,
-   ``subset_min``): the bottom rung of P0's own screening ladder, where Morris is
-   replaced by the Fisher information at the defaults (``docs/p0_design.md`` §4);
-4. ``fit_lsq`` on that subset from the defaults (P0's ruled sizes: one start, 40
+3. P0's screening on the objective channels (P0's calibration channels the tier
+   carries, P0's declared-noise weights): ``gsa_morris`` at P0's ruled size (4
+   trajectories, the mean over the calibration window, ``seeds.morris``) and P0's Morris
+   rule (mu* over the largest mu* of that output on any output at least
+   ``morris_min_relative``, at most ``subset_max`` kept, at least ``subset_min``); then
+   ``fisher_info`` at the defaults on the kept set and P0's identifiability rule
+   (relative CRLB at most ``max_relative_crlb``, a null direction drops, at least
+   ``subset_min`` stay by rank). Sobol takes its declared fallback (``docs/p0_design.md``
+   §4: "skip Sobol and take the Morris subset"), so the band's screening is P0's ladder
+   with its middle rung at the fallback; the Fisher-only bottom rung was tried first and
+   found degenerate on twenty parameters (every direction null at tier A);
+4. ``fit_lsq`` on the approved subset from the defaults (P0's ruled sizes: one start, 40
    evaluations, ``seeds.lsq``), then ``simulate`` at the optimum;
 5. the standardised residual ``(observed - predicted) / declared sd`` of every sensor of
    the tier over the calibration window, at the defaults and at the optimum: its mean
@@ -86,9 +92,10 @@ PLANT_BASELINES: dict[str, tuple[str | None, ...]] = {
 
 TIERS: tuple[str, ...] = ("A", "B", "C")
 
-BUDGET = {"simulator_evals": 300, "wall_clock_min": 300.0, "assay_units": 0}
+BUDGET = {"simulator_evals": 300, "wall_clock_min": 360.0, "assay_units": 0}
 """The envelope of one background run (the registry enforces it): the procedure's bound is
-under 100 evaluations, and no assay is ever requested."""
+under 160 evaluations (Morris 84, Fisher at most 8, the fit at most 57, two simulations),
+and no assay is ever requested."""
 
 DEV_FIRST: tuple[tuple[str, str | None, str], ...] = (
     ("B", None, "A"),
@@ -165,9 +172,17 @@ def procedure_settings() -> dict[str, Any]:
         "min_relative_sd": float(p0.calibration.min_relative_sd),
         "sd_floor_abs": float(p0.calibration.sd_floor_abs),
         "objective_channels": list(p0.calibration.channels),
-        "screening": "fisher_at_defaults (P0's declared fallback rung: the relative CRLB "
-        "at the defaults ranks the declared parameters; a null direction or a relative "
-        "CRLB above max_relative_crlb drops one; at most subset_max, at least subset_min)",
+        "screening": "P0's ladder, Sobol at its declared fallback: gsa_morris at P0's "
+        "ruled size on the objective channels' calibration-window means, P0's Morris "
+        "rule (mu* over the largest mu* of that output, on any output, at least "
+        "morris_min_relative; at most subset_max kept; at least subset_min), then "
+        "fisher_info at the defaults on the kept set with P0's identifiability rule "
+        "(relative CRLB at most max_relative_crlb; a null direction drops; at least "
+        "subset_min stay by rank)",
+        "morris_trajectories": int(p0.gsa.morris_trajectories),
+        "morris_min_relative": float(p0.screening.morris_min_relative),
+        "morris_seed": int(p0.seeds.morris),
+        "gsa_summary": str(p0.gsa.summary),
         "max_relative_crlb": float(p0.identifiability.max_relative_crlb),
         "subset_max": int(p0.screening.morris_keep),
         "subset_min": int(p0.screening.min_subset),
@@ -409,29 +424,52 @@ def compute_one(store: Path, run: BackgroundRun, run_id: str) -> dict[str, Any]:
         "admissible": bool(balance.admissible),
     }
 
-    # P0's screening ladder at its bottom rung: the Fisher information at the defaults
+    # P0's screening (docs/p0_design.md §3.2-3.3), Sobol at its declared fallback: Morris
+    # at the ruled size and P0's Morris rule, then Fisher at the defaults on the kept set
     params = list(desc.parameter_names)
     lower = dict(zip(params, np.asarray(desc.lower, dtype=float), strict=True))
     upper = dict(zip(params, np.asarray(desc.upper, dtype=float), strict=True))
     data = [s.observed(cal) for s in objective]
-    fim = registry.call("fisher_info", model=MODEL, data=data, parameters=params, at={})
+    morris = registry.call(
+        "gsa_morris",
+        model=MODEL,
+        parameters=params,
+        outputs=[s.channel for s in objective],
+        summary=str(settings["gsa_summary"]),
+        window={"start": cal[0], "end": cal[1]},
+        n_trajectories=int(settings["morris_trajectories"]),
+        seed=int(settings["morris_seed"]),
+    )
+    scores: dict[str, float] = {}
+    for res in morris.results:
+        mu = np.asarray(res.mu_star, dtype=float)
+        top = float(np.nanmax(mu)) if np.isfinite(mu).any() and np.nanmax(mu) > 0 else 1.0
+        for name, v in zip(morris.parameters, mu, strict=True):
+            scores[name] = max(scores.get(name, 0.0), float(v) / top if math.isfinite(v) else 0.0)
+    ranking = sorted(params, key=lambda n: -scores.get(n, 0.0))
+    kept = [n for n in ranking if scores.get(n, 0.0) >= float(settings["morris_min_relative"])]
+    kept = kept[: int(settings["subset_max"])]
+    if len(kept) < int(settings["subset_min"]):
+        kept = ranking[: int(settings["subset_min"])]
+
+    fim = registry.call("fisher_info", model=MODEL, data=data, parameters=kept, at={})
     relative: dict[str, float | None] = {}
     for name, sd in zip(fim.parameters, np.asarray(fim.crlb_sd, dtype=float), strict=True):
         relative[name] = float(sd / (upper[name] - lower[name])) if math.isfinite(sd) else None
-    ranking = sorted(params, key=lambda n: relative[n] if relative[n] is not None else np.inf)
-    kept = [
-        n
-        for n in ranking
-        if relative[n] is not None and relative[n] <= float(settings["max_relative_crlb"])
-    ][: int(settings["subset_max"])]
-    if len(kept) < int(settings["subset_min"]):
-        kept = ranking[: int(settings["subset_min"])]
+    limit = float(settings["max_relative_crlb"])
+    ok = [n for n in kept if relative[n] is not None and relative[n] <= limit]
+    if len(ok) < int(settings["subset_min"]):
+        ok = sorted(kept, key=lambda n: relative[n] if relative[n] is not None else np.inf)[
+            : int(settings["subset_min"])
+        ]
+    approved = [n for n in kept if n in ok]
+    dropped = [n for n in kept if n not in ok]
 
     fit = registry.call(
         "fit_lsq",
         model=MODEL,
         data=data,
-        parameters=kept,
+        parameters=approved,
         n_starts=int(settings["lsq_starts"]),
         max_nfev_per_start=int(settings["lsq_max_nfev_per_start"]),
         seed=int(settings["fit_seed"]),
@@ -467,9 +505,12 @@ def compute_one(store: Path, run: BackgroundRun, run_id: str) -> dict[str, Any]:
         "objective": [o.name for o in objective],
         "balance": balance_record,
         "screening": {
+            "morris_scores": {n: _round(v) for n, v in scores.items()},
+            "morris_ranking": ranking,
+            "morris_kept": kept,
             "relative_crlb": {n: _round(v) for n, v in relative.items()},
-            "ranking": ranking,
-            "kept": kept,
+            "fisher_dropped": dropped,
+            "approved": approved,
         },
         "fit": {
             "parameters": list(fit.parameters),
