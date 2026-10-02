@@ -3487,3 +3487,7 @@ test, fill the PR body; then `docs/p2_design.md` on `claude/p2-multi-agent`.
   These hold only if the watch is not broken.
 - **Blocking:** nothing, except that progress depends on the session staying awake. The
   rule, the seeds and the statistics are unchanged.
+
+**2026-10-02, 15:49 UTC.** 28 of 120 runs done, with 4 running and no errors; the
+container has stayed up four hours under the tracked watch. The partial record holds
+all 28. The three-seed band (PROVISIONAL) needs 8 more runs, about 18:10 UTC.
