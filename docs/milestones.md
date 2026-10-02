@@ -3463,3 +3463,27 @@ test, fill the PR body; then `docs/p2_design.md` on `claude/p2-multi-agent`.
 - **The P0 freeze test needs the machine alone for about two hours.** Plan: after the
   three-seed publish, pause the computation, run the freeze test, then resume. A relaunch
   only repeats the runs in progress.
+
+**2026-10-02, 11:49 UTC — no compute for 36 hours; the cause; relaunched.**
+- **Done:** 12 of the 120 declared runs (Plant B tiers A, B and C, and Plant C tier B,
+  seeds 900001–900003), unchanged since 30 September. No seed has all its runs yet, so
+  no band can be published, PROVISIONAL or otherwise (the driver publishes complete
+  seeds only, by the rule). The 12 records are committed as
+  `reports/background/runs_partial.jsonl` for safekeeping. They are not the published
+  record.
+- **What happened:** the container was reclaimed shortly after my turn ended at 20:15
+  UTC on 30 September; the logs stop at 20:19. It happened once before, after 14:14 UTC
+  the same day. Both times, the only processes alive were ones I had detached from the
+  session, with nothing tracked by the session running. The run store survived both
+  times: the 12 results, and 72 of the 120 runs generated. Runs in progress were lost;
+  finished runs were not.
+- **Fix, from now on:** the computation runs detached, and a session-tracked watch stays
+  armed beside it. A watch lasts at most two hours, and its expiry wakes the session,
+  which re-arms it. Between 10:37 and 14:14 UTC on 30 September that arrangement kept
+  the runs going.
+- **Expected:** 108 runs at about 70 min, four at a time, about 32 hours of uninterrupted
+  compute. The three-seed band (PROVISIONAL) needs 24 more runs, about 7 hours, so
+  about 19:00 UTC today. The ten-seed band (FINAL) is due about 20:00 UTC on 3 October.
+  These hold only if the watch is not broken.
+- **Blocking:** nothing, except that progress depends on the session staying awake. The
+  rule, the seeds and the statistics are unchanged.
