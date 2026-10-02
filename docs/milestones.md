@@ -3491,3 +3491,18 @@ test, fill the PR body; then `docs/p2_design.md` on `claude/p2-multi-agent`.
 **2026-10-02, 15:49 UTC.** 28 of 120 runs done, with 4 running and no errors; the
 container has stayed up four hours under the tracked watch. The partial record holds
 all 28. The three-seed band (PROVISIONAL) needs 8 more runs, about 18:10 UTC.
+
+**2026-10-02, about 18:15 UTC — a driver bug on Plant A, fixed; nothing published yet.**
+- All 36 first-three-seed runs had finished, but checking the record before publishing
+  showed that Plant A's two declared states had shared one run directory. The run id is
+  not keyed by the state, so the second generation overwrote the first. Every Plant A
+  result measured the unadapted state; the adapted state was never measured. Detail and
+  fix in `docs/decisions.md` (2026-10-02).
+- Fixed: one store per Plant A state, a collision guard, a check of each stored record's
+  state, and a regression test. The 18 Plant A results are discarded; Plants B and C (21
+  runs) are kept, and `reports/background/runs_partial.jsonl` holds those 21.
+- Relaunched about 18:10 UTC with a tracked watch. Still to run: the 18 Plant A runs of
+  seeds 1–3, then 81 runs of seeds 4–10: 99 runs, about 29 hours of compute.
+  - Three-seed band (PROVISIONAL): about 23:30 UTC today.
+  - Ten-seed band (FINAL): about 23:00 UTC on 3 October.
+- The rule, the seeds and the statistics are unchanged.

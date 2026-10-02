@@ -130,9 +130,46 @@ class BackgroundRun:
         return f"{stage}-{self.tier}-{self.seed}"
 
     @property
+    def stage(self) -> str:
+        """``B``, or ``A.adapted``: the plant and declared state the run is staged on."""
+        return self.plant if self.baseline is None else f"{self.plant}.{self.baseline}"
+
+    @property
     def group(self) -> tuple[str, str | None, int]:
         """The (plant, baseline, seed) whose tiers share one truth integration."""
         return (self.plant, self.baseline, self.seed)
+
+
+def runs_root(store: Path, run: BackgroundRun) -> Path:
+    """The run store of a run: one per Plant A state, one shared by Plants B and C.
+
+    ``<store>/runs`` for Plants B and C, whose run ids differ by plant;
+    ``<store>/<stage>/runs`` for each declared state of Plant A.
+
+    A run id is keyed by (scenario, plant, tier, seed, replicate) and NOT by the declared
+    community state, so Plant A's two states at one tier and seed would share one run
+    directory (and one truth) in a single store, the second generation overwriting the
+    first. That happened (found 2026-10-02): every Plant A run of the first computation
+    measured the unadapted state under both keys. One store per stage gives each its own
+    salt, run ids and truth store (``truth_store_for`` is the store's sibling), and
+    :func:`check_index` refuses a collision.
+    """
+    return store / "runs" if run.baseline is None else store / run.stage / "runs"
+
+
+def check_index(index: dict[str, str]) -> None:
+    """Refuse an index in which two runs of one stage share a run id.
+
+    Raises:
+        RuntimeError: Naming the colliding keys.
+    """
+    seen: dict[tuple[str, str], str] = {}
+    by_key = {run.key: run for run in all_runs()}
+    for key, rid in index.items():
+        stage = by_key[key].stage if key in by_key else key.split("-", 1)[0]
+        other = seen.setdefault((stage, rid), key)
+        if other != key:
+            raise RuntimeError(f"{key} and {other} share run id {rid} in stage {stage}")
 
 
 def all_runs() -> list[BackgroundRun]:
@@ -258,7 +295,7 @@ def generate(store: Path, only: Sequence[str] | None = None) -> dict[str, str]:
             load_plant_config(plant_id),
             [r.tier for r in todo],
             seed=seed,
-            runs_root=store / "runs",
+            runs_root=runs_root(store, todo[0]),
         )
         for run, art in zip(todo, artifacts, strict=True):
             if not art.truth.solver_success:
@@ -266,6 +303,7 @@ def generate(store: Path, only: Sequence[str] | None = None) -> dict[str, str]:
             if not art.truth.health.sound:
                 raise RuntimeError(f"{run.key}: the clean run is not a sound digester")
             index[run.key] = art.run_id
+        check_index(index)
         _index_path(store).parent.mkdir(parents=True, exist_ok=True)
         _index_path(store).write_text(json.dumps(index, indent=1, sort_keys=True) + "\n")
         print(
@@ -346,8 +384,11 @@ def compute_one(store: Path, run: BackgroundRun, run_id: str) -> dict[str, Any]:
     settings = procedure_settings()
     scenario = background_scenario(run.plant, run.baseline)
     started = time.perf_counter()
-    registry = open_registry(run_id, runs_root=store / "runs", scenario=scenario)
-    view = open_run(store / "runs" / run_id)
+    root = runs_root(store, run)
+    registry = open_registry(run_id, runs_root=root, scenario=scenario)
+    view = open_run(root / run_id)
+    if manifest_baseline(root, run_id) != (run.baseline or default_baseline(run.plant)):
+        raise RuntimeError(f"{run.key}: the stored record is not staged on its declared state")
     manifest = view.manifest
     if str(manifest.plant) != run.plant or str(manifest.tier) != run.tier:
         raise RuntimeError(f"{run.key}: the run's manifest says {manifest.plant}/{manifest.tier}")
@@ -534,6 +575,25 @@ def compute_one(store: Path, run: BackgroundRun, run_id: str) -> dict[str, Any]:
         "wall_s": round(time.perf_counter() - started, 1),
         "git_commit": git_commit(),
     }
+
+
+def default_baseline(plant_id: str) -> str | None:
+    """The plant's declared default community state (None for a plant that declares none)."""
+    from sim.plants import load_plant_config
+
+    declared = load_plant_config(plant_id).baseline(None)
+    return None if declared is None else declared.name
+
+
+def manifest_baseline(root: Path, run_id: str) -> str | None:
+    """The community state the stored run was generated on.
+
+    Experimenter side: the complete manifest, which a workflow never reads.
+    """
+    from sim.run.layout import RunPaths, truth_store_for
+
+    paths = RunPaths.for_run(run_id, root, truth_store_for(root))
+    return json.loads(paths.truth_manifest.read_text(encoding="utf-8")).get("baseline")
 
 
 def _result_path(store: Path, run: BackgroundRun) -> Path:
@@ -780,7 +840,8 @@ def publish(store: Path) -> None:
             writer.writerow(_csv_row(rec))
     for rec in records:
         # the visible projection of the run's log: what a workflow's own log would show
-        src = store / "runs" / index[rec["key"]] / "calls.jsonl"
+        run = next(r for r in all_runs() if r.key == rec["key"])
+        src = runs_root(store, run) / index[rec["key"]] / "calls.jsonl"
         shutil.copyfile(src, REPORT_DIR / "calls" / f"{rec['key']}.calls.jsonl")
     bands = aggregate(records)
     provenance = {

@@ -494,8 +494,10 @@ def test_the_committed_band_is_per_plant_and_tier_and_carries_nothing_per_cell()
     assert not re.findall(r"run_[0-9a-f]{12}", text)
     assert set(re.findall(r"S\d-\d\d", text)) == {bg.SCENARIO_ID}
     assert "truth" not in text and "baseline:" not in text.split("bands:", 1)[1]
+    body = text.split("bands:", 1)[1]
     for seed in {s.seed for s in load_library().values()}:
-        assert str(seed) not in text.split("bands:", 1)[1]
+        # as a whole number, not a digit run inside a decimal (0.231031 is not seed 1031)
+        assert not re.search(rf"(?<![\d.]){seed}(?![\d])", body), seed
 
     def keys_of(node: Any):
         if isinstance(node, dict):
@@ -536,10 +538,16 @@ def test_the_committed_record_shows_the_declared_call_sequence_and_nothing_else(
             if x.strip()
         ]
         names = tuple(x["name"] for x in lines)
-        # the harness's generation calls come first; the registry's calls are the sequence
-        start = names.index("registry.open")
+        # the harness's generation calls come first; each registry.open starts one attempt.
+        # The log is append-only, so attempts that were cut off (a container restart) or
+        # discarded (the first, Fisher-only procedure) stay in it; the record is the LAST
+        # attempt, which must be the declared sequence, every call ok
+        opens = [i for i, n in enumerate(names) if n == "registry.open"]
+        assert opens, rec["key"]
+        start = opens[-1]
         assert names[start:] == SEQUENCE, rec["key"]
         assert all(x["outcome"] == "ok" for x in lines[start:]), rec["key"]
+        assert all(n != "request_assay" for n in names), rec["key"]  # no assay, any attempt
         assert all("t_utc" not in x and "runtime_s" not in x for x in lines), rec["key"]
         assert rec["n_calls"] == len(SEQUENCE) - 1
         assert rec["evaluations_used"] <= bg.BUDGET["simulator_evals"]
@@ -558,3 +566,28 @@ def test_the_benchmark_cards_section_is_the_rendered_one():
     assert bg.CARD_BEGIN in text and bg.CARD_END in text
     section = text.split(bg.CARD_BEGIN, 1)[1].split(bg.CARD_END, 1)[0].strip("\n")
     assert section == bg.render_card_section(config)
+
+
+def test_each_plant_a_state_has_its_own_store_and_a_shared_run_id_is_refused(tmp_path):
+    """Plant A's two states never share a run directory (the bug found 2026-10-02).
+
+    A run id is not keyed by the declared state, so the two states shared one run directory
+    in one store and the second generation overwrote the first.
+    """
+    runs = {r.key: r for r in bg.all_runs()}
+    adapted, unadapted = runs["A.adapted-B-900001"], runs["A.unadapted-B-900001"]
+    plant_b, plant_c = runs["B-B-900001"], runs["C-B-900001"]
+    roots = {bg.runs_root(tmp_path, r) for r in (adapted, unadapted, plant_b)}
+    assert len(roots) == 3  # one store per Plant A state; B and C share theirs
+    assert bg.runs_root(tmp_path, plant_b) == bg.runs_root(tmp_path, plant_c)
+    # the truth store is the run store's sibling, so separate stores mean separate truth
+    from sim.run.layout import truth_store_for
+
+    assert truth_store_for(bg.runs_root(tmp_path, adapted)) != truth_store_for(
+        bg.runs_root(tmp_path, unadapted)
+    )
+    # the guard: two runs of one stage may not share an id; two stages may
+    with pytest.raises(RuntimeError, match="share run id"):
+        bg.check_index({adapted.key: "run_x", runs["A.adapted-C-900001"].key: "run_x"})
+    bg.check_index({adapted.key: "run_x", unadapted.key: "run_x"})
+    assert bg.default_baseline("A") == "adapted" and bg.default_baseline("B") is None

@@ -7268,3 +7268,44 @@ and ninth order statistics, a narrower claim than "seen on a clean run". A mean 
 band, rejected: it assumes a shape that ten runs cannot check. Three seeds, rejected:
 the envelope is too thin to be a reference. More than ten seeds, not now: the cost is
 about 70 min per run on this machine.
+
+
+## 2026-10-02 — The declared background: a driver bug on Plant A, found and fixed (no change to the rule)
+
+**Found by the P2 session** while checking the three-seed record before publishing it as
+PROVISIONAL. Nothing had been published.
+
+**The bug.** `scripts/declared_background.py` generated every stage into one run store.
+A run id is an HMAC over (scenario, plant, tier, seed, replicate), and the declared
+community state is not part of it. So `A.adapted-<tier>-<seed>` and
+`A.unadapted-<tier>-<seed>` resolved to the **same run directory and the same truth
+store**, and the second generation overwrote the first. The stored records are
+`unadapted` (their complete manifests say so). Every Plant A result of the first
+computation therefore measured the unadapted state under both keys, and the adapted state
+was never measured. The visible symptom: Plant A call logs with two registries open on
+one run, their lines interleaved. On every affected run, the two attempts' calls had
+identical argument hashes.
+
+**The fix.**
+- Each Plant A state gets its own run store (`<store>/A.adapted/runs`,
+  `<store>/A.unadapted/runs`), so its own salt, run ids and truth store. Plants B and C
+  keep the shared store, since their run ids differ by plant.
+- `check_index` refuses two runs of one stage sharing a run id.
+- `compute_one` refuses a stored record whose complete manifest names a state other than
+  the run's declared one.
+- A regression test: `test_each_plant_a_state_has_its_own_store_and_a_shared_run_id_is_refused`.
+- All Plant A index entries and results are discarded: 18 computed runs. Every Plant A
+  run is regenerated and recomputed.
+
+Plants B and C are unaffected: 21 runs kept.
+
+**Not changed:** the seeds, the band rule, the statistics and the procedure (the lead's
+ruling of 2026-09-30). The fix is the driver doing what the rule already said, the two
+states each measured on their own record.
+
+**Also recorded:** a run's visible call log is append-only. It keeps the attempts that a
+container restart cut off, and the first, Fisher-only attempts that were discarded. The
+published record is each run's last attempt, which the test checks against the declared
+sequence. A library seed is matched as a whole number in the leak test, so `0.231031`
+does not count as seed 1031. The record test looks for the token `"faults"` as a key, not
+as a substring of `at_defaults`.
