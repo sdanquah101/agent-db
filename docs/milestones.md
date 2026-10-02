@@ -3506,3 +3506,9 @@ all 28. The three-seed band (PROVISIONAL) needs 8 more runs, about 18:10 UTC.
   - Three-seed band (PROVISIONAL): about 23:30 UTC today.
   - Ten-seed band (FINAL): about 23:00 UTC on 3 October.
 - The rule, the seeds and the statistics are unchanged.
+
+**2026-10-02, 21:52 UTC.** 41 of 120 runs done: 30 on Plants B and C, 11 on Plant A, now
+in separate stores. Seed 900001 is complete on every stage. 10 three-seed Plant A runs
+remain, at about 60 min each, four at a time, so the three-seed band (PROVISIONAL) is due
+about 00:30 UTC on 3 October. Plants B and C run 28–41 min per run here now. The container
+has stayed up 10 hours under the tracked watch, with no errors.
