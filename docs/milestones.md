@@ -3593,3 +3593,7 @@ has stayed up 10 hours under the tracked watch, with no errors.
   `tests/test_p1_agent.py`; ruff clean.
 - The computation was relaunched at 03:16 UTC on seeds 900004–900010. Next: the full
   `pytest -q`, then the ten-seed band (FINAL) with the development cells' placement.
+
+**2026-10-03, 07:14 UTC.** 72 of 120 runs done; the container has stayed up 7 hours with
+no errors. 48 runs remain, about 9 hours, so the ten-seed band (FINAL) is due about
+16:00 UTC.
