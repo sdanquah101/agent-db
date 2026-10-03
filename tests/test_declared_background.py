@@ -592,3 +592,50 @@ def test_each_plant_a_state_has_its_own_store_and_a_shared_run_id_is_refused(tmp
         bg.check_index({adapted.key: "run_x", runs["A.adapted-C-900001"].key: "run_x"})
     bg.check_index({adapted.key: "run_x", unadapted.key: "run_x"})
     assert bg.default_baseline("A") == "adapted" and bg.default_baseline("B") is None
+
+
+def test_placement_is_the_published_envelope_with_no_margin(synthetic_config):
+    band = synthetic_config.band("B", "B")
+    inside = _record("B", "B", 9)  # the first synthetic run: on the envelope's edge
+    rows = {r["statistic"]: r for r in bg.placement(inside, band)}
+    assert rows["cod_closure"]["inside"] is True
+    assert rows["gas_flow.after_fit.rms_z"]["inside"] is True
+    # just past the envelope is outside: no margin of any size is added
+    outside = _record("B", "B", 9, shift=0.5000001)
+    rows = {r["statistic"]: r for r in bg.placement(outside, band)}
+    assert rows["cod_closure"]["inside"] is False
+    assert rows["cod_closure"]["band_max"] == band.cod_closure.max
+    # a channel the band does not carry is reported, not judged
+    extra = _record("B", "B", 9)
+    extra["channels"]["h2_offgas"] = extra["channels"]["ph"]
+    rows = {r["statistic"]: r for r in bg.placement(extra, band)}
+    assert rows["h2_offgas.after_fit.mean_z"]["inside"] is None
+    # a tier with no COD balance reports no closure judgement
+    rows = {
+        r["statistic"]: r
+        for r in bg.placement(_record("B", "A", 9), synthetic_config.band("B", "A"))
+    }
+    assert rows["cod_closure"]["inside"] is None and "n_cod_inadmissible" not in rows
+    assert set(bg.DEV_CELLS) == {("S0-01", "B", "A"), ("S0-01", "B", "B"),
+                                 ("S0-01", "B", "C"), ("S1-01", "B", "B")}  # fmt: skip
+
+
+def test_the_committed_placement_is_against_the_committed_band():
+    config, _ = _committed()
+    if not bg.DEV_FILE.is_file():
+        # the cells are placed when the band is final (the lead's ruling); not before
+        assert config.provenance.status == "PROVISIONAL"
+        return
+    placed = json.loads(bg.DEV_FILE.read_text(encoding="utf-8"))
+    assert {c["cell"] for c in placed["cells"]} == {f"{s} {p}/{t}" for s, p, t in bg.DEV_CELLS}
+    for cell in placed["cells"]:
+        assert cell["band_seeds"] == list(config.provenance.seeds)
+        assert cell["band_status"] == config.provenance.status
+        plant, tier = cell["cell"].split()[1].split("/")
+        band = config.band(plant, tier)
+        for r in cell["rows"]:
+            if r["inside"] is None:
+                continue
+            assert r["inside"] == (r["band_min"] <= r["value"] <= r["band_max"])
+        assert cell["n_outside"] == sum(1 for r in cell["rows"] if r["inside"] is False)
+        assert band is not None
