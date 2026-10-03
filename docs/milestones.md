@@ -3601,3 +3601,26 @@ no errors. 48 runs remain, about 9 hours, so the ten-seed band (FINAL) is due ab
 **2026-10-03, 11:13 UTC.** 90 of 120 runs done; the container has stayed up 11 hours with
 no errors. The development-cell placement step is on the branch (`cc62cc5`) and runs
 once the ten seeds are in. The ten-seed band (FINAL) is due about 17:00 UTC.
+
+**2026-10-03, about 19:20 UTC — the ten-seed band FINAL; the development cells placed.**
+- `configs/background.yaml` is FINAL (`0412375`): 120 clean runs, seeds
+  900001–900010, Plant A pooling both states. The card tables are regenerated.
+- The clean development cells against the band (`reports/background/dev_cells.json`,
+  card §5.5; a finding, not an input):
+
+  | cell | statistics outside / judged |
+  |---|---|
+  | S0-01 B/A | 0 / 12 |
+  | S0-01 B/B | 4 / 36 |
+  | S0-01 B/C | 13 / 64 |
+  | S1-01 B/B | 11 / 36 |
+
+  - S0-01 B/B's balance is **inside**, at the edge of the envelope.
+  - Some "outside" values are on the quiet side (charge drift, pH scatter below every
+    clean run).
+  - S1-01 is a Level-1 record (noise ×2, gaps ×2), above the declared-noise band by
+    construction on rms_z, and outside on its gas offset and balance.
+- Note for P2's design (not a change to the band): the envelope is two-sided as
+  published. Whether a value below the envelope counts as evidence is the workflow's
+  declared rule.
+- The full `pytest -q` is running on this head.

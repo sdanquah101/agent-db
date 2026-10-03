@@ -580,6 +580,29 @@ Per-channel envelope, **after the screened fit**: `mean_z` [min, max] and `rms_z
 | C / C | alkalinity: +0.90 [-0.05, +1.75]; 1.50 [0.96, 1.98]; ch4_fraction: +0.12 [-0.70, +0.90]; 1.13 [0.93, 1.38]; cod_total: +0.30 [-0.86, +1.21]; 1.34 [1.00, 1.73]; digestate_ts: +0.98 [-0.35, +2.58]; 1.87 [1.32, 2.99]; digestate_vs: +0.71 [-1.00, +2.10]; 1.89 [1.20, 2.94]; gas_flow: -0.03 [-1.56, +0.65]; 8.34 [7.50, 9.23]; h2_offgas: +0.29 [+0.22, +0.43]; 1.51 [1.31, 1.73]; ph: +0.14 [+0.02, +0.37]; 0.42 [0.31, 0.53]; tan: +1.41 [+0.13, +2.73]; 1.82 [1.12, 2.97]; temperature: +0.00 [-0.02, +0.03]; 0.02 [0.01, 0.04]; vfa_ac: +0.66 [+0.34, +1.05]; 3.08 [2.55, 3.66]; vfa_bu: +0.43 [+0.24, +0.63]; 2.33 [1.79, 2.85]; vfa_pro: +0.34 [-1.03, +1.29]; 2.75 [2.22, 3.30]; vfa_total: +0.57 [+0.17, +1.31]; 1.19 [0.95, 1.50]; vfa_va: -0.06 [-0.43, +0.33]; 0.88 [0.67, 1.12] |
 <!-- END GENERATED: declared background -->
 
+**The clean development cells against the FINAL band — a finding, not an input** (the lead's
+ruling of 2026-09-30; `reports/background/dev_cells.json`). Each cell was generated at its
+library seed and taken through the same procedure through its own registry, and every
+published statistic was compared with the envelope exactly as published, with no margin.
+
+| cell | statistics outside / judged | outside, value [band] |
+|---|---|---|
+| S0-01 B/A | 0 / 12 | none |
+| S0-01 B/B | 4 / 36 | charge drift 0.145 [0.208, 0.583], below; pH after-fit mean_z −0.237 [−0.236, 0.378]; VFA at-defaults mean_z −1.14 [−0.88, 0.53] and rms_z 1.56 [0.86, 1.45] |
+| S0-01 B/C | 13 / 64 | the S0-01 B/B items, plus digestate TS and VS above the envelope (VS after-fit mean_z 3.74 [−0.84, 3.33]) and pH after-fit rms_z 0.334 [0.347, 0.669], below |
+| S1-01 B/B | 11 / 36 | COD closure −0.191 [−0.138, 0.023]; worst window −0.481 [−0.368, 0.066]; gas mean_z after fit 7.54 [−1.13, 5.87] and rms_z 10.2 [5.6, 8.9]; CH₄-fraction and VFA rms_z above |
+
+Three readings, stated and not acted on:
+- **The balance of S0-01 B/B lies inside the ten-seed band**, at its edge: mean closure
+  −0.1376 against a minimum of −0.1378, and 2 inadmissible windows against a maximum of 2.
+  The three-seed band had excluded it.
+- **Some "outside" values lie on the quiet side** of the envelope: charge drift and pH
+  scatter below every clean run. The envelope is two-sided as published. Which side
+  counts as evidence of a fault is a workflow's declared rule, not the band's.
+- **S1-01 is a Level-1 record** (sensor noise ×2, gaps ×2). Its rms_z statistics are
+  standardised by the *declared* noise, so they exceed the declared-noise band by
+  construction. Its gas offset and balance also lie outside.
+
 ## 6. Scenario ladder (§6.3)
 
 Levels 0–8, from "the fitted model is the truth model" up to compound discrepancies:
