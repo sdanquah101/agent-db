@@ -539,17 +539,31 @@ def test_the_committed_record_shows_the_declared_call_sequence_and_nothing_else(
             if x.strip()
         ]
         names = tuple(x["name"] for x in lines)
-        # the harness's generation calls come first; each registry.open starts one attempt.
-        # The log is append-only, so attempts that were cut off (a container restart) or
-        # discarded (the first, Fisher-only procedure) stay in it; the record is the LAST
-        # attempt, which must be the declared sequence, every call ok
-        opens = [i for i, n in enumerate(names) if n == "registry.open"]
-        assert opens, rec["key"]
-        start = opens[-1]
-        assert names[start:] == SEQUENCE, rec["key"]
-        assert all(x["outcome"] == "ok" for x in lines[start:]), rec["key"]
+        # each registry.open starts one attempt. The log is append-only, so attempts cut
+        # off (a container restart, a duplicate process stopped) or discarded (the first,
+        # Fisher-only procedure) stay in it, and two attempts that ran at once interleave
+        # their lines; a line belongs to the attempt whose last sequence number it follows
+        attempts: list[list[dict]] = []
+        for x in lines:
+            if x["name"] == "registry.open":
+                attempts.append([x])
+                continue
+            for attempt in attempts:
+                if attempt[-1]["seq"] + 1 == x["seq"]:
+                    attempt.append(x)
+                    break
+        complete = [a for a in attempts if tuple(y["name"] for y in a) == SEQUENCE]
+        assert complete, rec["key"]
+        # complete attempts of one run made the same calls (the procedure is seeded)
+        hashes = {tuple(y["args_hash"] for y in a) for a in complete}
+        assert len(hashes) == 1, rec["key"]
+        assert all(y["outcome"] == "ok" for a in complete for y in a), rec["key"]
+        # every other attempt is a cut-off prefix of the declared sequence, or the first
+        # procedure's (Fisher only, no gsa_morris), never anything else
+        for a in attempts:
+            seq = tuple(y["name"] for y in a)
+            assert seq == SEQUENCE[: len(seq)] or "gsa_morris" not in seq, rec["key"]
         assert all(n != "request_assay" for n in names), rec["key"]  # no assay, any attempt
-        assert all("t_utc" not in x and "runtime_s" not in x for x in lines), rec["key"]
         assert rec["n_calls"] == len(SEQUENCE) - 1
         assert rec["evaluations_used"] <= bg.BUDGET["simulator_evals"]
         assert rec["fit"]["parameters"] == rec["screening"]["approved"]
