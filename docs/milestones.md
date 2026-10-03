@@ -3512,3 +3512,18 @@ in separate stores. Seed 900001 is complete on every stage. 10 three-seed Plant 
 remain, at about 60 min each, four at a time, so the three-seed band (PROVISIONAL) is due
 about 00:30 UTC on 3 October. Plants B and C run 28–41 min per run here now. The container
 has stayed up 10 hours under the tracked watch, with no errors.
+
+**2026-10-03, about 01:10 UTC — the three-seed band published, PROVISIONAL.**
+- `configs/background.yaml` (status PROVISIONAL; seeds 900001–900003), the per-run
+  record `reports/background/runs.jsonl`, `runs.csv`, every run's visible call log, and
+  the card's §5.5 tables. Plant A pools its two states, each now measured on its own
+  record. All 12 tests of `tests/test_declared_background.py` pass. With
+  `tests/test_tool_registry.py` and `tests/test_p1_agent.py`: 156 passed, 1 skipped
+  (the `openai` client is not installed here).
+- A container restart at about 23:59 UTC on 2 October cut off the last two three-seed
+  runs, even with the tracked watch armed. They were rerun from 00:00 UTC. So the watch
+  reduces restarts but does not prevent them.
+- Computation continues on seeds 900004–900010: 53 of 120 done at 01:01 UTC.
+- Next: pause the computation (SIGSTOP) and run the two-head P0 freeze test alone on the
+  machine; resume; the full `pytest -q`; the ten-seed band (FINAL) and the development
+  cells' placement, as the lead's ruling asks.

@@ -525,7 +525,8 @@ def test_the_committed_band_is_per_plant_and_tier_and_carries_nothing_per_cell()
     # the record itself names only visible quantities and the driver's own keys
     record_text = bg.RECORD_FILE.read_text(encoding="utf-8")
     for token in ("truth", "faults", "salt", "K_I_nh3_true", "correct_conclusion"):
-        assert token not in record_text, token
+        # as a whole word: "faults" inside "at_defaults" is not a fault plan
+        assert not re.search(rf"(?<![A-Za-z_]){token}(?![A-Za-z_])", record_text), token
 
 
 def test_the_committed_record_shows_the_declared_call_sequence_and_nothing_else():
