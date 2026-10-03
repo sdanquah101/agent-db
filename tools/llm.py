@@ -866,12 +866,22 @@ class ScriptedClient:
 
 
 def read_transcript(path: Path) -> list[dict[str, Any]]:
-    """Every line of a gateway log, in order."""
-    return [
-        json.loads(line)
-        for line in Path(path).read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    """Every line of a gateway log, in order.
+
+    A log committed gzipped (``llm_calls.jsonl.gz``, the two records over 5 MB under
+    ``reports/p1_pilot/records/``) is read when the plain file is absent, so the
+    committed records serve as a run store without unpacking.
+    """
+    path = Path(path)
+    packed = path.with_name(path.name + ".gz")
+    if not path.exists() and packed.exists():
+        import gzip
+
+        with gzip.open(packed, "rt", encoding="utf-8") as fh:
+            text = fh.read()
+    else:
+        text = path.read_text(encoding="utf-8")
+    return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
 _TRANSLATIONS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {

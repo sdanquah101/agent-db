@@ -1449,6 +1449,41 @@ def test_the_frozen_record_is_what_is_on_disk():
         assert cfg.frozen is None and cfg.prompt_sha256 == "" and check_frozen(cfg) is None
 
 
+def test_a_configuration_loaded_from_elsewhere_hashes_the_prompts_beside_it(tmp_path):
+    # the review of dbf2e45 (note 2): the prompt paths resolve against the yaml's own
+    # directory, so a copy of the frozen configuration checks the prompts beside it, never
+    # the repository's
+    import shutil
+
+    copy = tmp_path / "elsewhere"
+    shutil.copytree(WORKFLOW_CONFIG_DIR / "p1_prompts", copy / "p1_prompts")
+    shutil.copyfile(WORKFLOW_CONFIG_DIR / "p1.yaml", copy / "p1.yaml")
+    config = load_p1(copy / "p1.yaml")
+    assert config.prompt_root == copy.resolve()
+    assert check_frozen(config) is not None  # the unedited copy is the frozen P1
+    assert load_prompts(config) == load_prompts(load_p1())
+    # a one-character edit of the copied prompt is refused, although the repository's
+    # prompt is untouched; the repository's configuration still passes
+    system = copy / "p1_prompts" / "system.md"
+    system.write_text(system.read_text(encoding="utf-8") + " ", encoding="utf-8")
+    with pytest.raises(ValueError, match="prompt_sha256"):
+        check_frozen(load_p1(copy / "p1.yaml"))
+    with pytest.raises(ValueError, match="a post-freeze change invalidates the runs"):
+        p1_provenance(load_p1(copy / "p1.yaml"))
+    assert check_frozen(load_p1()) is not None
+    # an explicit root still wins, and the loader alone sets prompt_root
+    assert load_prompts(load_p1(copy / "p1.yaml"), root=WORKFLOW_CONFIG_DIR) == load_prompts(
+        load_p1()
+    )
+    text = (copy / "p1.yaml").read_text(encoding="utf-8") + "\nprompt_root: /nowhere\n"
+    (copy / "p1_root.yaml").write_text(text, encoding="utf-8")
+    with pytest.raises(ValueError, match="prompt_root is set by the loader"):
+        load_p1(copy / "p1_root.yaml")
+    # and it never reaches the file's dump or the jail payload
+    assert "prompt_root" not in load_p1().model_dump()
+    assert "prompt_root" not in sandbox_config(load_p1())
+
+
 def test_the_gateway_accepts_only_the_committed_tool_list(tmp_path):
     specs = agent.tool_specs()
     sent = []
@@ -1655,6 +1690,11 @@ def _guarded_config(tmp_path, seconds_per_evaluation: float):
     raw = yaml.safe_load((WORKFLOW_CONFIG_DIR / "p1.yaml").read_text("utf-8"))
     raw["duration_guard"]["seconds_per_evaluation_default"] = seconds_per_evaluation
     raw["duration_guard"]["min_evaluations_measured"] = 10**6  # the default rate stays
+    # a copy elsewhere resolves its prompt paths beside itself (the review of dbf2e45,
+    # note 2): name the repository's prompts by absolute path
+    raw["prompts"] = {
+        k: (str(WORKFLOW_CONFIG_DIR / v) if v else v) for k, v in raw["prompts"].items()
+    }
     path = tmp_path / "p1_guard.yaml"
     path.write_text(yaml.safe_dump(raw), encoding="utf-8")
     return path
