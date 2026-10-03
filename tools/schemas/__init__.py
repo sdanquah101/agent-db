@@ -11,6 +11,16 @@ Arrays are :data:`Array` fields: numpy on both sides, lists in JSON, so a model 
 through ``model_dump(mode="json")`` / ``model_validate`` unchanged.
 """
 
+from tools.schemas.background import (
+    BackgroundProcedure,
+    BandRecord,
+    BandStat,
+    ChannelBand,
+    DeclaredBackgroundInput,
+    DeclaredBackgroundOutput,
+    IntBand,
+    ZBand,
+)
 from tools.schemas.base import (
     Array,
     ObservedSeries,
@@ -66,10 +76,16 @@ __all__ = [
     "TOOL_OUTPUTS",
     "Array",
     "AssayResult",
+    "BackgroundProcedure",
+    "BandRecord",
+    "BandStat",
     "BayesMCMCInput",
     "BayesMCMCOutput",
+    "ChannelBand",
     "DataQCInput",
     "DataQCOutput",
+    "DeclaredBackgroundInput",
+    "DeclaredBackgroundOutput",
     "DescribeModelInput",
     "DescribeModelOutput",
     "FeedLoadsInput",
@@ -88,6 +104,7 @@ __all__ = [
     "GSAMorrisOutput",
     "GSASobolInput",
     "GSASobolOutput",
+    "IntBand",
     "MassBalanceInput",
     "MassBalanceOutput",
     "ObservedSeries",
@@ -107,4 +124,5 @@ __all__ = [
     "ValidateInput",
     "ValidateOutput",
     "Window",
+    "ZBand",
 ]

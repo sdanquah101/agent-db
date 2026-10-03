@@ -188,6 +188,11 @@ class ToolConfigs:
         """``voi.yaml``."""
         return cfg.load_voi()
 
+    @cached_property
+    def background(self) -> cfg.BackgroundConfig:
+        """``configs/background.yaml`` (the declared background; decision 1 of 2026-09-30)."""
+        return cfg.load_background()
+
 
 @dataclass
 class ToolContext:

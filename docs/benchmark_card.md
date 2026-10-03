@@ -498,6 +498,111 @@ closest percentile to 0.40 of any between the 50th and the 99th. It fires rarely
 simulation because the simulated distribution still sits ~1.5× below the plant's; the
 threshold is not moved to compensate.
 
+### 5.5 The declared background: what a clean record looks like under the fitted model
+
+**Declared beside the instrument noise, from 2026-09-30** (the lead's decision 1 of that
+date, `docs/decisions.md`; built by the P2 session). Every sensor has a declared noise
+model (§4.1); until this section the benchmark declared nothing about the **plant's own
+misfit** — how far a clean, fault-free record on each plant sits from the fitted model at
+its defaults and after a screened fit — and every model-backed workflow read that misfit
+as a fault: on the clean development cells the tools report gas +11–25 % at the defaults,
+COD closure −0.14 to −0.19 with two inadmissible 30-day windows, and 5–19σ channel biases
+after any fit (P0's pilot; the P1 knowledge audit, `docs/p1_knowledge_audit.md` §0), and
+both P1 arms labelled a fault on all four clean cells because no step ever asked what a
+clean record on this plant looks like. P0 was rescued by ruled thresholds (§4.2); a
+prompt cannot name thresholds (the P1 prompt rule). So the benchmark now **publishes the
+null band**, per plant and per tier, and serves it as a registry tool.
+
+**What it is.** `configs/background.yaml`, served by the registry tool
+`declared_background(plant, tier)` (`tools/background.py`, version 1.0, logged like every
+tool, costs no evaluation), computed offline by `scripts/declared_background.py` from
+seeded **clean** Level-0 generator runs: the `S0-01` row staged on each plant at the
+plant's horizon (200 d on B and C, 365 d on A), three base seeds of the benchmark's own
+(disjoint from the library's), Plant A on **both** its declared community states and its
+band the union of the two (which state a run is in is not declared, ruling B5). Each run
+was read the way a workflow reads it (the tier's sensors, the feed log, the redacted
+manifest) and taken through one declared, fixed-size procedure through the run's own
+registry: `simulate` at the defaults; `mass_balance` over 30-day windows of the
+calibration window `[0, 0.75 T]`; P0's screening on P0's calibration channels with P0's
+declared-noise weights — `gsa_morris` at P0's ruled size (4 trajectories, the mean over
+the calibration window) and P0's Morris rule (μ* at least 0.10 of the largest on any
+output, at most 4 kept, at least 2), then `fisher_info` at the defaults on the kept set
+with P0's identifiability rule (relative CRLB ≤ 0.5, a null direction drops, at least 2
+stay), Sobol at its declared fallback ("skip Sobol and take the Morris subset", §4 of
+`docs/p0_design.md`); `fit_lsq` on the approved subset from the defaults with P0's ruled
+sizes (one start, 40 evaluations); one `simulate` at the optimum. For every sensor of the tier the band records the mean and
+the root-mean-square of the standardised residual `(observed − predicted) / declared sd`
+over the calibration window, at the defaults and after the fit, and for the balance the
+per-run mean COD closure, every window's closure, the count of inadmissible windows and
+the charge drift — each as its mean, sd, minimum and maximum over the clean runs. No QC
+step and no quarantine: every observed sample enters, so the band is the record *before*
+cleaning. The per-run record, with each run's visible call log, is under
+`reports/background/`; the yaml regenerates from it (tested).
+
+**What it is not.** Not per cell and not per scenario: the keys are plant and tier, the
+seeds are the benchmark's own, and the tool answers the same on every run of a plant at a
+tier (tested with a negative control). Not a change to any existing tool: the frozen
+table is untouched, P0's plan and outputs are byte-identical (the two-head freeze test on
+the PR that added it), P0 does not call it, and the frozen P1 does not call it — P1's 0/4
+on `none` stands as its record. Not a threshold: the band is a reference; what a workflow
+requires a fault to exceed is that workflow's declared rule (P2's, in its design
+document). Not a claim that the fitted model is right: the band *is* the size of the
+structural difference between the fitted model on the visible feed log and the truth on a
+clean cell (§4.2's "recorded benchmark property"), stated per plant and tier.
+
+<!-- BEGIN GENERATED: declared background -->
+**Status: FINAL.** 120 clean runs, seeds 900001, 900002, 900003, 900004, 900005, 900006, 900007, 900008, 900009, 900010 (10 of the declared 10 per truth group; Plant A pools its two declared states). The band is the **min-max envelope** over the runs (the lead's ruling of 2026-09-30); the mean beside each envelope is for reading only.
+
+| plant / tier | runs | COD closure, per-run mean: mean [min, max] | worst window: mean [min, max] | inadmissible windows [min, max] of n | charge drift [min, max] | charge-consistent share | parameters fitted (runs) |
+|---|---|---|---|---|---|---|---|
+| A / A | 20 | n/a | n/a | n/a | n/a | n/a | K_I_nh3 (6), Y_ac (14), Y_h2 (14), k_m_ac (6) |
+| A / B | 20 | -0.0138 [-0.0437, 0.0138] | -0.084 [-0.161, 0.109] | [0, 0] of 9 | 0.425 [0.139, 0.684] | 0.10 | Y_ac (20), k_dec_X_ac (20) |
+| A / C | 20 | -0.0136 [-0.0405, 0.0132] | -0.0844 [-0.162, 0.106] | [0, 0] of 9 | 0.426 [0.139, 0.685] | 0.10 | K_S_pro (20), k_m_ac (20), k_m_c4 (20), k_m_h2 (20) |
+| B / A | 10 | n/a | n/a | n/a | n/a | n/a | Y_ac (10), Y_h2 (7), k_m_h2 (3) |
+| B / B | 10 | -0.0516 [-0.138, 0.0232] | -0.181 [-0.368, 0.0657] | [0, 2] of 5 | 0.338 [0.208, 0.582] | 0.00 | Y_ac (10), Y_h2 (1), k_dec_X_ac (9), k_m_h2 (8) |
+| B / C | 10 | -0.0623 [-0.151, 0.0171] | -0.193 [-0.363, 0.0522] | [0, 2] of 5 | 0.339 [0.208, 0.613] | 0.00 | Y_ac (10), Y_h2 (10), k_dec_X_ac (1), k_m_h2 (10), k_m_pro (9) |
+| C / A | 10 | n/a | n/a | n/a | n/a | n/a | Y_ac (6), k_dec_X_ac (10), k_m_ac (10) |
+| C / B | 10 | -0.00861 [-0.0427, 0.0344] | -0.0158 [-0.0971, 0.106] | [0, 0] of 5 | 0.374 [0.144, 0.552] | 0.10 | Y_ac (10), k_dec_X_ac (1), k_m_ac (10), k_m_h2 (7) |
+| C / C | 10 | -0.0198 [-0.0506, 0.0149] | -0.07 [-0.0968, -0.0326] | [0, 0] of 5 | 0.365 [0.19, 0.552] | 0.10 | K_S_pro (6), Y_ac (4), k_m_ac (10), k_m_c4 (10), k_m_h2 (10) |
+
+Per-channel envelope, **after the screened fit**: `mean_z` [min, max] and `rms_z` [min, max] over the clean runs (multiples of the declared measurement sd, calibration window). The same table at the default parameters, and the sd per statistic, are in `configs/background.yaml`.
+
+| plant / tier | channel: mean_z [min, max]; rms_z [min, max] |
+|---|---|
+| A / A | gas_flow: +0.87 [-2.10, +4.06]; 5.98 [4.68, 7.71]; ph: -0.00 [-0.77, +0.47]; 0.57 [0.42, 0.87]; temperature: +0.00 [-0.02, +0.03]; 0.02 [0.01, 0.03] |
+| A / B | alkalinity: +0.52 [-1.34, +2.17]; 1.55 [1.05, 2.40]; ch4_fraction: +0.22 [-1.30, +1.40]; 1.25 [0.91, 1.72]; cod_total: -0.31 [-2.49, +1.59]; 1.97 [1.10, 2.87]; gas_flow: +0.93 [-2.82, +4.19]; 6.11 [4.73, 7.80]; ph: +0.05 [-0.46, +0.44]; 0.44 [0.33, 0.59]; tan: +0.73 [-2.43, +3.35]; 1.99 [1.03, 3.46]; temperature: +0.00 [-0.02, +0.03]; 0.02 [0.01, 0.03]; vfa_total: +0.07 [-1.04, +1.31]; 1.25 [0.78, 1.75] |
+| A / C | alkalinity: +0.50 [-1.86, +2.17]; 1.63 [1.08, 2.39]; ch4_fraction: +0.22 [-1.21, +1.41]; 1.23 [0.93, 1.72]; cod_total: -0.30 [-2.62, +1.61]; 1.96 [1.09, 3.07]; digestate_ts: -0.23 [-3.08, +1.97]; 2.84 [1.86, 4.20]; digestate_vs: -0.50 [-4.42, +2.43]; 3.00 [1.86, 5.15]; gas_flow: +0.89 [-2.77, +4.98]; 6.12 [4.69, 8.21]; h2_offgas: +0.18 [-0.45, +1.36]; 1.30 [1.13, 1.75]; ph: +0.05 [-0.51, +0.45]; 0.45 [0.33, 0.59]; tan: +0.70 [-3.15, +3.36]; 2.10 [1.03, 3.46]; temperature: +0.00 [-0.02, +0.03]; 0.02 [0.01, 0.03]; vfa_ac: -26.88 [-65.06, +2.04]; 29.28 [2.23, 66.36]; vfa_bu: +0.40 [-0.78, +1.63]; 2.54 [2.02, 3.39]; vfa_pro: +0.33 [-1.71, +1.36]; 2.64 [2.12, 3.30]; vfa_total: +0.09 [-0.89, +1.35]; 1.26 [0.78, 1.78]; vfa_va: +0.06 [-0.18, +0.33]; 0.90 [0.73, 1.04] |
+| B / A | gas_flow: +1.65 [-0.94, +3.99]; 6.13 [5.51, 7.94]; ph: +0.06 [-0.60, +0.56]; 0.62 [0.34, 0.85]; temperature: +0.00 [-0.02, +0.02]; 0.01 [0.01, 0.02] |
+| B / B | alkalinity: -0.53 [-2.42, +1.02]; 1.50 [0.99, 2.90]; ch4_fraction: +0.21 [-0.99, +1.02]; 1.05 [0.81, 1.31]; cod_total: +1.02 [-0.73, +2.51]; 1.86 [1.22, 2.76]; gas_flow: +2.36 [-1.13, +5.87]; 6.49 [5.62, 8.93]; ph: +0.01 [-0.24, +0.38]; 0.47 [0.34, 0.67]; tan: -1.09 [-5.62, +2.78]; 3.13 [1.29, 7.57]; temperature: +0.00 [-0.02, +0.02]; 0.01 [0.01, 0.02]; vfa_total: -0.42 [-1.13, +0.80]; 1.27 [0.87, 1.88] |
+| B / C | alkalinity: -0.46 [-2.25, +0.97]; 1.47 [0.97, 2.76]; ch4_fraction: +0.22 [-0.99, +1.01]; 1.03 [0.80, 1.31]; cod_total: +0.97 [-0.70, +2.41]; 1.81 [1.16, 2.66]; digestate_ts: +1.48 [-0.67, +2.93]; 2.64 [1.39, 3.50]; digestate_vs: +1.56 [-0.84, +3.33]; 2.68 [1.25, 3.84]; gas_flow: +2.56 [-1.10, +5.73]; 6.62 [5.77, 8.86]; h2_offgas: +0.20 [+0.07, +0.25]; 1.23 [0.98, 1.36]; ph: -0.00 [-0.24, +0.34]; 0.47 [0.35, 0.67]; tan: -0.98 [-7.12, +2.66]; 3.24 [1.31, 9.20]; temperature: +0.00 [-0.02, +0.02]; 0.01 [0.01, 0.02]; vfa_ac: +0.53 [-0.56, +4.78]; 2.48 [1.51, 5.09]; vfa_bu: -0.02 [-1.51, +1.60]; 2.43 [1.83, 3.76]; vfa_pro: +0.32 [-0.07, +0.55]; 2.15 [1.80, 2.64]; vfa_total: -0.17 [-0.77, +0.70]; 1.14 [0.85, 1.38]; vfa_va: -0.03 [-0.33, +0.38]; 0.93 [0.65, 1.18] |
+| C / A | gas_flow: -0.39 [-2.11, +0.76]; 7.95 [6.91, 8.75]; ph: +0.14 [-0.43, +0.61]; 0.60 [0.33, 0.99]; temperature: +0.00 [-0.02, +0.04]; 0.02 [0.01, 0.04] |
+| C / B | alkalinity: +1.08 [+0.29, +1.75]; 1.58 [0.99, 1.97]; ch4_fraction: +0.09 [-0.73, +0.88]; 1.21 [1.06, 1.36]; cod_total: +0.04 [-1.22, +0.79]; 1.30 [0.90, 1.95]; gas_flow: +0.14 [-1.40, +0.93]; 8.08 [7.01, 8.92]; ph: +0.19 [+0.03, +0.39]; 0.44 [0.33, 0.55]; tan: +1.66 [+0.59, +2.69]; 1.98 [1.25, 2.94]; temperature: +0.00 [-0.02, +0.03]; 0.02 [0.01, 0.04]; vfa_total: -0.02 [-0.72, +0.97]; 1.25 [1.02, 1.80] |
+| C / C | alkalinity: +0.90 [-0.05, +1.75]; 1.50 [0.96, 1.98]; ch4_fraction: +0.12 [-0.70, +0.90]; 1.13 [0.93, 1.38]; cod_total: +0.30 [-0.86, +1.21]; 1.34 [1.00, 1.73]; digestate_ts: +0.98 [-0.35, +2.58]; 1.87 [1.32, 2.99]; digestate_vs: +0.71 [-1.00, +2.10]; 1.89 [1.20, 2.94]; gas_flow: -0.03 [-1.56, +0.65]; 8.34 [7.50, 9.23]; h2_offgas: +0.29 [+0.22, +0.43]; 1.51 [1.31, 1.73]; ph: +0.14 [+0.02, +0.37]; 0.42 [0.31, 0.53]; tan: +1.41 [+0.13, +2.73]; 1.82 [1.12, 2.97]; temperature: +0.00 [-0.02, +0.03]; 0.02 [0.01, 0.04]; vfa_ac: +0.66 [+0.34, +1.05]; 3.08 [2.55, 3.66]; vfa_bu: +0.43 [+0.24, +0.63]; 2.33 [1.79, 2.85]; vfa_pro: +0.34 [-1.03, +1.29]; 2.75 [2.22, 3.30]; vfa_total: +0.57 [+0.17, +1.31]; 1.19 [0.95, 1.50]; vfa_va: -0.06 [-0.43, +0.33]; 0.88 [0.67, 1.12] |
+<!-- END GENERATED: declared background -->
+
+**The clean development cells against the FINAL band — a finding, not an input** (the lead's
+ruling of 2026-09-30; `reports/background/dev_cells.json`). Each cell was generated at its
+library seed and taken through the same procedure through its own registry, and every
+published statistic was compared with the envelope exactly as published, with no margin.
+
+| cell | statistics outside / judged | outside, value [band] |
+|---|---|---|
+| S0-01 B/A | 0 / 12 | none |
+| S0-01 B/B | 4 / 36 | charge drift 0.145 [0.208, 0.583], below; pH after-fit mean_z −0.237 [−0.236, 0.378]; VFA at-defaults mean_z −1.14 [−0.88, 0.53] and rms_z 1.56 [0.86, 1.45] |
+| S0-01 B/C | 13 / 64 | the S0-01 B/B items, plus digestate TS and VS above the envelope (VS after-fit mean_z 3.74 [−0.84, 3.33]) and pH after-fit rms_z 0.334 [0.347, 0.669], below |
+| S1-01 B/B | 11 / 36 | COD closure −0.191 [−0.138, 0.023]; worst window −0.481 [−0.368, 0.066]; gas mean_z after fit 7.54 [−1.13, 5.87] and rms_z 10.2 [5.6, 8.9]; CH₄-fraction and VFA rms_z above |
+
+Three readings, stated and not acted on:
+- **The balance of S0-01 B/B lies inside the ten-seed band**, at its edge: mean closure
+  −0.1376 against a minimum of −0.1378, and 2 inadmissible windows against a maximum of 2.
+  The three-seed band had excluded it.
+- **Some "outside" values lie on the quiet side** of the envelope: charge drift and pH
+  scatter below every clean run. The envelope is two-sided as published. Which side
+  counts as evidence of a fault is a workflow's declared rule, not the band's.
+- **S1-01 is a Level-1 record** (sensor noise ×2, gaps ×2). Its rms_z statistics are
+  standardised by the *declared* noise, so they exceed the declared-noise band by
+  construction. Its gas offset and balance also lie outside.
+
 ## 6. Scenario ladder (§6.3)
 
 Levels 0–8, from "the fitted model is the truth model" up to compound discrepancies:

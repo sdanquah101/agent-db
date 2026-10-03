@@ -22,3 +22,5 @@ tool_versions:                 # per-tool version strings logged with every call
   voi_assay: "1.0"
   validate: "1.0"
   request_assay: "1.0"
+  declared_background: "1.0"   # the declared background (decision 1 of 2026-09-30;
+                               # tools/background.py, beside the frozen table)

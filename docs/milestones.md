@@ -3426,3 +3426,201 @@ the stores ignored), and `tools.llm.read_transcript` reads a gzipped log when th
 one is absent (tested), so the two packed logs need no unpacking. Verified in a temporary
 copy: the rev2 and rev2_claude rows come back identical; the other arms differ only in
 the three store-read columns.
+
+
+## Milestone 8 — P2, the task-specialised multi-agent workflow (proposal §6.5; `docs/p2_launch_brief.md`)
+
+### Session 2026-09-30 — deliverable 0, the declared-background tool (`claude/declared-background`, from `main` at `b611a1b`; work in progress)
+
+The P2 component session (not the coordinator). Open PRs at start: none.
+
+**Done (on the branch):**
+- The registry tool `declared_background(plant, tier)` beside the frozen table
+  (`tools/background.py`, `tools/schemas/background.py`, `tools/config.py::load_background`,
+  version 1.0 in `configs/tools/registry.yaml`); `tools.impl.SPECS` is unchanged.
+- The offline driver `scripts/declared_background.py`: 36 clean `S0-01` runs (seeds
+  900001–900003; Plants B and C, and Plant A on both declared states; all tiers), each
+  through its own registry: default `simulate`, `mass_balance` on the calibration window,
+  P0's Morris rule then P0's Fisher rule (Sobol at its declared fallback), `fit_lsq` at
+  P0's sizes, `simulate` at the optimum; `mean_z` / `rms_z` per sensor at the defaults
+  and after the fit. A first version screened by Fisher alone; it was degenerate on
+  twenty parameters and was dropped after one run (`docs/decisions.md`).
+- `tests/test_declared_background.py`: registration, logging, the per-(plant, tier) purity
+  with a negative control, rule-1 checks on the yaml, regeneration from the record, the
+  card section, and no existing tool changed (`tests/tool_contracts_v1.json`; P1's tool
+  digest `11d8e352…`). The two enumeration tests gained the new name.
+- Docs: benchmark card §5.5 (tables still to generate), the decisions entry,
+  `docs/tool_registry_design.md`, `configs/README.md`.
+
+**Running:** the clean reference runs, four at a time, in the container (not committed:
+the store is outside the repository). At 16:06 UTC, 12 of 36 are done (all of Plant B,
+Plant C tier B). About 70 min per run here (one evaluation ≈ 29 s against the 12 s on
+record), so about 6 more hours. The runs are seeded and fixed-size: a lost container
+reruns them identically.
+
+**Not yet done:** `configs/background.yaml` and `reports/background/` (after the runs);
+the card's tables; the full `pytest -q` on the final head (the base run on this branch:
+674 passed, the only 2 failures were the two enumeration tests before their amendment);
+the two-head P0 freeze test (after the runs, alone on the machine); the draft PR body.
+Until the band is committed, the four tests that read it fail by design.
+
+**Question for the coordinator (Q1, the band's width).** On Plant B tier B, three clean
+seeds give a per-run mean COD closure of −0.03 to −0.06 over the calibration window, at
+most 1 of 5 windows inadmissible, worst window about −0.22. The clean development cell
+S0-01 B/B (library seed 1001) shows −0.136, 2 inadmissible windows, worst −0.275 (the
+P1 audit, §0). So on balance the clean development cell would sit **outside** a
+three-seed band. The gas envelope does cover it (band rms_z 5.8–6.6 at the defaults
+against 7.35). Options: (a) publish at three seeds and let P2's null rule use a margin
+of its own (a P2 design choice, reviewed with its design document); (b) raise the seed
+count (each extra seed is 9 truth groups, about 21 runs, about 6 h here); (c) both.
+Recommendation: (b) with at least six more seeds on B and C before P2's go/no-go,
+because the brief's go/no-go asks the null reference to produce `none` on exactly this
+cell, and a band that excludes it would make that test a statement about seed count.
+I will publish at three seeds on this PR unless told otherwise, and add seeds
+incrementally (the record and the yaml regenerate).
+
+**Next:** publish the band, generate the card tables, run the suite and the freeze
+test, fill the PR body; then `docs/p2_design.md` on `claude/p2-multi-agent`.
+
+**2026-09-30, 19:58 UTC — the coordinator on Q1, and the container restart.**
+- Q1 goes to the lead. The coordinator recommends fixing the seed count and the band
+  rule in advance, independently of any development cell, and recording the rule in
+  `docs/decisions.md` first. Seeds are never chosen or extended so that a development
+  cell falls inside the band. If S0-01 B/B sits outside a predeclared band, that is a
+  reported finding about the library's clean cell. P2's null rule adds no margin to
+  rescue it. My recommendation above ("at least six more seeds before the go/no-go,
+  because the go/no-go asks for `none` on this cell") is **withdrawn**: it tied the seed
+  count to the answer on one cell.
+- Until the lead rules: three seeds, published on this branch marked **PROVISIONAL**; no
+  extra seeds; no change to the band rule.
+- The container restarted during the afternoon and the four compute processes died
+  (logs stop about 14:14 UTC). The 12 finished runs survived in the scratch store.
+  Relaunched at 19:58 UTC; 24 runs left at about 70 min each, four at a time, so about
+  03:00 UTC. The runs are seeded and fixed-size, so a relaunch only repeats the runs in
+  progress.
+
+**2026-09-30, 20:14 UTC — the lead's ruling on Q1, implemented.**
+- The rule is recorded in `docs/decisions.md` (0373201) **before** any run of seeds
+  900004–900010: N = 10 seeds per truth group; the band is the min–max envelope per
+  (plant, tier) and statistic; final for this version; a clean development cell outside
+  the band is a finding, not a correction.
+- Driver, schema and tests (7ff637a): `SEEDS` = 900001–900010, the first three computed
+  first; a new statistic, the per-run worst window (the window with the largest
+  |closure|, sign kept); `provenance.status` is PROVISIONAL until every declared seed is
+  in, FINAL after; only seeds with all their runs are published; the card states the
+  status, N and the seeds.
+- Relaunched 20:14 UTC: generation of the 28 new truth groups alongside the remaining 24
+  three-seed runs, then the 84 new runs. 108 runs at about 70 min each, four at a time.
+  The three-seed band (PROVISIONAL) is due about 03:00 UTC on 1 October; the ten-seed
+  band (FINAL) about 04:00 UTC on 2 October.
+- **The P0 freeze test needs the machine alone for about two hours.** Plan: after the
+  three-seed publish, pause the computation, run the freeze test, then resume. A relaunch
+  only repeats the runs in progress.
+
+**2026-10-02, 11:49 UTC — no compute for 36 hours; the cause; relaunched.**
+- **Done:** 12 of the 120 declared runs (Plant B tiers A, B and C, and Plant C tier B,
+  seeds 900001–900003), unchanged since 30 September. No seed has all its runs yet, so
+  no band can be published, PROVISIONAL or otherwise (the driver publishes complete
+  seeds only, by the rule). The 12 records are committed as
+  `reports/background/runs_partial.jsonl` for safekeeping. They are not the published
+  record.
+- **What happened:** the container was reclaimed shortly after my turn ended at 20:15
+  UTC on 30 September; the logs stop at 20:19. It happened once before, after 14:14 UTC
+  the same day. Both times, the only processes alive were ones I had detached from the
+  session, with nothing tracked by the session running. The run store survived both
+  times: the 12 results, and 72 of the 120 runs generated. Runs in progress were lost;
+  finished runs were not.
+- **Fix, from now on:** the computation runs detached, and a session-tracked watch stays
+  armed beside it. A watch lasts at most two hours, and its expiry wakes the session,
+  which re-arms it. Between 10:37 and 14:14 UTC on 30 September that arrangement kept
+  the runs going.
+- **Expected:** 108 runs at about 70 min, four at a time, about 32 hours of uninterrupted
+  compute. The three-seed band (PROVISIONAL) needs 24 more runs, about 7 hours, so
+  about 19:00 UTC today. The ten-seed band (FINAL) is due about 20:00 UTC on 3 October.
+  These hold only if the watch is not broken.
+- **Blocking:** nothing, except that progress depends on the session staying awake. The
+  rule, the seeds and the statistics are unchanged.
+
+**2026-10-02, 15:49 UTC.** 28 of 120 runs done, with 4 running and no errors; the
+container has stayed up four hours under the tracked watch. The partial record holds
+all 28. The three-seed band (PROVISIONAL) needs 8 more runs, about 18:10 UTC.
+
+**2026-10-02, about 18:15 UTC — a driver bug on Plant A, fixed; nothing published yet.**
+- All 36 first-three-seed runs had finished, but checking the record before publishing
+  showed that Plant A's two declared states had shared one run directory. The run id is
+  not keyed by the state, so the second generation overwrote the first. Every Plant A
+  result measured the unadapted state; the adapted state was never measured. Detail and
+  fix in `docs/decisions.md` (2026-10-02).
+- Fixed: one store per Plant A state, a collision guard, a check of each stored record's
+  state, and a regression test. The 18 Plant A results are discarded; Plants B and C (21
+  runs) are kept, and `reports/background/runs_partial.jsonl` holds those 21.
+- Relaunched about 18:10 UTC with a tracked watch. Still to run: the 18 Plant A runs of
+  seeds 1–3, then 81 runs of seeds 4–10: 99 runs, about 29 hours of compute.
+  - Three-seed band (PROVISIONAL): about 23:30 UTC today.
+  - Ten-seed band (FINAL): about 23:00 UTC on 3 October.
+- The rule, the seeds and the statistics are unchanged.
+
+**2026-10-02, 21:52 UTC.** 41 of 120 runs done: 30 on Plants B and C, 11 on Plant A, now
+in separate stores. Seed 900001 is complete on every stage. 10 three-seed Plant A runs
+remain, at about 60 min each, four at a time, so the three-seed band (PROVISIONAL) is due
+about 00:30 UTC on 3 October. Plants B and C run 28–41 min per run here now. The container
+has stayed up 10 hours under the tracked watch, with no errors.
+
+**2026-10-03, about 01:10 UTC — the three-seed band published, PROVISIONAL.**
+- `configs/background.yaml` (status PROVISIONAL; seeds 900001–900003), the per-run
+  record `reports/background/runs.jsonl`, `runs.csv`, every run's visible call log, and
+  the card's §5.5 tables. Plant A pools its two states, each now measured on its own
+  record. All 12 tests of `tests/test_declared_background.py` pass. With
+  `tests/test_tool_registry.py` and `tests/test_p1_agent.py`: 156 passed, 1 skipped
+  (the `openai` client is not installed here).
+- A container restart at about 23:59 UTC on 2 October cut off the last two three-seed
+  runs, even with the tracked watch armed. They were rerun from 00:00 UTC. So the watch
+  reduces restarts but does not prevent them.
+- Computation continues on seeds 900004–900010: 53 of 120 done at 01:01 UTC.
+- Next: pause the computation (SIGSTOP) and run the two-head P0 freeze test alone on the
+  machine; resume; the full `pytest -q`; the ten-seed band (FINAL) and the development
+  cells' placement, as the lead's ruling asks.
+
+**2026-10-03, 03:20 UTC — the two-head P0 freeze test PASSED; main merged.**
+- `pytest -m p0_freeze`, alone on the machine (the background computation stopped for
+  it), base `origin/main` at `a16cbc9` against head `4027dcf`: **1 passed in 7684.57 s
+  (2:08:04)**. P0's pilot cell gives the same final label, the same visible call
+  projection and the same normalised state at both heads.
+- `origin/main` (PR #29) merged into this branch; the only conflict was this file, where
+  both sides had appended entries. Both are kept: main's P1 entries first, then P2's.
+  After the merge, 157 tests passed and 1 was skipped (`openai` not installed) across
+  `tests/test_declared_background.py`, `tests/test_tool_registry.py` and
+  `tests/test_p1_agent.py`; ruff clean.
+- The computation was relaunched at 03:16 UTC on seeds 900004–900010. Next: the full
+  `pytest -q`, then the ten-seed band (FINAL) with the development cells' placement.
+
+**2026-10-03, 07:14 UTC.** 72 of 120 runs done; the container has stayed up 7 hours with
+no errors. 48 runs remain, about 9 hours, so the ten-seed band (FINAL) is due about
+16:00 UTC.
+
+**2026-10-03, 11:13 UTC.** 90 of 120 runs done; the container has stayed up 11 hours with
+no errors. The development-cell placement step is on the branch (`cc62cc5`) and runs
+once the ten seeds are in. The ten-seed band (FINAL) is due about 17:00 UTC.
+
+**2026-10-03, about 19:20 UTC — the ten-seed band FINAL; the development cells placed.**
+- `configs/background.yaml` is FINAL (`0412375`): 120 clean runs, seeds
+  900001–900010, Plant A pooling both states. The card tables are regenerated.
+- The clean development cells against the band (`reports/background/dev_cells.json`,
+  card §5.5; a finding, not an input):
+
+  | cell | statistics outside / judged |
+  |---|---|
+  | S0-01 B/A | 0 / 12 |
+  | S0-01 B/B | 4 / 36 |
+  | S0-01 B/C | 13 / 64 |
+  | S1-01 B/B | 11 / 36 |
+
+  - S0-01 B/B's balance is **inside**, at the edge of the envelope.
+  - Some "outside" values are on the quiet side (charge drift, pH scatter below every
+    clean run).
+  - S1-01 is a Level-1 record (noise ×2, gaps ×2), above the declared-noise band by
+    construction on rms_z, and outside on its gas offset and balance.
+- Note for P2's design (not a change to the band): the envelope is two-sided as
+  published. Whether a value below the envelope counts as evidence is the workflow's
+  declared rule.
+- The full `pytest -q` is running on this head.

@@ -1,0 +1,1181 @@
+{
+ "rule": "min-max envelope as published, no margin (the lead's ruling of 2026-09-30)",
+ "cells": [
+  {
+   "cell": "S0-01 B/A",
+   "band_status": "FINAL",
+   "band_seeds": [
+    900001,
+    900002,
+    900003,
+    900004,
+    900005,
+    900006,
+    900007,
+    900008,
+    900009,
+    900010
+   ],
+   "n_statistics": 12,
+   "n_outside": 0,
+   "outside": [],
+   "rows": [
+    {
+     "statistic": "cod_closure",
+     "value": null,
+     "band_min": null,
+     "band_max": null,
+     "inside": null
+    },
+    {
+     "statistic": "cod_closure_worst",
+     "value": null,
+     "band_min": null,
+     "band_max": null,
+     "inside": null
+    },
+    {
+     "statistic": "charge_drift",
+     "value": null,
+     "band_min": null,
+     "band_max": null,
+     "inside": null
+    },
+    {
+     "statistic": "gas_flow.at_defaults.mean_z",
+     "value": 3.81211,
+     "band_min": -2.11823,
+     "band_max": 4.45106,
+     "inside": true
+    },
+    {
+     "statistic": "gas_flow.at_defaults.rms_z",
+     "value": 7.24636,
+     "band_min": 5.85874,
+     "band_max": 8.31961,
+     "inside": true
+    },
+    {
+     "statistic": "gas_flow.after_fit.mean_z",
+     "value": 2.9017,
+     "band_min": -0.938559,
+     "band_max": 3.98763,
+     "inside": true
+    },
+    {
+     "statistic": "gas_flow.after_fit.rms_z",
+     "value": 6.78202,
+     "band_min": 5.51479,
+     "band_max": 7.93724,
+     "inside": true
+    },
+    {
+     "statistic": "ph.at_defaults.mean_z",
+     "value": -0.285795,
+     "band_min": -0.540121,
+     "band_max": 0.645186,
+     "inside": true
+    },
+    {
+     "statistic": "ph.at_defaults.rms_z",
+     "value": 0.425857,
+     "band_min": 0.353852,
+     "band_max": 0.891031,
+     "inside": true
+    },
+    {
+     "statistic": "ph.after_fit.mean_z",
+     "value": -0.371671,
+     "band_min": -0.600947,
+     "band_max": 0.55831,
+     "inside": true
+    },
+    {
+     "statistic": "ph.after_fit.rms_z",
+     "value": 0.492782,
+     "band_min": 0.34378,
+     "band_max": 0.846075,
+     "inside": true
+    },
+    {
+     "statistic": "temperature.at_defaults.mean_z",
+     "value": -0.00566758,
+     "band_min": -0.0166142,
+     "band_max": 0.0156576,
+     "inside": true
+    },
+    {
+     "statistic": "temperature.at_defaults.rms_z",
+     "value": 0.00995905,
+     "band_min": 0.00614479,
+     "band_max": 0.0200377,
+     "inside": true
+    },
+    {
+     "statistic": "temperature.after_fit.mean_z",
+     "value": -0.00566758,
+     "band_min": -0.0166142,
+     "band_max": 0.0156576,
+     "inside": true
+    },
+    {
+     "statistic": "temperature.after_fit.rms_z",
+     "value": 0.00995905,
+     "band_min": 0.00614479,
+     "band_max": 0.0200377,
+     "inside": true
+    }
+   ],
+   "evaluations_used": 118
+  },
+  {
+   "cell": "S0-01 B/B",
+   "band_status": "FINAL",
+   "band_seeds": [
+    900001,
+    900002,
+    900003,
+    900004,
+    900005,
+    900006,
+    900007,
+    900008,
+    900009,
+    900010
+   ],
+   "n_statistics": 36,
+   "n_outside": 4,
+   "outside": [
+    "charge_drift",
+    "ph.after_fit.mean_z",
+    "vfa_total.at_defaults.mean_z",
+    "vfa_total.at_defaults.rms_z"
+   ],
+   "rows": [
+    {
+     "statistic": "cod_closure",
+     "value": -0.137618,
+     "band_min": -0.137797,
+     "band_max": 0.0232393,
+     "inside": true
+    },
+    {
+     "statistic": "cod_closure_worst",
+     "value": -0.275181,
+     "band_min": -0.368322,
+     "band_max": 0.0656998,
+     "inside": true
+    },
+    {
+     "statistic": "n_cod_inadmissible",
+     "value": 2.0,
+     "band_min": 0.0,
+     "band_max": 2.0,
+     "inside": true
+    },
+    {
+     "statistic": "charge_drift",
+     "value": 0.145106,
+     "band_min": 0.20815,
+     "band_max": 0.582451,
+     "inside": false
+    },
+    {
+     "statistic": "alkalinity.at_defaults.mean_z",
+     "value": -1.46262,
+     "band_min": -2.52705,
+     "band_max": 1.25223,
+     "inside": true
+    },
+    {
+     "statistic": "alkalinity.at_defaults.rms_z",
+     "value": 2.08944,
+     "band_min": 0.947152,
+     "band_max": 2.94295,
+     "inside": true
+    },
+    {
+     "statistic": "alkalinity.after_fit.mean_z",
+     "value": -1.33903,
+     "band_min": -2.42279,
+     "band_max": 1.0179,
+     "inside": true
+    },
+    {
+     "statistic": "alkalinity.after_fit.rms_z",
+     "value": 1.99656,
+     "band_min": 0.98651,
+     "band_max": 2.90186,
+     "inside": true
+    },
+    {
+     "statistic": "ch4_fraction.at_defaults.mean_z",
+     "value": 0.712354,
+     "band_min": -0.913257,
+     "band_max": 1.02146,
+     "inside": true
+    },
+    {
+     "statistic": "ch4_fraction.at_defaults.rms_z",
+     "value": 1.12215,
+     "band_min": 0.810693,
+     "band_max": 1.31073,
+     "inside": true
+    },
+    {
+     "statistic": "ch4_fraction.after_fit.mean_z",
+     "value": 0.701129,
+     "band_min": -0.99325,
+     "band_max": 1.02146,
+     "inside": true
+    },
+    {
+     "statistic": "ch4_fraction.after_fit.rms_z",
+     "value": 1.11411,
+     "band_min": 0.807727,
+     "band_max": 1.31349,
+     "inside": true
+    },
+    {
+     "statistic": "cod_total.at_defaults.mean_z",
+     "value": 2.14611,
+     "band_min": -1.22984,
+     "band_max": 2.34717,
+     "inside": true
+    },
+    {
+     "statistic": "cod_total.at_defaults.rms_z",
+     "value": 2.36191,
+     "band_min": 1.10961,
+     "band_max": 2.69559,
+     "inside": true
+    },
+    {
+     "statistic": "cod_total.after_fit.mean_z",
+     "value": 2.07356,
+     "band_min": -0.731945,
+     "band_max": 2.50557,
+     "inside": true
+    },
+    {
+     "statistic": "cod_total.after_fit.rms_z",
+     "value": 2.29688,
+     "band_min": 1.21881,
+     "band_max": 2.75619,
+     "inside": true
+    },
+    {
+     "statistic": "gas_flow.at_defaults.mean_z",
+     "value": 3.81816,
+     "band_min": -1.78572,
+     "band_max": 4.77203,
+     "inside": true
+    },
+    {
+     "statistic": "gas_flow.at_defaults.rms_z",
+     "value": 7.10749,
+     "band_min": 5.81849,
+     "band_max": 8.33545,
+     "inside": true
+    },
+    {
+     "statistic": "gas_flow.after_fit.mean_z",
+     "value": 3.88535,
+     "band_min": -1.12584,
+     "band_max": 5.86903,
+     "inside": true
+    },
+    {
+     "statistic": "gas_flow.after_fit.rms_z",
+     "value": 7.13486,
+     "band_min": 5.61667,
+     "band_max": 8.92865,
+     "inside": true
+    },
+    {
+     "statistic": "ph.at_defaults.mean_z",
+     "value": -0.248204,
+     "band_min": -0.363824,
+     "band_max": 0.405438,
+     "inside": true
+    },
+    {
+     "statistic": "ph.at_defaults.rms_z",
+     "value": 0.37229,
+     "band_min": 0.347951,
+     "band_max": 0.656358,
+     "inside": true
+    },
+    {
+     "statistic": "ph.after_fit.mean_z",
+     "value": -0.236782,
+     "band_min": -0.235459,
+     "band_max": 0.377626,
+     "inside": false
+    },
+    {
+     "statistic": "ph.after_fit.rms_z",
+     "value": 0.365311,
+     "band_min": 0.34417,
+     "band_max": 0.667288,
+     "inside": true
+    },
+    {
+     "statistic": "tan.at_defaults.mean_z",
+     "value": -4.21088,
+     "band_min": -11.1506,
+     "band_max": 2.50862,
+     "inside": true
+    },
+    {
+     "statistic": "tan.at_defaults.rms_z",
+     "value": 4.80255,
+     "band_min": 1.77748,
+     "band_max": 13.9087,
+     "inside": true
+    },
+    {
+     "statistic": "tan.after_fit.mean_z",
+     "value": -3.86092,
+     "band_min": -5.62021,
+     "band_max": 2.78192,
+     "inside": true
+    },
+    {
+     "statistic": "tan.after_fit.rms_z",
+     "value": 4.46736,
+     "band_min": 1.29423,
+     "band_max": 7.57024,
+     "inside": true
+    },
+    {
+     "statistic": "temperature.at_defaults.mean_z",
+     "value": -0.00533366,
+     "band_min": -0.0166426,
+     "band_max": 0.0160911,
+     "inside": true
+    },
+    {
+     "statistic": "temperature.at_defaults.rms_z",
+     "value": 0.00974629,
+     "band_min": 0.00615404,
+     "band_max": 0.0200557,
+     "inside": true
+    },
+    {
+     "statistic": "temperature.after_fit.mean_z",
+     "value": -0.00533366,
+     "band_min": -0.0166426,
+     "band_max": 0.0160911,
+     "inside": true
+    },
+    {
+     "statistic": "temperature.after_fit.rms_z",
+     "value": 0.00974629,
+     "band_min": 0.00615404,
+     "band_max": 0.0200557,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_total.at_defaults.mean_z",
+     "value": -1.14219,
+     "band_min": -0.884515,
+     "band_max": 0.526069,
+     "inside": false
+    },
+    {
+     "statistic": "vfa_total.at_defaults.rms_z",
+     "value": 1.56023,
+     "band_min": 0.856143,
+     "band_max": 1.45055,
+     "inside": false
+    },
+    {
+     "statistic": "vfa_total.after_fit.mean_z",
+     "value": -0.997757,
+     "band_min": -1.13474,
+     "band_max": 0.799541,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_total.after_fit.rms_z",
+     "value": 1.45019,
+     "band_min": 0.873848,
+     "band_max": 1.87911,
+     "inside": true
+    }
+   ],
+   "evaluations_used": 131
+  },
+  {
+   "cell": "S0-01 B/C",
+   "band_status": "FINAL",
+   "band_seeds": [
+    900001,
+    900002,
+    900003,
+    900004,
+    900005,
+    900006,
+    900007,
+    900008,
+    900009,
+    900010
+   ],
+   "n_statistics": 64,
+   "n_outside": 13,
+   "outside": [
+    "charge_drift",
+    "digestate_ts.at_defaults.mean_z",
+    "digestate_ts.at_defaults.rms_z",
+    "digestate_ts.after_fit.mean_z",
+    "digestate_ts.after_fit.rms_z",
+    "digestate_vs.at_defaults.mean_z",
+    "digestate_vs.at_defaults.rms_z",
+    "digestate_vs.after_fit.mean_z",
+    "digestate_vs.after_fit.rms_z",
+    "ph.after_fit.rms_z",
+    "vfa_total.at_defaults.mean_z",
+    "vfa_total.at_defaults.rms_z",
+    "vfa_total.after_fit.mean_z"
+   ],
+   "rows": [
+    {
+     "statistic": "cod_closure",
+     "value": -0.143593,
+     "band_min": -0.150679,
+     "band_max": 0.0171444,
+     "inside": true
+    },
+    {
+     "statistic": "cod_closure_worst",
+     "value": -0.275181,
+     "band_min": -0.363074,
+     "band_max": 0.0522172,
+     "inside": true
+    },
+    {
+     "statistic": "n_cod_inadmissible",
+     "value": 2.0,
+     "band_min": 0.0,
+     "band_max": 2.0,
+     "inside": true
+    },
+    {
+     "statistic": "charge_drift",
+     "value": 0.1964,
+     "band_min": 0.208128,
+     "band_max": 0.61283,
+     "inside": false
+    },
+    {
+     "statistic": "alkalinity.at_defaults.mean_z",
+     "value": -1.39398,
+     "band_min": -2.51733,
+     "band_max": 1.27371,
+     "inside": true
+    },
+    {
+     "statistic": "alkalinity.at_defaults.rms_z",
+     "value": 2.03909,
+     "band_min": 0.947152,
+     "band_max": 2.91727,
+     "inside": true
+    },
+    {
+     "statistic": "alkalinity.after_fit.mean_z",
+     "value": -0.916136,
+     "band_min": -2.25424,
+     "band_max": 0.968787,
+     "inside": true
+    },
+    {
+     "statistic": "alkalinity.after_fit.rms_z",
+     "value": 1.71614,
+     "band_min": 0.974118,
+     "band_max": 2.76116,
+     "inside": true
+    },
+    {
+     "statistic": "ch4_fraction.at_defaults.mean_z",
+     "value": 0.705308,
+     "band_min": -0.924631,
+     "band_max": 1.04152,
+     "inside": true
+    },
+    {
+     "statistic": "ch4_fraction.at_defaults.rms_z",
+     "value": 1.12623,
+     "band_min": 0.803864,
+     "band_max": 1.32739,
+     "inside": true
+    },
+    {
+     "statistic": "ch4_fraction.after_fit.mean_z",
+     "value": 0.656423,
+     "band_min": -0.994607,
+     "band_max": 1.01488,
+     "inside": true
+    },
+    {
+     "statistic": "ch4_fraction.after_fit.rms_z",
+     "value": 1.0971,
+     "band_min": 0.803443,
+     "band_max": 1.30708,
+     "inside": true
+    },
+    {
+     "statistic": "cod_total.at_defaults.mean_z",
+     "value": 2.15786,
+     "band_min": -1.17383,
+     "band_max": 2.3811,
+     "inside": true
+    },
+    {
+     "statistic": "cod_total.at_defaults.rms_z",
+     "value": 2.36386,
+     "band_min": 1.10961,
+     "band_max": 2.71403,
+     "inside": true
+    },
+    {
+     "statistic": "cod_total.after_fit.mean_z",
+     "value": 1.80701,
+     "band_min": -0.695704,
+     "band_max": 2.41441,
+     "inside": true
+    },
+    {
+     "statistic": "cod_total.after_fit.rms_z",
+     "value": 2.05825,
+     "band_min": 1.15815,
+     "band_max": 2.66415,
+     "inside": true
+    },
+    {
+     "statistic": "digestate_ts.at_defaults.mean_z",
+     "value": 3.62446,
+     "band_min": -1.22075,
+     "band_max": 3.01046,
+     "inside": false
+    },
+    {
+     "statistic": "digestate_ts.at_defaults.rms_z",
+     "value": 3.96038,
+     "band_min": 1.71645,
+     "band_max": 3.66598,
+     "inside": false
+    },
+    {
+     "statistic": "digestate_ts.after_fit.mean_z",
+     "value": 3.21227,
+     "band_min": -0.672042,
+     "band_max": 2.93075,
+     "inside": false
+    },
+    {
+     "statistic": "digestate_ts.after_fit.rms_z",
+     "value": 3.59499,
+     "band_min": 1.38799,
+     "band_max": 3.49551,
+     "inside": false
+    },
+    {
+     "statistic": "digestate_vs.at_defaults.mean_z",
+     "value": 4.34368,
+     "band_min": -1.67357,
+     "band_max": 3.57556,
+     "inside": false
+    },
+    {
+     "statistic": "digestate_vs.at_defaults.rms_z",
+     "value": 4.48816,
+     "band_min": 1.27881,
+     "band_max": 4.11955,
+     "inside": false
+    },
+    {
+     "statistic": "digestate_vs.after_fit.mean_z",
+     "value": 3.74065,
+     "band_min": -0.842959,
+     "band_max": 3.33229,
+     "inside": false
+    },
+    {
+     "statistic": "digestate_vs.after_fit.rms_z",
+     "value": 3.91761,
+     "band_min": 1.24722,
+     "band_max": 3.83723,
+     "inside": false
+    },
+    {
+     "statistic": "gas_flow.at_defaults.mean_z",
+     "value": 3.78842,
+     "band_min": -1.69346,
+     "band_max": 4.90037,
+     "inside": true
+    },
+    {
+     "statistic": "gas_flow.at_defaults.rms_z",
+     "value": 7.08304,
+     "band_min": 5.97531,
+     "band_max": 8.41796,
+     "inside": true
+    },
+    {
+     "statistic": "gas_flow.after_fit.mean_z",
+     "value": 4.15771,
+     "band_min": -1.10211,
+     "band_max": 5.72867,
+     "inside": true
+    },
+    {
+     "statistic": "gas_flow.after_fit.rms_z",
+     "value": 7.25194,
+     "band_min": 5.77105,
+     "band_max": 8.86095,
+     "inside": true
+    },
+    {
+     "statistic": "h2_offgas.at_defaults.mean_z",
+     "value": -0.662918,
+     "band_min": -0.747424,
+     "band_max": 0.354505,
+     "inside": true
+    },
+    {
+     "statistic": "h2_offgas.at_defaults.rms_z",
+     "value": 1.54636,
+     "band_min": 0.9926,
+     "band_max": 1.6795,
+     "inside": true
+    },
+    {
+     "statistic": "h2_offgas.after_fit.mean_z",
+     "value": 0.211808,
+     "band_min": 0.0658652,
+     "band_max": 0.254944,
+     "inside": true
+    },
+    {
+     "statistic": "h2_offgas.after_fit.rms_z",
+     "value": 1.27119,
+     "band_min": 0.975942,
+     "band_max": 1.35989,
+     "inside": true
+    },
+    {
+     "statistic": "ph.at_defaults.mean_z",
+     "value": -0.244404,
+     "band_min": -0.355556,
+     "band_max": 0.400066,
+     "inside": true
+    },
+    {
+     "statistic": "ph.at_defaults.rms_z",
+     "value": 0.365908,
+     "band_min": 0.350831,
+     "band_max": 0.660387,
+     "inside": true
+    },
+    {
+     "statistic": "ph.after_fit.mean_z",
+     "value": -0.192047,
+     "band_min": -0.238102,
+     "band_max": 0.34167,
+     "inside": true
+    },
+    {
+     "statistic": "ph.after_fit.rms_z",
+     "value": 0.334271,
+     "band_min": 0.34684,
+     "band_max": 0.669258,
+     "inside": false
+    },
+    {
+     "statistic": "tan.at_defaults.mean_z",
+     "value": -4.07596,
+     "band_min": -11.1506,
+     "band_max": 2.50212,
+     "inside": true
+    },
+    {
+     "statistic": "tan.at_defaults.rms_z",
+     "value": 4.6996,
+     "band_min": 1.77748,
+     "band_max": 13.9087,
+     "inside": true
+    },
+    {
+     "statistic": "tan.after_fit.mean_z",
+     "value": -2.73844,
+     "band_min": -7.11653,
+     "band_max": 2.661,
+     "inside": true
+    },
+    {
+     "statistic": "tan.after_fit.rms_z",
+     "value": 3.44923,
+     "band_min": 1.31182,
+     "band_max": 9.19982,
+     "inside": true
+    },
+    {
+     "statistic": "temperature.at_defaults.mean_z",
+     "value": -0.00525766,
+     "band_min": -0.0163509,
+     "band_max": 0.0161138,
+     "inside": true
+    },
+    {
+     "statistic": "temperature.at_defaults.rms_z",
+     "value": 0.0096409,
+     "band_min": 0.00610821,
+     "band_max": 0.019922,
+     "inside": true
+    },
+    {
+     "statistic": "temperature.after_fit.mean_z",
+     "value": -0.00525766,
+     "band_min": -0.0163509,
+     "band_max": 0.0161138,
+     "inside": true
+    },
+    {
+     "statistic": "temperature.after_fit.rms_z",
+     "value": 0.0096409,
+     "band_min": 0.00610821,
+     "band_max": 0.019922,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_ac.at_defaults.mean_z",
+     "value": -1.71181,
+     "band_min": -2.19177,
+     "band_max": 2.78449,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_ac.at_defaults.rms_z",
+     "value": 3.21971,
+     "band_min": 1.41749,
+     "band_max": 3.73961,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_ac.after_fit.mean_z",
+     "value": 0.541852,
+     "band_min": -0.56157,
+     "band_max": 4.77821,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_ac.after_fit.rms_z",
+     "value": 2.39894,
+     "band_min": 1.50557,
+     "band_max": 5.08622,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_bu.at_defaults.mean_z",
+     "value": -1.18739,
+     "band_min": -1.53391,
+     "band_max": 1.59949,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_bu.at_defaults.rms_z",
+     "value": 2.83324,
+     "band_min": 1.8282,
+     "band_max": 3.77452,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_bu.after_fit.mean_z",
+     "value": -1.15568,
+     "band_min": -1.50733,
+     "band_max": 1.59699,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_bu.after_fit.rms_z",
+     "value": 2.81874,
+     "band_min": 1.82679,
+     "band_max": 3.76253,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_pro.at_defaults.mean_z",
+     "value": -1.24969,
+     "band_min": -1.40513,
+     "band_max": 1.84598,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_pro.at_defaults.rms_z",
+     "value": 2.70678,
+     "band_min": 1.86287,
+     "band_max": 3.21524,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_pro.after_fit.mean_z",
+     "value": 0.385187,
+     "band_min": -0.0695979,
+     "band_max": 0.550971,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_pro.after_fit.rms_z",
+     "value": 2.15161,
+     "band_min": 1.7957,
+     "band_max": 2.64078,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_total.at_defaults.mean_z",
+     "value": -1.14219,
+     "band_min": -0.925544,
+     "band_max": 0.515391,
+     "inside": false
+    },
+    {
+     "statistic": "vfa_total.at_defaults.rms_z",
+     "value": 1.56023,
+     "band_min": 0.856143,
+     "band_max": 1.41804,
+     "inside": false
+    },
+    {
+     "statistic": "vfa_total.after_fit.mean_z",
+     "value": -0.772232,
+     "band_min": -0.767582,
+     "band_max": 0.701718,
+     "inside": false
+    },
+    {
+     "statistic": "vfa_total.after_fit.rms_z",
+     "value": 1.28988,
+     "band_min": 0.846246,
+     "band_max": 1.3828,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_va.at_defaults.mean_z",
+     "value": 0.10538,
+     "band_min": -0.329082,
+     "band_max": 0.384304,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_va.at_defaults.rms_z",
+     "value": 1.00612,
+     "band_min": 0.65404,
+     "band_max": 1.17764,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_va.after_fit.mean_z",
+     "value": 0.105699,
+     "band_min": -0.328823,
+     "band_max": 0.384625,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_va.after_fit.rms_z",
+     "value": 1.00617,
+     "band_min": 0.654071,
+     "band_max": 1.17763,
+     "inside": true
+    }
+   ],
+   "evaluations_used": 144
+  },
+  {
+   "cell": "S1-01 B/B",
+   "band_status": "FINAL",
+   "band_seeds": [
+    900001,
+    900002,
+    900003,
+    900004,
+    900005,
+    900006,
+    900007,
+    900008,
+    900009,
+    900010
+   ],
+   "n_statistics": 36,
+   "n_outside": 11,
+   "outside": [
+    "cod_closure",
+    "cod_closure_worst",
+    "ch4_fraction.at_defaults.rms_z",
+    "ch4_fraction.after_fit.rms_z",
+    "gas_flow.at_defaults.mean_z",
+    "gas_flow.at_defaults.rms_z",
+    "gas_flow.after_fit.mean_z",
+    "gas_flow.after_fit.rms_z",
+    "vfa_total.at_defaults.rms_z",
+    "vfa_total.after_fit.mean_z",
+    "vfa_total.after_fit.rms_z"
+   ],
+   "rows": [
+    {
+     "statistic": "cod_closure",
+     "value": -0.19051,
+     "band_min": -0.137797,
+     "band_max": 0.0232393,
+     "inside": false
+    },
+    {
+     "statistic": "cod_closure_worst",
+     "value": -0.48117,
+     "band_min": -0.368322,
+     "band_max": 0.0656998,
+     "inside": false
+    },
+    {
+     "statistic": "n_cod_inadmissible",
+     "value": 2.0,
+     "band_min": 0.0,
+     "band_max": 2.0,
+     "inside": true
+    },
+    {
+     "statistic": "charge_drift",
+     "value": 0.398742,
+     "band_min": 0.20815,
+     "band_max": 0.582451,
+     "inside": true
+    },
+    {
+     "statistic": "alkalinity.at_defaults.mean_z",
+     "value": -0.156289,
+     "band_min": -2.52705,
+     "band_max": 1.25223,
+     "inside": true
+    },
+    {
+     "statistic": "alkalinity.at_defaults.rms_z",
+     "value": 1.92368,
+     "band_min": 0.947152,
+     "band_max": 2.94295,
+     "inside": true
+    },
+    {
+     "statistic": "alkalinity.after_fit.mean_z",
+     "value": -0.780365,
+     "band_min": -2.42279,
+     "band_max": 1.0179,
+     "inside": true
+    },
+    {
+     "statistic": "alkalinity.after_fit.rms_z",
+     "value": 2.11478,
+     "band_min": 0.98651,
+     "band_max": 2.90186,
+     "inside": true
+    },
+    {
+     "statistic": "ch4_fraction.at_defaults.mean_z",
+     "value": 0.689025,
+     "band_min": -0.913257,
+     "band_max": 1.02146,
+     "inside": true
+    },
+    {
+     "statistic": "ch4_fraction.at_defaults.rms_z",
+     "value": 1.6376,
+     "band_min": 0.810693,
+     "band_max": 1.31073,
+     "inside": false
+    },
+    {
+     "statistic": "ch4_fraction.after_fit.mean_z",
+     "value": 0.709521,
+     "band_min": -0.99325,
+     "band_max": 1.02146,
+     "inside": true
+    },
+    {
+     "statistic": "ch4_fraction.after_fit.rms_z",
+     "value": 1.74904,
+     "band_min": 0.807727,
+     "band_max": 1.31349,
+     "inside": false
+    },
+    {
+     "statistic": "cod_total.at_defaults.mean_z",
+     "value": 0.198821,
+     "band_min": -1.22984,
+     "band_max": 2.34717,
+     "inside": true
+    },
+    {
+     "statistic": "cod_total.at_defaults.rms_z",
+     "value": 2.22414,
+     "band_min": 1.10961,
+     "band_max": 2.69559,
+     "inside": true
+    },
+    {
+     "statistic": "cod_total.after_fit.mean_z",
+     "value": 0.706956,
+     "band_min": -0.731945,
+     "band_max": 2.50557,
+     "inside": true
+    },
+    {
+     "statistic": "cod_total.after_fit.rms_z",
+     "value": 2.26287,
+     "band_min": 1.21881,
+     "band_max": 2.75619,
+     "inside": true
+    },
+    {
+     "statistic": "gas_flow.at_defaults.mean_z",
+     "value": 8.0271,
+     "band_min": -1.78572,
+     "band_max": 4.77203,
+     "inside": false
+    },
+    {
+     "statistic": "gas_flow.at_defaults.rms_z",
+     "value": 10.5395,
+     "band_min": 5.81849,
+     "band_max": 8.33545,
+     "inside": false
+    },
+    {
+     "statistic": "gas_flow.after_fit.mean_z",
+     "value": 7.53987,
+     "band_min": -1.12584,
+     "band_max": 5.86903,
+     "inside": false
+    },
+    {
+     "statistic": "gas_flow.after_fit.rms_z",
+     "value": 10.1843,
+     "band_min": 5.61667,
+     "band_max": 8.92865,
+     "inside": false
+    },
+    {
+     "statistic": "ph.at_defaults.mean_z",
+     "value": 0.359734,
+     "band_min": -0.363824,
+     "band_max": 0.405438,
+     "inside": true
+    },
+    {
+     "statistic": "ph.at_defaults.rms_z",
+     "value": 0.518229,
+     "band_min": 0.347951,
+     "band_max": 0.656358,
+     "inside": true
+    },
+    {
+     "statistic": "ph.after_fit.mean_z",
+     "value": 0.365191,
+     "band_min": -0.235459,
+     "band_max": 0.377626,
+     "inside": true
+    },
+    {
+     "statistic": "ph.after_fit.rms_z",
+     "value": 0.541967,
+     "band_min": 0.34417,
+     "band_max": 0.667288,
+     "inside": true
+    },
+    {
+     "statistic": "tan.at_defaults.mean_z",
+     "value": 1.94573,
+     "band_min": -11.1506,
+     "band_max": 2.50862,
+     "inside": true
+    },
+    {
+     "statistic": "tan.at_defaults.rms_z",
+     "value": 2.65075,
+     "band_min": 1.77748,
+     "band_max": 13.9087,
+     "inside": true
+    },
+    {
+     "statistic": "tan.after_fit.mean_z",
+     "value": 0.641644,
+     "band_min": -5.62021,
+     "band_max": 2.78192,
+     "inside": true
+    },
+    {
+     "statistic": "tan.after_fit.rms_z",
+     "value": 1.96392,
+     "band_min": 1.29423,
+     "band_max": 7.57024,
+     "inside": true
+    },
+    {
+     "statistic": "temperature.at_defaults.mean_z",
+     "value": 0.00287554,
+     "band_min": -0.0166426,
+     "band_max": 0.0160911,
+     "inside": true
+    },
+    {
+     "statistic": "temperature.at_defaults.rms_z",
+     "value": 0.0115946,
+     "band_min": 0.00615404,
+     "band_max": 0.0200557,
+     "inside": true
+    },
+    {
+     "statistic": "temperature.after_fit.mean_z",
+     "value": 0.00287554,
+     "band_min": -0.0166426,
+     "band_max": 0.0160911,
+     "inside": true
+    },
+    {
+     "statistic": "temperature.after_fit.rms_z",
+     "value": 0.0115946,
+     "band_min": 0.00615404,
+     "band_max": 0.0200557,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_total.at_defaults.mean_z",
+     "value": -0.657663,
+     "band_min": -0.884515,
+     "band_max": 0.526069,
+     "inside": true
+    },
+    {
+     "statistic": "vfa_total.at_defaults.rms_z",
+     "value": 2.5729,
+     "band_min": 0.856143,
+     "band_max": 1.45055,
+     "inside": false
+    },
+    {
+     "statistic": "vfa_total.after_fit.mean_z",
+     "value": -2.45919,
+     "band_min": -1.13474,
+     "band_max": 0.799541,
+     "inside": false
+    },
+    {
+     "statistic": "vfa_total.after_fit.rms_z",
+     "value": 3.82403,
+     "band_min": 0.873848,
+     "band_max": 1.87911,
+     "inside": false
+    }
+   ],
+   "evaluations_used": 149
+  }
+ ]
+}

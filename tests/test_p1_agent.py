@@ -873,8 +873,12 @@ def test_every_tool_the_agent_names_is_a_registry_tool_or_a_workspace_action():
     names = {s["name"] for s in agent.tool_specs()}
     assert names - workspace <= set(TOOL_INPUTS)
     # the two state-space filters need a state-space model, and a run registers none;
-    # `validate` is the harness's, once, after the conclusion (the review of PR #26, 1)
-    assert set(TOOL_INPUTS) - names == {"filter_enkf", "filter_mhe", "validate"}
+    # `validate` is the harness's, once, after the conclusion (the review of PR #26, 1);
+    # `declared_background` joined the registry after the P1 freeze and the frozen P1
+    # does not call it (decision 1 of 2026-09-30): its committed tool list is unchanged
+    assert set(TOOL_INPUTS) - names == {
+        "filter_enkf", "filter_mhe", "validate", "declared_background",
+    }  # fmt: skip
 
 
 def test_long_arrays_are_summarised_and_short_ones_kept():

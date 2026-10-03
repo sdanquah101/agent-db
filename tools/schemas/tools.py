@@ -12,6 +12,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field, model_validator
 
+from tools.schemas.background import DeclaredBackgroundInput, DeclaredBackgroundOutput
 from tools.schemas.base import Array, ObservedSeries, ToolInput, ToolOutput, Window
 
 _PosInt = Annotated[int, Field(gt=0)]
@@ -723,6 +724,9 @@ TOOL_INPUTS: dict[str, type[ToolInput]] = {
     "voi_assay": VOIAssayInput,
     "validate": ValidateInput,
     "request_assay": RequestAssayInput,
+    # the declared background (decision 1 of 2026-09-30): served beside the frozen table,
+    # never called by P0 or the frozen P1 (tests/test_declared_background.py)
+    "declared_background": DeclaredBackgroundInput,
 }
 
 TOOL_OUTPUTS: dict[str, type[ToolOutput]] = {
@@ -745,4 +749,5 @@ TOOL_OUTPUTS: dict[str, type[ToolOutput]] = {
     "voi_assay": VOIAssayOutput,
     "validate": ValidateOutput,
     "request_assay": RequestAssayOutput,
+    "declared_background": DeclaredBackgroundOutput,
 }
