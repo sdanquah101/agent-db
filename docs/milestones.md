@@ -3624,3 +3624,12 @@ once the ten seeds are in. The ten-seed band (FINAL) is due about 17:00 UTC.
   published. Whether a value below the envelope counts as evidence is the workflow's
   declared rule.
 - The full `pytest -q` is running on this head.
+
+**2026-10-03, about 19:40 UTC — the full suite.** `pytest -q` on `0412375`, the FINAL
+band before its placement: 691 passed, 5 skipped, 1 failed in 38 min. The skips are the
+`openai` and `anthropic` clients, which are not installed, and the Muscatine SCADA file,
+which is not fetched. The failure is
+`test_the_committed_placement_is_against_the_committed_band`, which by design requires the
+development cells' placement once the band is FINAL. With the placement committed
+(`e297cb3`), that file passes all 14 tests, and ruff is clean. Deliverable 0 is complete
+and waits for the coordinator's review.
