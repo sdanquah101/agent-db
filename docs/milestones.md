@@ -3664,7 +3664,7 @@ judged against the other nine, falls outside on about 20 % of its statistics. P2
 rule must therefore not read "any statistic outside" as a fault. The band is unchanged.
 Next: the coordinator's re-review. Then `docs/p2_design.md` on `claude/p2-multi-agent`.
 
-**2026-10-05, about 21:30 UTC — PR #30 merged (`817b1f9`); deliverable 1 drafted.**
+**2026-10-05, about 20:45 UTC — PR #30 merged (`817b1f9`); deliverable 1 drafted.**
 - `claude/p2-multi-agent` was cut from `main` at `817b1f9`, with no open PRs at that
   moment.
 - The coordinator's LOW finding is fixed: a PROVISIONAL band must be over the first
