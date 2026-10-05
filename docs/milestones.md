@@ -3680,3 +3680,23 @@ Next: the coordinator's re-review. Then `docs/p2_design.md` on `claude/p2-multi-
 
 No live model call before the review. Next: deliverable 2, the three-role minimum
 offline, after the review.
+
+**2026-10-05, about 22:16 UTC — the coordinator's review of PR #31 (`c502899`; fixes needed), worked.**
+- `docs/p2_design.md` revision 2 answers the review's items 1–11. Four decisions are
+  marked PENDING THE LEAD'S RULING (§13): the null rule and its freeze by sha256; the
+  two-seed go/no-go; abstention without a null table; the model.
+- Pre-registered predictions on the four clean development cells (§4.5): `none` on all
+  four. Two of them stand on the null; two have the null rejected but unexplained.
+- The gap case (one channel failed, another partly outside) reads `none` by design,
+  recorded as `null_partial`; it occurs on 7 of 120 clean runs.
+- Every signature test is code, including the early/late test, the onset test and
+  `dq.trust`'s constraints.
+- The decision templates are versioned and hashed, and a scan keeps labelling rules out
+  of them.
+- The workflow imports nothing from `scripts/`.
+- The cost table and a proposed ablation grid of 84 runs.
+- Wording fixed: the leave-one-out rate is an estimate, not a bound (95 % interval
+  0.10–0.23).
+
+Next: the coordinator's re-review, then the lead's rulings on (a)–(d) before any live
+call.

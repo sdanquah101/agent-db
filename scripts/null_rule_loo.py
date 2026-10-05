@@ -11,10 +11,12 @@ scenario and no run outside the clean record is read.
 Run ``python -m scripts.null_rule_loo`` to regenerate
 ``reports/background/null_rule_loo.json``; a test regenerates it and compares.
 
-A note on the rate. A run outside the envelope of N - 1 exchangeable others on one
-statistic happens with probability 2 / N, so a leave-one-out rate slightly overstates the
-rate against the published envelope of N, 2 / (N + 1). The rates here are therefore
-conservative.
+A note on the rate. For **one** statistic, a run outside the envelope of N - 1
+exchangeable others happens with probability 2 / N, against 2 / (N + 1) for the
+published envelope of N. That bound is per statistic, not for the rule: a component with
+an "every other channel inside" clause (NS) can fire more often on a wider envelope, so
+these leave-one-out rates are estimates, not upper bounds. They are also a floor for any
+cell that is not exchangeable with the clean background.
 """
 
 from __future__ import annotations
