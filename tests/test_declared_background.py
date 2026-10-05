@@ -172,7 +172,7 @@ def synthetic_config(tmp_path_factory) -> BackgroundConfig:
             "n_runs": len(SYNTHETIC),
             "evaluations": 8 * 72,
             "status": "PROVISIONAL",
-            "seeds": [1, 2],
+            "seeds": list(bg.SEEDS[:2]),
         },
     )
     path = tmp_path_factory.mktemp("bg") / "background.yaml"
@@ -221,7 +221,7 @@ def test_the_tool_is_registered_beside_the_frozen_table_versioned_and_costs_noth
     assert isinstance(out, DeclaredBackgroundOutput)
     assert out.plant == "B" and out.tier == "B" and out.n_runs == 2
     # a workflow can tell a PROVISIONAL band from a FINAL one, and what it is over
-    assert out.status == "PROVISIONAL" and out.band_seeds == (1, 2)
+    assert out.status == "PROVISIONAL" and out.band_seeds == bg.SEEDS[:2]
     assert out.procedure.seeds == bg.SEEDS
     assert reg.describe(TOOL_NAME)["version"] == "1.0"
     assert "plant" in reg.describe(TOOL_NAME)["input_schema"]["properties"]
@@ -286,7 +286,7 @@ def test_plant_a_pools_its_two_declared_states_into_one_band_without_naming_them
             "n_runs": 8,
             "evaluations": 1,
             "status": "PROVISIONAL",
-            "seeds": [1, 2],
+            "seeds": list(bg.SEEDS[:2]),
         },
     )
     body = text.split("bands:", 1)[1]
@@ -305,7 +305,7 @@ def test_plant_a_pools_its_two_declared_states_into_one_band_without_naming_them
                     "n_runs": 1,
                     "evaluations": 0,
                     "status": "PROVISIONAL",
-                    "seeds": [1],
+                    "seeds": [bg.SEEDS[0]],
                 },
                 "bands": {"S0-01": {"A": bands["A"]["A"]}},
             }
@@ -347,6 +347,12 @@ def test_final_means_every_declared_seed_and_the_tool_says_which_it_is(tmp_path)
     # and so is a band over every seed that still calls itself PROVISIONAL
     with pytest.raises(ValidationError, match="is FINAL, not PROVISIONAL"):
         config("PROVISIONAL", every)
+    # a PROVISIONAL band is over the first declared seeds, in order, and nothing else
+    for not_a_prefix in ([900005, 900009], [1, 2, 3], every[1:4], [every[1], every[0]]):
+        with pytest.raises(ValidationError, match="first declared seeds in order"):
+            config("PROVISIONAL", not_a_prefix)
+    with pytest.raises(ValidationError):
+        config("PROVISIONAL", [])  # and over at least one
     # the control: both labels are accepted where they are true
     final, provisional = config("FINAL", every), config("PROVISIONAL", every[:3])
     for cfg, status, seeds in ((final, "FINAL", every), (provisional, "PROVISIONAL", every[:3])):
