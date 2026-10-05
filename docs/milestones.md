@@ -3663,3 +3663,20 @@ The reviewer's leave-one-out finding goes into `docs/p2_design.md`. Each clean s
 judged against the other nine, falls outside on about 20 % of its statistics. P2's null
 rule must therefore not read "any statistic outside" as a fault. The band is unchanged.
 Next: the coordinator's re-review. Then `docs/p2_design.md` on `claude/p2-multi-agent`.
+
+**2026-10-05, about 21:30 UTC — PR #30 merged (`817b1f9`); deliverable 1 drafted.**
+- `claude/p2-multi-agent` was cut from `main` at `817b1f9`, with no open PRs at that
+  moment.
+- The coordinator's LOW finding is fixed: a PROVISIONAL band must be over the first
+  declared seeds, in order.
+- `docs/p2_design.md` (DRAFT) covers the seven procedures and their decision points with
+  schemas and fallbacks, the reference fit (like-for-like with the band), the null rule,
+  admission, the routing machine, the allow-lists and messages, the hold-out, the
+  ablation switches, the budget and record, the tests, and the plan.
+- **The null rule:** three conjunctive components against the band as published. The
+  leave-one-out false-alarm rate on the clean record is 0.16, against a target below
+  0.20. It is reproduced by `scripts/null_rule_loo.py`.
+- Five questions for the coordinator are in the design's §12 and the PR body.
+
+No live model call before the review. Next: deliverable 2, the three-role minimum
+offline, after the review.

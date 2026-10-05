@@ -7341,3 +7341,37 @@ None of these changes the seeds, the statistics, the envelope or a value of the 
 5. **The provenance names a clean commit.** The band was republished from a clean tree,
    with identical values. The earlier `-dirty` suffix came from uncommitted work in the
    tree at publish time, not from the record.
+
+
+## 2026-10-05 — Proposed (P2 session): P2's null rule over the declared background (for the coordinator's review)
+
+**Proposed, not decided.** `docs/p2_design.md` §4 is for the coordinator's review before
+any live call.
+
+**The finding it answers** (the coordinator's review of PR #30): judged by
+leave-one-out, each clean seed falls outside the published envelope on about 15 % of its
+statistics, which is 2/(N + 1). So "any statistic outside" fires on 90 of 120 clean runs,
+and cannot be P2's null rule.
+
+**The proposal.**
+- Three null components, each a conjunction of placements against the band exactly as
+  published (no margin):
+  - **NB**, the balance: the mean closure and the worst window outside on the same side,
+    or the inadmissible count above the band maximum;
+  - **NM**, two or more channels each biased on the same side at the defaults and after
+    the fit, with after-fit scatter above the band;
+  - **NS**, exactly one such channel, with the others' after-fit means inside.
+- The null is rejected when any one fails. Its leave-one-out false-alarm rate on the
+  clean record is 19 of 120 (0.16); the target is below 0.20.
+- A label is admitted only over a failed null case that matches it (the design's §4.3).
+- `scripts/null_rule_loo.py` reproduces the rates, `reports/background/null_rule_loo.json`
+  holds them, and `tests/test_null_rule_loo.py` pins them.
+
+**The band does not change.**
+
+**Alternatives.**
+- Any statistic outside: rejected, because it fires on 75 % of clean runs.
+- Any channel mean outside: rejected, at 55 %.
+- A count threshold on the statistics outside: rejected, because it carries no
+  localisation, so no label could rest on it.
+- A margin on the envelope: excluded by the lead's ruling.
