@@ -67,8 +67,8 @@ procedure:
   budget_simulator_evals: 300
   budget_wall_clock_min: 360.0
 provenance:
-  git_commit: c17cefc10933629957794af292a43e65118d8fc2-dirty
-  computed: '2026-10-03'
+  git_commit: f8bb2ff3cb45d278aadc32be046c0383d3a3ea48
+  computed: '2026-10-05'
   record: reports/background/runs.jsonl
   n_runs: 120
   evaluations: 16360
