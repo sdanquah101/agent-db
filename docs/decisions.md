@@ -7309,3 +7309,35 @@ published record is each run's last attempt, which the test checks against the d
 sequence. A library seed is matched as a whole number in the leak test, so `0.231031`
 does not count as seed 1031. The record test looks for the token `"faults"` as a key, not
 as a substring of `at_defaults`.
+
+
+## 2026-10-05 — The declared background after the coordinator's review of PR #30 (no change to the rule)
+
+**From the review of 2026-10-05 at `6cc7519`** (verdict: fixes needed, nothing blocking).
+None of these changes the seeds, the statistics, the envelope or a value of the band.
+
+1. **The tool says what its band is.** `declared_background` now returns `status`
+   (PROVISIONAL or FINAL) and `band_seeds`, the seeds the band is over. Before, a
+   workflow saw only `procedure.seeds`, which always lists all ten. The loader refuses a
+   FINAL band over fewer than the declared seeds, and a PROVISIONAL band over all of them.
+   The check sits on `BackgroundConfig`, not on the provenance, because the declared
+   seeds belong to the procedure.
+2. **Only the ruled statistics are judged in the placement.** The charge drift is in the
+   band for reading but is not one of the ruling's statistics, so the placement shows it
+   with its envelope, unjudged (`ruled: false`, `inside: null`), and does not count it.
+   The counts become S0-01 B/A 0 / 12, B/B 3 / 35, B/C 12 / 63, and S1-01 B/B 11 / 35.
+3. **Rule 1 has a planted-truth control.** A short faulted run (S3-01) is generated with
+   a populated truth store, and its registry is opened as a workflow's would be. None of
+   the truth store's identifiers, seeds, hashes or fault labels is in the tool's answer
+   or in the visible log line. One such value, planted into a copy of the committed
+   yaml, is caught by the same scan that the committed yaml passes.
+4. **The record check drops nothing.**
+   - Every line after the harness header must belong to an attempt. Where two
+     interleaved attempts end on the same sequence number, every reading is tried.
+   - A cut-off attempt must be a prefix of the declared sequence, with the complete
+     attempt's calls, or a prefix of the discarded Fisher-only procedure.
+   - Every line must be `ok`.
+   - Negative controls cover the two corruptions the earlier check missed.
+5. **The provenance names a clean commit.** The band was republished from a clean tree,
+   with identical values. The earlier `-dirty` suffix came from uncommitted work in the
+   tree at publish time, not from the record.

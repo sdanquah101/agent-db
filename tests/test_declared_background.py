@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -61,6 +62,17 @@ SEQUENCE = (
     "registry.open", "describe_model", "feed_loads", "simulate", "mass_balance",
     "gsa_morris", "fisher_info", "fit_lsq", "simulate",
 )  # fmt: skip
+FISHER_ONLY = (
+    "registry.open", "describe_model", "feed_loads", "simulate", "mass_balance",
+    "fisher_info", "fit_lsq", "simulate",
+)  # fmt: skip
+"""The first procedure, Fisher screening alone, tried and discarded as degenerate before
+the declared one (``docs/milestones.md``); its attempts stay in the append-only logs."""
+GENERATION = (
+    "sim.generate_influent", "sim.burn_in", "sim.simulate_truth", "sim.channel_series",
+    "sim.observe",
+)  # fmt: skip
+"""The harness's own lines, written once when the run is generated, before any registry."""
 
 
 # ------------------------------------------------------------------ a synthetic record
@@ -208,6 +220,9 @@ def test_the_tool_is_registered_beside_the_frozen_table_versioned_and_costs_noth
     out = reg.call(TOOL_NAME, plant="B", tier="B")
     assert isinstance(out, DeclaredBackgroundOutput)
     assert out.plant == "B" and out.tier == "B" and out.n_runs == 2
+    # a workflow can tell a PROVISIONAL band from a FINAL one, and what it is over
+    assert out.status == "PROVISIONAL" and out.band_seeds == (1, 2)
+    assert out.procedure.seeds == bg.SEEDS
     assert reg.describe(TOOL_NAME)["version"] == "1.0"
     assert "plant" in reg.describe(TOOL_NAME)["input_schema"]["properties"]
 
@@ -295,6 +310,49 @@ def test_plant_a_pools_its_two_declared_states_into_one_band_without_naming_them
                 "bands": {"S0-01": {"A": bands["A"]["A"]}},
             }
         )
+
+
+def _provenance(status: str, seeds: list[int]) -> dict[str, Any]:
+    return {
+        "git_commit": "t",
+        "computed": "2026-10-05",
+        "record": "r",
+        "n_runs": 1,
+        "evaluations": 0,
+        "status": status,
+        "seeds": seeds,
+    }
+
+
+def test_final_means_every_declared_seed_and_the_tool_says_which_it_is(tmp_path):
+    bands = bg.aggregate(SYNTHETIC)
+    every = list(bg.SEEDS)
+
+    def config(status: str, seeds: list[int]) -> BackgroundConfig:
+        return BackgroundConfig.model_validate(
+            {
+                "version": 1,
+                "procedure": bg.procedure_settings(),
+                "provenance": _provenance(status, seeds),
+                "bands": bands,
+            }
+        )
+
+    # FINAL over fewer than the ten declared seeds is refused, by the loader and the driver
+    for fewer in (every[:3], every[:9], every[1:]):
+        with pytest.raises(ValidationError, match="FINAL band is over every declared seed"):
+            config("FINAL", fewer)
+        with pytest.raises(ValidationError, match="FINAL band"):
+            bg.render_config(bands, _provenance("FINAL", fewer))
+    # and so is a band over every seed that still calls itself PROVISIONAL
+    with pytest.raises(ValidationError, match="is FINAL, not PROVISIONAL"):
+        config("PROVISIONAL", every)
+    # the control: both labels are accepted where they are true
+    final, provisional = config("FINAL", every), config("PROVISIONAL", every[:3])
+    for cfg, status, seeds in ((final, "FINAL", every), (provisional, "PROVISIONAL", every[:3])):
+        reg, _, _ = _registry(tmp_path / status, cfg)
+        out = reg.call(TOOL_NAME, plant="B", tier="B")
+        assert out.status == status and list(out.band_seeds) == seeds
 
 
 # ------------------------------------------------------------------ 5. the arithmetic
@@ -478,12 +536,41 @@ def test_the_committed_band_regenerates_from_the_committed_record():
     assert csv_keys == keys
 
 
+def _word(token: str) -> str:
+    """``token`` as a whole word: ``faults`` inside ``at_defaults`` is not a fault plan."""
+    return rf"(?<![A-Za-z_]){re.escape(token)}(?![A-Za-z_])"
+
+
+def yaml_leaks(text: str) -> list[str]:
+    """What in a ``background.yaml`` text would be per-cell or truth-side information.
+
+    A run id; a scenario other than the clean row the band is generated from; the word
+    truth; a ``baseline`` under the bands; a library seed as a whole number (``0.231031``
+    is not seed 1031); a fault type of the library as a whole word. Empty on a clean text.
+    """
+    from sim.run.matrix import load_library
+
+    library = load_library().values()
+    body = text.split("bands:", 1)[1] if "bands:" in text else text
+    found = re.findall(r"run_[0-9a-f]{12}", text)
+    found += sorted(set(re.findall(r"S\d-\d\d", text)) - {bg.SCENARIO_ID})
+    found += ["truth"] if "truth" in text else []
+    found += ["baseline:"] if "baseline:" in body else []
+    for seed in sorted({s.seed for s in library}):
+        if re.search(rf"(?<![\d.]){seed}(?![\d])", body):
+            found.append(str(seed))
+    for fault in sorted({str(f.type.value) for s in library for f in s.faults}):
+        if re.search(_word(fault), body):
+            found.append(fault)
+    return found
+
+
 def test_the_committed_band_is_per_plant_and_tier_and_carries_nothing_per_cell():
     from sim.observation import load_observation_config
-    from sim.run.matrix import load_library
 
     config, _records = _committed()
     text = bg.CONFIG_FILE.read_text(encoding="utf-8")
+    assert yaml_leaks(text) == []
     assert set(config.bands) == {"A", "B", "C"}
     for plant, tiers in config.bands.items():
         assert set(tiers) == {"A", "B", "C"}, plant
@@ -491,13 +578,7 @@ def test_the_committed_band_is_per_plant_and_tier_and_carries_nothing_per_cell()
         assert len(n) == 1, (plant, n)  # every tier of a plant shares its truth groups
         expected = len(config.provenance.seeds) * len(bg.PLANT_BASELINES[plant])
         assert n == {expected}, (plant, n)
-    assert not re.findall(r"run_[0-9a-f]{12}", text)
     assert set(re.findall(r"S\d-\d\d", text)) == {bg.SCENARIO_ID}
-    assert "truth" not in text and "baseline:" not in text.split("bands:", 1)[1]
-    body = text.split("bands:", 1)[1]
-    for seed in {s.seed for s in load_library().values()}:
-        # as a whole number, not a digit run inside a decimal (0.231031 is not seed 1031)
-        assert not re.search(rf"(?<![\d.]){seed}(?![\d])", body), seed
 
     def keys_of(node: Any):
         if isinstance(node, dict):
@@ -525,8 +606,217 @@ def test_the_committed_band_is_per_plant_and_tier_and_carries_nothing_per_cell()
     # the record itself names only visible quantities and the driver's own keys
     record_text = bg.RECORD_FILE.read_text(encoding="utf-8")
     for token in ("truth", "faults", "salt", "K_I_nh3_true", "correct_conclusion"):
-        # as a whole word: "faults" inside "at_defaults" is not a fault plan
-        assert not re.search(rf"(?<![A-Za-z_]){token}(?![A-Za-z_])", record_text), token
+        assert not re.search(_word(token), record_text), token
+
+
+def _truth_tokens(manifest: dict[str, Any], faults: dict[str, Any]) -> set[str]:
+    """The distinctive values of a run's truth store: ids, seeds, hashes, fault labels.
+
+    Plain small numbers (a 5.0 magnitude, a 0.02 rate) are left out: they occur in any
+    table of numbers and say nothing about the run. Everything that names or keys the
+    run or its hidden truth is in.
+    """
+    tokens = {str(manifest["run_id"]), str(manifest["scenario_id"]), str(manifest["git_sha"])}
+    tokens |= {str(v) for v in manifest["seeds"].values() if isinstance(v, int) and v >= 1000}
+    tokens |= {str(v) for v in manifest["configs"]["sha256"].values()}
+    tokens |= {str(f["type"]) for f in faults["faults"]}
+    tokens |= {str(label) for label in faults["truth_label"]}
+    tokens |= {str(m["feed_id"]) for m in faults["influent"]["mislabelled"]}
+    tokens.add(str(faults["influent"]["seed"]))
+    return tokens
+
+
+def test_a_generated_runs_truth_never_reaches_the_tool_and_a_planted_value_is_caught(tmp_path):
+    """Rule 1 against a real truth store, with the planted-truth negative control.
+
+    A short faulted run (S3-01, a mislabelled feed, on Plant C at Tier B) is generated
+    with its truth store populated; its registry is opened the way every workflow's is,
+    and ``declared_background`` answers for the run's declared plant and tier. None of
+    the truth store's distinctive values is in the answer or in the call's visible log.
+    The control: one of those values planted into a copy of the committed yaml is found
+    by the same scan the committed yaml passes, so the scan is not blind.
+    """
+    import yaml
+
+    from scenarios.schema import load_scenario
+    from sim.plants import load_plant_config
+    from sim.run.harness import generate_run
+    from tools.privileged import open_registry
+
+    scenario = load_scenario(REPO / "scenarios" / "S3-01.yaml")
+    faults = tuple(
+        f.model_copy(update={"onset_day": min(f.onset_day, 15.0)}) for f in scenario.faults
+    )
+    scenario = scenario.model_copy(update={"duration_days": 30.0, "faults": faults})
+    runs_root = tmp_path / "runs"
+    run = generate_run(scenario, "B", plant=load_plant_config("C"), runs_root=runs_root)
+    manifest = json.loads(run.paths.truth_manifest.read_text(encoding="utf-8"))
+    truth_faults = json.loads(run.paths.truth_faults.read_text(encoding="utf-8"))
+    tokens = _truth_tokens(manifest, truth_faults)
+    # the truth store is populated: a fault, its label and the mislabelled feed are there
+    assert {"feed_mislabelled", "influent", "S3-01", run.run_id} <= tokens
+
+    public = json.loads(run.paths.manifest.read_text(encoding="utf-8"))
+    reg = open_registry(run.run_id, runs_root=runs_root, scenario=scenario)
+    out = reg.call(TOOL_NAME, plant=public["plant"], tier=public["tier"])
+    answer = json.dumps(out.model_dump(mode="json"), sort_keys=True)
+    visible = run.paths.calls.read_text(encoding="utf-8").splitlines()[-1]
+    assert json.loads(visible)["name"] == TOOL_NAME
+    for token in sorted(tokens):
+        assert not re.search(_word(token), answer), token
+        assert not re.search(_word(token), visible), token
+    # the same answer as on any other run of that plant and tier: the committed band
+    assert out.n_runs == load_background().band(public["plant"], public["tier"]).n_runs
+
+    # the negative control: a truth value planted into a copy of the yaml is caught
+    text = bg.CONFIG_FILE.read_text(encoding="utf-8")
+    assert yaml_leaks(text) == []
+    header = text.split("version:", 1)[0]
+    for planted in (run.run_id, "S3-01", str(manifest["seeds"]["base"]), "feed_mislabelled"):
+        copy = yaml.safe_load(text)
+        gas = copy["bands"][public["plant"]][public["tier"]]["channels"]["gas_flow"]
+        if planted.isdigit():
+            gas["after_fit"]["mean_z"]["max"] = int(planted)
+        else:
+            gas["unit"] = planted
+        leaked = header + yaml.safe_dump(copy, sort_keys=False, width=100)
+        assert planted in yaml_leaks(leaked), planted
+
+
+def split_attempts(lines: list[dict[str, Any]]) -> Iterator[list[list[dict[str, Any]]]]:
+    """Every way of reading a run's visible call log as one list per registry attempt.
+
+    The log opens with the harness's generation lines; each ``registry.open`` after them
+    starts one attempt. The log is append-only, so attempts cut off (a container restart,
+    a duplicate process stopped) or discarded (the first, Fisher-only procedure) stay in
+    it, and two attempts that ran at once interleave their lines: a line belongs to an
+    attempt whose last sequence number it follows. When two attempts end on the same
+    number, the line could continue either, so every assignment is yielded; a line that
+    continues no attempt ends that reading (nothing is dropped silently).
+
+    Raises:
+        AssertionError: If the header is not the harness's generation lines, or no
+            reading places every line.
+    """
+    first = next(i for i, x in enumerate(lines) if x["name"] == "registry.open")
+    assert tuple(x["name"] for x in lines[:first]) == GENERATION, "not the harness's header"
+    body = lines[first:]
+    dead_ends: list[str] = []
+
+    def walk(i: int, attempts: list[list[dict[str, Any]]]):
+        if i == len(body):
+            yield [list(a) for a in attempts]
+            return
+        x = body[i]
+        if x["name"] == "registry.open":
+            yield from walk(i + 1, [*attempts, [x]])
+            return
+        owners = [k for k, a in enumerate(attempts) if a[-1]["seq"] + 1 == x["seq"]]
+        if not owners:
+            dead_ends.append(f"line seq {x['seq']} ({x['name']}) continues no attempt")
+        for k in owners:
+            yield from walk(i + 1, [[*a, x] if j == k else a for j, a in enumerate(attempts)])
+
+    readings = 0
+    for attempts in walk(0, []):
+        readings += 1
+        yield attempts
+    assert readings, dead_ends[0]
+
+
+def check_attempts(attempts: list[list[dict[str, Any]]]) -> None:
+    """The record's rule for one reading of a run's attempts.
+
+    At least one attempt is the declared sequence, and every complete one made the same
+    calls (the procedure is seeded). Every other attempt is a prefix of the declared
+    sequence, with the same calls as the complete one so far, or a prefix of the
+    discarded Fisher-only one (which opened with its own budget, so its calls may
+    differ): cut off, never anything else. Every line of every attempt is ``ok``: a
+    cut-off ends a log, it does not fail a call.
+    """
+    names = [tuple(y["name"] for y in a) for a in attempts]
+    for n in names:
+        assert n in (SEQUENCE[: len(n)], FISHER_ONLY[: len(n)]), n
+    complete = [a for a, n in zip(attempts, names, strict=True) if n == SEQUENCE]
+    assert complete, "no attempt is the declared sequence"
+    hashes = {tuple(y["args_hash"] for y in a) for a in complete}
+    assert len(hashes) == 1, "complete attempts differ"
+    (reference,) = hashes
+    for a, n in zip(attempts, names, strict=True):
+        same = tuple(y["args_hash"] for y in a) == reference[: len(a)]
+        if n == SEQUENCE[: len(n)] and not same:
+            # only an attempt that still reads as the discarded procedure may differ
+            assert n == FISHER_ONLY[: len(n)], ("calls differ", n)
+    bad = [(y["name"], y["outcome"]) for a in attempts for y in a if y["outcome"] != "ok"]
+    assert not bad, bad
+
+
+def check_log(lines: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    """The attempts of the first reading of the log that keeps the record's rule.
+
+    Raises:
+        AssertionError: The first reading's failure, when no reading keeps the rule.
+    """
+    failures: list[AssertionError] = []
+    for attempts in split_attempts(lines):
+        try:
+            check_attempts(attempts)
+        except AssertionError as err:
+            failures.append(err)
+            continue
+        return attempts
+    raise failures[0]
+
+
+def test_the_record_check_refuses_a_dropped_line_and_a_foreign_attempt():
+    """The negative controls of the record check (the corruptions it once missed)."""
+
+    def log(*attempts: tuple[str, ...]) -> list[dict[str, Any]]:
+        lines, seq = [], 0
+        for name in GENERATION:
+            lines.append({"seq": seq, "name": name, "args_hash": "g", "outcome": "ok"})
+            seq += 1
+        for attempt in attempts:
+            for i, name in enumerate(attempt):
+                lines.append({"seq": seq, "name": name, "args_hash": f"{name}{i}", "outcome": "ok"})
+                seq += 1
+        return lines
+
+    good = log(SEQUENCE[:5], FISHER_ONLY, SEQUENCE)
+    assert len(check_log(good)) == 3  # the control: a cut-off and a discarded attempt
+    # two attempts that ran at once, the second cut off: the second registry.open took
+    # seq 10 while the first attempt's own seq 10-13 followed, so seq 13 continues either
+    # attempt; the reading that keeps the rule is found (A.adapted-C-900008 is such a log)
+    first, second = log(SEQUENCE)[5:], log(SEQUENCE[:3])[5:]
+    interleaved = log()
+    for x in [*first[:5], *second, *first[5:]]:
+        interleaved.append(dict(x))
+    for k, x in enumerate(interleaved[5:]):
+        x["seq"] = [5, 6, 7, 8, 9, 10, 11, 12, 10, 11, 12, 13][k]
+    attempts = check_log(interleaved)
+    assert [len(a) for a in attempts] == [len(SEQUENCE), 3]
+    # (a) a line whose seq continues no attempt is refused, not dropped
+    orphan = [*good, {"seq": 999, "name": "fit_lsq", "args_hash": "x", "outcome": "ok"}]
+    with pytest.raises(AssertionError, match="continues no attempt"):
+        check_log(orphan)
+    # (b) an attempt that is neither procedure is refused, whatever it lacks
+    foreign = log(SEQUENCE, ("registry.open", "fit_cmaes"))
+    foreign[-1]["outcome"] = "error"
+    with pytest.raises(AssertionError, match="fit_cmaes"):
+        check_log(foreign)
+    # a failed call inside a declared prefix is refused too
+    failed = log(SEQUENCE, SEQUENCE[:4])
+    failed[-1]["outcome"] = "error"
+    with pytest.raises(AssertionError, match="error"):
+        check_log(failed)
+    # a cut-off attempt that made other calls than the complete one is refused
+    other = log(SEQUENCE, SEQUENCE[:6])
+    other[-1]["args_hash"] = "another"
+    with pytest.raises(AssertionError, match="calls differ"):
+        check_log(other)
+    # and a header that is not the harness's
+    with pytest.raises(AssertionError, match="header"):
+        check_log(log(SEQUENCE)[1:])
 
 
 def test_the_committed_record_shows_the_declared_call_sequence_and_nothing_else():
@@ -538,31 +828,11 @@ def test_the_committed_record_shows_the_declared_call_sequence_and_nothing_else(
             for x in (calls_dir / f"{rec['key']}.calls.jsonl").read_text("utf-8").splitlines()
             if x.strip()
         ]
+        try:
+            check_log(lines)
+        except AssertionError as err:
+            raise AssertionError(f"{rec['key']}: {err}") from err
         names = tuple(x["name"] for x in lines)
-        # each registry.open starts one attempt. The log is append-only, so attempts cut
-        # off (a container restart, a duplicate process stopped) or discarded (the first,
-        # Fisher-only procedure) stay in it, and two attempts that ran at once interleave
-        # their lines; a line belongs to the attempt whose last sequence number it follows
-        attempts: list[list[dict]] = []
-        for x in lines:
-            if x["name"] == "registry.open":
-                attempts.append([x])
-                continue
-            for attempt in attempts:
-                if attempt[-1]["seq"] + 1 == x["seq"]:
-                    attempt.append(x)
-                    break
-        complete = [a for a in attempts if tuple(y["name"] for y in a) == SEQUENCE]
-        assert complete, rec["key"]
-        # complete attempts of one run made the same calls (the procedure is seeded)
-        hashes = {tuple(y["args_hash"] for y in a) for a in complete}
-        assert len(hashes) == 1, rec["key"]
-        assert all(y["outcome"] == "ok" for a in complete for y in a), rec["key"]
-        # every other attempt is a cut-off prefix of the declared sequence, or the first
-        # procedure's (Fisher only, no gsa_morris), never anything else
-        for a in attempts:
-            seq = tuple(y["name"] for y in a)
-            assert seq == SEQUENCE[: len(seq)] or "gsa_morris" not in seq, rec["key"]
         assert all(n != "request_assay" for n in names), rec["key"]  # no assay, any attempt
         assert rec["n_calls"] == len(SEQUENCE) - 1
         assert rec["evaluations_used"] <= bg.BUDGET["simulator_evals"]
@@ -619,6 +889,11 @@ def test_placement_is_the_published_envelope_with_no_margin(synthetic_config):
     rows = {r["statistic"]: r for r in bg.placement(outside, band)}
     assert rows["cod_closure"]["inside"] is False
     assert rows["cod_closure"]["band_max"] == band.cod_closure.max
+    # the charge drift is not a ruled statistic: shown with its band, never judged
+    drift = rows["charge_drift"]
+    assert drift["ruled"] is False and drift["inside"] is None
+    assert drift["value"] > drift["band_max"]  # outside its envelope, and still not judged
+    assert all(r["ruled"] for r in rows.values() if r["statistic"] != "charge_drift")
     # a channel the band does not carry is reported, not judged
     extra = _record("B", "B", 9)
     extra["channels"]["h2_offgas"] = extra["channels"]["ph"]
@@ -648,8 +923,15 @@ def test_the_committed_placement_is_against_the_committed_band():
         plant, tier = cell["cell"].split()[1].split("/")
         band = config.band(plant, tier)
         for r in cell["rows"]:
+            # only the lead's ruled statistics are judged; the charge drift is not one
+            assert r["ruled"] == (r["statistic"] != "charge_drift"), r["statistic"]
+            if not r["ruled"]:
+                assert r["inside"] is None, r["statistic"]
             if r["inside"] is None:
                 continue
             assert r["inside"] == (r["band_min"] <= r["value"] <= r["band_max"])
-        assert cell["n_outside"] == sum(1 for r in cell["rows"] if r["inside"] is False)
+        judged = [r for r in cell["rows"] if r["inside"] is not None]
+        assert cell["n_statistics"] == len(judged)
+        assert cell["n_outside"] == sum(1 for r in judged if r["inside"] is False)
+        assert "charge_drift" not in cell["outside"]
         assert band is not None

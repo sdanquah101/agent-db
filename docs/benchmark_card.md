@@ -583,21 +583,25 @@ Per-channel envelope, **after the screened fit**: `mean_z` [min, max] and `rms_z
 **The clean development cells against the FINAL band — a finding, not an input** (the lead's
 ruling of 2026-09-30; `reports/background/dev_cells.json`). Each cell was generated at its
 library seed and taken through the same procedure through its own registry, and every
-published statistic was compared with the envelope exactly as published, with no margin.
+statistic of the ruling (the mean closure, the worst window, the inadmissible count, and
+every channel's `mean_z` and `rms_z`) was compared with the envelope exactly as published,
+with no margin. The charge drift is published in the band for reading but is not a ruled
+statistic, so it is shown in the file unjudged and not counted.
 
 | cell | statistics outside / judged | outside, value [band] |
 |---|---|---|
 | S0-01 B/A | 0 / 12 | none |
-| S0-01 B/B | 4 / 36 | charge drift 0.145 [0.208, 0.583], below; pH after-fit mean_z −0.237 [−0.236, 0.378]; VFA at-defaults mean_z −1.14 [−0.88, 0.53] and rms_z 1.56 [0.86, 1.45] |
-| S0-01 B/C | 13 / 64 | the S0-01 B/B items, plus digestate TS and VS above the envelope (VS after-fit mean_z 3.74 [−0.84, 3.33]) and pH after-fit rms_z 0.334 [0.347, 0.669], below |
-| S1-01 B/B | 11 / 36 | COD closure −0.191 [−0.138, 0.023]; worst window −0.481 [−0.368, 0.066]; gas mean_z after fit 7.54 [−1.13, 5.87] and rms_z 10.2 [5.6, 8.9]; CH₄-fraction and VFA rms_z above |
+| S0-01 B/B | 3 / 35 | pH after-fit mean_z −0.237 [−0.236, 0.378]; VFA at-defaults mean_z −1.14 [−0.88, 0.53] and rms_z 1.56 [0.86, 1.45] |
+| S0-01 B/C | 12 / 63 | the VFA items of S0-01 B/B and the VFA after-fit mean_z −0.772 [−0.768, 0.702], plus digestate TS and VS above the envelope (VS after-fit mean_z 3.74 [−0.84, 3.33]) and pH after-fit rms_z 0.334 [0.347, 0.669], below |
+| S1-01 B/B | 11 / 35 | COD closure −0.191 [−0.138, 0.023]; worst window −0.481 [−0.368, 0.066]; gas mean_z after fit 7.54 [−1.13, 5.87] and rms_z 10.2 [5.6, 8.9]; CH₄-fraction and VFA rms_z above |
 
 Three readings, stated and not acted on:
 - **The balance of S0-01 B/B lies inside the ten-seed band**, at its edge: mean closure
   −0.1376 against a minimum of −0.1378, and 2 inadmissible windows against a maximum of 2.
   The three-seed band had excluded it.
-- **Some "outside" values lie on the quiet side** of the envelope: charge drift and pH
-  scatter below every clean run. The envelope is two-sided as published. Which side
+- **Some "outside" values lie on the quiet side** of the envelope: the pH after-fit
+  scatter of S0-01 B/C is below every clean run (so, unjudged, are both cells' charge
+  drifts: 0.145 and 0.196 against minima of 0.208). The envelope is two-sided as published. Which side
   counts as evidence of a fault is a workflow's declared rule, not the band's.
 - **S1-01 is a Level-1 record** (sensor noise ×2, gaps ×2). Its rms_z statistics are
   standardised by the *declared* noise, so they exceed the declared-noise band by

@@ -137,6 +137,19 @@ class BackgroundConfig(_Frozen):
             raise ValueError("at least one band is needed")
         return self
 
+    @model_validator(mode="after")
+    def _final_means_every_declared_seed(self) -> BackgroundConfig:
+        # here rather than on the provenance: the declared seeds are the procedure's
+        declared = tuple(self.procedure.seeds)
+        published = tuple(self.provenance.seeds)
+        if self.provenance.status == "FINAL" and published != declared:
+            raise ValueError(
+                f"a FINAL band is over every declared seed {list(declared)}, not {list(published)}"
+            )
+        if self.provenance.status == "PROVISIONAL" and published == declared:
+            raise ValueError("a band over every declared seed is FINAL, not PROVISIONAL")
+        return self
+
     def band(self, plant: str, tier: str) -> BandRecord | None:
         """The band of a (plant, tier), or ``None`` when none was computed."""
         return self.bands.get(str(plant), {}).get(str(tier))

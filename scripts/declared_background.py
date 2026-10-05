@@ -1006,26 +1006,31 @@ def placement(record: dict[str, Any], band: Any) -> list[dict[str, Any]]:
     """Each published statistic of one run against the band of its (plant, tier).
 
     ``inside`` is ``min <= value <= max``: the min-max envelope exactly as published,
-    with no margin (the lead's ruling of 2026-09-30). A statistic the band or the run
-    does not have is reported with ``inside`` None.
+    with no margin (the lead's ruling of 2026-09-30). Only the ruled statistics are
+    judged (``ruled`` True): the mean closure, the worst window, the inadmissible count
+    and every channel's ``mean_z`` and ``rms_z``. The charge drift is published for
+    reading but is not a ruled statistic, so it is shown with ``ruled`` False and
+    ``inside`` None. A statistic the band or the run does not have is reported with
+    ``inside`` None.
     """
     rows = []
 
-    def row(statistic: str, value: Any, stat: Any) -> None:
+    def row(statistic: str, value: Any, stat: Any, *, ruled: bool = True) -> None:
         if value is None or stat is None:
-            rows.append({"statistic": statistic, "value": value, "band_min": None,
-                         "band_max": None, "inside": None})  # fmt: skip
+            rows.append({"statistic": statistic, "ruled": ruled, "value": value,
+                         "band_min": None, "band_max": None, "inside": None})  # fmt: skip
             return
         lo, hi = float(stat.min), float(stat.max)
-        rows.append({"statistic": statistic, "value": float(value), "band_min": lo,
-                     "band_max": hi, "inside": bool(lo <= float(value) <= hi)})  # fmt: skip
+        inside = bool(lo <= float(value) <= hi) if ruled else None
+        rows.append({"statistic": statistic, "ruled": ruled, "value": float(value),
+                     "band_min": lo, "band_max": hi, "inside": inside})  # fmt: skip
 
     b = record["balance"]
     row("cod_closure", b["cod_closure_mean"], band.cod_closure)
     row("cod_closure_worst", worst_window(record), band.cod_closure_worst)
     if band.n_cod_inadmissible is not None and b["n_cod_evaluable"]:
         row("n_cod_inadmissible", b["n_cod_inadmissible"], band.n_cod_inadmissible)
-    row("charge_drift", b["charge_drift"], band.charge_drift)
+    row("charge_drift", b["charge_drift"], band.charge_drift, ruled=False)
     for name, ch in sorted(record["channels"].items()):
         ref = band.channels.get(name)
         for where in ("at_defaults", "after_fit"):
@@ -1062,7 +1067,8 @@ def place(store: Path) -> dict[str, Any]:
             }
         )
     out = {"rule": "min-max envelope as published, no margin (the lead's ruling of "
-           "2026-09-30)", "cells": cells}  # fmt: skip
+           "2026-09-30); ruled statistics only, the charge drift is shown unjudged",
+           "cells": cells}  # fmt: skip
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     DEV_FILE.write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8")
     for c in cells:

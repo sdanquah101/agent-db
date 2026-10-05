@@ -185,5 +185,13 @@ class DeclaredBackgroundOutput(BandRecord):
 
     plant: Plant
     tier: Tier
+    status: Literal["PROVISIONAL", "FINAL"] = Field(
+        description="FINAL once every declared seed is in (``procedure.seeds``); a "
+        "PROVISIONAL band is over fewer seeds and is not the benchmark's reference"
+    )
+    band_seeds: tuple[int, ...] = Field(
+        description="The seeds the published band is over: all of ``procedure.seeds`` "
+        "when FINAL, the first of them when PROVISIONAL"
+    )
     procedure: BackgroundProcedure
     units: dict[str, str] = Field(description="Unit of every quantity in the band (rule 6)")

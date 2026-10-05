@@ -72,6 +72,8 @@ def run_background(inp: DeclaredBackgroundInput, ctx: ToolContext) -> DeclaredBa
     return DeclaredBackgroundOutput(
         plant=inp.plant,
         tier=inp.tier,
+        status=config.provenance.status,
+        band_seeds=config.provenance.seeds,
         procedure=config.procedure,
         units=dict(UNITS),
         **band.model_dump(),
