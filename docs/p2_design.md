@@ -1,7 +1,8 @@
 # P2: task-specialised procedures with model-backed decision points (proposal §6.5)
 
-Status: **DRAFT, revision 2, for the coordinator's review.** This is deliverable 1 of
-`docs/p2_launch_brief.md` §7. Revision 2 answers the review of 2026-10-05 at `c502899`.
+Status: **DRAFT, revision 3, for the lead's rulings.** This is deliverable 1 of
+`docs/p2_launch_brief.md` §7. Revision 2 answered the review of 2026-10-05 at `c502899`;
+revision 3 answers the re-review at `3e84f3b` (items N1–N9).
 Four decisions are **PENDING THE LEAD'S RULING** (§13) and are written as defaults, not
 as decided. No live model call happens before the coordinator's review and the lead's
 approval. Written by the P2 component session on `claude/p2-multi-agent`, cut from
@@ -42,7 +43,7 @@ evidence is code**; no decision point can supply one.
 ## 2. Roles, procedures and decision points
 
 Seven roles (§6.5). Each role is a Python procedure with typed inputs and outputs. A
-model is called only at the eleven decision points listed below. Each decision point has:
+model is called only at the twelve decision points listed below. Each decision point has:
 
 - a fixed JSON output schema;
 - **declared inputs**: the only things its request may contain;
@@ -103,13 +104,17 @@ No decision point.
 
 **`dq.trust` is constrained by code** (brief decision 4; the review's item 6). A
 quarantine is refused when it:
-- overlaps the first HRT, so a model cannot erase the S4 signal;
+- covers a **spike** sample inside the first HRT, so a model cannot erase the S4 signal.
+  A flatline or an outage inside the first HRT may still be quarantined: decision 4 is
+  about spikes;
 - covers any sample that QC did not flag (a flatline segment, a spike sample or an
   outage);
 - reaches into the hold-out.
 
 A refusal is logged as `p2.dq.refused` and counted. The model can narrow QC's
-quarantines; it can never widen them.
+quarantines; it can never widen them. **The same constraints apply to the fallback**
+(the re-review's N5): P0's §3.1 quarantines pass through the same filter, so the
+fallback, too, never quarantines a first-HRT spike.
 
 `dq.coupled` names what the coupled channels show, not what it implies.
 `coupled_inside` (the deviation is isolated) supports a `sensor` finding.
@@ -125,9 +130,11 @@ quarantines; it can never widen them.
    names a cause is a **negative anchor**: it is recorded and never used as evidence for
    that cause.
 3. **The onset test, in code.** It passes only when either of these holds:
-   - **a dated onset:** every closure window before the onset day is inside the band's
-     per-window envelope (`cod_closure_windows`), and at least two windows after it are
-     outside, on the side NB failed;
+   - **a dated onset:** at least **two** evaluable closure windows lie before the onset
+     day, and every one of them is inside the band's per-window envelope
+     (`cod_closure_windows`); at least two windows after it are outside, on the side NB
+     failed. An onset at day 0, or one with fewer than two windows before it, cannot be
+     dated, so a uniform offset never passes (the re-review's N1);
    - **a feed covariate:** P0's R2 feed η² ≥ 0.15 on the primary residual, computed by
      `residual_diag` on the reference fit.
 
@@ -199,7 +206,11 @@ quarantines; it can never widen them.
 5. **The `simulate(biomass_scale)` pair** whenever the early/late test fires on any
    channel: the reference optimum at biomass scales 0.5 and 2.0. The pair **improves the
    early window** when either scale lowers the early window's RMS standardised residual,
-   on the channels that fired, below the reference's.
+   on the channels that fired, below the reference's. **This is a weak test, stated:**
+   accepting either direction means two chances to improve, and a lower early RMS can
+   come from any extra freedom, not only a mis-initialised state. It is a necessary
+   condition for `state`, never sufficient on its own, and the null case must still
+   fail.
 6. `bayes_mcmc` by procedure on the approved subset. `posterior_intervals` is abstained
    only after a failed call (Level-8 discipline).
 7. **A bound hit is never a kinetic update.** It is a finding of type `bound_hit`, which
@@ -250,7 +261,7 @@ claim (§10).
    statistic of the reference fit (§3) is placed against the band: 12, 35 or 63
    statistics by tier. The null components NB, NM and NS of §4 are evaluated. The table
    goes into the state. **A run without a completed null table** (the reference fit
-   unfinished) **abstains** (§13, decision c).
+   unfinished) **abstains**: default, pending the lead (§13, decision c).
 2. **Admission.** Each proposed label must rest on a null component that failed (§4.4).
    A label without one is rejected, whatever its signature.
 3. **The hold-out.** One `validate` call on the proposal's prediction. The verifier is
@@ -438,8 +449,8 @@ input: the rule does not change if a live run disagrees.
 | Cell | Null components | Expected label | What blocks a wrong admission |
 |---|---|---|---|
 | S0-01 B/A | none failed | `none` | — |
-| S0-01 B/B | none failed. pH's after-fit mean is outside alone, which is not a failure. | `none` | — |
-| S0-01 B/C | **NM failed**: `digestate_ts` and `digestate_vs`; VFA's after-fit mean outside, not failed | `none` with `null_failed_unexplained`, **unless** a signature holds | `state` needs the early/late test on a failed channel and the biomass pair. `parameter` needs a common step on two channels or `inhibited`; VFA is low here, not high. `structural` needs R3 **and** a failed hold-out. **The risk, stated:** TS and VS are one physical quantity counted as two channels, so if the hold-out fails, R3 may be met and `structural` wrongly admitted (§12, question 6). |
+| S0-01 B/B | none failed. pH's after-fit mean is outside, and VFA's two at-defaults statistics (`mean_z` below, `rms_z` above); no channel fails all three conditions. | `none` | — |
+| S0-01 B/C | **NM failed**: `digestate_ts` and `digestate_vs`; VFA's after-fit mean outside, not failed | `none` with `null_failed_unexplained`, **unless** a signature holds | `state` needs the early/late test on a failed channel and the biomass pair. `parameter` needs a common step on two channels or `inhibited`; VFA is low here, not high. `structural` needs R3 **and** a failed hold-out. **The risks, stated:** TS and VS are one physical quantity counted as two channels. If the hold-out fails, R3 may be met and `structural` wrongly admitted. If both show a step on a common day, the two-channel change point may be met and `parameter` wrongly admitted, since NB does not fail here (§12, question 6). |
 | S1-01 B/B | **NB failed**: closure −0.191 and the worst window −0.481, both below. `gas_flow` failed alone, but VFA's after-fit mean is outside, so not NS (the gap of §4.2). | `none` with `null_failed_unexplained` | `influent` needs the onset test. A closure offset in every window has no dated onset, and the feed-covariate test is code. A model-proposed onset day is accepted only if every window before it is inside the per-window envelope. `sensor` on gas needs NS, which does not fail. |
 
 So the rule predicts `none` on all four clean cells: two with the null standing and two
@@ -497,7 +508,7 @@ the registry charges.
 It applies P0's deterministic plan at `plan.eval_seconds_assumed` = 12 s, with P0's
 ladder. When the wall clock left falls below the reserve (P1's 6 minutes), it goes
 straight to PROPOSE and VERIFY with what exists. If REFERENCE never completed, the
-verifier abstains (§13, decision c).
+verifier abstains: default, pending the lead (§13, decision c).
 
 **REVISE.** This is one round, taken only on `fail`. The failing reason codes go back to
 the roles that produced the rejected findings. Those roles re-run their decision points
@@ -668,13 +679,21 @@ policy; `RecordedClient` replays.
    `scripts/`. The reference fit's settings are the served `procedure` block.
 9. **Rule 1:** nothing under `workflows/p2_multi_agent/` reads the truth store, and its
    imports pass the truth-isolation allow-list.
-10. **`dq.trust`'s constraints:** a quarantine over the first HRT, over an unflagged
-    sample, or into the hold-out is refused. The negative control is a quarantine inside
-    a QC-flagged window, which is accepted.
+10. **`dq.trust`'s constraints:** a quarantine of a first-HRT spike, of an unflagged
+    sample, or into the hold-out is refused, from the model and from the fallback alike.
+    The negative controls are a quarantine inside a QC-flagged window after the first
+    HRT, and a first-HRT flatline, both accepted.
 11. **The onset test:** a uniform offset fails it, and a dated step passes it. A
-    model-proposed onset day with an outside window before it is rejected.
+    model-proposed onset day with an outside window before it is rejected. **An onset at
+    day 0 on a uniform offset is rejected**, and so is any onset with fewer than two
+    evaluable windows before it (N1).
 12. **The templates:** the scan of §6.3, with a planted template line containing a label
     name as its negative control.
+13. **The workflow's null rule is the frozen one** (the re-review's N2). Freezing
+    `scripts/null_rule_loo.py` does not pin the workflow's own NB, NM and NS. So a test
+    runs the workflow's code over the same 120 leave-one-out placements and reproduces
+    every count in `reports/background/null_rule_loo.json`, `null_partial` included. It
+    also reproduces the four outcomes of §4.5 from `dev_cells.json`.
 
 ## 11. Development plan, power, go/no-go and cost
 
@@ -696,8 +715,11 @@ that need no model:
   | S5-01 A/A | parameter |
   | S6-02 B/B | structural |
   | S8-01 B/B | sensor |
+  | S0-01 B/C | `none` (the §4.5 prediction: NM rejected, unexplained) |
+  | S1-01 B/B | `none` (the §4.5 prediction: NB rejected, unexplained) |
 
-  The `null_partial` count is reported with them.
+  The two clean cells check the §4.5 predictions at no model cost (the re-review's N6).
+  The `null_partial` count is reported with every cell.
 
 **Deliverable 3.** The three-role minimum live, on three development cells with two
 seeds each:
@@ -708,13 +730,14 @@ seeds each:
 | S2-01 B/B | `sensor` (pH drift) | data quality's S1 path |
 | S8-01 B/B | `sensor` (gas scale) with an injected sampler failure | calibration's Level-8 path |
 
-**Go/no-go** (§13, decisions b and c). It is judged on each seed's final label. Stop and
-report only if **both** seeds of S0-01 B/B label something other than `none`. A seed
-that abstains for want of a null table is excluded, reported, and never counted as
-`none`. That is a finding about the band and the rule, not a P2 task.
+**Go/no-go** (default, pending the lead: §13, decisions b and c). It is judged on each
+seed's final label. Stop and report only if **both** seeds of S0-01 B/B label something
+other than `none`. A seed that abstains for want of a null table is excluded, reported,
+and never counted as `none`. A stop is a finding about the band and the rule, not a P2
+task.
 
-**Model** (§13, decision d): the frozen P1's `gpt-5.6-luna`, reasoning `high`, no
-temperature. Each decision point is one request with one forced tool whose input schema
+**Model** (default, pending the lead: §13, decision d): the frozen P1's `gpt-5.6-luna`,
+reasoning `high`, no temperature. Each decision point is one request with one forced tool whose input schema
 is the decision's schema.
 
 **Cost and runner time** (the review's item 9; GPT at P1's measured rate, about USD 0.04
@@ -722,7 +745,7 @@ per run, and about 50–60 min per run):
 
 | Phase | Runs | Model cost | Runner time |
 |---|---|---|---|
-| Deliverable 2 (offline, no model) | about 7 reference runs | USD 0 | about 6 h |
+| Deliverable 2 (offline, no model) | about 9 reference runs | USD 0 | about 8 h |
 | Deliverable 3 | 6 | about USD 0.3 | about 6 h |
 | Deliverable 4 (ten cells, two seeds) | 20 | about USD 0.9 | 17–20 h |
 | Ablations, every switch on every cell | 9 × 20 = 180 | about USD 8 | 150 h, 6–7 runner-days |
@@ -757,11 +780,14 @@ the lead, §12, question 7):
    after CONCLUDE, admitting `structural` only on the final validation and without a
    second round?
 5. **The development cells for deliverable 3 (§11).** S0-01 B/B, S2-01 B/B and S8-01 B/B.
-6. **Coupled channels in R3's count (§4.5, S0-01 B/C).** `digestate_ts` and
-   `digestate_vs` are one physical quantity. Should R3's channel count (a signature, not
-   the null rule) count coupled groups, not channels? This question is **motivated by a
-   development cell**, so it is stated as such. The null rule would not change, nor would
-   its rates.
+6. **Coupled channels in the signatures' channel counts (§4.5, S0-01 B/C).**
+   `digestate_ts` and `digestate_vs` are one physical quantity. Should two signature
+   counts count coupled groups, not channels?
+   - R3's "two or more channels structured" (`structural`);
+   - the change point's "two or more channels" (`parameter`).
+
+   This question is **motivated by a development cell**, so it is stated as such. The
+   null rule would not change, nor would its rates.
 7. **The ablation grid (§11).** The full 180 runs, or the proposed 84?
 
 ## 13. Decisions PENDING THE LEAD'S RULING

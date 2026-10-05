@@ -3700,3 +3700,20 @@ offline, after the review.
 
 Next: the coordinator's re-review, then the lead's rulings on (a)–(d) before any live
 call.
+
+**2026-10-06, about 23:53 UTC — the re-review of PR #31 (`3e84f3b`, PASS, ready for the lead's four decisions); its small fixes N1–N9 made.**
+- Design revision 3:
+  - the onset test needs at least two evaluable windows before the onset, all inside,
+    so day 0 on a uniform offset is refused;
+  - a planned test pins the workflow's NB/NM/NS to the 120 leave-one-out counts and the
+    four §4.5 outcomes;
+  - the first-HRT refusal covers spikes only, and applies to the fallback too;
+  - S0-01 B/C and S1-01 B/B are added to the offline power run;
+  - the defaults are marked pending where they are used;
+  - the TS/VS risk is extended to the `parameter` change point;
+  - wording fixes.
+- `scripts/null_rule_loo.py` now also counts `null_partial` (7/120). Every existing
+  count is unchanged.
+
+Decisions (a)–(d) stay PENDING until the coordinator relays the lead's rulings. No live
+call.

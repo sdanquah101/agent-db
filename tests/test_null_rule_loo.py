@@ -29,6 +29,9 @@ def test_the_committed_rates_are_what_the_record_gives():
     )
     assert rules["null_rejected"]["rate"] < rules["any_channel_after_fit_mean_outside"]["rate"]
     assert rules["null_rejected"]["rate"] < rules["any_statistic_outside"]["rate"]
+    # the design's figures (docs/p2_design.md §4.2-4.3): 19 rejections, 7 partial
+    assert rules["null_rejected"]["false_alarms"] == 19
+    assert rules["null_partial"]["false_alarms"] == 7
 
 
 def _channel(mean_d: int, mean_f: int, rms_d: int, rms_f: int) -> dict[str, int]:
@@ -58,8 +61,12 @@ def test_the_null_rule_means_what_the_design_says():
     # one channel failed, the others' after-fit means inside: NS, not NM
     single = _placement(gas_flow=failed, ph=inside, tan=_channel(0, 0, 1, 1))
     assert loo.n_single(single) and not loo.n_multi(single)
-    # one channel failed but another's after-fit mean outside: neither NS nor NM
-    assert not loo.n_single(_placement(gas_flow=failed, ph=_channel(0, 1, 0, 0)))
+    # one channel failed but another's after-fit mean outside: neither NS nor NM, but
+    # counted as the gap the design reads as none (null_partial)
+    gap = _placement(gas_flow=failed, ph=_channel(0, 1, 0, 0))
+    assert not loo.n_single(gap) and not loo.n_multi(gap) and loo.null_partial(gap)
+    assert not loo.null_partial(single) and not loo.null_partial(noisy)
+    assert not loo.null_partial(_placement(gas_flow=failed, ph=failed))
     # two channels failed: NM
     assert loo.n_multi(_placement(gas_flow=failed, ph=failed))
     # temperature is read, never a failure

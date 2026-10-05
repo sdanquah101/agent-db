@@ -122,11 +122,25 @@ def n_single(p: Placement) -> bool:
     return all(p.get(f"{c}.after_fit.mean_z", 0) == 0 for c in channels(p) if c != failed[0])
 
 
+def null_partial(p: Placement) -> bool:
+    """The gap the design reads as ``none`` by design (``docs/p2_design.md`` §4.2).
+
+    Exactly one channel's null case failed, and another channel's after-fit mean is
+    outside without a full failure, so neither NS nor NM fires. Counted, not a component.
+    """
+    failed = [c for c in channels(p) if channel_fails(p, c)]
+    if len(failed) != 1:
+        return False
+    return any(p.get(f"{c}.after_fit.mean_z", 0) != 0 for c in channels(p) if c != failed[0])
+
+
 RULES: dict[str, Callable[[Placement], bool]] = {
     "NB": n_bal,
     "NM": n_multi,
     "NS": n_single,
     "null_rejected": lambda p: n_bal(p) or n_multi(p) or n_single(p),
+    # counted, not part of the rule: the gap that reads none by design
+    "null_partial": null_partial,
     # the rules the design rejects, measured for the record
     "any_statistic_outside": lambda p: any(v != 0 for v in p.values()),
     "any_channel_after_fit_mean_outside": lambda p: any(

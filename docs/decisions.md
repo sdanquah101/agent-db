@@ -7370,7 +7370,7 @@ outside" fires on 90 of 120 clean runs, and cannot be P2's null rule.
   unchanged. It is now marked PENDING THE LEAD'S RULING (decision a of the design's §13),
   with the pre-registered predictions on the four clean development cells (design §4.5)
   and the timing disclosed (design §4.6).
-- A label is admitted only over a failed null case that matches it (the design's §4.3).
+- A label is admitted only over a failed null case that matches it (the design's §4.4).
 - `scripts/null_rule_loo.py` reproduces the rates, `reports/background/null_rule_loo.json`
   holds them, and `tests/test_null_rule_loo.py` pins them.
 

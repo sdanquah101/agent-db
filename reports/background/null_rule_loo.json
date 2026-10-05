@@ -74,6 +74,21 @@
     "C/C": 2
    }
   },
+  "null_partial": {
+   "false_alarms": 7,
+   "rate": 0.0583,
+   "per_plant_tier": {
+    "A/A": 1,
+    "A/B": 0,
+    "A/C": 3,
+    "B/A": 0,
+    "B/B": 0,
+    "B/C": 2,
+    "C/A": 0,
+    "C/B": 0,
+    "C/C": 1
+   }
+  },
   "any_statistic_outside": {
    "false_alarms": 90,
    "rate": 0.75,
