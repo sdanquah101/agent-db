@@ -3633,3 +3633,33 @@ which is not fetched. The failure is
 development cells' placement once the band is FINAL. With the placement committed
 (`e297cb3`), that file passes all 14 tests, and ruff is clean. Deliverable 0 is complete
 and waits for the coordinator's review.
+
+**2026-10-05, about 18:20 UTC — the coordinator's review of PR #30 (fixes needed, nothing
+blocking), worked.** Six items; details in `docs/decisions.md` (2026-10-05).
+1. The tool returns `status` and `band_seeds`. FINAL is refused over fewer than the ten
+   declared seeds, and PROVISIONAL is refused over all ten.
+2. The placement judges only the ruled statistics. The charge drift is shown but not
+   judged. New counts:
+
+   | cell | statistics outside / judged |
+   |---|---|
+   | S0-01 B/A | 0 / 12 |
+   | S0-01 B/B | 3 / 35 |
+   | S0-01 B/C | 12 / 63 |
+   | S1-01 B/B | 11 / 35 |
+3. A planted-truth control for rule 1, on a generated S3-01 run with a populated truth
+   store.
+4. The record check drops no line. It tries every reading of interleaved attempts, so the
+   one log that needs this (`A.adapted-C-900008`) is read correctly. Cut-off attempts
+   must match the declared procedure or the discarded Fisher-only one, and every line
+   must be `ok`. Negative controls cover the two corruptions the earlier check missed.
+5. The band is republished from a clean tree: provenance `f8bb2ff`, every value identical.
+6. The PR body now says what the merge `8066a1e` brought. `tools/llm.py` and
+   `tools/workflow_config.py` are byte-identical to `main` at `a16cbc9`, the freeze
+   test's base. P0's runner does import them, so "P0 does not import them" would be
+   wrong.
+
+The reviewer's leave-one-out finding goes into `docs/p2_design.md`. Each clean seed,
+judged against the other nine, falls outside on about 20 % of its statistics. P2's null
+rule must therefore not read "any statistic outside" as a fault. The band is unchanged.
+Next: the coordinator's re-review. Then `docs/p2_design.md` on `claude/p2-multi-agent`.
