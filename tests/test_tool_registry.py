@@ -125,6 +125,8 @@ def test_every_tool_of_the_proposal_table_is_registered_with_a_version(tmp_path)
         "fisher_info", "fit_lsq", "fit_de", "fit_cmaes", "bayes_mcmc", "filter_enkf",
         "filter_mhe", "residual_diag", "voi_assay", "validate", "request_assay",
         "simulate", "describe_model", "feed_loads",
+        # beside the frozen table (decision 1 of 2026-09-30; tools/background.py)
+        "declared_background",
     }  # fmt: skip
     assert set(reg.tools) == expected
     for name in expected:

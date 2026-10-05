@@ -61,11 +61,13 @@ __all__ = [
 def make_registry(**kwargs: object) -> Registry:
     """A registry over the full tool table with no run attached (tests, pure tools).
 
-    Keyword arguments go to :class:`Registry`; ``specs`` defaults to every tool.
+    Keyword arguments go to :class:`Registry`; ``specs`` defaults to every tool: the
+    frozen table of :mod:`tools.impl` and the declared background beside it
+    (:func:`tools.background.full_specs`).
     """
-    from tools.impl import SPECS
+    from tools.background import full_specs
 
-    kwargs.setdefault("specs", SPECS)
+    kwargs.setdefault("specs", full_specs())
     return Registry(**kwargs)  # type: ignore[arg-type]
 
 

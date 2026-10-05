@@ -1,0 +1,14 @@
+{"seq":0,"name":"sim.generate_influent","version":"1.0","args_hash":"10658fb977741a87","outcome":"ok","detail":""}
+{"seq":1,"name":"sim.burn_in","version":"1.0","args_hash":"2148f2db2c6b4c4f","outcome":"ok","detail":""}
+{"seq":2,"name":"sim.simulate_truth","version":"1.0","args_hash":"10658fb977741a87","outcome":"ok","detail":""}
+{"seq":3,"name":"sim.channel_series","version":"1.0","args_hash":"7253c84add800287","outcome":"ok","detail":""}
+{"seq":4,"name":"sim.observe","version":"1.0","args_hash":"aa8cc45fcbc8a71f","outcome":"ok","detail":""}
+{"seq":5,"name":"registry.open","version":"1.0","args_hash":"3118c2980995ef06","outcome":"ok","detail":"clock start: the wall-clock allowance runs from this record"}
+{"seq":6,"name":"describe_model","version":"1.0","args_hash":"6e46ab5fd289f281","outcome":"ok","detail":""}
+{"seq":7,"name":"feed_loads","version":"1.0","args_hash":"6e46ab5fd289f281","outcome":"ok","detail":""}
+{"seq":8,"name":"simulate","version":"1.0","args_hash":"2374dcaf9eadfb0e","outcome":"ok","detail":""}
+{"seq":9,"name":"mass_balance","version":"1.0","args_hash":"6cc51d665b043c74","outcome":"ok","detail":""}
+{"seq":10,"name":"gsa_morris","version":"1.0","args_hash":"ee919d43d08aaaf4","outcome":"ok","detail":""}
+{"seq":11,"name":"fisher_info","version":"1.0","args_hash":"a89614c70448f05d","outcome":"ok","detail":""}
+{"seq":12,"name":"fit_lsq","version":"1.0","args_hash":"dc83fbf68c187e2b","outcome":"ok","detail":""}
+{"seq":13,"name":"simulate","version":"1.0","args_hash":"b7e74edcb2b4875f","outcome":"ok","detail":""}

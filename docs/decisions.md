@@ -7125,3 +7125,219 @@ constraints. Its first deliverable is the declared-background tool of decision 1
 own PR, reviewed and merged before any P2 role runs live. P2 as a workflow is not agents
 with prompts: seven procedures written from the review and P0's rules, a model called
 only at typed decision points, coordination as code.
+
+
+## 2026-09-30 — The declared-background tool built (decision 1): the procedure, the seeds, what the band is and is not
+
+**Session:** the P2 component session (`claude/declared-background`, cut from `main` at
+`b611a1b`), the first deliverable of the P2 launch brief §7.0. Not the coordinator.
+
+**Decision (how decision 1 is implemented).** The null band is served by a **new**
+registry tool, `declared_background(plant, tier)` (`tools/background.py`, version `1.0`
+in `configs/tools/registry.yaml`, schemas in `tools/schemas/background.py`, config
+`configs/background.yaml` loaded by `tools/config.py::load_background`), registered
+*beside* the frozen table: `tools.impl.SPECS` is unchanged and `tools/background.py::
+full_specs()` is the one place the entry joins it, read by both registry builders
+(`make_registry`, `open_registry`). It costs no evaluation, is logged like every tool
+(visible and truth-side lines), and is a pure function of `(plant, tier)` and the
+committed configuration: it reads nothing of the run.
+
+**The procedure** (`scripts/declared_background.py`, experimenter side, like the
+positive-control driver), every size read from the frozen P0 and P1 files rather than
+chosen here:
+
+1. Records: the clean row `S0-01` generated with the harness on each plant at the plant's
+   horizon (`at_plant_horizon`), three base seeds **900001–900003** (disjoint from every
+   library seed; tested), at all three tiers; Plant A on both declared community states
+   (`adapted`, `unadapted`). Budget per run 300 evaluations / 300 min / 0 assay units,
+   enforced by the run's registry.
+2. Through the run's registry, on the visible record only (run view: sensors, feed log,
+   redacted manifest): `describe_model`, `feed_loads`, `simulate` at the defaults;
+   `mass_balance` over `balance_window_d` = 30 d windows of the calibration window
+   `[0, 0.75 T]` (P1's convention); P0's screening against P0's calibration channels the
+   tier carries, weighted with P0's declared-noise rule (`sd = sqrt((cv·|v|)² + sd_abs²)`,
+   floored at 0.02 × median |v|): `gsa_morris` at P0's ruled size (`morris_trajectories`
+   4, `summary` mean over the calibration window, `seeds.morris`) and P0's Morris rule
+   (μ* over the largest μ* of that output, on any output, ≥ `morris_min_relative` 0.10;
+   at most `morris_keep` 4; at least `min_subset` 2), then `fisher_info` at the defaults
+   on the kept set with P0's identifiability rule (relative CRLB ≤ `max_relative_crlb`
+   0.5, a null direction drops, at least `min_subset` stay by rank) — Sobol at its
+   declared fallback ("skip Sobol and take the Morris subset"); `fit_lsq` on the approved
+   subset from the defaults with P0's ruled sizes (1 start, 40 evaluations, `seeds.lsq`);
+   `simulate` at the optimum. Bound under 160 evaluations per run; the same seeds give the
+   same band on any machine (fixed sizes, never the measured rate). The Fisher-only
+   bottom rung was tried first and dropped: on twenty parameters the information at the
+   defaults is rank-deficient and every relative CRLB a null direction, so "at least two
+   stay by rank" kept the first two in declared order (`k_dis`, `k_hyd_ch` at B/A), which
+   is P0's fallback as written but not a screened fit.
+3. Per sensor of the tier, over the calibration window: `mean_z` and `rms_z` of
+   `(observed − predicted) / declared sd` at the defaults and after the fit (P1's
+   `sim_summary` arithmetic); per run the mean COD closure, every window's closure, the
+   inadmissible-window count, the N closure, the charge drift and its verdict; the fitted
+   subset and whether it ended at a bound.
+4. Aggregation per (plant, tier) over the runs — Plant A's two states pooled — as mean,
+   sd, min and max (`BandStat`), counts as min/mean/max (`IntBand`); the yaml regenerates
+   from `reports/background/runs.jsonl` and a test compares; the benchmark card's §5.5
+   tables regenerate from the yaml and a test compares.
+
+**What the band is not.** Not per cell or per scenario (rule 1): keys are plant and tier;
+no run id, no library seed, no scenario but `S0-01` in the file; the tool answers
+identically on registries of different runs, and differently for different plants and
+tiers (the negative control). Not a change to any existing tool: the nineteen frozen
+tools' versions and input/output fields are pinned in `tests/tool_contracts_v1.json`;
+P0's pipeline, `p0.yaml` and P1's committed tool list never name it, and P1's tool digest
+`11d8e352…` is the one every frozen summary carries (tested); the two-head P0 freeze test
+runs on the PR's head (result in the PR body). Not a threshold: what a workflow requires a
+fault to exceed is its own declared rule (P2's design document); P0 and the frozen P1
+never read it. Not a QC'd record: no quarantine is applied, so the band describes the
+record before cleaning, a conservative reference for a workflow that quarantines spikes.
+
+**Reason.** Decision 1's own: without a declared reference no model-backed workflow can
+tell the plant's background from a fault, and `none` stays unscoreable; a tool result is
+the channel every workflow shares and the evaluator can audit. The screened fit is
+declared at P0's own sizes with Sobol at its fallback rather than by running P0 itself
+because P0's plan reads the measured evaluation rate (its fallbacks are
+machine-dependent, the freeze test's own finding of 2026-09-29), and a published band
+must be reproducible from its seeds; Sobol's 80 evaluations per run would double the
+cost for a subset the Morris rule already bounds at four.
+
+**Alternatives.** Carry the band in `mass_balance` / `residual_diag` results (rejected by
+decision 1: breaks P0's freeze). Run the full P0 procedure per clean run (rejected:
+machine-dependent plan, 2–3× the cost). A hand-picked fitted subset per plant (rejected:
+a number of this session's own; the Morris and Fisher rules are P0's declared ones).
+The Fisher-only rung (rejected after one run: degenerate, above). One band per
+Plant A state (rejected: leaks the state, which ruling B5 keeps undeclared). Fewer than
+three seeds (rejected: no sd). More (deferred: the record is incremental; the lead may
+ask for more seeds and the yaml regenerates).
+
+**Not changed:** `sim/`, `scenarios/`, the G1-frozen configs, `workflows/p0_scripted/`,
+`configs/workflows/p0.yaml`, `eval/`, `tools/impl/`. Two tests that enumerate the tool
+table gained the new name (`tests/test_tool_registry.py`; `tests/test_p1_agent.py`,
+which now says the frozen P1 leaves `declared_background` uncalled).
+
+
+## 2026-09-30 — RULING (the lead): the declared background's band rule, fixed before any further result
+
+**The lead's word** of 2026-09-30 on the P2 session's Q1 ("implement your
+recommendations"), relayed by the coordinator (session_01Cu6G2kQjP2QSzvtkyP8cPr) at
+20:11 UTC. Recorded here **before** any run of seeds 900004–900010 starts. At the time of
+this entry, 12 of the 36 three-seed runs are done (Plant B at all tiers; Plant C at
+tier B).
+
+**The rule.**
+1. **N = 10 clean seeds per truth group**: seeds 900001–900010. A truth group is one
+   (plant, declared community state, seed): Plants B and C, and Plant A on each of its two
+   declared states. That is 3 existing seeds plus 7 more, with the same driver
+   (`scripts/declared_background.py`), the same sizes and the same procedure (the entry
+   above, "The declared-background tool built"), and no other change.
+2. **The band** for each (plant, tier) and each published statistic is the **min–max
+   envelope over the runs**, published as such, with N and the seeds in
+   `configs/background.yaml` and in the benchmark card. That is 10 runs on Plants B and C,
+   and 20 on Plant A, whose two states pool (ruling B5). The statistics:
+   - the per-run mean COD closure over the calibration window;
+   - the per-run count of inadmissible COD windows;
+   - the per-run worst window, meaning the closure of the window with the largest
+     |closure|, sign kept. This statistic is added by this ruling;
+   - per sensor, `mean_z` and `rms_z`, at the defaults and after the screened fit.
+
+   The yaml keeps each statistic's mean and sd beside its min and max, for reading only.
+   The band is `[min, max]`.
+3. **Final for this benchmark version.** No seed is added or dropped, and no statistic or
+   envelope is changed, after seeing where any development cell falls. The clean
+   development cells (S0-01 B/A, B/B and B/C, and S1-01 B/B) are **not inputs** and are
+   not consulted in building the band.
+4. **A clean development cell outside the band is a finding**, reported in
+   `docs/milestones.md`, the card and the PR, and never corrected by widening the band.
+   P2's null rule uses the band exactly as published, with no margin of its own.
+
+**Until the ten seeds are in**, the three-seed band is published on the P2 branch
+labelled **PROVISIONAL** (`provenance.status` in the yaml, and the card). When the ten
+seeds are in, the band is regenerated, the label becomes FINAL, and the PR states where
+each clean development cell falls, inside or outside, per statistic. The development
+cells are measured with the same procedure through their own registries.
+
+**Reason.** A reference that is widened or narrowed after looking at the cell it will
+judge is fitted to the answer. The P2 session's earlier recommendation ("more seeds
+because the go/no-go asks for `none` on this cell") is withdrawn for that reason
+(`docs/milestones.md`, 19:58 UTC). Ten seeds give the envelope a declared size, fixed in
+advance. The min–max envelope is the simplest rule that states what clean runs were
+actually seen.
+
+**Alternatives.** A quantile band, rejected: at N = 10 a 5–95 % quantile is the second
+and ninth order statistics, a narrower claim than "seen on a clean run". A mean ± k·sd
+band, rejected: it assumes a shape that ten runs cannot check. Three seeds, rejected:
+the envelope is too thin to be a reference. More than ten seeds, not now: the cost is
+about 70 min per run on this machine.
+
+
+## 2026-10-02 — The declared background: a driver bug on Plant A, found and fixed (no change to the rule)
+
+**Found by the P2 session** while checking the three-seed record before publishing it as
+PROVISIONAL. Nothing had been published.
+
+**The bug.** `scripts/declared_background.py` generated every stage into one run store.
+A run id is an HMAC over (scenario, plant, tier, seed, replicate), and the declared
+community state is not part of it. So `A.adapted-<tier>-<seed>` and
+`A.unadapted-<tier>-<seed>` resolved to the **same run directory and the same truth
+store**, and the second generation overwrote the first. The stored records are
+`unadapted` (their complete manifests say so). Every Plant A result of the first
+computation therefore measured the unadapted state under both keys, and the adapted state
+was never measured. The visible symptom: Plant A call logs with two registries open on
+one run, their lines interleaved. On every affected run, the two attempts' calls had
+identical argument hashes.
+
+**The fix.**
+- Each Plant A state gets its own run store (`<store>/A.adapted/runs`,
+  `<store>/A.unadapted/runs`), so its own salt, run ids and truth store. Plants B and C
+  keep the shared store, since their run ids differ by plant.
+- `check_index` refuses two runs of one stage sharing a run id.
+- `compute_one` refuses a stored record whose complete manifest names a state other than
+  the run's declared one.
+- A regression test: `test_each_plant_a_state_has_its_own_store_and_a_shared_run_id_is_refused`.
+- All Plant A index entries and results are discarded: 18 computed runs. Every Plant A
+  run is regenerated and recomputed.
+
+Plants B and C are unaffected: 21 runs kept.
+
+**Not changed:** the seeds, the band rule, the statistics and the procedure (the lead's
+ruling of 2026-09-30). The fix is the driver doing what the rule already said, the two
+states each measured on their own record.
+
+**Also recorded:** a run's visible call log is append-only. It keeps the attempts that a
+container restart cut off, and the first, Fisher-only attempts that were discarded. The
+published record is each run's last attempt, which the test checks against the declared
+sequence. A library seed is matched as a whole number in the leak test, so `0.231031`
+does not count as seed 1031. The record test looks for the token `"faults"` as a key, not
+as a substring of `at_defaults`.
+
+
+## 2026-10-05 — The declared background after the coordinator's review of PR #30 (no change to the rule)
+
+**From the review of 2026-10-05 at `6cc7519`** (verdict: fixes needed, nothing blocking).
+None of these changes the seeds, the statistics, the envelope or a value of the band.
+
+1. **The tool says what its band is.** `declared_background` now returns `status`
+   (PROVISIONAL or FINAL) and `band_seeds`, the seeds the band is over. Before, a
+   workflow saw only `procedure.seeds`, which always lists all ten. The loader refuses a
+   FINAL band over fewer than the declared seeds, and a PROVISIONAL band over all of them.
+   The check sits on `BackgroundConfig`, not on the provenance, because the declared
+   seeds belong to the procedure.
+2. **Only the ruled statistics are judged in the placement.** The charge drift is in the
+   band for reading but is not one of the ruling's statistics, so the placement shows it
+   with its envelope, unjudged (`ruled: false`, `inside: null`), and does not count it.
+   The counts become S0-01 B/A 0 / 12, B/B 3 / 35, B/C 12 / 63, and S1-01 B/B 11 / 35.
+3. **Rule 1 has a planted-truth control.** A short faulted run (S3-01) is generated with
+   a populated truth store, and its registry is opened as a workflow's would be. None of
+   the truth store's identifiers, seeds, hashes or fault labels is in the tool's answer
+   or in the visible log line. One such value, planted into a copy of the committed
+   yaml, is caught by the same scan that the committed yaml passes.
+4. **The record check drops nothing.**
+   - Every line after the harness header must belong to an attempt. Where two
+     interleaved attempts end on the same sequence number, every reading is tried.
+   - A cut-off attempt must be a prefix of the declared sequence, with the complete
+     attempt's calls, or a prefix of the discarded Fisher-only procedure.
+   - Every line must be `ok`.
+   - Negative controls cover the two corruptions the earlier check missed.
+5. **The provenance names a clean commit.** The band was republished from a clean tree,
+   with identical values. The earlier `-dirty` suffix came from uncommitted work in the
+   tree at publish time, not from the record.

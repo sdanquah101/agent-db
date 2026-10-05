@@ -227,7 +227,9 @@ tools/
   models.py         the Model protocol; the analytic test models
   fitted.py         adm1_fitted (imports sim)
   assays.py         request_assay (privileged side)
-  impl/             one module per tool: pure functions of (input, model, seed)
+  impl/             one module per tool: pure functions of (input, model, seed); FROZEN
+  background.py     declared_background: the null band per plant and tier (decision 1 of
+                    2026-09-30), the one entry registered beside the frozen table (full_specs)
   transport.py      frames and array encoding (shared)
   server.py         the socket server
   sandbox.py        the workflow launcher and its bootstrap
