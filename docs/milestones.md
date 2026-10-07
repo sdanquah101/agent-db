@@ -3717,3 +3717,24 @@ call.
 
 Decisions (a)–(d) stay PENDING until the coordinator relays the lead's rulings. No live
 call.
+
+**2026-10-07, about 23:00 UTC — P2 deliverable 2 on `claude/p2-workflow` (draft PR #32).**
+- The lead's rulings of 2026-10-07 are recorded, and the null rule is frozen by sha256.
+- The workflow runs offline, with every test of design §10. CI is green on `e5d4926`.
+- **The offline power run (no model) is complete**: `reports/p2_power/`.
+  - **0 of 6 faulted cells** are labelled correctly, and the null is rejected on 3 of 6.
+  - **Three wrong `parameter` labels**, which are false kinetic updates: S2-01 B/B,
+    S3-01 C/B and the clean S0-01 B/C.
+  - The §4.5 predictions: S1-01 B/B holds; S0-01 B/C fails.
+  - S8-01 B/B would be a correct `sensor` with a model's S1 reading; offline it is blocked
+    by the declared fallback.
+- **Findings for the coordinator** (`reports/p2_power/findings.md`), none acted on:
+  - admission does not tie a signature to the channels whose null case failed;
+  - early change points sit inside the first HRT;
+  - `influent` is unreachable when only the worst window is outside;
+  - a single-channel fault can land in NM.
+- **A reporting correction**, with a test: the sensor rejection code is now
+  `signature_absent` when the S1 table holds but nothing reads it.
+
+No live call. The next step is the coordinator's review of deliverable 2 and the lead's
+word on the findings, before deliverable 3.

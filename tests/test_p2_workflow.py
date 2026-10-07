@@ -201,10 +201,16 @@ def test_admission_needs_a_failed_null_case_and_its_signature(cfg):
     assert wf.admit(lab, _table(ns=True, failed=["gas_flow"]), sig)["admitted"] == ["sensor"]
     # NS on another channel: rejected
     assert wf.admit(lab, _table(ns=True, failed=["ph"]), sig)["admitted"] == []
-    # the S1 reading fails: coupled_outside
-    bad = {"sensor": {"channel": "gas_flow", "s1_holds": False}, "sensor_proposed": True}
+    # the S1 table shows the coupled channels moved: coupled_outside
+    bad = {"sensor": {"channel": "gas_flow", "s1_holds": False,
+                      "s1": {"coupled_inside": False}}, "sensor_proposed": True}  # fmt: skip
     out = wf.admit(lab, _table(ns=True, failed=["gas_flow"]), bad)
     assert out["rejected"] == [{"label": "sensor", "code": "coupled_outside"}]
+    # the table holds but no reading admits it (the offline fallback): signature_absent
+    unread = {"sensor": {"channel": "gas_flow", "s1_holds": False,
+                         "s1": {"coupled_inside": True}}, "sensor_proposed": True}  # fmt: skip
+    out = wf.admit(lab, _table(ns=True, failed=["gas_flow"]), unread)
+    assert out["rejected"] == [{"label": "sensor", "code": "signature_absent"}]
     # influent on NB only; parameter on NM without NB; structural on NM with R3 and hold-out
     inf = {"influent": True, "influent_proposed": True}
     assert wf.admit(lab, _table(nb=True), inf)["admitted"] == ["influent"]

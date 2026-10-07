@@ -436,7 +436,11 @@ def admit(
         "sensor",
         bool(t.get("NS")) and sensor.get("channel") in t.get("failed_channels", []),
         bool(sensor.get("channel")) and bool(sensor.get("s1_holds")),
-        "coupled_outside" if sensor.get("channel") else "signature_absent",
+        # coupled_outside only when the S1 table itself shows the coupled channels moved;
+        # a table that holds with no reading for it (the offline fallback) is absent
+        "coupled_outside"
+        if sensor.get("channel") and not (sensor.get("s1") or {}).get("coupled_inside", False)
+        else "signature_absent",
     )
     judge("influent", bool(t.get("NB")), bool(signatures.get("influent")))
     judge(
