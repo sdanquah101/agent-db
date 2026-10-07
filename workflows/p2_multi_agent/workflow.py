@@ -1892,8 +1892,9 @@ class Workflow:
                  "rejected": result["rejected"]},
                 check=lambda o, adm=result["admitted"]: o.label in [*adm, lab["none"]],
             )  # fmt: skip
-            proposed = any(self.signatures.get(f"{k}_proposed") for k in P0_ORDER)
-            verdict = "pass" if result["admitted"] or not proposed else "fail"
+            # a fail is a rejected null that no admitted label explains; a signature
+            # rejected because the null stands is the null case working: a pass on none
+            verdict = "pass" if result["admitted"] or not self.table["null_rejected"] else "fail"
             self.verdict = {"verdict": verdict, "label": choice.label, **result,
                             "holdout_failed": holdout_failed, "round": round_ + 1}  # fmt: skip
             self.log.send("verdict", "verification", "coordination", "verify",

@@ -222,6 +222,36 @@ def test_admission_needs_a_failed_null_case_and_its_signature(cfg):
     assert wf.first_in_p0_order(lab, ["parameter", "sensor"]) == "sensor"
 
 
+def test_a_signature_over_a_standing_null_concludes_none_not_unexplained(monkeypatch, cfg):
+    """A rejected signature over a clean table is the null case working (the smoke run)."""
+    fake = FakeTools()
+    monkeypatch.setattr(wf, "tools", fake)
+    run = wf.Workflow(json.loads(json.dumps(cfg)))
+    run.reference = {"balance": {}, "channels": {}}
+    run.table = _table()
+    run.signatures = {"parameter": True, "parameter_proposed": True}
+    run.prediction = fake._simulate(wf.MODEL)
+    run.series = {}
+    run.step_verify()
+    assert run.verdict["verdict"] == "pass" and run.verdict["label"] == "none"
+    assert run.verdict["rejected"] == [{"label": "parameter", "code": "null_not_failed"}]
+    run.step_conclude()
+    assert run.classification["rule"] == "null_stands"
+    assert run.classification["confidence"] == cfg["p0"]["attribution"]["confidence"]["none"]
+    assert "revise" not in run.trace
+    # and a rejected null with nothing admitted is the fail that concludes unexplained
+    run2 = wf.Workflow(json.loads(json.dumps(cfg)))
+    run2.reference = {"balance": {}, "channels": {}}
+    run2.table = _table(nm=True, failed=["ph", "tan"])
+    run2.signatures = {}
+    run2.prediction = run.prediction
+    run2.series = {}
+    run2.step_verify()
+    assert run2.verdict["verdict"] == "fail" and "revise" in run2.trace
+    run2.step_conclude()
+    assert run2.classification["rule"] == "null_failed_unexplained"
+
+
 def test_a_run_without_a_null_table_abstains_and_never_reads_none(monkeypatch, cfg):
     run, _fake, doc = run_fake(monkeypatch, cfg, FakeTools(evals=60))
     assert run.verdict["verdict"] == "abstain" and run.table is None
