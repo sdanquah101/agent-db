@@ -1,12 +1,12 @@
 # P2: task-specialised procedures with model-backed decision points (proposal §6.5)
 
-Status: **DRAFT, revision 3, for the lead's rulings.** This is deliverable 1 of
-`docs/p2_launch_brief.md` §7. Revision 2 answered the review of 2026-10-05 at `c502899`;
-revision 3 answers the re-review at `3e84f3b` (items N1–N9).
-Four decisions are **PENDING THE LEAD'S RULING** (§13) and are written as defaults, not
-as decided. No live model call happens before the coordinator's review and the lead's
-approval. Written by the P2 component session on `claude/p2-multi-agent`, cut from
-`main` at `817b1f9`.
+Status: **APPROVED; merged at `2dab5d2` (PR #31, merge `aad51ea`).** This is deliverable 1
+of `docs/p2_launch_brief.md` §7. Revision 2 answered the review of 2026-10-05 at
+`c502899`; revision 3 answered the re-review at `3e84f3b` (items N1–N9). The four
+decisions of §13 are **DECIDED (lead, 2026-10-07)**, as recommended. No live model call
+happens before the coordinator's review of deliverable 2 and the lead's approval.
+Written by the P2 component session on `claude/p2-multi-agent`, cut from `main` at
+`817b1f9`; amended on `claude/p2-workflow` (deliverable 2).
 
 The brief is the charter. This document turns its §3 table and its §4 steps into
 procedures, schemas and switches that can be built and tested. Where the brief leaves a
@@ -241,7 +241,8 @@ fallback, too, never quarantines a first-HRT spike.
 | `design.assay` | the request and its reason code, `voi_assay`'s table, the price list, the units left | `{assay: enum(price list), day, prediction: enum(channel)}` | P0 §3.6 |
 
 The audit found these choices apt in 9 of 10 runs **on Claude**, not on GPT. With GPT
-(§13, decision d) this decision point may be weaker than the audit suggests.
+(§13, decision d: DECIDED (lead, 2026-10-07)) this decision point may be weaker than the
+audit suggests.
 
 **Tools:** `voi_assay`, `request_assay`.
 
@@ -261,7 +262,7 @@ claim (§10).
    statistic of the reference fit (§3) is placed against the band: 12, 35 or 63
    statistics by tier. The null components NB, NM and NS of §4 are evaluated. The table
    goes into the state. **A run without a completed null table** (the reference fit
-   unfinished) **abstains**: default, pending the lead (§13, decision c).
+   unfinished) **abstains** (§13, decision c: DECIDED (lead, 2026-10-07)).
 2. **Admission.** Each proposed label must rest on a null component that failed (§4.4).
    A label without one is rejected, whatever its signature.
 3. **The hold-out.** One `validate` call on the proposal's prediction. The verifier is
@@ -451,7 +452,7 @@ input: the rule does not change if a live run disagrees.
 | S0-01 B/A | none failed | `none` | — |
 | S0-01 B/B | none failed. pH's after-fit mean is outside, and VFA's two at-defaults statistics (`mean_z` below, `rms_z` above); no channel fails all three conditions. | `none` | — |
 | S0-01 B/C | **NM failed**: `digestate_ts` and `digestate_vs`; VFA's after-fit mean outside, not failed | `none` with `null_failed_unexplained`, **unless** a signature holds | `state` needs the early/late test on a failed channel and the biomass pair. `parameter` needs a common step on two channels or `inhibited`; VFA is low here, not high. `structural` needs R3 **and** a failed hold-out. **The risks, stated:** TS and VS are one physical quantity counted as two channels. If the hold-out fails, R3 may be met and `structural` wrongly admitted. If both show a step on a common day, the two-channel change point may be met and `parameter` wrongly admitted, since NB does not fail here (§12, question 6). |
-| S1-01 B/B | **NB failed**: closure −0.191 and the worst window −0.481, both below. `gas_flow` failed alone, but VFA's after-fit mean is outside, so not NS (the gap of §4.2). | `none` with `null_failed_unexplained` | `influent` needs the onset test. A closure offset in every window has no dated onset, and the feed-covariate test is code. A model-proposed onset day is accepted only if every window before it is inside the per-window envelope. `sensor` on gas needs NS, which does not fail. |
+| S1-01 B/B | **NB failed**: closure −0.191 and the worst window −0.481, both below. `gas_flow` failed alone, but VFA's after-fit mean is outside, so not NS (the gap of §4.2). | `none` with `null_failed_unexplained` | `influent` needs the onset test. A closure offset in every window has no dated onset, and the feed-covariate test is code. A model-proposed onset day is accepted only if at least two evaluable windows lie before it and every one of them is inside the per-window envelope, so an onset at day 0 is refused. `sensor` on gas needs NS, which does not fail. |
 
 So the rule predicts `none` on all four clean cells: two with the null standing and two
 with it rejected and unexplained. The prediction holds only if the signature tests reject
@@ -508,7 +509,7 @@ the registry charges.
 It applies P0's deterministic plan at `plan.eval_seconds_assumed` = 12 s, with P0's
 ladder. When the wall clock left falls below the reserve (P1's 6 minutes), it goes
 straight to PROPOSE and VERIFY with what exists. If REFERENCE never completed, the
-verifier abstains: default, pending the lead (§13, decision c).
+verifier abstains (§13, decision c: DECIDED (lead, 2026-10-07)).
 
 **REVISE.** This is one round, taken only on `fail`. The failing reason codes go back to
 the roles that produced the rejected findings. Those roles re-run their decision points
@@ -669,7 +670,7 @@ policy; `RecordedClient` replays.
    - on each of NB, NM and NS constructed to fail, the matching label is admitted only
      with its signature;
    - a signature without a failed null case is rejected with `null_not_failed`;
-   - a run with no null table abstains.
+   - a run with no null table abstains (§13, decision c: DECIDED (lead, 2026-10-07)).
 6. **Every decision point's schema:** a valid output is accepted. An invalid one is
    retried once, then the declared fallback is used and recorded.
 7. **Every ablation switch:** a run with the switch off records it, omits its element,
@@ -730,13 +731,13 @@ seeds each:
 | S2-01 B/B | `sensor` (pH drift) | data quality's S1 path |
 | S8-01 B/B | `sensor` (gas scale) with an injected sampler failure | calibration's Level-8 path |
 
-**Go/no-go** (default, pending the lead: §13, decisions b and c). It is judged on each
+**Go/no-go** (§13, decisions b and c: DECIDED (lead, 2026-10-07)). It is judged on each
 seed's final label. Stop and report only if **both** seeds of S0-01 B/B label something
 other than `none`. A seed that abstains for want of a null table is excluded, reported,
 and never counted as `none`. A stop is a finding about the band and the rule, not a P2
 task.
 
-**Model** (default, pending the lead: §13, decision d): the frozen P1's `gpt-5.6-luna`,
+**Model** (§13, decision d: DECIDED (lead, 2026-10-07)): the frozen P1's `gpt-5.6-luna`,
 reasoning `high`, no temperature. Each decision point is one request with one forced tool whose input schema
 is the decision's schema.
 
@@ -790,20 +791,23 @@ the lead, §12, question 7):
    null rule would not change, nor would its rates.
 7. **The ablation grid (§11).** The full 180 runs, or the proposed 84?
 
-## 13. Decisions PENDING THE LEAD'S RULING
+## 13. Decisions — DECIDED (lead, 2026-10-07)
 
-Written as defaults. **None is decided.** Each becomes a `docs/decisions.md` entry on
-the lead's word.
+The lead's word of 2026-10-07 ("Implement your recommendation"), relayed by the
+coordinator: all four are accepted as recommended. Recorded in `docs/decisions.md`
+(2026-10-07).
 
-- **(a) The null rule — PENDING THE LEAD'S RULING.** Default: accept §4 as written, then
-  freeze it by recording in `docs/decisions.md` the sha256 of `scripts/null_rule_loo.py`
-  and of `reports/background/null_rule_loo.json` at the commit the lead approves.
-- **(b) The two-seed go/no-go — PENDING THE LEAD'S RULING.** Default: judged on each
-  seed's final label. Stop only if both seeds of S0-01 B/B label something other than
-  `none`.
-- **(c) A run without a completed null table — PENDING THE LEAD'S RULING.** Default: it
-  abstains. It is excluded and reported, and never counts as `none`, toward the go/no-go,
-  or toward success.
-- **(d) The model — PENDING THE LEAD'S RULING.** Default: GPT, `gpt-5.6-luna` as the
-  frozen P1, with about USD 10 in total for deliverables 3–5. Against it: the audit's
+- **(a) The null rule — DECIDED (lead, 2026-10-07).** §4 as written, frozen by the sha256
+  of the two files as they are at `aad51ea`:
+  - `scripts/null_rule_loo.py`:
+    `fb8e88917d440b1b50001d1f29b0e8f36a88256219f44ff81c19167549059812`;
+  - `reports/background/null_rule_loo.json`:
+    `de537c459d737fa895d3af5cdf170c30ad3eebf6a847ce6be07c57230f094e9c`.
+- **(b) The two-seed go/no-go — DECIDED (lead, 2026-10-07).** Judged on each seed's final
+  label. Stop only if both seeds of S0-01 B/B label something other than `none`.
+- **(c) A run without a completed null table — DECIDED (lead, 2026-10-07).** It abstains.
+  It is excluded and reported, and never counts as `none`, toward the go/no-go, or toward
+  success.
+- **(d) The model — DECIDED (lead, 2026-10-07).** GPT, `gpt-5.6-luna` with the frozen
+  P1's settings, with about USD 10 in total for deliverables 3–5. Against it: the audit's
   9-of-10 assay choices were Claude's (§2.6).

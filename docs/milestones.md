@@ -3701,7 +3701,7 @@ offline, after the review.
 Next: the coordinator's re-review, then the lead's rulings on (a)–(d) before any live
 call.
 
-**2026-10-06, about 23:53 UTC — the re-review of PR #31 (`3e84f3b`, PASS, ready for the lead's four decisions); its small fixes N1–N9 made.**
+**2026-10-05, about 23:53 UTC — the re-review of PR #31 (`3e84f3b`, PASS, ready for the lead's four decisions); its small fixes N1–N9 made.**
 - Design revision 3:
   - the onset test needs at least two evaluable windows before the onset, all inside,
     so day 0 on a uniform offset is refused;

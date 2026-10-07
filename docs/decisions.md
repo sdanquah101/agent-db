@@ -7382,3 +7382,62 @@ outside" fires on 90 of 120 clean runs, and cannot be P2's null rule.
 - A count threshold on the statistics outside: rejected, because it carries no
   localisation, so no label could rest on it.
 - A margin on the envelope: excluded by the lead's ruling.
+
+
+## 2026-10-07 — RULINGS (the lead): P2's four design decisions, accepted as recommended; the null rule frozen
+
+**The lead's word** of 2026-10-07, about 13:00 UTC ("Implement your recommendation"),
+relayed by the coordinator (session_01Cu6G2kQjP2QSzvtkyP8cPr). PR #31 was merged at
+`2dab5d2` (merge commit `aad51ea`). The four decisions of `docs/p2_design.md` §13 are
+DECIDED as recommended.
+
+**(a) The null rule: accepted and frozen.**
+- The rule is `docs/p2_design.md` §4. It has three conjunctive components (NB, NM, NS)
+  against the declared background exactly as published, with no margin. A label is
+  admitted only over a failed null case that matches it (§4.4).
+- **Frozen** by the sha256 of the two files as they are at `aad51ea`:
+
+  | File | sha256 |
+  |---|---|
+  | `scripts/null_rule_loo.py` | `fb8e88917d440b1b50001d1f29b0e8f36a88256219f44ff81c19167549059812` |
+  | `reports/background/null_rule_loo.json` | `de537c459d737fa895d3af5cdf170c30ad3eebf6a847ce6be07c57230f094e9c` |
+
+  A test checks both hashes, and pins the workflow's own NB, NM and NS to the JSON's
+  counts (design §10.13).
+- *Reason:* a leave-one-out false-alarm rate of 19 of 120 clean runs (0.16; 95 %
+  interval 0.10–0.23), against 0.75 for "any statistic outside" and 0.55 for "any channel
+  mean outside". Scatter alone is not a fault, by the ladder's Level 1.
+- *Alternatives:*
+  - those two simpler rules;
+  - adding the gap case as a fourth component, which would give 26 of 120 (0.22);
+  - a margin on the envelope, which the lead's ruling of 2026-09-30 excludes.
+
+**(b) The go/no-go, two seeds per cell: accepted.**
+- Deliverable 3's go/no-go on S0-01 B/B is judged on each seed's final label. It stops
+  only if **both** seeds give a label other than `none`.
+- *Reason:* one seed's false alarm is expected at the rule's clean rate (about 0.16); two
+  together are about 0.03.
+- *Alternative:* stopping on either seed, which fires on about 30 % of clean pairs.
+
+**(c) A run with no completed null table: accepted.**
+- Such a run (an unfinished reference fit) **abstains**. It is excluded and reported, and
+  never counts as `none`, toward the go/no-go, or toward success.
+- *Reason:* without the table no label can be admitted, and `none` would be unsupported.
+- *Alternative:* reading it as `none`, which would reward a run for not finishing.
+
+**(d) The model: accepted.**
+- GPT `gpt-5.6-luna` with the frozen P1's settings: reasoning `high`, no temperature,
+  P1's caps. The total model budget is about USD 10 for deliverables 3–5.
+- *Reason:* a P2-versus-P1 difference is then the procedure's, not the model's, and it is
+  the cheapest arm.
+- *Alternative:* Claude Opus 5.5, whose assay choices the audit found apt in 9 of 10
+  runs, at about 20 times the cost per run.
+
+**What follows** (the coordinator's relay of the same word): deliverable 2 on
+`claude/p2-workflow`, cut from `main` at `aad51ea`:
+- the workflow code under `workflows/p2_multi_agent/`;
+- every test of design §10, with the review's R1–R4 carried in;
+- the offline power run with **no model call**.
+
+No live run happens before the coordinator's review of deliverable 2 and the lead's
+approval.
