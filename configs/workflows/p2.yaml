@@ -1,0 +1,93 @@
+# P2: task-specialised procedures with model-backed decision points (docs/p2_design.md).
+#
+# Every threshold, window, size and seed P2 shares with P0 is P0's, read from
+# configs/workflows/p0.yaml (`p0_config`) and handed to the jail beside this file; nothing
+# here retypes one. The null rule is the frozen one (docs/decisions.md, 2026-10-07) and
+# the band is the declared background (configs/background.yaml), served by its tool.
+#
+# Deliverable 2 runs OFFLINE: `decider: offline`, so every decision point takes its
+# declared code fallback and no model is called. A live decider comes with deliverable 3,
+# after the coordinator's review and the lead's approval.
+
+version: 1
+workflow: p2
+workflow_version: "0.2-offline"
+p0_config: p0.yaml
+decider: offline
+
+# the roles and the tools each may call (design §6.1); a call outside the list is
+# refused in the role's view, before the registry
+roles:
+  data_quality:
+    tools: [data_qc, inspect_record, set_sensor_status]
+  influent:
+    tools: [mass_balance, feed_loads, inspect_record, declared_background]
+  identifiability:
+    tools: [describe_model, gsa_morris, gsa_sobol, profile_likelihood, fisher_info, residual_diag]
+  calibration:
+    tools: [fit_lsq, fit_de, fit_cmaes, bayes_mcmc, simulate, residual_diag, declared_background]
+  design:
+    tools: [voi_assay, request_assay]
+  verification:
+    tools: [declared_background, validate]
+  coordination:
+    tools: []
+
+# the ablation switches (design §8): true = on. The three-role minimum of the descope
+# clause is data_quality, calibration and verification with coordination as code.
+ablation:
+  verifier: true
+  coordinator: true
+  persistent_state: true
+  self_correction: true
+  roles:
+    data_quality: true
+    influent: true
+    identifiability: true
+    calibration: true
+    design: true
+
+# the S1 table's physically coupled channels (design §2.2), by sensor name
+coupled_channels:
+  gas_flow: [ch4_fraction]
+  ph: [alkalinity, vfa_total, tan]
+  tan: [ph]
+  vfa_total: [ph, alkalinity]
+  digestate_ts: [digestate_vs]
+  digestate_vs: [digestate_ts]
+  alkalinity: [ph]
+  ch4_fraction: [gas_flow]
+
+# the physics-forced candidate list per plant (design §2.4): always screened
+forced_candidates:
+  A: [K_I_nh3, k_hyd_ch, k_hyd_pr, k_hyd_li]
+  B: []
+  C: []
+
+onset:
+  min_windows_before: 2       # DESIGN  N1: evaluable windows before the onset, all inside
+  every_window_after: true    # DESIGN  R1: every evaluable window after it outside, on NB's side
+  min_windows_after: 2        # DESIGN  and at least this many of them
+
+biomass_scales: [0.5, 2.0]    # DESIGN  the simulate(biomass_scale) pair (design §2.5)
+
+holdout:
+  min_channels_failed: 2      # DESIGN  §12 Q3: hold-out rms_z above the band's after-fit max
+
+# the decision points' templates (design §6.3); their sha256 goes into every record
+templates:
+  dq.trust: p2_prompts/dq.trust.md
+  dq.assay: p2_prompts/dq.assay.md
+  dq.coupled: p2_prompts/dq.coupled.md
+  influent.onset: p2_prompts/influent.onset.md
+  influent.window: p2_prompts/influent.window.md
+  influent.mechanism: p2_prompts/influent.mechanism.md
+  ident.subset: p2_prompts/ident.subset.md
+  cal.accept: p2_prompts/cal.accept.md
+  cal.bound: p2_prompts/cal.bound.md
+  cal.split: p2_prompts/cal.split.md
+  design.assay: p2_prompts/design.assay.md
+  verify.differential: p2_prompts/verify.differential.md
+
+runner:
+  timeout_margin_min: 15.0

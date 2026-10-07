@@ -113,8 +113,9 @@ quarantine is refused when it:
 
 A refusal is logged as `p2.dq.refused` and counted. The model can narrow QC's
 quarantines; it can never widen them. **The same constraints apply to the fallback**
-(the re-review's N5): P0's §3.1 quarantines pass through the same filter, so the
-fallback, too, never quarantines a first-HRT spike.
+(the re-review's N5), but the fallback is **trimmed**, not refused (the review's R2):
+the offending first-HRT spike and hold-out samples are dropped from P0's §3.1 quarantine
+and the rest of it stands, so the fallback, too, never quarantines a first-HRT spike.
 
 `dq.coupled` names what the coupled channels show, not what it implies.
 `coupled_inside` (the deviation is isolated) supports a `sensor` finding.
@@ -133,8 +134,10 @@ fallback, too, never quarantines a first-HRT spike.
    - **a dated onset:** at least **two** evaluable closure windows lie before the onset
      day, and every one of them is inside the band's per-window envelope
      (`cod_closure_windows`); at least two windows after it are outside, on the side NB
-     failed. An onset at day 0, or one with fewer than two windows before it, cannot be
-     dated, so a uniform offset never passes (the re-review's N1);
+     failed, and **every** evaluable window after it is outside on that side (the
+     review's R1: in, in, out, in, out does not pass). An onset at day 0, or one with
+     fewer than two windows before it, cannot be dated, so a uniform offset never passes
+     (the re-review's N1);
    - **a feed covariate:** P0's R2 feed η² ≥ 0.15 on the primary residual, computed by
      `residual_diag` on the reference fit.
 
@@ -381,7 +384,9 @@ moves it (P0's rule).
 
 **A gap, by design** (the review's item 3). One channel can fail while another channel's
 after-fit mean is outside without a full failure. Neither NS nor NM fires there, and that
-run reads `none` for its channels. This happens on 7 of 120 clean runs. It can also be an
+run reads `none` for its channels. `null_partial` is a **channel-level** gap: it can
+co-occur with NB, which is judged on its own (the review's R3; S1-01 B/B is such a
+case). This happens on 7 of 120 clean runs. It can also be an
 S1/S3-coherent change.
 
 Adding it as a fourth component would raise the rule's clean false-alarm rate to 26 of
@@ -693,8 +698,9 @@ policy; `RecordedClient` replays.
 13. **The workflow's null rule is the frozen one** (the re-review's N2). Freezing
     `scripts/null_rule_loo.py` does not pin the workflow's own NB, NM and NS. So a test
     runs the workflow's code over the same 120 leave-one-out placements and reproduces
-    every count in `reports/background/null_rule_loo.json`, `null_partial` included. It
-    also reproduces the four outcomes of §4.5 from `dev_cells.json`.
+    the JSON's counts of NB, NM, NS, `null_rejected` and `null_partial` (the review's R4:
+    the rule's own counts, not the comparison rules'). It also reproduces the four
+    outcomes of §4.5 from `dev_cells.json`, and checks the two frozen files' sha256.
 
 ## 11. Development plan, power, go/no-go and cost
 
@@ -811,3 +817,33 @@ coordinator: all four are accepted as recommended. Recorded in `docs/decisions.m
 - **(d) The model — DECIDED (lead, 2026-10-07).** GPT, `gpt-5.6-luna` with the frozen
   P1's settings, with about USD 10 in total for deliverables 3–5. Against it: the audit's
   9-of-10 assay choices were Claude's (§2.6).
+
+## 14. Implementation notes (deliverable 2)
+
+What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a choice:
+
+- **One file.** The sandbox copies one script, so the workflow is a single module. It
+  imports only `tools`, numpy, pydantic and the standard library. The tests import its
+  pure functions on the test side.
+- **Offline.** `decider: offline` in `configs/workflows/p2.yaml`. Every decision point
+  takes its declared fallback, and the record says so (`fallback_used`, zero attempts,
+  no model call id). The live decider (a forced tool call through P1's gateway) comes
+  with deliverable 3.
+- **The reference fit** reads every size, window and seed from the band tool's served
+  `procedure` block, fetched before the fit. If the record is shorter than one balance
+  window, the balance is not placed and NB is not judged (`no_balance_window`). If any
+  reference call fails, the run abstains (decision c).
+- **Split-window fits are not run in deliverable 2.** The change point is P0's R4
+  arithmetic, as `cal.split`'s fallback, and the fits either side of it come with the
+  seven roles (deliverable 4).
+- **`holdout_failed`** is §12 question 3's proposal: two or more objective channels whose
+  hold-out `rms_z` (raw record, reference prediction) exceeds their band's after-fit
+  `rms_z` maximum.
+- **Coupled channels in the signature counts** (§12 question 6) are counted as channels.
+  The question was not ruled, and nothing is changed.
+- **The S1 reading's fallback is `insufficient`**, as §2.2 declares, so offline no
+  `sensor` label is admitted. The offline power run therefore reports the code
+  signatures (the S1 table's `coupled_inside`) beside the labels.
+- **The influent onset's fallback is no day**, so offline the dated onset never passes.
+  The power run reports every candidate onset day that would pass, for each cell where
+  NB fails (the review's R1).

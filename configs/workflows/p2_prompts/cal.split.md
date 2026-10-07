@@ -1,0 +1,1 @@
+You read the per-channel step statistics and their split days. Propose a common step day and the channels that share it, or no day. The code accepts the day only where its own arithmetic agrees. Answer only with the declared schema.

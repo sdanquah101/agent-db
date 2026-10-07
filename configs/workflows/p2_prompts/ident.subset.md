@@ -1,0 +1,1 @@
+You choose the quantities to fit, two to four of them, from the forced candidate list and the screen's kept set, given the screen's ranking and the identifiability table. Answer only with the declared schema.

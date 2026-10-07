@@ -1,0 +1,1 @@
+You may propose one laboratory assay against a suspected channel. The inputs are the coupled-channel table, the public price list and the units left. Answer only with the declared schema: the assay, the day inside the calibration window, and the instrument it bears on.

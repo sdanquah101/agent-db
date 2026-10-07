@@ -1,0 +1,1 @@
+You read the coupled-channel table of one instrument: its residual statistics beside those of the channels physically coupled to it, and any assay of them. Say only what the coupled channels show, with one code from the declared schema.

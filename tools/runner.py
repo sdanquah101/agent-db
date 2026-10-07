@@ -78,6 +78,7 @@ __all__ = ["WORKFLOWS", "WorkflowResult", "batch", "main", "run_workflow", "writ
 WORKFLOWS: dict[str, Path] = {
     "p0": REPO_ROOT / "workflows" / "p0_scripted" / "pipeline.py",
     "p1": REPO_ROOT / "workflows" / "p1_single_agent" / "agent.py",
+    "p2": REPO_ROOT / "workflows" / "p2_multi_agent" / "workflow.py",
 }
 """The workflow scripts the runner knows, by name."""
 
