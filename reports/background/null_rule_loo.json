@@ -1,0 +1,175 @@
+{
+ "what": "leave-one-out false alarms of P2's null rule on the clean record (docs/p2_design.md \u00a74); each clean run against the min-max envelope of the other runs of its plant and tier, no margin",
+ "record": "reports/background/runs.jsonl",
+ "n_runs": 120,
+ "runs": {
+  "A/A": 20,
+  "A/B": 20,
+  "A/C": 20,
+  "B/A": 10,
+  "B/B": 10,
+  "B/C": 10,
+  "C/A": 10,
+  "C/B": 10,
+  "C/C": 10
+ },
+ "rules": {
+  "NB": {
+   "false_alarms": 8,
+   "rate": 0.0667,
+   "per_plant_tier": {
+    "A/A": 0,
+    "A/B": 2,
+    "A/C": 1,
+    "B/A": 0,
+    "B/B": 2,
+    "B/C": 2,
+    "C/A": 0,
+    "C/B": 1,
+    "C/C": 0
+   }
+  },
+  "NM": {
+   "false_alarms": 10,
+   "rate": 0.0833,
+   "per_plant_tier": {
+    "A/A": 0,
+    "A/B": 2,
+    "A/C": 2,
+    "B/A": 0,
+    "B/B": 1,
+    "B/C": 1,
+    "C/A": 0,
+    "C/B": 2,
+    "C/C": 2
+   }
+  },
+  "NS": {
+   "false_alarms": 5,
+   "rate": 0.0417,
+   "per_plant_tier": {
+    "A/A": 1,
+    "A/B": 1,
+    "A/C": 1,
+    "B/A": 1,
+    "B/B": 0,
+    "B/C": 0,
+    "C/A": 1,
+    "C/B": 0,
+    "C/C": 0
+   }
+  },
+  "null_rejected": {
+   "false_alarms": 19,
+   "rate": 0.1583,
+   "per_plant_tier": {
+    "A/A": 1,
+    "A/B": 4,
+    "A/C": 4,
+    "B/A": 1,
+    "B/B": 2,
+    "B/C": 2,
+    "C/A": 1,
+    "C/B": 2,
+    "C/C": 2
+   }
+  },
+  "null_partial": {
+   "false_alarms": 7,
+   "rate": 0.0583,
+   "per_plant_tier": {
+    "A/A": 1,
+    "A/B": 0,
+    "A/C": 3,
+    "B/A": 0,
+    "B/B": 0,
+    "B/C": 2,
+    "C/A": 0,
+    "C/B": 0,
+    "C/C": 1
+   }
+  },
+  "any_statistic_outside": {
+   "false_alarms": 90,
+   "rate": 0.75,
+   "per_plant_tier": {
+    "A/A": 6,
+    "A/B": 13,
+    "A/C": 18,
+    "B/A": 6,
+    "B/B": 10,
+    "B/C": 10,
+    "C/A": 8,
+    "C/B": 9,
+    "C/C": 10
+   }
+  },
+  "any_channel_after_fit_mean_outside": {
+   "false_alarms": 66,
+   "rate": 0.55,
+   "per_plant_tier": {
+    "A/A": 3,
+    "A/B": 7,
+    "A/C": 14,
+    "B/A": 4,
+    "B/B": 8,
+    "B/C": 9,
+    "C/A": 4,
+    "C/B": 7,
+    "C/C": 10
+   }
+  },
+  "any_balance_statistic_outside": {
+   "false_alarms": 18,
+   "rate": 0.15,
+   "per_plant_tier": {
+    "A/A": 0,
+    "A/B": 2,
+    "A/C": 3,
+    "B/A": 0,
+    "B/B": 3,
+    "B/C": 3,
+    "C/A": 0,
+    "C/B": 3,
+    "C/C": 4
+   }
+  }
+ },
+ "per_statistic": {
+  "after_fit.mean_z": {
+   "outside": 154,
+   "n": 1040,
+   "rate": 0.1481
+  },
+  "after_fit.rms_z": {
+   "outside": 154,
+   "n": 1040,
+   "rate": 0.1481
+  },
+  "at_defaults.mean_z": {
+   "outside": 154,
+   "n": 1040,
+   "rate": 0.1481
+  },
+  "at_defaults.rms_z": {
+   "outside": 154,
+   "n": 1040,
+   "rate": 0.1481
+  },
+  "cod_closure": {
+   "outside": 12,
+   "n": 80,
+   "rate": 0.15
+  },
+  "cod_closure_worst": {
+   "outside": 12,
+   "n": 80,
+   "rate": 0.15
+  },
+  "n_cod_inadmissible": {
+   "outside": 2,
+   "n": 80,
+   "rate": 0.025
+  }
+ }
+}

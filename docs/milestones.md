@@ -3663,3 +3663,57 @@ The reviewer's leave-one-out finding goes into `docs/p2_design.md`. Each clean s
 judged against the other nine, falls outside on about 20 % of its statistics. P2's null
 rule must therefore not read "any statistic outside" as a fault. The band is unchanged.
 Next: the coordinator's re-review. Then `docs/p2_design.md` on `claude/p2-multi-agent`.
+
+**2026-10-05, about 20:45 UTC — PR #30 merged (`817b1f9`); deliverable 1 drafted.**
+- `claude/p2-multi-agent` was cut from `main` at `817b1f9`, with no open PRs at that
+  moment.
+- The coordinator's LOW finding is fixed: a PROVISIONAL band must be over the first
+  declared seeds, in order.
+- `docs/p2_design.md` (DRAFT) covers the seven procedures and their decision points with
+  schemas and fallbacks, the reference fit (like-for-like with the band), the null rule,
+  admission, the routing machine, the allow-lists and messages, the hold-out, the
+  ablation switches, the budget and record, the tests, and the plan.
+- **The null rule:** three conjunctive components against the band as published. The
+  leave-one-out false-alarm rate on the clean record is 0.16, against a target below
+  0.20. It is reproduced by `scripts/null_rule_loo.py`.
+- Five questions for the coordinator are in the design's §12 and the PR body.
+
+No live model call before the review. Next: deliverable 2, the three-role minimum
+offline, after the review.
+
+**2026-10-05, about 22:16 UTC — the coordinator's review of PR #31 (`c502899`; fixes needed), worked.**
+- `docs/p2_design.md` revision 2 answers the review's items 1–11. Four decisions are
+  marked PENDING THE LEAD'S RULING (§13): the null rule and its freeze by sha256; the
+  two-seed go/no-go; abstention without a null table; the model.
+- Pre-registered predictions on the four clean development cells (§4.5): `none` on all
+  four. Two of them stand on the null; two have the null rejected but unexplained.
+- The gap case (one channel failed, another partly outside) reads `none` by design,
+  recorded as `null_partial`; it occurs on 7 of 120 clean runs.
+- Every signature test is code, including the early/late test, the onset test and
+  `dq.trust`'s constraints.
+- The decision templates are versioned and hashed, and a scan keeps labelling rules out
+  of them.
+- The workflow imports nothing from `scripts/`.
+- The cost table and a proposed ablation grid of 84 runs.
+- Wording fixed: the leave-one-out rate is an estimate, not a bound (95 % interval
+  0.10–0.23).
+
+Next: the coordinator's re-review, then the lead's rulings on (a)–(d) before any live
+call.
+
+**2026-10-06, about 23:53 UTC — the re-review of PR #31 (`3e84f3b`, PASS, ready for the lead's four decisions); its small fixes N1–N9 made.**
+- Design revision 3:
+  - the onset test needs at least two evaluable windows before the onset, all inside,
+    so day 0 on a uniform offset is refused;
+  - a planned test pins the workflow's NB/NM/NS to the 120 leave-one-out counts and the
+    four §4.5 outcomes;
+  - the first-HRT refusal covers spikes only, and applies to the fallback too;
+  - S0-01 B/C and S1-01 B/B are added to the offline power run;
+  - the defaults are marked pending where they are used;
+  - the TS/VS risk is extended to the `parameter` change point;
+  - wording fixes.
+- `scripts/null_rule_loo.py` now also counts `null_partial` (7/120). Every existing
+  count is unchanged.
+
+Decisions (a)–(d) stay PENDING until the coordinator relays the lead's rulings. No live
+call.

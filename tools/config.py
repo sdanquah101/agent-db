@@ -148,6 +148,12 @@ class BackgroundConfig(_Frozen):
             )
         if self.provenance.status == "PROVISIONAL" and published == declared:
             raise ValueError("a band over every declared seed is FINAL, not PROVISIONAL")
+        if self.provenance.status == "PROVISIONAL" and published != declared[: len(published)]:
+            # the seeds run in their declared order, so a partial band is their first n
+            raise ValueError(
+                f"a PROVISIONAL band is over the first declared seeds in order, "
+                f"{list(declared[: len(published)])}, not {list(published)}"
+            )
         return self
 
     def band(self, plant: str, tier: str) -> BandRecord | None:
