@@ -7511,3 +7511,21 @@ done in order:
 
 The rejection codes are `change_point_not_on_failed_channels_after_hrt` and
 `r3_not_on_failed_channels`.
+
+**The lead's confirmation (2026-10-08, evening): the strict reading of ruling 1.**
+- *Ruling* (the review's N-7, relayed by the coordinator: "Implement your
+  recommendation"): the reading recorded above is **confirmed**. A change point defined
+  over several channels admits `parameter` only if it is common to **failed** channels.
+  A step shared by one failed and one non-failed channel does not admit.
+- **DEVELOPMENT-INFORMED**, like the rulings it qualifies. It was confirmed after the
+  development results were seen, so it is judged on the held-out variants.
+- *Reason:* the strict reading is the one implemented, tested and re-run. It is also
+  the only reading under which the admitting signature explains the channels that
+  failed.
+- *Alternative:* the looser reading (at least one of the sharing channels failed). It
+  would have kept S2-01 B/B's wrong `parameter`.
+- No code changes: `tied_change_point` already implements the strict reading.
+
+**Deliverable 3 (the live wiring) is approved to start only after PR #32 merges**, on a
+new branch cut from `main`. No live call is made, not even a smoke call, until the
+coordinator has reviewed deliverable 3 and the lead approves the pilot.
