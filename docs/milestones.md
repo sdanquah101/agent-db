@@ -3774,3 +3774,25 @@ NEEDED, nothing blocking), fixed on `claude/p2-workflow`.**
 
 The next step is the coordinator's re-review.
 
+**2026-10-08, about 16:30 UTC — P2: the lead's two admission rulings, and the offline
+power re-run (PR #32, draft).**
+- **The rulings of 2026-10-08** are implemented in `51c9782`, with tests and negative
+  controls, and recorded in `docs/decisions.md`. They are marked DEVELOPMENT-INFORMED:
+  - an admitting change point and R3 lie on the channels whose null case failed;
+  - a change point inside the first HRT never admits.
+  The null rule is unchanged.
+- **The runner's `by_role`** now reads the meter's counts from the full call log
+  (`15d0daf`). The sandboxed test found that the visible log has none.
+- **The offline re-run at `15d0daf`** is in `reports/p2_power/`, with each cell before
+  and after:
+  - 0 of 6 faulted cells right, as before;
+  - wrong non-`none` labels fell from 3 to 1 (S0-01 B/C and S2-01 are now `none`);
+  - S3-01 C/B is still `parameter`, which is reported, not adjusted for;
+  - both §4.5 predictions checked here now hold.
+  The improved cells are the ones the rulings came from, so they are no evidence for
+  the rulings.
+- **Next:**
+  1. the coordinator's review of the re-run;
+  2. then deliverable 3, the live wiring (F-B, F-E), for review;
+  3. no live call until the lead approves.
+

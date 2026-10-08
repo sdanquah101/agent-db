@@ -7,10 +7,10 @@
    "truth": [
     "none"
    ],
-   "label": "parameter",
-   "outcome": "parameter",
+   "label": "none",
+   "outcome": "none",
    "excluded": false,
-   "hit": false,
+   "hit": true,
    "null": {
     "NB": false,
     "NM": true,
@@ -34,23 +34,52 @@
     "early_late": [],
     "biomass_improves": false,
     "change_point": true,
+    "change_point_tied": {
+     "channels": [],
+     "common": false,
+     "day": null,
+     "first_hrt_excluded": [
+      "gas_flow",
+      "ph"
+     ],
+     "off_failed": [
+      "alkalinity",
+      "ch4_fraction",
+      "cod_total",
+      "h2_offgas",
+      "tan",
+      "vfa_ac",
+      "vfa_bu",
+      "vfa_pro",
+      "vfa_total",
+      "vfa_va"
+     ]
+    },
     "inhibited": false,
-    "r3": true,
+    "r3": false,
+    "r3_channels": [],
+    "r3_channels_all": [
+     "gas_flow",
+     "tan"
+    ],
     "structural": false
    },
-   "admitted": [
-    "parameter"
-   ],
+   "admitted": [],
    "rejected": [
     {
-     "code": "holdout_passed",
+     "code": "change_point_not_on_failed_channels_after_hrt",
+     "label": "parameter"
+    },
+    {
+     "code": "r3_not_on_failed_channels",
      "label": "structural"
     }
    ],
    "holdout_failed": false,
    "completed": true,
-   "evaluations": "144/450",
-   "wall_min": 62.9
+   "evaluations": "232/450",
+   "wall_min": 75.3,
+   "outcome_before": "parameter"
   },
   {
    "cell": "S1-01 B/B",
@@ -83,9 +112,31 @@
     "early_late": [],
     "biomass_improves": false,
     "change_point": true,
+    "change_point_tied": {
+     "channels": [],
+     "common": false,
+     "day": null,
+     "first_hrt_excluded": [
+      "ch4_fraction",
+      "cod_total"
+     ],
+     "off_failed": [
+      "alkalinity",
+      "ph",
+      "tan",
+      "vfa_total"
+     ]
+    },
     "inhibited": false,
-    "r3": true,
-    "structural": true
+    "r3": false,
+    "r3_channels": [
+     "gas_flow"
+    ],
+    "r3_channels_all": [
+     "gas_flow",
+     "vfa_total"
+    ],
+    "structural": false
    },
    "admitted": [],
    "rejected": [
@@ -94,26 +145,27 @@
      "label": "influent"
     },
     {
-     "code": "null_not_failed",
+     "code": "change_point_not_on_failed_channels_after_hrt",
      "label": "parameter"
     },
     {
-     "code": "null_not_failed",
+     "code": "r3_not_on_failed_channels",
      "label": "structural"
     }
    ],
    "holdout_failed": true,
    "completed": true,
    "evaluations": "149/450",
-   "wall_min": 64.7
+   "wall_min": 51.9,
+   "outcome_before": "none"
   },
   {
    "cell": "S2-01 B/B",
    "truth": [
     "sensor"
    ],
-   "label": "parameter",
-   "outcome": "parameter",
+   "label": "none",
+   "outcome": "none",
    "excluded": false,
    "hit": false,
    "null": {
@@ -139,18 +191,43 @@
     "early_late": [],
     "biomass_improves": false,
     "change_point": true,
+    "change_point_tied": {
+     "channels": [],
+     "common": false,
+     "day": null,
+     "first_hrt_excluded": [
+      "ph"
+     ],
+     "off_failed": [
+      "alkalinity",
+      "ch4_fraction",
+      "cod_total",
+      "tan",
+      "vfa_total"
+     ]
+    },
     "inhibited": false,
     "r3": false,
+    "r3_channels": [
+     "gas_flow"
+    ],
+    "r3_channels_all": [
+     "gas_flow"
+    ],
     "structural": false
    },
-   "admitted": [
-    "parameter"
+   "admitted": [],
+   "rejected": [
+    {
+     "code": "change_point_not_on_failed_channels_after_hrt",
+     "label": "parameter"
+    }
    ],
-   "rejected": [],
    "holdout_failed": true,
    "completed": true,
    "evaluations": "198/450",
-   "wall_min": 88.9
+   "wall_min": 65.5,
+   "outcome_before": "parameter"
   },
   {
    "cell": "S3-01 C/B",
@@ -188,8 +265,34 @@
     "early_late": [],
     "biomass_improves": false,
     "change_point": true,
+    "change_point_tied": {
+     "channels": [
+      "gas_flow",
+      "vfa_total"
+     ],
+     "common": true,
+     "day": 31.0,
+     "first_hrt_excluded": [
+      "cod_total"
+     ],
+     "off_failed": [
+      "ch4_fraction"
+     ]
+    },
     "inhibited": false,
     "r3": true,
+    "r3_channels": [
+     "alkalinity",
+     "gas_flow",
+     "tan",
+     "vfa_total"
+    ],
+    "r3_channels_all": [
+     "alkalinity",
+     "gas_flow",
+     "tan",
+     "vfa_total"
+    ],
     "structural": true
    },
    "admitted": [
@@ -200,7 +303,8 @@
    "holdout_failed": true,
    "completed": true,
    "evaluations": "204/600",
-   "wall_min": 89.5
+   "wall_min": 66.5,
+   "outcome_before": "parameter"
   },
   {
    "cell": "S4-01 B/B",
@@ -233,16 +337,36 @@
     "early_late": [],
     "biomass_improves": false,
     "change_point": false,
+    "change_point_tied": {
+     "channels": [],
+     "common": false,
+     "day": null,
+     "first_hrt_excluded": [
+      "alkalinity",
+      "ch4_fraction",
+      "gas_flow"
+     ],
+     "off_failed": [
+      "ph",
+      "tan",
+      "vfa_total"
+     ]
+    },
     "inhibited": false,
     "r3": false,
+    "r3_channels": [],
+    "r3_channels_all": [
+     "gas_flow"
+    ],
     "structural": false
    },
    "admitted": [],
    "rejected": [],
    "holdout_failed": false,
    "completed": true,
-   "evaluations": "150/600",
-   "wall_min": 70.1
+   "evaluations": "220/600",
+   "wall_min": 71.0,
+   "outcome_before": "none"
   },
   {
    "cell": "S5-01 A/A",
@@ -273,21 +397,36 @@
     "early_late": [],
     "biomass_improves": false,
     "change_point": true,
+    "change_point_tied": {
+     "channels": [],
+     "common": false,
+     "day": null,
+     "first_hrt_excluded": [],
+     "off_failed": [
+      "gas_flow",
+      "ph"
+     ]
+    },
     "inhibited": false,
     "r3": false,
+    "r3_channels": [],
+    "r3_channels_all": [
+     "gas_flow"
+    ],
     "structural": false
    },
    "admitted": [],
    "rejected": [
     {
-     "code": "null_not_failed",
+     "code": "change_point_not_on_failed_channels_after_hrt",
      "label": "parameter"
     }
    ],
    "holdout_failed": false,
    "completed": true,
    "evaluations": "132/300",
-   "wall_min": 110.6
+   "wall_min": 78.6,
+   "outcome_before": "none"
   },
   {
    "cell": "S6-02 B/B",
@@ -318,21 +457,42 @@
     "early_late": [],
     "biomass_improves": false,
     "change_point": true,
+    "change_point_tied": {
+     "channels": [],
+     "common": false,
+     "day": null,
+     "first_hrt_excluded": [
+      "gas_flow",
+      "ph"
+     ],
+     "off_failed": [
+      "alkalinity",
+      "ch4_fraction",
+      "cod_total",
+      "tan",
+      "vfa_total"
+     ]
+    },
     "inhibited": false,
     "r3": false,
+    "r3_channels": [],
+    "r3_channels_all": [
+     "tan"
+    ],
     "structural": false
    },
    "admitted": [],
    "rejected": [
     {
-     "code": "null_not_failed",
+     "code": "change_point_not_on_failed_channels_after_hrt",
      "label": "parameter"
     }
    ],
    "holdout_failed": false,
    "completed": true,
    "evaluations": "259/750",
-   "wall_min": 111.4
+   "wall_min": 85.2,
+   "outcome_before": "none"
   },
   {
    "cell": "S8-01 B/B",
@@ -368,14 +528,36 @@
     ],
     "biomass_improves": true,
     "change_point": true,
+    "change_point_tied": {
+     "channels": [],
+     "common": false,
+     "day": null,
+     "first_hrt_excluded": [
+      "gas_flow",
+      "ph"
+     ],
+     "off_failed": [
+      "alkalinity",
+      "ch4_fraction",
+      "cod_total",
+      "tan",
+      "vfa_total"
+     ]
+    },
     "inhibited": false,
     "r3": false,
+    "r3_channels": [
+     "gas_flow"
+    ],
+    "r3_channels_all": [
+     "gas_flow"
+    ],
     "structural": false
    },
    "admitted": [],
    "rejected": [
     {
-     "code": "coupled_outside",
+     "code": "signature_absent",
      "label": "sensor"
     },
     {
@@ -387,14 +569,15 @@
      "label": "state"
     },
     {
-     "code": "null_not_failed",
+     "code": "change_point_not_on_failed_channels_after_hrt",
      "label": "parameter"
     }
    ],
    "holdout_failed": false,
    "completed": true,
    "evaluations": "165/750",
-   "wall_min": 73.1
+   "wall_min": 56.2,
+   "outcome_before": "none"
   }
  ],
  "hits_faulted": "0 of 6 scored",
@@ -415,7 +598,7 @@
    },
    "null_component": true,
    "failed_channels": true,
-   "label": false
+   "label": true
   },
   "S1-01 B/B": {
    "predicted": {
@@ -429,5 +612,9 @@
    "failed_channels": true,
    "label": true
   }
+ },
+ "before": {
+  "file": "cells_before_rulings.json",
+  "hits_faulted": "0 of 6 scored"
  }
 }

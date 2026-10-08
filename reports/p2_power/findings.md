@@ -75,3 +75,43 @@ holds), with a test. No label changes.
     list here was already empty.
   - **The no-statistic abstention (F-H)** applies only to an empty placement, and every
     cell placed 12 or more statistics.
+
+## The re-run after the lead's rulings of 2026-10-08
+
+**Run.** 2026-10-08, 10:19 to about 16:00 UTC, at commit `15d0daf`. The same eight cells,
+seeds, horizons and budgets as the first run, two at a time, into a fresh store. No
+model call. The rulings tie the admitting change point and R3 to the failed channels,
+and exclude change points inside the first HRT. Both are **development-informed**: they
+were proposed after the first run's results on S0-01 B/C, S2-01 B/B and S3-01 C/B.
+These cells are therefore **no evidence for them**, and nothing further was tuned on
+them. `cells_before_rulings.json` keeps the first run's table.
+
+| cell | truth | before | after | why (after) |
+|---|---|---|---|---|
+| S0-01 B/C | none | `parameter` (wrong) | `none` | The step was on gas and pH, not on the failed TS and VS: `change_point_not_on_failed_channels_after_hrt`. R3 was on gas and TAN, not on the failed channels: `r3_not_on_failed_channels`. The null failed on NM and is unexplained. |
+| S1-01 B/B | none | `none` | `none` | Unchanged. NB failed and gas failed alone. No candidate onset. |
+| S2-01 B/B | sensor | `parameter` (wrong) | `none` | Failed channels: gas and pH. pH's step was inside the first HRT, and no two failed channels share a later step. The null failed on NM and is unexplained. Still a miss, but no longer a false kinetic update. |
+| S3-01 C/B | influent | `parameter` (wrong) | `parameter` (**still wrong**) | Gas and VFA, both failed, share a step after the first HRT, so the tied change point holds. R3 holds on four failed channels with a failed hold-out, so `structural` is also admitted. This is reported, not adjusted for. |
+| S4-01 B/B | state | `none` | `none` | Unchanged: the null stands. |
+| S5-01 A/A | parameter | `none` | `none` | Unchanged: the null stands. |
+| S6-02 B/B | structural | `none` | `none` | Unchanged: the null stands. |
+| S8-01 B/B | sensor | `none` | `none` | Unchanged. It is blocked only by the offline S1 reading. |
+
+**Counts.**
+- Faulted cells hit: **0 of 6 scored** before and after, with none excluded.
+- Wrong non-`none` labels (false kinetic updates): **3 before, 1 after** (S3-01 C/B).
+- The two §4.5 predictions checked here **now both hold**: S0-01 B/C ends on `none` as
+  predicted, and S1-01 B/B is unchanged.
+- The null is rejected on the same cells, since the null rule is unchanged.
+
+**Read with care.**
+- The two cells that improved are the ones the rulings were proposed from, so the
+  improvement is expected and proves nothing. The test is on the held-out variants.
+- S3-01 C/B is the one development cell whose wrong label the rulings did not touch. Its
+  fault is an influent change that moves six channels; the step on gas and VFA is real
+  and lies on failed channels. Finding 3 (`influent` unreachable when only the worst
+  window is outside) is what keeps it from `influent`. It stands as recorded and is
+  not acted on.
+- **Cost.** 132–259 evaluations against budgets of 300–750, and 52–85 minutes of wall
+  clock, with two cells sharing the machine. S5-01 used 79 of its 120 minutes this
+  time, against 111 in the first run.
