@@ -144,9 +144,12 @@ class WorkflowResult:
     tool_failures: list[str] = field(default_factory=list)
     by_role: dict[str, dict[str, Any]] | None = None
     """P2 only (``docs/p2_design.md`` §9): the meter's cost per role. Every number is the
-    call log's (``calls.jsonl``, rule 3); only the attribution of a call to a role is the
-    workflow's, read from the ``role.step`` of its own action record with the same ``seq``.
-    A logged call no action names is counted under ``unattributed``."""
+    **full** call log's (``truth_store/<id>/calls.jsonl``, which carries what the meter
+    charged each call; the visible ``runs/<id>/calls.jsonl`` is a projection without
+    them), read here on the privileged side, never by a workflow (rule 1). Only the
+    attribution of a call to a role is the workflow's, read from the ``role.step`` of its
+    own action record with the same ``seq``. A logged call no action names is counted
+    under ``unattributed``."""
     state_valid: bool = False
     output_name: str = ""
     error: str = ""
@@ -291,7 +294,7 @@ def run_workflow(
     if isinstance(config, P1Config):
         provenance = p1_provenance(config)  # refuses a post-freeze prompt change
     registry = open_registry(run_id, runs_root=runs_root, truth_store=store, scenario=scenario)
-    first_seq = _logged_calls(paths.root)
+    first_seq = _logged_calls(paths.truth)
     if timeout_s is None:
         timeout_s = (registry.budget.wall_clock_min + config.runner.timeout_margin_min) * 60.0
     box = _fresh_sandbox(sandbox_root, workflow)
@@ -505,19 +508,22 @@ def _summarise(
     result.fallbacks = list(state.plan.fallbacks)
     result.tool_failures = [f"{f.name}:{f.kind}" for f in state.tool_failures]
     if workflow == "p2":
-        result.by_role = by_role(paths.root, state, first_seq)
+        result.by_role = by_role(paths.truth, state, first_seq)
     return result
 
 
-def _logged_calls(run_dir: Path) -> int:
-    """Lines already in ``calls.jsonl``: the first ``seq`` a launch from now can write."""
+def _logged_calls(log_dir: Path) -> int:
+    """Lines already in ``log_dir/calls.jsonl``: the first ``seq`` a launch can now write."""
     from state.provenance import read_calls
 
-    return len(read_calls(run_dir)) if (run_dir / "calls.jsonl").is_file() else 0
+    return len(read_calls(log_dir)) if (log_dir / "calls.jsonl").is_file() else 0
 
 
-def by_role(run_dir: Path, state: TaskState, first_seq: int = 0) -> dict[str, dict[str, Any]]:
-    """The call log's cost of each P2 role (design §9): evaluations, wall clock, assays.
+def by_role(log_dir: Path, state: TaskState, first_seq: int = 0) -> dict[str, dict[str, Any]]:
+    """The full call log's cost of each P2 role (design §9): evaluations, wall, assays.
+
+    ``log_dir`` is the run's truth-side directory, whose ``calls.jsonl`` is the full log
+    (the meter's per-call counts); its ``seq`` is the visible log's, line for line.
 
     Only this launch's lines (``seq >= first_seq``) are counted. Tokens and requests are
     zero until a live decider runs (deliverable 3).
@@ -526,9 +532,9 @@ def by_role(run_dir: Path, state: TaskState, first_seq: int = 0) -> dict[str, di
 
     role_of = {a.seq: a.step.split(".", 1)[0] for a in state.actions if a.seq is not None}
     out: dict[str, dict[str, Any]] = {}
-    if not (run_dir / "calls.jsonl").is_file():
+    if not (log_dir / "calls.jsonl").is_file():
         return out
-    for call in read_calls(run_dir):
+    for call in read_calls(log_dir):
         if call.seq < first_seq:
             continue
         role = role_of.get(call.seq, "unattributed")

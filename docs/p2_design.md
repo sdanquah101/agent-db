@@ -882,7 +882,9 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
 - **With the verifier off,** the rule string names no null component, since none was
   evaluated: `unverified+<label>` (F-J).
 - **`summary.json` carries `by_role`** (§9). The runner, on the privileged side, sums
-  each call's evaluations, runtime and assay units from `calls.jsonl`. It attributes
+  each call's evaluations, runtime and assay units from the **full** call log
+  (`truth_store/<id>/calls.jsonl`). The visible `runs/<id>/calls.jsonl` is a projection
+  without these numbers, and no workflow reads the full log. It attributes
   each call to a role by the `role.step` of the workflow's action with the same `seq`.
   A logged call that no action names is counted as `unattributed`. Tokens and requests
   are zero until deliverable 3.
