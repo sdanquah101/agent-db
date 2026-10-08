@@ -838,7 +838,12 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
   seven roles (deliverable 4).
 - **`holdout_failed`** is §12 question 3's proposal: two or more objective channels whose
   hold-out `rms_z` (raw record, reference prediction) exceeds their band's after-fit
-  `rms_z` maximum.
+  `rms_z` maximum. It is derived from the verifier's own logged `validate` call on the
+  **reference** prediction, never a later one (the review's F-I). The call is made in
+  standardised form: each sample's residual over its declared sd, against a zero
+  prediction, so the tool's `rmse` is the hold-out `rms_z`. If the call cannot be made
+  or fails, the bit is unknown (`None`), and R3 is then rejected as
+  `holdout_unavailable`, never as passed.
 - **Coupled channels in the signature counts** (§12 question 6) are counted as channels.
   The question was not ruled, and nothing is changed.
 - **The S1 reading's fallback is `insufficient`**, as §2.2 declares, so offline no
@@ -847,3 +852,36 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
 - **The influent onset's fallback is no day**, so offline the dated onset never passes.
   The power run reports every candidate onset day that would pass, for each cell where
   NB fails (the review's R1).
+- **Every P2 count keys on the outcome, never the label alone** (the review's F-A,
+  ruling (c)). The task state must carry a label from the closed vocabulary, so an
+  abstaining or unfinished run writes `none` there. `report.json` therefore carries
+  `outcome`: `pending` for a run that did not complete, `abstain` for one whose verdict
+  abstained, and the final label otherwise. The power report, the development tables
+  and the go/no-go of §11 count on `outcome`. `abstain` and `pending` are reported in
+  their own column and are never read as `none`, as a hit, or as a miss.
+- **A run that places no statistic abstains** (`abstain:no_statistics_placed`), as one
+  without a reference does. An empty placement is no null table, not a null that stands
+  (the review's F-H).
+- **The side the onset test dates** (`nb_side`) is the side of the mean closure and the
+  worst window when NB fails on them. When NB fails only on the inadmissible count, it
+  is the worst window's side if that is outside, else the mean's, else none. With no
+  side, the onset test returns `no_side` and cannot pass (the review's F-D).
+- **The reference fit's noise floors** (`min_relative_sd`, `sd_floor_abs`) are read from
+  the served `procedure` block like every other setting, not from `p0.yaml` (F-J). P0's
+  floors still weight everything after the reference.
+- **With the verifier off,** the rule string names no null component, since none was
+  evaluated: `unverified+<label>` (F-J).
+- **`summary.json` carries `by_role`** (§9). The runner, on the privileged side, sums
+  each call's evaluations, runtime and assay units from `calls.jsonl`. It attributes
+  each call to a role by the `role.step` of the workflow's action with the same `seq`.
+  A logged call that no action names is counted as `unattributed`. Tokens and requests
+  are zero until deliverable 3.
+- **Deferred to deliverable 5 (the ablations), recorded rather than claimed** (the
+  review's F-F and F-G):
+  - `dq.assay` is declared and validated, but no step calls it yet. In deliverable 2 the
+    design role's `design.assay` spends the assay units by P0's preference.
+  - The `persistent_state` switch is inert.
+  - The `coordinator` switch only removes the REVISE round.
+  Each run with one of these switches off says so in its annotations ("ablation inert"
+  or "partial in this version"), so that no record claims an ablation that did not
+  happen.

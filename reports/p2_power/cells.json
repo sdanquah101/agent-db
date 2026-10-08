@@ -1,5 +1,6 @@
 {
  "what": "P2 offline (no model): every decision point at its code fallback",
+ "counting": "on the outcome (verdict and completion), never on the label alone",
  "cells": [
   {
    "cell": "S0-01 B/C",
@@ -7,6 +8,8 @@
     "none"
    ],
    "label": "parameter",
+   "outcome": "parameter",
+   "excluded": false,
    "hit": false,
    "null": {
     "NB": false,
@@ -55,6 +58,8 @@
     "none"
    ],
    "label": "none",
+   "outcome": "none",
+   "excluded": false,
    "hit": true,
    "null": {
     "NB": true,
@@ -108,6 +113,8 @@
     "sensor"
    ],
    "label": "parameter",
+   "outcome": "parameter",
+   "excluded": false,
    "hit": false,
    "null": {
     "NB": false,
@@ -151,6 +158,8 @@
     "influent"
    ],
    "label": "parameter",
+   "outcome": "parameter",
+   "excluded": false,
    "hit": false,
    "null": {
     "NB": false,
@@ -199,6 +208,8 @@
     "state"
    ],
    "label": "none",
+   "outcome": "none",
+   "excluded": false,
    "hit": false,
    "null": {
     "NB": false,
@@ -239,6 +250,8 @@
     "parameter"
    ],
    "label": "none",
+   "outcome": "none",
+   "excluded": false,
    "hit": false,
    "null": {
     "NB": false,
@@ -282,6 +295,8 @@
     "structural"
    ],
    "label": "none",
+   "outcome": "none",
+   "excluded": false,
    "hit": false,
    "null": {
     "NB": false,
@@ -325,6 +340,8 @@
     "sensor"
    ],
    "label": "none",
+   "outcome": "none",
+   "excluded": false,
    "hit": false,
    "null": {
     "NB": true,
@@ -380,7 +397,11 @@
    "wall_min": 73.1
   }
  ],
- "hits_faulted": "0 of 6",
+ "hits_faulted": "0 of 6 scored",
+ "excluded_faulted": {
+  "abstain": 0,
+  "pending": 0
+ },
  "null_rejected_faulted": "3 of 6",
  "prediction_checks": {
   "S0-01 B/C": {

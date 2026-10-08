@@ -59,3 +59,19 @@ holds), with a test. No label changes.
 5. **Cost.** The reference procedure plus the rest used 132–259 evaluations, against
    budgets of 300–750. Wall clock ran 63–111 minutes with two cells sharing the machine;
    S5-01 used 111 of its 120 minutes. Wall clock, not evaluations, binds.
+
+## After the review of PR #32 (2026-10-08)
+
+- **The counts are now keyed on the outcome**, not the label (F-A). `summary.md` and
+  `cells.json` were regenerated from the same eight records. No cell abstained or ended
+  pending, so no count changes: faulted cells hit 0 of 6 scored, 0 excluded.
+- **The cells were not re-run.** Four review fixes could in principle change a run's
+  values. None changes these eight:
+  - **The hold-out bit's source (F-I)** now comes from the verifier's `validate` call on
+    the reference prediction. Offline, `ident.subset` falls back to the reference subset,
+    so no subset fit ran and the prediction was the reference one.
+  - **The served noise floors (F-J)** equal P0's (0.02 and 1e-6).
+  - **`nb_side` (F-D)** now returns no side when NB did not fail. Every candidate-onset
+    list here was already empty.
+  - **The no-statistic abstention (F-H)** applies only to an empty placement, and every
+    cell placed 12 or more statistics.

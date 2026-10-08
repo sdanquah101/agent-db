@@ -55,6 +55,28 @@ def key(cell: tuple[str, str, str]) -> str:
     return f"{cell[0]} {cell[1]}/{cell[2]}"
 
 
+EXCLUDED = ("abstain", "pending")
+"""Outcomes that are never a label: reported in their own column, never counted as
+``none`` (the review's F-A, ruling (c))."""
+
+
+def outcome_of(record: dict[str, Any]) -> str:
+    """The outcome a count keys on: the verdict and completion first, the label last.
+
+    A record that carries the workflow's ``outcome`` is read as written. An older record
+    (written before the field existed) is derived the same way: not completed, or the
+    rule ``pending``, is ``pending``; an abstaining verdict is ``abstain``.
+    """
+    if record.get("outcome"):
+        return str(record["outcome"])
+    verdict = record.get("verdict") or {}
+    if not record.get("completed") or record.get("rule") == "pending":
+        return "pending"
+    if verdict.get("verdict") == "abstain" or str(record.get("rule", "")).startswith("abstain"):
+        return "abstain"
+    return str(record["label"])
+
+
 def run(store: Path, part: str = "0/1") -> None:
     """Generate and run every cell of this part that has no result yet."""
     from scenarios.schema import load_scenario
@@ -93,6 +115,7 @@ def run(store: Path, part: str = "0/1") -> None:
             "evaluations_used": result.simulator_evals_used,
             "evaluations_total": result.simulator_evals_total,
             "label": report["label"],
+            "outcome": report.get("outcome"),
             "rule": report["rule"],
             "verdict": report["verdict"],
             "null_table": report["null_table"],
@@ -112,11 +135,14 @@ def summarise(records: list[dict[str, Any]]) -> dict[str, Any]:
     for r in records:
         t = r["null_table"] or {}
         sig = r["signatures"] or {}
+        out = outcome_of(r)
         rows.append({
             "cell": r["cell"],
             "truth": r["truth"],
             "label": r["label"],
-            "hit": r["label"] in r["truth"],
+            "outcome": out,
+            "excluded": out in EXCLUDED,
+            "hit": out not in EXCLUDED and out in r["truth"],
             "null": {k: t.get(k) for k in ("NB", "NM", "NS", "null_partial", "null_rejected")},
             "failed_channels": t.get("failed_channels"),
             "n_outside": t.get("n_outside"),
@@ -151,13 +177,16 @@ def summarise(records: list[dict[str, Any]]) -> dict[str, Any]:
             "predicted": pred,
             "null_component": bool(row["null"].get(pred["null"])),
             "failed_channels": row["failed_channels"] == pred["failed"],
-            "label": row["label"] == pred["label"],
+            "label": row["outcome"] == pred["label"],
         }
     faulted = [x for x in rows if x["truth"] != ["none"]]
+    scored = [x for x in faulted if not x["excluded"]]
     return {
         "what": "P2 offline (no model): every decision point at its code fallback",
+        "counting": "on the outcome (verdict and completion), never on the label alone",
         "cells": rows,
-        "hits_faulted": f"{sum(x['hit'] for x in faulted)} of {len(faulted)}",
+        "hits_faulted": f"{sum(x['hit'] for x in scored)} of {len(scored)} scored",
+        "excluded_faulted": {k: sum(1 for x in faulted if x["outcome"] == k) for k in EXCLUDED},
         "null_rejected_faulted": f"{sum(bool(x['null'].get('null_rejected')) for x in faulted)}"
         f" of {len(faulted)}",
         "prediction_checks": checks,
@@ -175,16 +204,21 @@ def report(store: Path) -> dict[str, Any]:
         "# P2 offline power run (deliverable 2): no model call",
         "",
         "Every decision point at its declared code fallback (`decider: offline`).",
-        f"Faulted cells hit: {out['hits_faulted']}; null rejected on faulted cells: "
-        f"{out['null_rejected_faulted']}.",
+        "Every count keys on the outcome (the verdict and completion), never the label alone:",
+        "an abstaining or unfinished run is excluded, never read as `none`.",
+        f"Faulted cells hit: {out['hits_faulted']}; excluded: "
+        f"{', '.join(f'{k} {v}' for k, v in out['excluded_faulted'].items())}; null rejected "
+        f"on faulted cells: {out['null_rejected_faulted']}.",
         "",
-        "| cell | truth | label | NB | NM | NS | partial | failed channels | admitted |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| cell | truth | outcome | excluded | NB | NM | NS | partial | failed channels "
+        "| admitted |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for x in out["cells"]:
         n = x["null"]
         lines.append(
-            f"| {x['cell']} | {','.join(x['truth'])} | {x['label']} | {n.get('NB')} | "
+            f"| {x['cell']} | {','.join(x['truth'])} | {x['outcome']} | "
+            f"{x['excluded']} | {n.get('NB')} | "
             f"{n.get('NM')} | {n.get('NS')} | {n.get('null_partial')} | "
             f"{x['failed_channels']} | {x['admitted']} |"
         )

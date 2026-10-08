@@ -234,6 +234,7 @@ def test_a_signature_over_a_standing_null_concludes_none_not_unexplained(monkeyp
     monkeypatch.setattr(wf, "tools", fake)
     run = wf.Workflow(json.loads(json.dumps(cfg)))
     run.reference = {"balance": {}, "channels": {}}
+    run.placement = {"cod_closure": 0}
     run.table = _table()
     run.signatures = {"parameter": True, "parameter_proposed": True}
     run.prediction = fake._simulate(wf.MODEL)
@@ -248,6 +249,7 @@ def test_a_signature_over_a_standing_null_concludes_none_not_unexplained(monkeyp
     # and a rejected null with nothing admitted is the fail that concludes unexplained
     run2 = wf.Workflow(json.loads(json.dumps(cfg)))
     run2.reference = {"balance": {}, "channels": {}}
+    run2.placement = {"cod_closure": 0}
     run2.table = _table(nm=True, failed=["ph", "tan"])
     run2.signatures = {}
     run2.prediction = run.prediction
@@ -258,8 +260,20 @@ def test_a_signature_over_a_standing_null_concludes_none_not_unexplained(monkeyp
     assert run2.classification["rule"] == "null_failed_unexplained"
 
 
+def _power_record(fake: FakeTools, truth: list[str], *, completed: bool = True) -> dict:
+    """A run's record as ``scripts/p2_power.py`` reads it from the report."""
+    report = json.loads(fake.run.outputs[wf.REPORT_FILE])
+    return {"cell": "X", "truth": truth, "completed": completed, "label": report["label"],
+            "outcome": report["outcome"], "rule": report["rule"], "verdict": report["verdict"],
+            "null_table": report["null_table"], "signatures": report["signatures"],
+            "evaluations_used": 0, "evaluations_total": 1, "wall_s": 1.0}  # fmt: skip
+
+
 def test_a_run_without_a_null_table_abstains_and_never_reads_none(monkeypatch, cfg):
-    run, _fake, doc = run_fake(monkeypatch, cfg, FakeTools(evals=60))
+    """The state must carry a label, so it holds the null one; no count may read it."""
+    from scripts import p2_power
+
+    run, fake, doc = run_fake(monkeypatch, cfg, FakeTools(evals=60))
     assert run.verdict["verdict"] == "abstain" and run.table is None
     assert doc["classification"]["rule"] == "abstain:no_null_table"
     assert doc["classification"]["confidence"] == 0.0
@@ -267,6 +281,44 @@ def test_a_run_without_a_null_table_abstains_and_never_reads_none(monkeypatch, c
     assert {"kinetic_attribution", "parameter_values", "structural_adequacy"} <= set(
         doc["abstentions"]
     )
+    # what every count keys on is the outcome, and it is not none
+    report = json.loads(fake.run.outputs[wf.REPORT_FILE])
+    assert report["outcome"] == "abstain" != report["label"]
+    out = p2_power.summarise([_power_record(fake, ["none"])])
+    row = out["cells"][0]
+    assert row["outcome"] == "abstain" and row["excluded"] and not row["hit"]
+    # on a faulted cell it is excluded, not a miss read as none
+    out = p2_power.summarise([_power_record(fake, ["sensor"])])
+    assert out["hits_faulted"] == "0 of 0 scored"
+    assert out["excluded_faulted"] == {"abstain": 1, "pending": 0}
+    # a run that stopped before CONCLUDE is pending, whatever label it wrote
+    assert p2_power.outcome_of({"completed": False, "rule": "pending", "label": "none"}) == (
+        "pending"
+    )
+    assert p2_power.outcome_of({"completed": True, "rule": "pending", "label": "none"}) == (
+        "pending"
+    )
+    # an older record without the field is derived the same way, from the verdict
+    old = {"completed": True, "rule": "abstain:no_null_table", "label": "none",
+           "verdict": {"verdict": "abstain"}}  # fmt: skip
+    assert p2_power.outcome_of(old) == "abstain"
+    # the negative control: a completed run whose null stands is counted as none
+    _run, fake, _doc = run_fake(monkeypatch, cfg)
+    report = json.loads(fake.run.outputs[wf.REPORT_FILE])
+    assert report["outcome"] == report["label"] == "none"
+    row = p2_power.summarise([_power_record(fake, ["none"])])["cells"][0]
+    assert not row["excluded"] and row["hit"]
+
+
+def test_a_run_that_places_no_statistic_abstains(monkeypatch, cfg):
+    """No statistic placed is no null table, never a null that stands (the review's F-H)."""
+    monkeypatch.setattr(wf, "band_placement", lambda stats, band: {})
+    run, fake, doc = run_fake(monkeypatch, cfg)
+    assert run.verdict["verdict"] == "abstain" and run.table is None
+    assert run.verdict["reason"] == "no_statistics_placed"
+    assert doc["classification"]["rule"] == "abstain:no_statistics_placed"
+    assert "no_statistics_placed" in doc["plan"]["fallbacks"]
+    assert json.loads(fake.run.outputs[wf.REPORT_FILE])["outcome"] == "abstain"
 
 
 # ------------------------------------------------------------------ 6. decision schemas
@@ -482,6 +534,28 @@ def test_the_onset_test_dates_a_step_and_refuses_an_offset():
     assert wf.onset_test(edge, env, -1, 60.0, ONSET)["code"] == "inside_after"
 
 
+def test_the_side_nb_failed_on_is_the_one_dated():
+    """``nb_side`` in every NB case (the review's F-D); a flipped sign fails here."""
+    assert wf.nb_side({"cod_closure": -1, "cod_closure_worst": -1}) == -1
+    assert wf.nb_side({"cod_closure": 1, "cod_closure_worst": 1}) == 1
+    # NB on the inadmissible count only: the worst window's side, else the mean's
+    assert wf.nb_side({"n_cod_inadmissible": 1, "cod_closure_worst": 1}) == 1
+    assert wf.nb_side({"n_cod_inadmissible": 1, "cod_closure_worst": -1}) == -1
+    assert wf.nb_side({"n_cod_inadmissible": 1, "cod_closure": 1}) == 1
+    # no side outside: 0, and the onset test cannot pass on it
+    assert wf.nb_side({"n_cod_inadmissible": 1, "cod_closure": 0}) == 0
+    step = _windows([0.0, 0.01, 0.25, 0.30, 0.27])
+    env = (-0.138, 0.023)
+    assert wf.onset_test(step, env, 0, 60.0, ONSET)["code"] == "no_side"
+    assert wf.candidate_onsets(step, env, 0, ONSET) == []
+    # NB not failed: nothing to date
+    assert wf.nb_side({"cod_closure": 1, "cod_closure_worst": 0}) == 0
+    assert wf.nb_side({}) == 0
+    # the negative control: the side the closures are on dates the step, the other does not
+    assert wf.onset_test(step, env, 1, 60.0, ONSET)["passes"]
+    assert not wf.onset_test(step, env, -1, 60.0, ONSET)["passes"]
+
+
 # ------------------------------------------------------------------ 12. the templates
 
 
@@ -579,6 +653,207 @@ def test_the_band_placement_and_the_envelope_placement_agree(monkeypatch, cfg):
     assert all(v == 0 for v in p.values())  # a clean run inside the band it helped build
 
 
+def _served(plant: str, tier: str, band: dict[str, Any]) -> dict[str, Any]:
+    """A band dict through the band tool's served output schema, as the verifier reads it."""
+    from tools.config import load_background
+    from tools.schemas import BandRecord, DeclaredBackgroundOutput
+
+    config = load_background()
+    return DeclaredBackgroundOutput(
+        plant=plant, tier=tier, status=config.provenance.status,
+        band_seeds=config.provenance.seeds, procedure=config.procedure, units={},
+        **BandRecord.model_validate(band).model_dump(),
+    ).model_dump(mode="json")  # fmt: skip
+
+
+def _band_path_counts(placement=None) -> dict[str, dict[str, int]]:
+    """The frozen rule's counts over the 120 leave-one-out runs, by the workflow's path.
+
+    Each run's statistics (``record_statistics``) are placed by ``band_placement`` against
+    a band the band driver's own ``aggregate`` builds from the other runs of its (plant,
+    tier), served through the tool's output schema: the path the workflow's verifier takes.
+    """
+    placement = placement or wf.band_placement
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for r in sorted(bg.read_record(), key=lambda r: r["key"]):
+        groups[(r["plant"], r["tier"])].append(r)
+    rules = {"NB": wf.n_bal, "NM": wf.n_multi, "NS": wf.n_single,
+             "null_rejected": wf.null_rejected, "null_partial": wf.null_partial}  # fmt: skip
+    counts = {name: defaultdict(int) for name in rules}
+    for (plant, tier), rs in groups.items():
+        for i, r in enumerate(rs):
+            band = bg.aggregate(rs[:i] + rs[i + 1 :])[plant][tier]
+            p = placement(wf.record_statistics(r), _served(plant, tier, band))
+            for name, rule in rules.items():
+                counts[name][f"{plant}/{tier}"] += int(rule(p))
+    return {name: dict(c) for name, c in counts.items()}
+
+
+def test_the_band_path_reproduces_the_frozen_counts_and_predictions():
+    """The pin through ``band_envelopes``/``band_placement`` (the review's F-C)."""
+    frozen = json.loads((REPO / "reports" / "background" / "null_rule_loo.json").read_text())
+    counts = _band_path_counts()
+    for name, per in counts.items():
+        assert per == frozen["rules"][name]["per_plant_tier"], name
+
+    # the negative control: the band path without the inadmissible count (half of NB)
+    # loses NB failures the frozen rule has
+    def without_inadmissible(stats, band):
+        return wf.band_placement({k: v for k, v in stats.items() if k != "n_cod_inadmissible"},
+                                 band)  # fmt: skip
+
+    mutated = _band_path_counts(without_inadmissible)
+    assert mutated["NB"] != frozen["rules"]["NB"]["per_plant_tier"]
+    # the four §4.5 cells, placed against the band tool's served output
+    from tests.p2_support import FakeTools as Fake
+
+    placed = json.loads((REPO / "reports" / "background" / "dev_cells.json").read_text())
+    outcome = {}
+    for cell in placed["cells"]:
+        _sid, pt = cell["cell"].split(" ")
+        plant, tier = pt.split("/")
+        served = Fake()._declared_background(plant, tier).model_dump(mode="json")
+        stats = {r["statistic"]: r["value"] for r in cell["rows"]
+                 if r.get("ruled", True) and r["value"] is not None}  # fmt: skip
+        p = wf.band_placement(stats, served)
+        outcome[cell["cell"]] = (wf.n_bal(p), wf.n_multi(p), wf.n_single(p),
+                                 wf.failed_channels(p))  # fmt: skip
+    assert outcome["S0-01 B/A"] == (False, False, False, [])
+    assert outcome["S0-01 B/B"] == (False, False, False, [])
+    assert outcome["S0-01 B/C"] == (False, True, False, ["digestate_ts", "digestate_vs"])
+    assert outcome["S1-01 B/B"] == (True, False, False, ["gas_flow"])
+
+
+# ------------------------------------------------------------------ the hold-out bit (F-I)
+
+
+def test_the_holdout_bit_is_the_verifiers_validate_output_on_the_reference(monkeypatch, cfg):
+    run, fake, doc = run_fake(monkeypatch, cfg, FakeTools(offsets={"gas_flow": 20.0, "ph": 20.0}))
+    holdout = run.tables["holdout"]
+    # one logged validate call by the verifier, in standardised form (a zero prediction)
+    calls = [a for a in doc["actions"] if a["name"] == "validate"]
+    mine = [a for a in calls if a["step"] == "verification.holdout"]
+    assert len(mine) == 1 and holdout["call"] == mine[0]["call_index"]
+    args = next(a for n, a in fake.calls if n == "validate")
+    assert all(not np.any(v) for v in args["predicted"].values())
+    # the bit is the tool's output against the band's after-fit maximum
+    limit = int(cfg["holdout"]["min_channels_failed"])
+    above = [n for n, rms in holdout["rms_z"].items()
+             if rms > run.band["channels"][n]["after_fit"]["rms_z"]["max"]]  # fmt: skip
+    assert {"gas_flow", "ph"} <= set(above)
+    assert holdout["holdout_failed"] is (len(above) >= limit) is True
+    assert run.verdict["holdout_failed"] is True
+    # it reads the reference prediction: a later prediction (a subset fit's) changes nothing
+    before = dict(holdout["rms_z"])
+    shifted = fake._simulate(wf.MODEL)
+    shifted.outputs = {k: v + 1e6 for k, v in shifted.outputs.items()}
+    run.prediction = shifted
+    assert run.holdout_check()["rms_z"] == before
+    # the negative control: a clean record passes the hold-out
+    run, _fake, _doc = run_fake(monkeypatch, cfg)
+    assert run.tables["holdout"]["holdout_failed"] is False
+
+    # and a failed call leaves the bit unknown, never passed
+    def broken(**kw: Any) -> Any:
+        raise wf.tools.ToolError("validate failed")
+
+    fake = FakeTools()
+    monkeypatch.setattr(fake, "_validate", broken)
+    run, _fake, _doc = run_fake(monkeypatch, cfg, fake)
+    assert run.tables["holdout"]["holdout_failed"] is None
+    out = wf.admit(cfg["p0"]["labels"], _table(nm=True),
+                   {"r3": True, "structural": False, "structural_proposed": True,
+                    "holdout_failed": None})  # fmt: skip
+    assert out["rejected"] == [{"label": "structural", "code": "holdout_unavailable"}]
+
+
+# ------------------------------------------------------------------ F-J
+
+
+def test_the_rule_names_no_null_component_the_verifier_did_not_evaluate(monkeypatch, cfg):
+    fake = FakeTools()
+    monkeypatch.setattr(wf, "tools", fake)
+    c = json.loads(json.dumps(cfg))
+    c["ablation"]["verifier"] = False
+    run = wf.Workflow(c)
+    run.reference = {"balance": {}, "channels": {}}
+    run.placement = {"cod_closure": 0}
+    run.signatures = {"parameter": True}
+    run.prediction = fake._simulate(wf.MODEL)
+    run.series = {}
+    run.step_verify()
+    run.step_conclude()
+    assert run.classification["rule"] == "unverified+parameter"
+    # the negative control: with the verifier on, the evaluated component is named
+    run2 = wf.Workflow(json.loads(json.dumps(cfg)))
+    run2.reference = {"balance": {}, "channels": {}}
+    run2.placement = {"cod_closure": 0}
+    run2.table = _table(nm=True, failed=["ph", "tan"])
+    run2.signatures = {"parameter": True}
+    run2.prediction = run.prediction
+    run2.series = {}
+    run2.step_verify()
+    run2.step_conclude()
+    assert run2.classification["rule"] == "NM+parameter"
+
+
+def test_the_reference_weights_use_the_served_noise_floors(monkeypatch, cfg):
+    """The floors are the band's served procedure's, not p0.yaml's (the review's F-J)."""
+    fake = FakeTools()
+    served = fake._declared_background
+
+    def floors_changed(plant, tier):
+        out = served(plant, tier)
+        proc = out.procedure.model_copy(update={"min_relative_sd": 0.5})
+        return out.model_copy(update={"procedure": proc})
+
+    monkeypatch.setattr(fake, "_declared_background", floors_changed)
+    run, fake, _doc = run_fake(monkeypatch, cfg, fake)
+    lsq = next(a for n, a in fake.calls if n == "fit_lsq")
+    gas = next(d for d in lsq["data"] if d["output"] == "q_gas_stp_dry")
+    s = run.series["gas_flow"]
+    floors = {"min_relative_sd": 0.5, "sd_floor_abs": served("B", "B").procedure.sd_floor_abs}
+    keep = (s.t >= run.cal[0]) & (s.t <= run.cal[1])
+    np.testing.assert_allclose(gas["sd"], s.weights(floors)[keep])
+    # the negative control: P0's floors give other weights
+    assert not np.allclose(gas["sd"], s.sd[keep])
+
+
+def test_the_summary_counts_each_roles_cost_from_the_call_log(tmp_path):
+    """``summary.json``'s ``by_role`` (design §9): the log's numbers, the action's role."""
+    import types
+
+    from state.provenance import CallRecord
+    from tools.runner import by_role
+
+    lines = [
+        CallRecord(seq=0, t_utc="x", name="read_sensors", version="1", args_hash="a",
+                   runtime_s=0.1, outcome="ok", n_evaluations=0, assay_units=0),
+        CallRecord(seq=1, t_utc="x", name="simulate", version="1", args_hash="b",
+                   runtime_s=2.0, outcome="ok", n_evaluations=1, assay_units=0),
+        CallRecord(seq=2, t_utc="x", name="fit_lsq", version="1", args_hash="c",
+                   runtime_s=30.0, outcome="ok", n_evaluations=40, assay_units=0),
+        CallRecord(seq=3, t_utc="x", name="request_assay", version="1", args_hash="d",
+                   runtime_s=0.2, outcome="ok", n_evaluations=0, assay_units=1),
+        CallRecord(seq=4, t_utc="x", name="validate", version="1", args_hash="e",
+                   runtime_s=0.1, outcome="ok", n_evaluations=0, assay_units=0),
+    ]  # fmt: skip
+    (tmp_path / "calls.jsonl").write_text("".join(c.to_json() + "\n" for c in lines))
+    act = types.SimpleNamespace
+    state = types.SimpleNamespace(actions=[
+        act(seq=1, step="calibration.read"), act(seq=2, step="calibration.reference"),
+        act(seq=3, step="design.assay"), act(seq=4, step="verification.holdout"),
+    ])  # fmt: skip
+    out = by_role(tmp_path, state, first_seq=1)
+    assert out["calibration"]["evaluations"] == 41 and out["calibration"]["calls"] == 2
+    assert out["design"]["assay_units"] == 1 and out["verification"]["calls"] == 1
+    assert "unattributed" not in out  # seq 0 is before this launch
+    assert sum(r["evaluations"] for r in out.values()) == 41
+    # the negative control: a logged call no action names is counted, not dropped
+    out = by_role(tmp_path, state, first_seq=0)
+    assert out["unattributed"]["calls"] == 1
+
+
 # ------------------------------------------------------------------ the integration run
 
 
@@ -609,6 +884,11 @@ def test_the_sandboxed_run_writes_the_declared_record(jailed):
     report = json.loads((out / "report.json").read_text())
     used = sum(int(v["evaluations"]) for v in report["by_role"].values())
     assert used == result.simulator_evals_used
+    summary = json.loads((out / "summary.json").read_text())
+    assert sum(int(v["evaluations"]) for v in summary["by_role"].values()) == (
+        result.simulator_evals_used
+    )
+    assert report["outcome"] == report["label"]  # completed, placed: not excluded
     assert report["null_table"] is not None  # the reference completed and was placed
     from state.provenance import read_calls
 

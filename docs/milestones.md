@@ -3738,3 +3738,39 @@ call.
 
 No live call. The next step is the coordinator's review of deliverable 2 and the lead's
 word on the findings, before deliverable 3.
+
+**2026-10-08, about 09:30 UTC — PR #32: the coordinator's review of deliverable 2 (FIXES
+NEEDED, nothing blocking), fixed on `claude/p2-workflow`.**
+- **F-A:** every P2 count now keys on the outcome. `report.json` carries `outcome`
+  (`pending`, `abstain` or the label). `scripts/p2_power.py` reports abstain and pending
+  in their own column. The `..._never_reads_none` test now asserts what its name says.
+  The design records that the go/no-go keys on the verdict.
+- **F-C:** the frozen rule is pinned a second time, through `band_envelopes` and
+  `band_placement`:
+  - The 120 leave-one-out bands are built by the band driver's `aggregate` and served
+    through the tool's schema.
+  - The four §4.5 cells are placed against the served band.
+  - A mutation that drops `n_cod_inadmissible` fails the test.
+- **F-D:** `nb_side` is defined for every NB case, and the onset test refuses a run
+  with no side. It has a test.
+- **F-H:** a run that places no statistic abstains.
+- **F-I:** `holdout_failed` comes from the verifier's logged `validate` call on the
+  reference prediction. An unavailable bit rejects R3 as `holdout_unavailable`.
+- **F-J:**
+  - the reference fit reads the noise floors from the served procedure block;
+  - with the verifier off, the rule names no null component;
+  - `summary.json` carries `by_role`, from the call log;
+  - this entry.
+- **F-F and F-G:** `dq.assay`, `persistent_state` and the coordinator switch are
+  deferred to deliverable 5 (design §14). The record says so whenever one of those
+  switches is off.
+- **The power report** was regenerated with the new counting. No label or count
+  changed, and the cells were not re-run (`reports/p2_power/findings.md` says why).
+
+**Not started, as instructed:**
+- F-B and F-E are deferred to deliverable 3.
+- Power-run findings 1 and 2 are with the lead.
+- No live call has been made.
+
+The next step is the coordinator's re-review.
+

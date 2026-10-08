@@ -262,8 +262,20 @@ def null_table(p: Placement) -> dict[str, Any]:
 
 
 def nb_side(p: Placement) -> int:
-    """The side NB failed on: the mean closure's, or -1 for the inadmissible count."""
-    return int(p.get("cod_closure", 0)) or -1
+    """The side NB failed on, which the onset test dates: +1 above, -1 below, 0 none.
+
+    - NB not failed: 0 (there is nothing to date).
+    - The mean closure and the worst window outside on one side: that side.
+    - NB failed only on the inadmissible count: the worst window's side if it is outside,
+      else the mean closure's if it is outside, else 0. An inadmissible window can lie on
+      either side, so no side is assumed; with 0 the onset test cannot pass.
+    """
+    if not n_bal(p):
+        return 0
+    mean, worst = int(p.get("cod_closure", 0)), int(p.get("cod_closure_worst", 0))
+    if mean != 0 and mean == worst:
+        return mean
+    return worst or mean
 
 
 def onset_test(
@@ -287,6 +299,8 @@ def onset_test(
     out = {"onset_day": onset_day, "passes": False, "code": "no_onset"}
     if onset_day is None:
         return out
+    if side not in (-1, 1):
+        return {**out, "code": "no_side"}
     ev = [w for w in windows if w.get("closure") is not None]
     before = [w for w in ev if float(w["end"]) <= float(onset_day) + 1e-9]
     after = [w for w in ev if float(w["start"]) >= float(onset_day) - 1e-9]
@@ -457,9 +471,31 @@ def admit(
         "structural",
         bool(t.get("NM")),
         bool(signatures.get("structural")),
-        "holdout_passed" if signatures.get("r3") else "signature_absent",
-    )
+        "signature_absent"
+        if not signatures.get("r3")
+        else ("holdout_unavailable" if signatures.get("holdout_failed") is None
+              and "holdout_failed" in signatures else "holdout_passed"),
+    )  # fmt: skip
     return {"admitted": admitted, "rejected": rejected}
+
+
+EXCLUDED = ("abstain", "pending")
+"""The outcomes no count may read as a label (the review's F-A; ruling (c))."""
+
+
+def outcome(verdict: dict[str, Any], completed: bool, label: str) -> str:
+    """What every P2 count keys on: ``pending``, ``abstain``, or the final label.
+
+    The task state must carry a label from the closed vocabulary, so an abstaining or
+    unfinished run writes the null label there; this is the field that says it is not one.
+    A run that did not complete is ``pending`` whatever it wrote; a completed run whose
+    verdict abstained is ``abstain``.
+    """
+    if not completed:
+        return "pending"
+    if verdict.get("verdict") == "abstain":
+        return "abstain"
+    return label
 
 
 def first_in_p0_order(lab: dict[str, str], labels: Sequence[str]) -> str:
@@ -953,9 +989,8 @@ class Series:
         self.t = np.asarray(raw["sample_t_d"], dtype=float)
         self.raw = np.array([np.nan if v is None else float(v) for v in raw["value"]], dtype=float)
         self.value = self.raw.copy()
-        self.sd = declared_sd(
-            self.raw, float(noise.get("cv", 0.0)), float(noise.get("sd_abs", 0.0)), cal
-        )
+        self.cv, self.sd_abs = float(noise.get("cv", 0.0)), float(noise.get("sd_abs", 0.0))
+        self.sd = declared_sd(self.raw, self.cv, self.sd_abs, cal)
         bound = noise.get("drift_bound")
         self.drift_bound = None if bound is None else float(bound)
         self.quarantined: list[list[float]] = []
@@ -964,14 +999,24 @@ class Series:
         self.in_objective = False
         self.status = "ok"
 
-    def observed(self, window: tuple[float, float], *, raw: bool = False) -> dict[str, Any]:
+    def weights(self, cal: dict[str, Any]) -> np.ndarray:
+        """The declared sd under another pair of floors (the band's served procedure)."""
+        return declared_sd(self.raw, self.cv, self.sd_abs, cal)
+
+    def observed(
+        self,
+        window: tuple[float, float],
+        *,
+        raw: bool = False,
+        sd: np.ndarray | None = None,
+    ) -> dict[str, Any]:
         """An ``ObservedSeries`` payload restricted to ``window``."""
         keep = (self.t >= window[0]) & (self.t <= window[1])
         return {
             "output": self.channel,
             "t": self.t[keep],
             "value": (self.raw if raw else self.value)[keep],
-            "sd": self.sd[keep],
+            "sd": (self.sd if sd is None else sd)[keep],
             "unit": self.unit,
         }
 
@@ -1014,6 +1059,9 @@ class Workflow:
         self.abstentions: list[str] = []
         self.evidence: list[dict[str, Any]] = []
         self.reference: dict[str, Any] | None = None
+        self.reference_prediction: Any = None
+        self.balance_index: int | None = None
+        self.reference_sd: dict[str, np.ndarray] = {}
         self.band: dict[str, Any] | None = None
         self.table: dict[str, Any] | None = None
         self.placement: Placement = {}
@@ -1035,6 +1083,14 @@ class Workflow:
         self.model: dict[str, Any] = {}
         self.notes: list[dict[str, Any]] = []
         self.completed = False
+        # two switches are not yet wired through (design §14, deferred to deliverable 5);
+        # the record says so rather than claiming an ablation that did not happen
+        if not self.switch["persistent_state"]:
+            self.annotations.append("ablation inert in this version: persistent_state")
+        if not self.switch["coordinator"]:
+            self.annotations.append(
+                "ablation partial in this version: coordinator (only the REVISE round is removed)"
+            )
 
     # -- persistence ---------------------------------------------------------------
     def checkpoint(self, step: str) -> None:
@@ -1213,7 +1269,12 @@ class Workflow:
 
     def _reference(self, proc: dict[str, Any], cal: tuple[float, float]) -> dict[str, Any]:
         objective = [s for s in self.series.values() if s.name in set(proc["objective_channels"])]
-        default = {n: z_summary(s.t, s.raw, s.sd, self.baseline.t,
+        # the noise floors are the served procedure's, like everything else (the review's F-J)
+        floors = {"min_relative_sd": float(proc["min_relative_sd"]),
+                  "sd_floor_abs": float(proc["sd_floor_abs"])}  # fmt: skip
+        weights = {n: s.weights(floors) for n, s in self.series.items()}
+        self.reference_sd = weights
+        default = {n: z_summary(s.t, s.raw, weights[n], self.baseline.t,
                                 self.baseline.outputs[s.channel], cal)
                    for n, s in self.series.items()
                    if s.channel in self.baseline.outputs}  # fmt: skip
@@ -1277,7 +1338,7 @@ class Workflow:
                        "admissible": True}  # fmt: skip
             self.codes.append("no_balance_window")
         params = list(self.model["parameters"])
-        data = [s.observed(cal, raw=True) for s in objective]
+        data = [s.observed(cal, raw=True, sd=weights[s.name]) for s in objective]
         morris = self.call(
             "identifiability", "reference", "gsa_morris", model=MODEL, parameters=params,
             outputs=[s.channel for s in objective], summary=str(proc["gsa_summary"]),
@@ -1319,6 +1380,7 @@ class Workflow:
         optimum = {n: float(v) for n, v in zip(fit.parameters, np.asarray(fit.theta), strict=True)}
         fitted = self.call("calibration", "reference", "simulate", model=MODEL, parameters=optimum)
         self.prediction, self.prediction_index = fitted, self.rec.last_index
+        self.reference_prediction = fitted
         self.fit, self.optimum, self.approved = fit, optimum, list(approved)
         self.screening = {
             "declared": params,
@@ -1330,7 +1392,7 @@ class Workflow:
         }
         channels = {}
         for name, s in self.series.items():
-            after = (z_summary(s.t, s.raw, s.sd, fitted.t, fitted.outputs[s.channel], cal)
+            after = (z_summary(s.t, s.raw, weights[name], fitted.t, fitted.outputs[s.channel], cal)
                      if s.channel in fitted.outputs else None)  # fmt: skip
             if default.get(name) is None or after is None:
                 continue
@@ -1357,6 +1419,11 @@ class Workflow:
             self.checkpoint("null")
             return
         self.placement = band_placement(record_statistics(self.reference), self.band)
+        if not self.placement:
+            # nothing to place is no null table, not a null that stands (the review's F-H)
+            self.codes.append("no_statistics_placed")
+            self.checkpoint("null")
+            return
         if self.switch["verifier"]:
             self.table = null_table(self.placement)
             self.log.send("table", "verification", "coordination", "null",
@@ -1791,24 +1858,51 @@ class Workflow:
         self.checkpoint("assays")
 
     # -- VERIFY -----------------------------------------------------------------------
-    def holdout_check(self) -> bool:
-        """``holdout_failed`` (§12, question 3), read by the verifier alone.
+    def holdout_check(self) -> dict[str, Any]:
+        """``holdout_failed`` (§12, question 3), from the verifier's own ``validate`` call.
 
-        It fails when enough channels' hold-out ``rms_z`` are above the band's after-fit
-        maximum.
+        The call scores the **reference** prediction (the reference fit on the raw record,
+        never a subset fit a decision chose) over the hold-out, in standardised form: the
+        observed series is each sample's residual over its declared sd (the served floors)
+        and the prediction is zero, so the tool's ``rmse`` is the hold-out ``rms_z``. The
+        bit fails when enough channels' ``rms_z`` are above the band's after-fit maximum.
+        It is ``None`` when the call cannot be made or fails (no hold-out bit, logged).
         """
-        failed = 0
+        pred = self.reference_prediction
+        out: dict[str, Any] = {"holdout_failed": None, "rms_z": {}, "call": None}
+        if pred is None:
+            return out
+        t_pred = np.asarray(pred.t, dtype=float)
+        observed, names = [], {}
         for name, s in self.series.items():
-            if not s.in_objective or s.channel not in self.prediction.outputs:
+            if not s.in_objective or s.channel not in pred.outputs or s.count(self.holdout) < 1:
                 continue
+            sd = self.reference_sd.get(name, s.sd)
+            z = (s.raw - np.interp(s.t, t_pred, np.asarray(pred.outputs[s.channel], float))) / sd
+            observed.append({"output": s.channel, "t": s.t, "value": z,
+                             "sd": np.ones(s.t.shape), "unit": "-"})  # fmt: skip
+            names[s.channel] = name
+        if not observed:
+            return out
+        try:
+            val = self.call("verification", "holdout", "validate", observed=observed, t=t_pred,
+                            predicted={o["output"]: np.zeros(t_pred.shape) for o in observed},
+                            holdout={"start": self.holdout[0], "end": self.holdout[1]})  # fmt: skip
+        except tools.ToolError as exc:
+            self.rec.failure("verification.holdout", "validate", "error", str(exc),
+                             "no hold-out bit")  # fmt: skip
+            return out
+        out["call"] = self.rec.last_index
+        failed = 0
+        for m in val.results:
+            name = names.get(m.output)
             band = (self.band or {}).get("channels", {}).get(name)
-            summ = z_summary(s.t, s.raw, s.sd, self.prediction.t,
-                             self.prediction.outputs[s.channel], self.holdout)  # fmt: skip
-            if band is None or summ is None or summ["rms_z"] is None:
-                continue
-            if float(summ["rms_z"]) > float(band["after_fit"]["rms_z"]["max"]):
-                failed += 1
-        return failed >= int(self.cfg["holdout"]["min_channels_failed"])
+            rms = _f(m.rmse)
+            out["rms_z"][name] = rms
+            if band is not None and rms is not None:
+                failed += int(rms > float(band["after_fit"]["rms_z"]["max"]))
+        out["holdout_failed"] = failed >= int(self.cfg["holdout"]["min_channels_failed"])
+        return out
 
     def validate(self, role: str, step: str) -> dict[str, Any] | None:
         """One ``validate`` call on the current prediction over the hold-out."""
@@ -1858,14 +1952,14 @@ class Workflow:
     def step_verify(self) -> None:
         """Admission, the hold-out bit, the differential, the verdict (§2.7, §5)."""
         lab = self.lab
-        if self.reference is None:
+        if self.reference is None or not self.placement:
             self.verdict = {
                 "verdict": "abstain",
                 "label": lab["none"],
                 "admitted": [],
                 "rejected": [],
                 "holdout_failed": None,
-                "reason": "no_null_table",
+                "reason": "no_null_table" if self.reference is None else "no_statistics_placed",
             }
             self.checkpoint("verify")
             return
@@ -1880,9 +1974,11 @@ class Workflow:
             }
             self.checkpoint("verify")
             return
-        self.verifier_validation = self.validate("verification", "holdout")
-        holdout_failed = self.holdout_check()
-        self.signatures["structural"] = self.signatures.get("r3", False) and holdout_failed
+        holdout = self.holdout_check()
+        self.tables["holdout"] = holdout
+        holdout_failed = holdout["holdout_failed"]
+        self.signatures["holdout_failed"] = holdout_failed
+        self.signatures["structural"] = bool(self.signatures.get("r3", False) and holdout_failed)
         rounds = 2 if (self.switch["self_correction"] and self.switch["coordinator"]) else 1
         result: dict[str, Any] = {}
         for round_ in range(rounds):
@@ -1917,7 +2013,7 @@ class Workflow:
         label = v.get("label", lab["none"])
         rejected_null = bool(self.table and self.table["null_rejected"])
         if v.get("verdict") == "abstain":
-            label, conf, rule = lab["none"], 0.0, "abstain:no_null_table"
+            label, conf, rule = lab["none"], 0.0, f"abstain:{v['reason']}"
             self.abstentions += ["kinetic_attribution", "parameter_values", "structural_adequacy"]
         elif v.get("verdict") == "fail" or (label == lab["none"] and rejected_null):
             label, conf, rule = lab["none"], float(attr["confidence"]["multiple"]), \
@@ -1928,11 +2024,13 @@ class Workflow:
         else:
             n = len(v.get("admitted", []))
             conf = float(attr["confidence"]["single" if n == 1 else "multiple"])
-            component = (
-                "NB"
-                if label == lab["influent"]
-                else ("NS" if self.table and self.table["NS"] else "NM")
-            )
+            if self.table is None:
+                # the verifier is off: no null component was evaluated, so none is named
+                component = "unverified"
+            elif label == lab["influent"]:
+                component = "NB"
+            else:
+                component = "NS" if self.table["NS"] else "NM"
             rule = f"{component}+{label}"
         secondary = [x for x in v.get("admitted", []) if x != label]
         flag = None
@@ -2081,6 +2179,7 @@ class Workflow:
             "workflow": doc["workflow"],
             "run_id": doc["run_id"],
             "label": cls["label"],
+            "outcome": outcome(self.verdict, bool(doc["final"]["completed"]), cls["label"]),
             "confidence": cls["confidence"],
             "rule": cls["rule"],
             "abstentions": doc["abstentions"],
@@ -2100,7 +2199,7 @@ class Workflow:
         self.step_qc()
         self.step_reference()
         self.step_null()
-        if self.reference is not None:
+        if self.reference is not None and self.placement:
             self.step_screen()
             self.intervals_from_fit()
             self.step_mcmc()

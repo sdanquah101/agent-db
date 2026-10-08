@@ -221,8 +221,19 @@ class FakeTools:
         return ns(report_day=day + 3.0,
                   results=[ns(channel="vfa_total", value=300.0, sd=20.0, unit="mg/L")])  # fmt: skip
 
-    def _validate(self, observed: Any, **kw: Any) -> Any:
-        return ns(ensemble=False, results=[
-            ns(output=o["output"], n=10, mae=1.0, rmse=1.0, nrmse=0.1, bias=0.0,
-               coverage={}, interval_score={}, crps=None, constraint_violations=0)
-            for o in observed])  # fmt: skip
+    def _validate(self, observed: Any, t: Any, predicted: Any, holdout: Any = None,
+                  **kw: Any) -> Any:  # fmt: skip
+        """The real tool's point metrics over the hold-out (``rmse`` is what P2 reads)."""
+        results = []
+        for o in observed:
+            tt, y = np.asarray(o["t"], dtype=float), np.asarray(o["value"], dtype=float)
+            keep = np.isfinite(y)
+            if holdout is not None:
+                keep &= (tt >= holdout["start"]) & (tt <= holdout["end"])
+            err = np.interp(tt[keep], np.asarray(t, dtype=float),
+                            np.asarray(predicted[o["output"]], dtype=float)) - y[keep]  # fmt: skip
+            results.append(ns(output=o["output"], n=int(err.size), mae=float(np.mean(np.abs(err))),
+                              rmse=float(np.sqrt(np.mean(err**2))), nrmse=0.1,
+                              bias=float(np.mean(err)), coverage={}, interval_score={},
+                              crps=None, constraint_violations=0))  # fmt: skip
+        return ns(ensemble=False, results=results)
