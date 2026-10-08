@@ -3769,7 +3769,8 @@ NEEDED, nothing blocking), fixed on `claude/p2-workflow`.**
 
 **Not started, as instructed:**
 - F-B and F-E are deferred to deliverable 3.
-- Power-run findings 1 and 2 are with the lead.
+- Power-run findings 1 and 2 were with the lead; they were **accepted the same day**
+  and implemented in `51c9782` (the next entry).
 - No live call has been made.
 
 The next step is the coordinator's re-review.
@@ -3796,3 +3797,31 @@ power re-run (PR #32, draft).**
   2. then deliverable 3, the live wiring (F-B, F-E), for review;
   3. no live call until the lead approves.
 
+**2026-10-08, about 19:30 UTC — PR #32: the coordinator's delta review at `15d0daf`
+(FIXES NEEDED, one MEDIUM), fixed.**
+- **Commits since the last review:**
+  - `51c9782`: the rulings;
+  - `15d0daf`: `by_role` from the full log;
+  - `493961d`: the re-run, in which wrong non-`none` labels fell from 3 to 1, matching
+    the reviewer's independent prediction.
+- **N-1 (MEDIUM).** `by_role` joined the visible log to the truth-side log by `seq`.
+  That log has one record per hidden integration segment, so the join was offset by
+  the number of fault onsets, and `unattributed` leaked that number. The registry now
+  keeps each call's charge keyed by the visible `seq`, and the runner reads no log. A
+  test runs this on a three-segment record and checks the per-role split. A negative
+  control shows that the old join misattributes.
+- **N-2:** `cells.json` carries each cell's change-point days, sizes and R3 channels,
+  regenerated from the existing records with no re-run.
+- **N-3:** this entry.
+- **N-4:** `outcome_of` reads the runner's `completed` first.
+- **N-5:** an `nb_side` test where the mean and the worst window disagree.
+- **N-6:** `first_hrt_excluded` lists only the channels whose step lies inside the
+  first HRT.
+- **N-8:** design §14 records that P2 rows are filtered on `outcome` before the frozen
+  evaluator's metrics are pooled.
+- **Item 8:** the runner no longer reads any log for `by_role`, so a malformed log line
+  cannot affect a P0 or P1 launch.
+- **N-7** (the strict reading of ruling 1) is with the lead; nothing changes unless the
+  lead rules.
+- **Next:** the lead's merge word on deliverable 2. Deliverable 3 (the live wiring)
+  does not start before the coordinator relays the lead's go-ahead. No live call.

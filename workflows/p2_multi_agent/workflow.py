@@ -388,10 +388,12 @@ def tied_change_point(
     later); a step on a channel that did not fail does not count. ``common`` therefore
     needs ``parameter_channels_min`` failed channels sharing a step after the transient.
     """
-    late = {ch: r for ch, r in residuals.items()
-            if r.get("step_day") is not None and float(r["step_day"]) > transient_end}  # fmt: skip
+    dated = {ch: float(r["step_day"]) for ch, r in residuals.items()
+             if r.get("step_day") is not None}  # fmt: skip
+    late = {ch: residuals[ch] for ch, day in dated.items() if day > transient_end}
     out = common_change_point({ch: r for ch, r in late.items() if ch in set(failed)}, attr)
-    out["first_hrt_excluded"] = sorted(set(residuals) - set(late))
+    # only channels whose located step is inside the first HRT (the review's N-6)
+    out["first_hrt_excluded"] = sorted(ch for ch, day in dated.items() if day <= transient_end)
     out["off_failed"] = sorted(ch for ch in late if ch not in set(failed))
     return out
 

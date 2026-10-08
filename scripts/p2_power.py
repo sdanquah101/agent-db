@@ -63,15 +63,17 @@ EXCLUDED = ("abstain", "pending")
 def outcome_of(record: dict[str, Any]) -> str:
     """The outcome a count keys on: the verdict and completion first, the label last.
 
-    A record that carries the workflow's ``outcome`` is read as written. An older record
-    (written before the field existed) is derived the same way: not completed, or the
-    rule ``pending``, is ``pending``; an abstaining verdict is ``abstain``.
+    The runner's ``completed`` is read **first** (the review's N-4): a run the runner did
+    not see complete is ``pending`` whatever its report says. Then the workflow's own
+    ``outcome``, if the record carries it; an older record (written before the field
+    existed) is derived the same way: the rule ``pending`` is ``pending``, an abstaining
+    verdict is ``abstain``.
     """
+    if not record.get("completed") or record.get("rule") == "pending":
+        return "pending"
     if record.get("outcome"):
         return str(record["outcome"])
     verdict = record.get("verdict") or {}
-    if not record.get("completed") or record.get("rule") == "pending":
-        return "pending"
     if verdict.get("verdict") == "abstain" or str(record.get("rule", "")).startswith("abstain"):
         return "abstain"
     return str(record["label"])
@@ -129,6 +131,35 @@ def run(store: Path, part: str = "0/1") -> None:
               f"{record['wall_s']:.0f} s", flush=True)  # fmt: skip
 
 
+def steps_of(store: Path, record: dict[str, Any]) -> dict[str, Any] | None:
+    """Each sensor's located change point (day, size) and the first-HRT boundary.
+
+    Read from the run's own ``state.json`` in the store (its ``residuals``, keyed by model
+    output, mapped back to sensor names through the band's channels), so the per-cell
+    claims in ``docs/decisions.md`` can be checked from the repo without a re-run (the
+    review's N-2). ``None`` when the store no longer holds the run.
+    """
+    from tools.config import load_background
+    from tools.workflow_config import load_p2
+
+    path = store / "runs" / str(record.get("run_id")) / "workflows" / "p2" / "state.json"
+    if not path.is_file():
+        return None
+    state = json.loads(path.read_text(encoding="utf-8"))
+    name_of = {
+        ch.channel: name
+        for tiers in load_background().bands.values()
+        for band in tiers.values()
+        for name, ch in band.channels.items()
+    }
+    boundary = float(state["calibration_window"][0]) + float(load_p2().p0().attribution.transient_d)
+    steps = {
+        name_of.get(out, out): {"step_day": r.get("step_day"), "step_z": r.get("step_z")}
+        for out, r in sorted(state["residuals"].items())
+    }
+    return {"first_hrt_end_d": boundary, "steps": steps}
+
+
 def summarise(records: list[dict[str, Any]]) -> dict[str, Any]:
     """The hit counts and the prediction checks."""
     rows = []
@@ -157,6 +188,7 @@ def summarise(records: list[dict[str, Any]]) -> dict[str, Any]:
                 "early_late": sig.get("early_late"),
                 "biomass_improves": sig.get("biomass_improves"),
                 "change_point": (sig.get("change_point") or {}).get("common"),
+                "change_point_untied": sig.get("change_point"),
                 "change_point_tied": sig.get("change_point_tied"),
                 "inhibited": (sig.get("inhibition") or {}).get("inhibited"),
                 "r3": sig.get("r3"),
@@ -167,6 +199,7 @@ def summarise(records: list[dict[str, Any]]) -> dict[str, Any]:
             "admitted": (r["verdict"] or {}).get("admitted"),
             "rejected": (r["verdict"] or {}).get("rejected"),
             "holdout_failed": (r["verdict"] or {}).get("holdout_failed"),
+            "steps": r.get("steps"),
             "completed": r["completed"],
             "evaluations": f"{r['evaluations_used']}/{r['evaluations_total']}",
             "wall_min": round(r["wall_s"] / 60.0, 1),
@@ -204,6 +237,8 @@ def report(store: Path, before: Path | None = None) -> dict[str, Any]:
     """
     records = [json.loads(p.read_text(encoding="utf-8"))
                for p in sorted((store / "results").glob("*.json"))]  # fmt: skip
+    for r in records:
+        r["steps"] = steps_of(store, r)
     out = summarise(records)
     if before is not None:
         earlier = json.loads(before.read_text(encoding="utf-8"))

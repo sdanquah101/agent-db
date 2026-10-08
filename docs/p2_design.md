@@ -881,10 +881,15 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
   floors still weight everything after the reference.
 - **With the verifier off,** the rule string names no null component, since none was
   evaluated: `unverified+<label>` (F-J).
-- **`summary.json` carries `by_role`** (§9). The runner, on the privileged side, sums
-  each call's evaluations, runtime and assay units from the **full** call log
-  (`truth_store/<id>/calls.jsonl`). The visible `runs/<id>/calls.jsonl` is a projection
-  without these numbers, and no workflow reads the full log. It attributes
+- **`summary.json` carries `by_role`** (§9). The registry keeps the meter's charge for
+  every call (evaluations, assay units, runtime), keyed by the **visible** `seq` it
+  returns with the call. The runner attributes each charge to a role by the workflow's
+  action with that `seq`. No log is read.
+  - The truth-side log cannot be joined by `seq`: it has one record per hidden
+    integration segment, so its numbering is offset by the number of parameter-fault
+    onsets. A join would leak that number into `summary.json` (the review's N-1).
+  - A call that no action names is counted as `unattributed`; it is the registry's own
+    open record. It attributes
   each call to a role by the `role.step` of the workflow's action with the same `seq`.
   A logged call that no action names is counted as `unattributed`. Tokens and requests
   are zero until deliverable 3.
@@ -903,3 +908,8 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
   proposed signature fails only the tie or the first-HRT exclusion, the rejection says
   so: `change_point_not_on_failed_channels_after_hrt` or `r3_not_on_failed_channels`.
   The `cal.split` decision still sees every channel's step; only admission is tied.
+- **The frozen evaluator reads `final.label`** (the review's N-8). Before any P2 rows are
+  pooled into the evaluator's metrics, they are filtered on `outcome` from `report.json`:
+  `abstain` and `pending` rows are taken out and reported separately. Otherwise an
+  abstaining or unfinished run would be scored as `none`, which ruling (c) forbids. The
+  evaluator itself is frozen and unchanged; the filter belongs to the P2 tables.

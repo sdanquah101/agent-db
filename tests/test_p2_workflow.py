@@ -258,7 +258,12 @@ def test_the_admitting_change_point_is_on_failed_channels_after_the_first_hrt(cf
     # day itself is inside (the early/late test's t <= boundary)
     for day in (15.0, hrt_end):
         early = wf.tied_change_point(_steps(day), failed, attr, hrt_end)
-        assert not early["common"] and {"ph", "tan"} <= set(early["first_hrt_excluded"])
+        # only the channels whose step is inside are listed (the review's N-6): not one
+        # with no located step, nor one whose step is later
+        res = {**_steps(day), "vfa_total": {"channel": "vfa_total", "step_z": None,
+                                            "step_day": None}}  # fmt: skip
+        early = wf.tied_change_point(res, failed, attr, hrt_end)
+        assert not early["common"] and early["first_hrt_excluded"] == ["ph", "tan"]
         assert wf.common_change_point(_steps(day), attr)["common"]
     # through admission: NM on the failed channels, the tied step admits, the untied not
     lab = cfg["p0"]["labels"]
@@ -379,6 +384,11 @@ def test_a_run_without_a_null_table_abstains_and_never_reads_none(monkeypatch, c
     out = p2_power.summarise([_power_record(fake, ["sensor"])])
     assert out["hits_faulted"] == "0 of 0 scored"
     assert out["excluded_faulted"] == {"abstain": 1, "pending": 0}
+    # a run the runner did not see complete is pending, whatever its report says
+    # (the review's N-4: the runner's completed is read before the report's outcome)
+    assert p2_power.outcome_of({"completed": False, "outcome": "none", "label": "none"}) == (
+        "pending"
+    )
     # a run that stopped before CONCLUDE is pending, whatever label it wrote
     assert p2_power.outcome_of({"completed": False, "rule": "pending", "label": "none"}) == (
         "pending"
@@ -630,6 +640,10 @@ def test_the_side_nb_failed_on_is_the_one_dated():
     assert wf.nb_side({"n_cod_inadmissible": 1, "cod_closure_worst": 1}) == 1
     assert wf.nb_side({"n_cod_inadmissible": 1, "cod_closure_worst": -1}) == -1
     assert wf.nb_side({"n_cod_inadmissible": 1, "cod_closure": 1}) == 1
+    # the two disagree: the worst window's side wins (the review's N-5; a swap of the
+    # precedence fails here)
+    assert wf.nb_side({"n_cod_inadmissible": 1, "cod_closure": 1, "cod_closure_worst": -1}) == -1
+    assert wf.nb_side({"n_cod_inadmissible": 1, "cod_closure": -1, "cod_closure_worst": 1}) == 1
     # no side outside: 0, and the onset test cannot pass on it
     assert wf.nb_side({"n_cod_inadmissible": 1, "cod_closure": 0}) == 0
     step = _windows([0.0, 0.01, 0.25, 0.30, 0.27])
@@ -907,39 +921,55 @@ def test_the_reference_weights_use_the_served_noise_floors(monkeypatch, cfg):
     assert not np.allclose(gas["sd"], s.sd[keep])
 
 
-def test_the_summary_counts_each_roles_cost_from_the_call_log(tmp_path):
-    """``summary.json``'s ``by_role`` (design §9): the log's numbers, the action's role."""
+def test_the_summary_splits_each_roles_cost_by_the_visible_seq(tmp_path):
+    """``summary.json``'s ``by_role`` (design §9; the review's N-1).
+
+    On a run whose truth-side log has several integration segments and whose visible log
+    has one record for them, so the two logs' numbering differs.
+    """
     import types
 
-    from state.provenance import CallRecord
+    from state.provenance import CallLog, read_calls
+    from tests.test_tool_registry import linear_data, linear_model
+    from tools import Budget, make_registry
     from tools.runner import by_role
 
-    lines = [
-        CallRecord(seq=0, t_utc="x", name="read_sensors", version="1", args_hash="a",
-                   runtime_s=0.1, outcome="ok", n_evaluations=0, assay_units=0),
-        CallRecord(seq=1, t_utc="x", name="simulate", version="1", args_hash="b",
-                   runtime_s=2.0, outcome="ok", n_evaluations=1, assay_units=0),
-        CallRecord(seq=2, t_utc="x", name="fit_lsq", version="1", args_hash="c",
-                   runtime_s=30.0, outcome="ok", n_evaluations=40, assay_units=0),
-        CallRecord(seq=3, t_utc="x", name="request_assay", version="1", args_hash="d",
-                   runtime_s=0.2, outcome="ok", n_evaluations=0, assay_units=1),
-        CallRecord(seq=4, t_utc="x", name="validate", version="1", args_hash="e",
-                   runtime_s=0.1, outcome="ok", n_evaluations=0, assay_units=0),
-    ]  # fmt: skip
-    (tmp_path / "calls.jsonl").write_text("".join(c.to_json() + "\n" for c in lines))
-    act = types.SimpleNamespace
-    state = types.SimpleNamespace(actions=[
-        act(seq=1, step="calibration.read"), act(seq=2, step="calibration.reference"),
-        act(seq=3, step="design.assay"), act(seq=4, step="verification.holdout"),
-    ])  # fmt: skip
-    out = by_role(tmp_path, state, first_seq=1)
-    assert out["calibration"]["evaluations"] == 41 and out["calibration"]["calls"] == 2
-    assert out["design"]["assay_units"] == 1 and out["verification"]["calls"] == 1
-    assert "unattributed" not in out  # seq 0 is before this launch
-    assert sum(r["evaluations"] for r in out.values()) == 41
-    # the negative control: a logged call no action names is counted, not dropped
-    out = by_role(tmp_path, state, first_seq=0)
-    assert out["unattributed"]["calls"] == 1
+    run_dir, truth_dir = tmp_path / "runs" / "r", tmp_path / "truth_store" / "r"
+    # the generator's records: three hidden segments, one visible integration
+    full, visible = CallLog(truth_dir), CallLog(run_dir, projection=True)
+    for k in range(3):
+        full.append("sim.simulate_truth_segment", "1", {"segment": k}, 1.0, "ok")
+    visible.append("sim.simulate_truth", "1", {"n_days": 10}, 3.0, "ok")
+    reg = make_registry(budget=Budget(500, 60.0, 4), seed=7, run_dir=run_dir,
+                        truth_log_dir=truth_dir, models={"linear": linear_model()})  # fmt: skip
+    actions = []
+
+    def call(step: str, name: str, **args: Any) -> None:
+        reg.call(name, **args)
+        actions.append(types.SimpleNamespace(seq=reg.last.seq, step=step))
+
+    call("identifiability.read", "simulate", model="linear", parameters={"a": 2.0})
+    call("calibration.reference", "fit_lsq", model="linear", data=[linear_data()],
+         parameters=["a", "b"], n_starts=1, max_nfev_per_start=20, seed=1)  # fmt: skip
+    call("calibration.reference", "simulate", model="linear", parameters={"a": 1.0})
+    charged = {c["seq"]: c["n_evaluations"] for c in reg.charged_calls}
+    fit_evals = charged[actions[1].seq]
+    assert fit_evals > 1
+    out = by_role(reg, types.SimpleNamespace(actions=actions))
+    # the per-role split, not just the sum
+    assert out["identifiability"]["calls"] == 1 and out["identifiability"]["evaluations"] == 1
+    assert out["calibration"]["calls"] == 2
+    assert out["calibration"]["evaluations"] == fit_evals + 1
+    # the registry's own open record is the only call no action names, and it costs
+    # nothing; the hidden segment count appears nowhere
+    assert reg.charged_calls[0]["name"] == "registry.open"
+    assert out["unattributed"]["calls"] == 1 and out["unattributed"]["evaluations"] == 0
+    assert sum(r["evaluations"] for r in out.values()) == reg.evaluations_used
+    # the negative control: joining the truth-side log by seq is offset by the segments
+    # and misattributes (the defect this replaces)
+    by_full_seq = {r.seq: r for r in read_calls(truth_dir)}
+    misjoined = {a.step.split(".")[0]: by_full_seq[a.seq].name for a in actions}
+    assert misjoined["identifiability"] != "simulate"
 
 
 # ------------------------------------------------------------------ the integration run
