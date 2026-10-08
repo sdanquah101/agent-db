@@ -157,8 +157,11 @@ def summarise(records: list[dict[str, Any]]) -> dict[str, Any]:
                 "early_late": sig.get("early_late"),
                 "biomass_improves": sig.get("biomass_improves"),
                 "change_point": (sig.get("change_point") or {}).get("common"),
+                "change_point_tied": sig.get("change_point_tied"),
                 "inhibited": (sig.get("inhibition") or {}).get("inhibited"),
                 "r3": sig.get("r3"),
+                "r3_channels": sig.get("r3_channels"),
+                "r3_channels_all": sig.get("r3_channels_all"),
                 "structural": sig.get("structural"),
             },
             "admitted": (r["verdict"] or {}).get("admitted"),
@@ -193,11 +196,21 @@ def summarise(records: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def report(store: Path) -> dict[str, Any]:
-    """Write ``reports/p2_power/cells.json`` and ``summary.md`` from the store's results."""
+def report(store: Path, before: Path | None = None) -> dict[str, Any]:
+    """Write ``reports/p2_power/cells.json`` and ``summary.md`` from the store's results.
+
+    With ``before`` (an earlier ``cells.json``), each cell's earlier outcome is shown
+    beside the new one.
+    """
     records = [json.loads(p.read_text(encoding="utf-8"))
                for p in sorted((store / "results").glob("*.json"))]  # fmt: skip
     out = summarise(records)
+    if before is not None:
+        earlier = json.loads(before.read_text(encoding="utf-8"))
+        was = {c["cell"]: c.get("outcome", c["label"]) for c in earlier["cells"]}
+        out["before"] = {"file": before.name, "hits_faulted": earlier["hits_faulted"]}
+        for x in out["cells"]:
+            x["outcome_before"] = was.get(x["cell"])
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     (REPORT_DIR / "cells.json").write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8")
     lines = [
@@ -222,6 +235,19 @@ def report(store: Path) -> dict[str, Any]:
             f"{n.get('NM')} | {n.get('NS')} | {n.get('null_partial')} | "
             f"{x['failed_channels']} | {x['admitted']} |"
         )
+    if "before" in out:
+        lines += [
+            "",
+            f"Before (`{out['before']['file']}`): faulted cells hit "
+            f"{out['before']['hits_faulted']}.",
+            "",
+            "| cell | truth | before | after |",
+            "|---|---|---|---|",
+        ]
+        lines += [
+            f"| {x['cell']} | {','.join(x['truth'])} | {x['outcome_before']} | {x['outcome']} |"
+            for x in out["cells"]
+        ]
     (REPORT_DIR / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
     return out
@@ -232,6 +258,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("action", choices=["run", "report"])
     parser.add_argument("--store", type=Path, required=True)
     parser.add_argument("--part", default="0/1")
+    parser.add_argument("--before", type=Path, default=None)
     args = parser.parse_args(argv)
     store = args.store.resolve()
     if store == REPO or REPO in store.parents:
@@ -239,7 +266,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.action == "run":
         run(store, args.part)
     else:
-        report(store)
+        report(store, args.before)
     return 0
 
 

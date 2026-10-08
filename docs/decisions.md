@@ -7441,3 +7441,73 @@ DECIDED as recommended.
 
 No live run happens before the coordinator's review of deliverable 2 and the lead's
 approval.
+
+## 2026-10-08 — RULINGS (the lead): two admission changes from the offline power run; no live run yet
+
+The lead's word, relayed by the coordinator: "Implement your recommendations." These are
+findings 1 and 2 of `reports/p2_power/findings.md` (deliverable 2).
+
+> **DEVELOPMENT-INFORMED.** Both changes were proposed **after** the offline results on
+> S0-01 B/C, S2-01 B/B and S3-01 C/B were seen. Those cells are therefore no evidence
+> for either change. Both must be judged on the **held-out variants**, never on these
+> cells. The re-run of the eight development cells is reported, not used to tune.
+
+**The null rule itself is unchanged.** NB, NM, NS and `null_partial` are as frozen on
+2026-10-07, and `scripts/null_rule_loo.py` and `reports/background/null_rule_loo.json`
+keep their sha256 (`fb8e8891…`, `de537c45…`; checked by a test). Only admission (design
+§4.4) changes: which signature may admit a label over a null case that has already
+failed.
+
+**(1) Channel-tied admission: accepted.**
+- *Ruling:* a label's admitting signature must lie on the channels whose null case
+  failed.
+  - `parameter`: the change point must be on failed channels. It is P0's R4 arithmetic
+    over the failed channels only, so `parameter_channels_min` (2) **failed** channels
+    must share the step within `step_day_tolerance_d`.
+  - `structural`: the R3 pattern is counted over failed channels only, so
+    `structural_channels_min` (2) failed channels must be structured.
+  - `state`: the early/late test, which was already tied this way.
+  - `sensor` (NS ties it to its channel) and `influent` (NB ties it to the balance) are
+    unchanged.
+- *Interpretation recorded* (the lead's text reads "on at least one failed channel; if
+  defined over several channels, common to failed channels"). P0's change point is
+  always defined over at least two channels, so the second clause governs. The step is
+  read as common to failed channels, and a step shared by one failed and one non-failed
+  channel does not admit. The looser reading (at least one of the sharing channels
+  failed) is the alternative. It would have kept S2-01's admission, whose step was on
+  alkalinity and gas while gas and pH failed.
+- *Reason:* on S0-01 B/C the null failed on TS and VS and the step was on gas and pH. On
+  S2-01 the step was on alkalinity and gas while gas and pH failed. A signature
+  elsewhere explains nothing about the failure it is admitted over.
+- *Alternatives:* the looser reading above, or leaving admission untied (the design of
+  2026-10-07).
+
+**(2) The first-HRT exclusion for change points: accepted.**
+- *Ruling:* a change point inside the first `transient_d` does not count as an
+  admitting signature. The boundary is the calibration start plus P0's `transient_d`
+  (30 d), taken by reference: the same boundary as the early/late test, `t ≤ boundary`.
+  The start-up transient belongs to the state test (decision 4 of 2026-09-30).
+- *Interpretation recorded:* the channel's located change point (P0's single
+  best-split search) is excluded if it falls inside. The search is **not** repeated
+  over the later days, which would be a new test.
+- *Reason:* the admitting steps on S0-01 B/C (day 15) and in the smoke run (day 13)
+  lay inside the start-up transient.
+- *Alternatives:* repeating the search after the transient, or keeping early steps.
+
+**(3) No live model run yet**, not even the 3-cell × 2-seed pilot, until these steps are
+done in order:
+1. these changes and the review's fixes (F-A, F-C, F-D, F-H, F-I, F-J, F-F/G) are in;
+2. the offline power run is re-run on the same eight cells;
+3. the coordinator has reviewed that re-run;
+4. the live wiring of deliverable 3 (F-B, F-E) has been reviewed;
+5. the lead has approved the first live run.
+
+**Tests** (`tests/test_p2_workflow.py`), each with its negative control:
+- a step on non-failed channels does not admit `parameter` (P0's arithmetic alone
+  would);
+- a step inside the first HRT does not admit, the boundary day included;
+- a step on the failed channels after the first HRT does admit;
+- R3 counted off the failed channels does not admit `structural`.
+
+The rejection codes are `change_point_not_on_failed_channels_after_hrt` and
+`r3_not_on_failed_channels`.

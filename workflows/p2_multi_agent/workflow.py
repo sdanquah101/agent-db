@@ -373,6 +373,29 @@ def common_change_point(
     return {"common": False, "day": None, "channels": []}
 
 
+def tied_change_point(
+    residuals: dict[str, dict[str, Any]],
+    failed: Sequence[str],
+    attr: dict[str, Any],
+    transient_end: float,
+) -> dict[str, Any]:
+    """The change point that may admit ``parameter`` (the lead's rulings, 2026-10-08).
+
+    P0's R4 arithmetic over the channels whose null case **failed** only, and only over
+    change points **after** the first HRT (``transient_end``: the calibration start plus
+    P0's ``transient_d``, the early/late test's own boundary). A channel's located change
+    point that falls inside the first HRT does not count (it is not searched for again
+    later); a step on a channel that did not fail does not count. ``common`` therefore
+    needs ``parameter_channels_min`` failed channels sharing a step after the transient.
+    """
+    late = {ch: r for ch, r in residuals.items()
+            if r.get("step_day") is not None and float(r["step_day"]) > transient_end}  # fmt: skip
+    out = common_change_point({ch: r for ch, r in late.items() if ch in set(failed)}, attr)
+    out["first_hrt_excluded"] = sorted(set(residuals) - set(late))
+    out["off_failed"] = sorted(ch for ch in late if ch not in set(failed))
+    return out
+
+
 def structured_channels(
     residuals: dict[str, dict[str, Any]], attr: dict[str, Any], at_bound: bool
 ) -> list[str]:
@@ -466,12 +489,13 @@ def admit(
         "parameter",
         bool(t.get("NM")) and not bool(t.get("NB")),
         bool(signatures.get("parameter")),
+        str(signatures.get("parameter_code", "signature_absent")),
     )
     judge(
         "structural",
         bool(t.get("NM")),
         bool(signatures.get("structural")),
-        "signature_absent"
+        str(signatures.get("structural_code", "signature_absent"))
         if not signatures.get("r3")
         else ("holdout_unavailable" if signatures.get("holdout_failed") is None
               and "holdout_failed" in signatures else "holdout_passed"),
@@ -1751,8 +1775,11 @@ class Workflow:
         self.signatures["influent_proposed"] = self.on["influent"] and (
             bool(self.table and self.table["NB"]) or feed
         )
-        # the change point and the inhibition check (calibration)
+        # the change point and the inhibition check (calibration); the admitting change
+        # point is tied to the failed channels and lies after the first HRT (2026-10-08)
         change = common_change_point(self.residuals, self.attr)
+        transient_end = self.cal[0] + float(self.attr["transient_d"])
+        tied = tied_change_point(self.residuals, failed, self.attr, transient_end)
         if self.on["calibration"]:
             steps = {ch: {"step_z": r.get("step_z"), "step_day": r.get("step_day")}
                      for ch, r in self.residuals.items()}  # fmt: skip
@@ -1769,20 +1796,28 @@ class Workflow:
                                 check=agrees)  # fmt: skip
         inhib = inhibition(p) if p else {"available": False, "inhibited": False}
         self.signatures["change_point"] = change
+        self.signatures["change_point_tied"] = tied
         self.signatures["inhibition"] = inhib
         self.signatures["parameter"] = self.on["calibration"] and (
-            change["common"] or inhib["inhibited"]) and not feed  # fmt: skip
+            tied["common"] or inhib["inhibited"]) and not feed  # fmt: skip
         self.signatures["parameter_proposed"] = change["common"] or inhib["inhibited"]
+        if change["common"] and not tied["common"] and not inhib["inhibited"]:
+            self.signatures["parameter_code"] = "change_point_not_on_failed_channels_after_hrt"
         firing = self.signatures.get("early_late", [])
         self.signatures["initial_state"] = bool(set(firing) & set(failed)) and bool(
             self.signatures.get("biomass_improves")
         )
         self.signatures["initial_state_proposed"] = bool(firing)
         at_bound = bool(self.fit is not None and list(self.fit.at_bound))
-        r3 = structured_channels(self.residuals, self.attr, at_bound)
-        self.signatures["r3"] = len(r3) >= int(self.attr["structural_channels_min"])
+        r3_all = structured_channels(self.residuals, self.attr, at_bound)
+        r3 = [c for c in r3_all if c in set(failed)]  # R3 on failed channels (2026-10-08)
+        need = int(self.attr["structural_channels_min"])
+        self.signatures["r3"] = len(r3) >= need
         self.signatures["r3_channels"] = r3
-        self.signatures["structural_proposed"] = self.signatures["r3"]
+        self.signatures["r3_channels_all"] = r3_all
+        self.signatures["structural_proposed"] = len(r3_all) >= need
+        if len(r3_all) >= need and len(r3) < need:
+            self.signatures["structural_code"] = "r3_not_on_failed_channels"
         for key in ("sensor", "influent", "initial_state", "parameter", "structural"):
             if self.signatures.get(f"{key}_proposed"):
                 self.log.send(

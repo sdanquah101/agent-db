@@ -432,9 +432,19 @@ have stopped both P1 arms.
 | `sensor` | NS on that channel | the S1 table: every coupled channel's after-fit mean inside; `dq.coupled` ∈ {`coupled_inside`, `assay_implicates`}; a QC flag alone never qualifies |
 | `influent` | NB | the onset test of §2.3: a dated onset or a feed covariate; a uniform offset and charge alone never qualify |
 | `state` | NS or NM | the early/late test fires on a failed channel, and the `biomass_scale` pair improves the early window |
-| `parameter` | NM, with NB not failed | a common change point on two or more channels within 30 d **or** `inhibited` (§2.5), and no feed covariate |
-| `structural` | NM | P0's R3 criterion and a failed hold-out (verifier, S6) |
+| `parameter` | NM, with NB not failed | a common change point on two or more **failed** channels within 30 d, **after the first HRT** (rulings of 2026-10-08), **or** `inhibited` (§2.5); and no feed covariate |
+| `structural` | NM | P0's R3 criterion **on two or more failed channels** (ruling of 2026-10-08) and a failed hold-out (verifier, S6) |
 | `none` | none failed, **or** a failure that no label's signature explains | — |
+
+**The lead's rulings of 2026-10-08 (DEVELOPMENT-INFORMED; `docs/decisions.md`).**
+- An admitting signature must lie on the channels whose null case failed. For
+  `parameter` this means the change point: P0's R4 arithmetic over the failed channels
+  only. For `structural` it means R3, counted over the failed channels only. `state`
+  was already tied, and `sensor` and `influent` are tied by NS and NB.
+- A change point inside the first HRT (`t ≤` calibration start + P0's `transient_d`, the
+  early/late test's boundary) never admits.
+- Both rulings were proposed after the development results were seen, so they are
+  judged on the held-out variants. The null rule is unchanged.
 
 When the null is rejected but no signature explains it, the label is `none`, with:
 - confidence `attribution.confidence.none`, lowered to `multiple`;
@@ -885,3 +895,9 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
   Each run with one of these switches off says so in its annotations ("ablation inert"
   or "partial in this version"), so that no record claims an ablation that did not
   happen.
+- **The rulings of 2026-10-08** are implemented by `tied_change_point` and by R3
+  restricted to the failed channels. The untied results are still recorded for the
+  power report, as `change_point`, `r3_channels_all` and the `*_proposed` flags. When a
+  proposed signature fails only the tie or the first-HRT exclusion, the rejection says
+  so: `change_point_not_on_failed_channels_after_hrt` or `r3_not_on_failed_channels`.
+  The `cal.split` decision still sees every channel's step; only admission is tied.

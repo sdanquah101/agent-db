@@ -228,6 +228,94 @@ def test_admission_needs_a_failed_null_case_and_its_signature(cfg):
     assert wf.first_in_p0_order(lab, ["parameter", "sensor"]) == "sensor"
 
 
+def _steps(day: float, channels=("ph", "tan")) -> dict[str, dict[str, Any]]:
+    """Residual summaries with a 5-se step at ``day`` on ``channels``, flat elsewhere."""
+    out = {}
+    for ch in ("gas_flow", "ph", "tan", "cod_total"):
+        stepped = ch in channels
+        out[ch] = {"channel": ch, "step_z": 5.0 if stepped else 0.5,
+                   "step_day": day if stepped else 100.0, "rmse_z": 4.0,
+                   "serially_structured": stepped, "most_explanatory": "time"}  # fmt: skip
+    return out
+
+
+def test_the_admitting_change_point_is_on_failed_channels_after_the_first_hrt(cfg):
+    """The lead's rulings of 2026-10-08, each with its negative control."""
+    attr = cfg["p0"]["attribution"]
+    hrt_end = 0.0 + float(attr["transient_d"])  # the early/late test's own boundary
+    failed = ["ph", "tan"]
+    # a step on the failed channels after the first HRT admits
+    tied = wf.tied_change_point(_steps(80.0), failed, attr, hrt_end)
+    assert tied["common"] and tied["channels"] == ["ph", "tan"] and tied["day"] == 80.0
+    # a step on channels that did not fail does not (P0's arithmetic alone would admit it)
+    off = wf.tied_change_point(_steps(80.0), ["gas_flow", "cod_total"], attr, hrt_end)
+    assert not off["common"] and off["off_failed"] == ["ph", "tan"]
+    assert wf.common_change_point(_steps(80.0), attr)["common"]
+    # nor a step shared by one failed and one non-failed channel: it must be common to
+    # failed channels
+    assert not wf.tied_change_point(_steps(80.0), ["ph", "gas_flow"], attr, hrt_end)["common"]
+    # a step inside the first HRT does not admit, on the failed channels too; the boundary
+    # day itself is inside (the early/late test's t <= boundary)
+    for day in (15.0, hrt_end):
+        early = wf.tied_change_point(_steps(day), failed, attr, hrt_end)
+        assert not early["common"] and {"ph", "tan"} <= set(early["first_hrt_excluded"])
+        assert wf.common_change_point(_steps(day), attr)["common"]
+    # through admission: NM on the failed channels, the tied step admits, the untied not
+    lab = cfg["p0"]["labels"]
+    nm = _table(nm=True, failed=failed)
+    assert wf.admit(lab, nm, {"parameter": True, "parameter_proposed": True})["admitted"] == [
+        "parameter"
+    ]
+    out = wf.admit(
+        lab,
+        nm,
+        {
+            "parameter": False,
+            "parameter_proposed": True,
+            "parameter_code": "change_point_not_on_failed_channels_after_hrt",
+        },
+    )
+    assert out["rejected"] == [
+        {"label": "parameter", "code": "change_point_not_on_failed_channels_after_hrt"}
+    ]  # fmt: skip
+
+
+def test_the_workflow_ties_the_change_point_and_r3_to_the_failed_channels(monkeypatch, cfg):
+    """The same rulings through ``step_profile``: the signatures the verifier admits."""
+    fake = FakeTools()
+    monkeypatch.setattr(wf, "tools", fake)
+
+    def profiled(residuals: dict[str, Any], failed: list[str]) -> wf.Workflow:
+        run = wf.Workflow(json.loads(json.dumps(cfg)))
+        run.placement = {}
+        for ch in ("gas_flow", "ph", "tan", "cod_total"):
+            side = 1 if ch in failed else 0
+            for where in ("at_defaults", "after_fit"):
+                run.placement[f"{ch}.{where}.mean_z"] = side
+            run.placement[f"{ch}.after_fit.rms_z"] = side
+            run.placement[f"{ch}.at_defaults.rms_z"] = 0
+        run.table = wf.null_table(run.placement)
+        run.residuals = residuals
+        run.step_profile()
+        return run
+
+    hrt_end = float(cfg["p0"]["attribution"]["transient_d"])
+    # on the failed channels, after the first HRT: the signature holds, R3 too
+    run = profiled(_steps(80.0), ["ph", "tan"])
+    assert run.table["NM"] and run.signatures["parameter"] and run.signatures["r3"]
+    assert run.signatures["change_point_tied"]["channels"] == ["ph", "tan"]
+    # the negative controls: off the failed channels, or inside the first HRT
+    run = profiled(_steps(80.0), ["gas_flow", "cod_total"])
+    assert run.table["NM"] and not run.signatures["parameter"]
+    assert run.signatures["parameter_proposed"]  # P0's arithmetic alone would propose it
+    assert run.signatures["parameter_code"] == "change_point_not_on_failed_channels_after_hrt"
+    assert not run.signatures["r3"] and run.signatures["structural_proposed"]
+    assert run.signatures["structural_code"] == "r3_not_on_failed_channels"
+    run = profiled(_steps(hrt_end / 2), ["ph", "tan"])
+    assert not run.signatures["parameter"]
+    assert run.signatures["r3"]  # R3 is tied to channels, not to days
+
+
 def test_a_signature_over_a_standing_null_concludes_none_not_unexplained(monkeypatch, cfg):
     """A rejected signature over a clean table is the null case working (the smoke run)."""
     fake = FakeTools()
