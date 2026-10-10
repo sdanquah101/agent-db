@@ -78,6 +78,7 @@ __all__ = ["WORKFLOWS", "WorkflowResult", "batch", "main", "run_workflow", "writ
 WORKFLOWS: dict[str, Path] = {
     "p0": REPO_ROOT / "workflows" / "p0_scripted" / "pipeline.py",
     "p1": REPO_ROOT / "workflows" / "p1_single_agent" / "agent.py",
+    "p2": REPO_ROOT / "workflows" / "p2_multi_agent" / "workflow.py",
 }
 """The workflow scripts the runner knows, by name."""
 
@@ -141,6 +142,11 @@ class WorkflowResult:
     steps_completed: list[str] = field(default_factory=list)
     fallbacks: list[str] = field(default_factory=list)
     tool_failures: list[str] = field(default_factory=list)
+    by_role: dict[str, dict[str, Any]] | None = None
+    """P2 only (``docs/p2_design.md`` §9): the meter's cost per role, from the registry's
+    own per-call charge keyed by the visible ``seq`` (:func:`by_role`); no log is read.
+    Only the attribution of a call to a role is the workflow's; a call no action names
+    is counted under ``unattributed``."""
     state_valid: bool = False
     output_name: str = ""
     error: str = ""
@@ -333,7 +339,14 @@ def run_workflow(
         if not keep_sandbox:
             shutil.rmtree(box, ignore_errors=True)
     summary = _summarise(
-        paths, workflow, wall_s, returncode, error, stderr, registry=registry, output_name=out_name
+        paths,
+        workflow,
+        wall_s,
+        returncode,
+        error,
+        stderr,
+        registry=registry,
+        output_name=out_name,
     )
     if gateway is not None:
         meter = gateway.meter
@@ -488,7 +501,36 @@ def _summarise(
     result.steps_completed = list(state.plan.steps_completed)
     result.fallbacks = list(state.plan.fallbacks)
     result.tool_failures = [f"{f.name}:{f.kind}" for f in state.tool_failures]
+    if workflow == "p2":
+        result.by_role = by_role(registry, state)
     return result
+
+
+def by_role(registry: Registry, state: TaskState) -> dict[str, dict[str, Any]]:
+    """The meter's cost of each P2 role (design §9): evaluations, wall clock, assay units.
+
+    Every number is the registry's own per-call charge (:attr:`Registry.charged_calls`),
+    keyed by the **visible** ``seq`` it handed back with the call, so no log is read and
+    nothing on the truth side is consulted (the review's N-1: the truth-side log has one
+    record per hidden integration segment, so its numbering is not the visible one). Only
+    the attribution of a call to a role is the workflow's, from the ``role.step`` of its
+    action with the same ``seq``; a call no action names is ``unattributed``. Tokens and
+    requests are zero until a live decider runs (deliverable 3).
+    """
+    role_of = {a.seq: a.step.split(".", 1)[0] for a in state.actions if a.seq is not None}
+    out: dict[str, dict[str, Any]] = {}
+    for call in registry.charged_calls:
+        role = role_of.get(call["seq"], "unattributed")
+        row = out.setdefault(
+            role,
+            {"calls": 0, "evaluations": 0, "wall_clock_s": 0.0, "assay_units": 0,
+             "tokens": 0, "requests": 0},
+        )  # fmt: skip
+        row["calls"] += 1
+        row["evaluations"] += int(call["n_evaluations"])
+        row["wall_clock_s"] = round(row["wall_clock_s"] + float(call["runtime_s"]), 3)
+        row["assay_units"] += int(call["assay_units"])
+    return dict(sorted(out.items()))
 
 
 # ------------------------------------------------------------------ the batch

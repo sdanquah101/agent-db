@@ -335,6 +335,7 @@ class Registry:
         self._in_flight = 0
         self._assay_units_used = 0
         self._n_calls = 0
+        self._charged: list[dict[str, Any]] = []
         self._models: dict[str, Model] = dict(models or {})
         self._state_space: dict[str, StateSpaceModel] = dict(state_space_models or {})
         self._assay_server = assay_server
@@ -428,6 +429,16 @@ class Registry:
         while self._in_flight > 0 and time.monotonic() < deadline:
             time.sleep(0.05)
         return self._in_flight == 0
+
+    @property
+    def charged_calls(self) -> tuple[dict[str, Any], ...]:
+        """Every call since open with what the meter charged it, keyed by visible ``seq``.
+
+        Privileged side only (never served to a workflow). Each entry: ``seq`` (the
+        visible log's, ``None`` without a visible log), ``name``, ``n_evaluations``,
+        ``assay_units``, ``runtime_s``.
+        """
+        return tuple(dict(c) for c in self._charged)
 
     @property
     def evaluations_used(self) -> int:
@@ -677,6 +688,18 @@ class Registry:
             seq, hashed = record.seq, record.args_hash
         else:
             hashed = args_hash(args)
+        # the meter's charge for this call, keyed by the seq the workflow sees: the
+        # privileged runner attributes cost by it without reading the truth-side log,
+        # whose numbering differs (one record per hidden integration segment)
+        self._charged.append(
+            {
+                "seq": seq,
+                "name": name,
+                "n_evaluations": int(n_evaluations),
+                "assay_units": int(assay_units),
+                "runtime_s": float(runtime),
+            }
+        )
         self.last = CallOutcome(
             name=name,
             outcome=outcome,

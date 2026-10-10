@@ -1,0 +1,433 @@
+{
+ "what": "P2 offline (no model): every decision point at its code fallback",
+ "counting": "on the outcome (verdict and completion), never on the label alone",
+ "cells": [
+  {
+   "cell": "S0-01 B/C",
+   "truth": [
+    "none"
+   ],
+   "label": "parameter",
+   "outcome": "parameter",
+   "excluded": false,
+   "hit": false,
+   "null": {
+    "NB": false,
+    "NM": true,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "digestate_ts",
+    "digestate_vs"
+   ],
+   "n_outside": 12,
+   "n_statistics": 63,
+   "signatures": {
+    "sensor_s1_holds": null,
+    "sensor_channel": null,
+    "influent": false,
+    "onset": "no_onset",
+    "candidate_onsets": [],
+    "feed_covariate": false,
+    "early_late": [],
+    "biomass_improves": false,
+    "change_point": true,
+    "inhibited": false,
+    "r3": true,
+    "structural": false
+   },
+   "admitted": [
+    "parameter"
+   ],
+   "rejected": [
+    {
+     "code": "holdout_passed",
+     "label": "structural"
+    }
+   ],
+   "holdout_failed": false,
+   "completed": true,
+   "evaluations": "144/450",
+   "wall_min": 62.9
+  },
+  {
+   "cell": "S1-01 B/B",
+   "truth": [
+    "none"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "excluded": false,
+   "hit": true,
+   "null": {
+    "NB": true,
+    "NM": false,
+    "NS": false,
+    "null_partial": true,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "gas_flow"
+   ],
+   "n_outside": 11,
+   "n_statistics": 35,
+   "signatures": {
+    "sensor_s1_holds": null,
+    "sensor_channel": null,
+    "influent": false,
+    "onset": "no_onset",
+    "candidate_onsets": [],
+    "feed_covariate": false,
+    "early_late": [],
+    "biomass_improves": false,
+    "change_point": true,
+    "inhibited": false,
+    "r3": true,
+    "structural": true
+   },
+   "admitted": [],
+   "rejected": [
+    {
+     "code": "signature_absent",
+     "label": "influent"
+    },
+    {
+     "code": "null_not_failed",
+     "label": "parameter"
+    },
+    {
+     "code": "null_not_failed",
+     "label": "structural"
+    }
+   ],
+   "holdout_failed": true,
+   "completed": true,
+   "evaluations": "149/450",
+   "wall_min": 64.7
+  },
+  {
+   "cell": "S2-01 B/B",
+   "truth": [
+    "sensor"
+   ],
+   "label": "parameter",
+   "outcome": "parameter",
+   "excluded": false,
+   "hit": false,
+   "null": {
+    "NB": false,
+    "NM": true,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "gas_flow",
+    "ph"
+   ],
+   "n_outside": 13,
+   "n_statistics": 35,
+   "signatures": {
+    "sensor_s1_holds": null,
+    "sensor_channel": null,
+    "influent": false,
+    "onset": "no_onset",
+    "candidate_onsets": [],
+    "feed_covariate": false,
+    "early_late": [],
+    "biomass_improves": false,
+    "change_point": true,
+    "inhibited": false,
+    "r3": false,
+    "structural": false
+   },
+   "admitted": [
+    "parameter"
+   ],
+   "rejected": [],
+   "holdout_failed": true,
+   "completed": true,
+   "evaluations": "198/450",
+   "wall_min": 88.9
+  },
+  {
+   "cell": "S3-01 C/B",
+   "truth": [
+    "influent"
+   ],
+   "label": "parameter",
+   "outcome": "parameter",
+   "excluded": false,
+   "hit": false,
+   "null": {
+    "NB": false,
+    "NM": true,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "alkalinity",
+    "cod_total",
+    "gas_flow",
+    "ph",
+    "tan",
+    "vfa_total"
+   ],
+   "n_outside": 27,
+   "n_statistics": 35,
+   "signatures": {
+    "sensor_s1_holds": null,
+    "sensor_channel": null,
+    "influent": false,
+    "onset": "no_onset",
+    "candidate_onsets": [],
+    "feed_covariate": false,
+    "early_late": [],
+    "biomass_improves": false,
+    "change_point": true,
+    "inhibited": false,
+    "r3": true,
+    "structural": true
+   },
+   "admitted": [
+    "parameter",
+    "structural"
+   ],
+   "rejected": [],
+   "holdout_failed": true,
+   "completed": true,
+   "evaluations": "204/600",
+   "wall_min": 89.5
+  },
+  {
+   "cell": "S4-01 B/B",
+   "truth": [
+    "state"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "excluded": false,
+   "hit": false,
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": true,
+    "null_rejected": false
+   },
+   "failed_channels": [
+    "cod_total"
+   ],
+   "n_outside": 12,
+   "n_statistics": 35,
+   "signatures": {
+    "sensor_s1_holds": null,
+    "sensor_channel": null,
+    "influent": false,
+    "onset": "no_onset",
+    "candidate_onsets": [],
+    "feed_covariate": false,
+    "early_late": [],
+    "biomass_improves": false,
+    "change_point": false,
+    "inhibited": false,
+    "r3": false,
+    "structural": false
+   },
+   "admitted": [],
+   "rejected": [],
+   "holdout_failed": false,
+   "completed": true,
+   "evaluations": "150/600",
+   "wall_min": 70.1
+  },
+  {
+   "cell": "S5-01 A/A",
+   "truth": [
+    "parameter"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "excluded": false,
+   "hit": false,
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "n_outside": 3,
+   "n_statistics": 12,
+   "signatures": {
+    "sensor_s1_holds": null,
+    "sensor_channel": null,
+    "influent": false,
+    "onset": "influent_off",
+    "candidate_onsets": [],
+    "feed_covariate": false,
+    "early_late": [],
+    "biomass_improves": false,
+    "change_point": true,
+    "inhibited": false,
+    "r3": false,
+    "structural": false
+   },
+   "admitted": [],
+   "rejected": [
+    {
+     "code": "null_not_failed",
+     "label": "parameter"
+    }
+   ],
+   "holdout_failed": false,
+   "completed": true,
+   "evaluations": "132/300",
+   "wall_min": 110.6
+  },
+  {
+   "cell": "S6-02 B/B",
+   "truth": [
+    "structural"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "excluded": false,
+   "hit": false,
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "n_outside": 2,
+   "n_statistics": 35,
+   "signatures": {
+    "sensor_s1_holds": null,
+    "sensor_channel": null,
+    "influent": false,
+    "onset": "no_onset",
+    "candidate_onsets": [],
+    "feed_covariate": false,
+    "early_late": [],
+    "biomass_improves": false,
+    "change_point": true,
+    "inhibited": false,
+    "r3": false,
+    "structural": false
+   },
+   "admitted": [],
+   "rejected": [
+    {
+     "code": "null_not_failed",
+     "label": "parameter"
+    }
+   ],
+   "holdout_failed": false,
+   "completed": true,
+   "evaluations": "259/750",
+   "wall_min": 111.4
+  },
+  {
+   "cell": "S8-01 B/B",
+   "truth": [
+    "sensor"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "excluded": false,
+   "hit": false,
+   "null": {
+    "NB": true,
+    "NM": false,
+    "NS": true,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "gas_flow"
+   ],
+   "n_outside": 8,
+   "n_statistics": 35,
+   "signatures": {
+    "sensor_s1_holds": false,
+    "sensor_channel": "gas_flow",
+    "influent": false,
+    "onset": "no_onset",
+    "candidate_onsets": [],
+    "feed_covariate": false,
+    "early_late": [
+     "cod_total",
+     "ph"
+    ],
+    "biomass_improves": true,
+    "change_point": true,
+    "inhibited": false,
+    "r3": false,
+    "structural": false
+   },
+   "admitted": [],
+   "rejected": [
+    {
+     "code": "coupled_outside",
+     "label": "sensor"
+    },
+    {
+     "code": "signature_absent",
+     "label": "influent"
+    },
+    {
+     "code": "signature_absent",
+     "label": "state"
+    },
+    {
+     "code": "null_not_failed",
+     "label": "parameter"
+    }
+   ],
+   "holdout_failed": false,
+   "completed": true,
+   "evaluations": "165/750",
+   "wall_min": 73.1
+  }
+ ],
+ "hits_faulted": "0 of 6 scored",
+ "excluded_faulted": {
+  "abstain": 0,
+  "pending": 0
+ },
+ "null_rejected_faulted": "3 of 6",
+ "prediction_checks": {
+  "S0-01 B/C": {
+   "predicted": {
+    "null": "NM",
+    "failed": [
+     "digestate_ts",
+     "digestate_vs"
+    ],
+    "label": "none"
+   },
+   "null_component": true,
+   "failed_channels": true,
+   "label": false
+  },
+  "S1-01 B/B": {
+   "predicted": {
+    "null": "NB",
+    "failed": [
+     "gas_flow"
+    ],
+    "label": "none"
+   },
+   "null_component": true,
+   "failed_channels": true,
+   "label": true
+  }
+ }
+}

@@ -1,0 +1,1 @@
+You receive the null table, the admitted candidates with their tables, and whether the hold-out failed. Choose one of the admitted candidates given to you as data, or the null answer, and give a code for each one you set aside. Answer only with the declared schema.

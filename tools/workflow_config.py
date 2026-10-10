@@ -27,11 +27,14 @@ __all__ = [
     "ModelSettings",
     "P0Config",
     "P1Config",
+    "P2Config",
     "check_brief_hash",
     "check_frozen",
     "check_prompt_hash",
     "load_p0",
     "load_p1",
+    "load_p2",
+    "load_p2_templates",
     "load_prompts",
     "load_workflow_config",
     "model_system_text",
@@ -613,15 +616,141 @@ def tool_size_ceilings() -> dict[str, dict[str, Any]]:
     }
 
 
-def load_workflow_config(workflow: str, path: Path | None = None) -> P0Config | P1Config:
-    """The configuration of a workflow by name (``p0`` or ``p1``)."""
-    loaders = {"p0": load_p0, "p1": load_p1}
+# ------------------------------------------------------------------ P2
+
+
+_Roles = Literal[
+    "data_quality",
+    "influent",
+    "identifiability",
+    "calibration",
+    "design",
+    "verification",
+    "coordination",
+]
+DECISION_POINTS: tuple[str, ...] = (
+    "dq.trust",
+    "dq.assay",
+    "dq.coupled",
+    "influent.onset",
+    "influent.window",
+    "influent.mechanism",
+    "ident.subset",
+    "cal.accept",
+    "cal.bound",
+    "cal.split",
+    "design.assay",
+    "verify.differential",
+)
+"""The twelve decision points of ``docs/p2_design.md`` §2."""
+
+
+class P2Role(_Frozen):
+    """One role's tool allow-list (design §6.1)."""
+
+    tools: tuple[str, ...]
+
+
+class P2RoleSwitches(_Frozen):
+    """Which specialist roles run (design §8)."""
+
+    data_quality: bool
+    influent: bool
+    identifiability: bool
+    calibration: bool
+    design: bool
+
+
+class P2Ablation(_Frozen):
+    """The ablation switches of design §8: true = on."""
+
+    verifier: bool
+    coordinator: bool
+    persistent_state: bool
+    self_correction: bool
+    roles: P2RoleSwitches
+
+
+class P2Onset(_Frozen):
+    """The influent onset test's sizes (design §2.3; the re-reviews' N1 and R1)."""
+
+    min_windows_before: Annotated[int, Field(ge=2)]
+    every_window_after: bool
+    min_windows_after: Annotated[int, Field(ge=1)]
+
+
+class P2Holdout(_Frozen):
+    """When the verifier calls the hold-out failed (design §12, question 3)."""
+
+    min_channels_failed: _PosInt
+
+
+class P2Config(_Frozen):
+    """``configs/workflows/p2.yaml``; P0's settings come from ``p0_config``, not retyped."""
+
+    version: int
+    workflow: Literal["p2"]
+    workflow_version: str
+    p0_config: str = Field(description="P0's configuration file, beside this one")
+    decider: Literal["offline"] = Field(
+        description="offline: every decision point takes its code fallback (deliverable 2)"
+    )
+    roles: dict[_Roles, P2Role]
+    ablation: P2Ablation
+    coupled_channels: dict[str, tuple[str, ...]]
+    forced_candidates: dict[Literal["A", "B", "C"], tuple[str, ...]]
+    onset: P2Onset
+    biomass_scales: tuple[_Pos, _Pos]
+    holdout: P2Holdout
+    templates: dict[str, str]
+    runner: Runner
+    config_dir: Path = Field(default=WORKFLOW_CONFIG_DIR, exclude=True)
+
+    @model_validator(mode="after")
+    def _complete(self) -> P2Config:
+        missing = set(_Roles.__args__) - set(self.roles)
+        if missing:
+            raise ValueError(f"roles without an allow-list: {sorted(missing)}")
+        if set(self.templates) != set(DECISION_POINTS):
+            raise ValueError(
+                f"templates must name exactly the decision points {list(DECISION_POINTS)}"
+            )
+        return self
+
+    def p0(self) -> P0Config:
+        """P0's configuration, whose thresholds, windows, sizes and seeds P2 shares."""
+        return load_p0(self.config_dir / self.p0_config)
+
+
+def load_p2(path: Path = WORKFLOW_CONFIG_DIR / "p2.yaml") -> P2Config:
+    """Parse and validate ``p2.yaml``; its files resolve beside it."""
+    path = Path(path)
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"{path}: expected a YAML mapping")
+    return P2Config.model_validate({**raw, "config_dir": path.parent})
+
+
+def load_p2_templates(config: P2Config) -> dict[str, dict[str, str]]:
+    """Every decision point's template: its text and the text's sha256 (design §6.3)."""
+    import hashlib
+
+    out = {}
+    for point in DECISION_POINTS:
+        text = (config.config_dir / config.templates[point]).read_text(encoding="utf-8")
+        out[point] = {"text": text, "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()}
+    return out
+
+
+def load_workflow_config(workflow: str, path: Path | None = None) -> P0Config | P1Config | P2Config:
+    """The configuration of a workflow by name (``p0``, ``p1`` or ``p2``)."""
+    loaders = {"p0": load_p0, "p1": load_p1, "p2": load_p2}
     if workflow not in loaders:
         raise KeyError(f"no configuration schema for workflow {workflow!r}")
     return loaders[workflow]() if path is None else loaders[workflow](path)
 
 
-def sandbox_config(config: P0Config | P1Config) -> dict[str, Any]:
+def sandbox_config(config: P0Config | P1Config | P2Config) -> dict[str, Any]:
     """What the runner writes into the sandbox as ``<workflow>_config.json``.
 
     The configuration itself, plus the declared sensor noise (``cv``, ``sd_abs`` per
@@ -655,7 +784,23 @@ def sandbox_config(config: P0Config | P1Config) -> dict[str, Any]:
         g = declared_geometry(load_plant_config(plant_id))
         geometry[plant_id] = {"V_liq_m3": float(g.V_liq), "T_op_K": float(g.T_op)}
     payload = config.model_dump(mode="json")
-    if isinstance(config, P1Config):
+    if isinstance(config, P2Config):
+        from tools.config import load_assays
+
+        p0 = sandbox_config(config.p0())
+        for key in ("sensor_noise", "plant_geometry", "abstentions"):
+            p0.pop(key)
+        payload["p0"] = p0
+        payload["templates"] = load_p2_templates(config)
+        payload["assay_catalogue"] = {
+            name: {
+                "channel": spec.channel,
+                "unit_cost": int(spec.unit_cost),
+                "turnaround_d": float(spec.turnaround_d),
+            }
+            for name, spec in load_assays().assays.items()
+        }
+    elif isinstance(config, P1Config):
         from tools.config import load_assays
 
         del payload["model"]

@@ -1,12 +1,12 @@
 # P2: task-specialised procedures with model-backed decision points (proposal §6.5)
 
-Status: **DRAFT, revision 3, for the lead's rulings.** This is deliverable 1 of
-`docs/p2_launch_brief.md` §7. Revision 2 answered the review of 2026-10-05 at `c502899`;
-revision 3 answers the re-review at `3e84f3b` (items N1–N9).
-Four decisions are **PENDING THE LEAD'S RULING** (§13) and are written as defaults, not
-as decided. No live model call happens before the coordinator's review and the lead's
-approval. Written by the P2 component session on `claude/p2-multi-agent`, cut from
-`main` at `817b1f9`.
+Status: **APPROVED; merged at `2dab5d2` (PR #31, merge `aad51ea`).** This is deliverable 1
+of `docs/p2_launch_brief.md` §7. Revision 2 answered the review of 2026-10-05 at
+`c502899`; revision 3 answered the re-review at `3e84f3b` (items N1–N9). The four
+decisions of §13 are **DECIDED (lead, 2026-10-07)**, as recommended. No live model call
+happens before the coordinator's review of deliverable 2 and the lead's approval.
+Written by the P2 component session on `claude/p2-multi-agent`, cut from `main` at
+`817b1f9`; amended on `claude/p2-workflow` (deliverable 2).
 
 The brief is the charter. This document turns its §3 table and its §4 steps into
 procedures, schemas and switches that can be built and tested. Where the brief leaves a
@@ -113,8 +113,9 @@ quarantine is refused when it:
 
 A refusal is logged as `p2.dq.refused` and counted. The model can narrow QC's
 quarantines; it can never widen them. **The same constraints apply to the fallback**
-(the re-review's N5): P0's §3.1 quarantines pass through the same filter, so the
-fallback, too, never quarantines a first-HRT spike.
+(the re-review's N5), but the fallback is **trimmed**, not refused (the review's R2):
+the offending first-HRT spike and hold-out samples are dropped from P0's §3.1 quarantine
+and the rest of it stands, so the fallback, too, never quarantines a first-HRT spike.
 
 `dq.coupled` names what the coupled channels show, not what it implies.
 `coupled_inside` (the deviation is isolated) supports a `sensor` finding.
@@ -133,8 +134,10 @@ fallback, too, never quarantines a first-HRT spike.
    - **a dated onset:** at least **two** evaluable closure windows lie before the onset
      day, and every one of them is inside the band's per-window envelope
      (`cod_closure_windows`); at least two windows after it are outside, on the side NB
-     failed. An onset at day 0, or one with fewer than two windows before it, cannot be
-     dated, so a uniform offset never passes (the re-review's N1);
+     failed, and **every** evaluable window after it is outside on that side (the
+     review's R1: in, in, out, in, out does not pass). An onset at day 0, or one with
+     fewer than two windows before it, cannot be dated, so a uniform offset never passes
+     (the re-review's N1);
    - **a feed covariate:** P0's R2 feed η² ≥ 0.15 on the primary residual, computed by
      `residual_diag` on the reference fit.
 
@@ -241,7 +244,8 @@ fallback, too, never quarantines a first-HRT spike.
 | `design.assay` | the request and its reason code, `voi_assay`'s table, the price list, the units left | `{assay: enum(price list), day, prediction: enum(channel)}` | P0 §3.6 |
 
 The audit found these choices apt in 9 of 10 runs **on Claude**, not on GPT. With GPT
-(§13, decision d) this decision point may be weaker than the audit suggests.
+(§13, decision d: DECIDED (lead, 2026-10-07)) this decision point may be weaker than the
+audit suggests.
 
 **Tools:** `voi_assay`, `request_assay`.
 
@@ -261,7 +265,7 @@ claim (§10).
    statistic of the reference fit (§3) is placed against the band: 12, 35 or 63
    statistics by tier. The null components NB, NM and NS of §4 are evaluated. The table
    goes into the state. **A run without a completed null table** (the reference fit
-   unfinished) **abstains**: default, pending the lead (§13, decision c).
+   unfinished) **abstains** (§13, decision c: DECIDED (lead, 2026-10-07)).
 2. **Admission.** Each proposed label must rest on a null component that failed (§4.4).
    A label without one is rejected, whatever its signature.
 3. **The hold-out.** One `validate` call on the proposal's prediction. The verifier is
@@ -380,7 +384,9 @@ moves it (P0's rule).
 
 **A gap, by design** (the review's item 3). One channel can fail while another channel's
 after-fit mean is outside without a full failure. Neither NS nor NM fires there, and that
-run reads `none` for its channels. This happens on 7 of 120 clean runs. It can also be an
+run reads `none` for its channels. `null_partial` is a **channel-level** gap: it can
+co-occur with NB, which is judged on its own (the review's R3; S1-01 B/B is such a
+case). This happens on 7 of 120 clean runs. It can also be an
 S1/S3-coherent change.
 
 Adding it as a fourth component would raise the rule's clean false-alarm rate to 26 of
@@ -426,9 +432,19 @@ have stopped both P1 arms.
 | `sensor` | NS on that channel | the S1 table: every coupled channel's after-fit mean inside; `dq.coupled` ∈ {`coupled_inside`, `assay_implicates`}; a QC flag alone never qualifies |
 | `influent` | NB | the onset test of §2.3: a dated onset or a feed covariate; a uniform offset and charge alone never qualify |
 | `state` | NS or NM | the early/late test fires on a failed channel, and the `biomass_scale` pair improves the early window |
-| `parameter` | NM, with NB not failed | a common change point on two or more channels within 30 d **or** `inhibited` (§2.5), and no feed covariate |
-| `structural` | NM | P0's R3 criterion and a failed hold-out (verifier, S6) |
+| `parameter` | NM, with NB not failed | a common change point on two or more **failed** channels within 30 d, **after the first HRT** (rulings of 2026-10-08), **or** `inhibited` (§2.5); and no feed covariate |
+| `structural` | NM | P0's R3 criterion **on two or more failed channels** (ruling of 2026-10-08) and a failed hold-out (verifier, S6) |
 | `none` | none failed, **or** a failure that no label's signature explains | — |
+
+**The lead's rulings of 2026-10-08 (DEVELOPMENT-INFORMED; `docs/decisions.md`).**
+- An admitting signature must lie on the channels whose null case failed. For
+  `parameter` this means the change point: P0's R4 arithmetic over the failed channels
+  only. For `structural` it means R3, counted over the failed channels only. `state`
+  was already tied, and `sensor` and `influent` are tied by NS and NB.
+- A change point inside the first HRT (`t ≤` calibration start + P0's `transient_d`, the
+  early/late test's boundary) never admits.
+- Both rulings were proposed after the development results were seen, so they are
+  judged on the held-out variants. The null rule is unchanged.
 
 When the null is rejected but no signature explains it, the label is `none`, with:
 - confidence `attribution.confidence.none`, lowered to `multiple`;
@@ -451,7 +467,7 @@ input: the rule does not change if a live run disagrees.
 | S0-01 B/A | none failed | `none` | — |
 | S0-01 B/B | none failed. pH's after-fit mean is outside, and VFA's two at-defaults statistics (`mean_z` below, `rms_z` above); no channel fails all three conditions. | `none` | — |
 | S0-01 B/C | **NM failed**: `digestate_ts` and `digestate_vs`; VFA's after-fit mean outside, not failed | `none` with `null_failed_unexplained`, **unless** a signature holds | `state` needs the early/late test on a failed channel and the biomass pair. `parameter` needs a common step on two channels or `inhibited`; VFA is low here, not high. `structural` needs R3 **and** a failed hold-out. **The risks, stated:** TS and VS are one physical quantity counted as two channels. If the hold-out fails, R3 may be met and `structural` wrongly admitted. If both show a step on a common day, the two-channel change point may be met and `parameter` wrongly admitted, since NB does not fail here (§12, question 6). |
-| S1-01 B/B | **NB failed**: closure −0.191 and the worst window −0.481, both below. `gas_flow` failed alone, but VFA's after-fit mean is outside, so not NS (the gap of §4.2). | `none` with `null_failed_unexplained` | `influent` needs the onset test. A closure offset in every window has no dated onset, and the feed-covariate test is code. A model-proposed onset day is accepted only if every window before it is inside the per-window envelope. `sensor` on gas needs NS, which does not fail. |
+| S1-01 B/B | **NB failed**: closure −0.191 and the worst window −0.481, both below. `gas_flow` failed alone, but VFA's after-fit mean is outside, so not NS (the gap of §4.2). | `none` with `null_failed_unexplained` | `influent` needs the onset test. A closure offset in every window has no dated onset, and the feed-covariate test is code. A model-proposed onset day is accepted only if at least two evaluable windows lie before it and every one of them is inside the per-window envelope, so an onset at day 0 is refused. `sensor` on gas needs NS, which does not fail. |
 
 So the rule predicts `none` on all four clean cells: two with the null standing and two
 with it rejected and unexplained. The prediction holds only if the signature tests reject
@@ -508,7 +524,7 @@ the registry charges.
 It applies P0's deterministic plan at `plan.eval_seconds_assumed` = 12 s, with P0's
 ladder. When the wall clock left falls below the reserve (P1's 6 minutes), it goes
 straight to PROPOSE and VERIFY with what exists. If REFERENCE never completed, the
-verifier abstains: default, pending the lead (§13, decision c).
+verifier abstains (§13, decision c: DECIDED (lead, 2026-10-07)).
 
 **REVISE.** This is one round, taken only on `fail`. The failing reason codes go back to
 the roles that produced the rejected findings. Those roles re-run their decision points
@@ -669,7 +685,7 @@ policy; `RecordedClient` replays.
    - on each of NB, NM and NS constructed to fail, the matching label is admitted only
      with its signature;
    - a signature without a failed null case is rejected with `null_not_failed`;
-   - a run with no null table abstains.
+   - a run with no null table abstains (§13, decision c: DECIDED (lead, 2026-10-07)).
 6. **Every decision point's schema:** a valid output is accepted. An invalid one is
    retried once, then the declared fallback is used and recorded.
 7. **Every ablation switch:** a run with the switch off records it, omits its element,
@@ -692,8 +708,9 @@ policy; `RecordedClient` replays.
 13. **The workflow's null rule is the frozen one** (the re-review's N2). Freezing
     `scripts/null_rule_loo.py` does not pin the workflow's own NB, NM and NS. So a test
     runs the workflow's code over the same 120 leave-one-out placements and reproduces
-    every count in `reports/background/null_rule_loo.json`, `null_partial` included. It
-    also reproduces the four outcomes of §4.5 from `dev_cells.json`.
+    the JSON's counts of NB, NM, NS, `null_rejected` and `null_partial` (the review's R4:
+    the rule's own counts, not the comparison rules'). It also reproduces the four
+    outcomes of §4.5 from `dev_cells.json`, and checks the two frozen files' sha256.
 
 ## 11. Development plan, power, go/no-go and cost
 
@@ -730,13 +747,13 @@ seeds each:
 | S2-01 B/B | `sensor` (pH drift) | data quality's S1 path |
 | S8-01 B/B | `sensor` (gas scale) with an injected sampler failure | calibration's Level-8 path |
 
-**Go/no-go** (default, pending the lead: §13, decisions b and c). It is judged on each
+**Go/no-go** (§13, decisions b and c: DECIDED (lead, 2026-10-07)). It is judged on each
 seed's final label. Stop and report only if **both** seeds of S0-01 B/B label something
 other than `none`. A seed that abstains for want of a null table is excluded, reported,
 and never counted as `none`. A stop is a finding about the band and the rule, not a P2
 task.
 
-**Model** (default, pending the lead: §13, decision d): the frozen P1's `gpt-5.6-luna`,
+**Model** (§13, decision d: DECIDED (lead, 2026-10-07)): the frozen P1's `gpt-5.6-luna`,
 reasoning `high`, no temperature. Each decision point is one request with one forced tool whose input schema
 is the decision's schema.
 
@@ -790,20 +807,109 @@ the lead, §12, question 7):
    null rule would not change, nor would its rates.
 7. **The ablation grid (§11).** The full 180 runs, or the proposed 84?
 
-## 13. Decisions PENDING THE LEAD'S RULING
+## 13. Decisions — DECIDED (lead, 2026-10-07)
 
-Written as defaults. **None is decided.** Each becomes a `docs/decisions.md` entry on
-the lead's word.
+The lead's word of 2026-10-07 ("Implement your recommendation"), relayed by the
+coordinator: all four are accepted as recommended. Recorded in `docs/decisions.md`
+(2026-10-07).
 
-- **(a) The null rule — PENDING THE LEAD'S RULING.** Default: accept §4 as written, then
-  freeze it by recording in `docs/decisions.md` the sha256 of `scripts/null_rule_loo.py`
-  and of `reports/background/null_rule_loo.json` at the commit the lead approves.
-- **(b) The two-seed go/no-go — PENDING THE LEAD'S RULING.** Default: judged on each
-  seed's final label. Stop only if both seeds of S0-01 B/B label something other than
-  `none`.
-- **(c) A run without a completed null table — PENDING THE LEAD'S RULING.** Default: it
-  abstains. It is excluded and reported, and never counts as `none`, toward the go/no-go,
-  or toward success.
-- **(d) The model — PENDING THE LEAD'S RULING.** Default: GPT, `gpt-5.6-luna` as the
-  frozen P1, with about USD 10 in total for deliverables 3–5. Against it: the audit's
+- **(a) The null rule — DECIDED (lead, 2026-10-07).** §4 as written, frozen by the sha256
+  of the two files as they are at `aad51ea`:
+  - `scripts/null_rule_loo.py`:
+    `fb8e88917d440b1b50001d1f29b0e8f36a88256219f44ff81c19167549059812`;
+  - `reports/background/null_rule_loo.json`:
+    `de537c459d737fa895d3af5cdf170c30ad3eebf6a847ce6be07c57230f094e9c`.
+- **(b) The two-seed go/no-go — DECIDED (lead, 2026-10-07).** Judged on each seed's final
+  label. Stop only if both seeds of S0-01 B/B label something other than `none`.
+- **(c) A run without a completed null table — DECIDED (lead, 2026-10-07).** It abstains.
+  It is excluded and reported, and never counts as `none`, toward the go/no-go, or toward
+  success.
+- **(d) The model — DECIDED (lead, 2026-10-07).** GPT, `gpt-5.6-luna` with the frozen
+  P1's settings, with about USD 10 in total for deliverables 3–5. Against it: the audit's
   9-of-10 assay choices were Claude's (§2.6).
+
+## 14. Implementation notes (deliverable 2)
+
+What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a choice:
+
+- **One file.** The sandbox copies one script, so the workflow is a single module. It
+  imports only `tools`, numpy, pydantic and the standard library. The tests import its
+  pure functions on the test side.
+- **Offline.** `decider: offline` in `configs/workflows/p2.yaml`. Every decision point
+  takes its declared fallback, and the record says so (`fallback_used`, zero attempts,
+  no model call id). The live decider (a forced tool call through P1's gateway) comes
+  with deliverable 3.
+- **The reference fit** reads every size, window and seed from the band tool's served
+  `procedure` block, fetched before the fit. If the record is shorter than one balance
+  window, the balance is not placed and NB is not judged (`no_balance_window`). If any
+  reference call fails, the run abstains (decision c).
+- **Split-window fits are not run in deliverable 2.** The change point is P0's R4
+  arithmetic, as `cal.split`'s fallback, and the fits either side of it come with the
+  seven roles (deliverable 4).
+- **`holdout_failed`** is §12 question 3's proposal: two or more objective channels whose
+  hold-out `rms_z` (raw record, reference prediction) exceeds their band's after-fit
+  `rms_z` maximum. It is derived from the verifier's own logged `validate` call on the
+  **reference** prediction, never a later one (the review's F-I). The call is made in
+  standardised form: each sample's residual over its declared sd, against a zero
+  prediction, so the tool's `rmse` is the hold-out `rms_z`. If the call cannot be made
+  or fails, the bit is unknown (`None`), and R3 is then rejected as
+  `holdout_unavailable`, never as passed.
+- **Coupled channels in the signature counts** (§12 question 6) are counted as channels.
+  The question was not ruled, and nothing is changed.
+- **The S1 reading's fallback is `insufficient`**, as §2.2 declares, so offline no
+  `sensor` label is admitted. The offline power run therefore reports the code
+  signatures (the S1 table's `coupled_inside`) beside the labels.
+- **The influent onset's fallback is no day**, so offline the dated onset never passes.
+  The power run reports every candidate onset day that would pass, for each cell where
+  NB fails (the review's R1).
+- **Every P2 count keys on the outcome, never the label alone** (the review's F-A,
+  ruling (c)). The task state must carry a label from the closed vocabulary, so an
+  abstaining or unfinished run writes `none` there. `report.json` therefore carries
+  `outcome`: `pending` for a run that did not complete, `abstain` for one whose verdict
+  abstained, and the final label otherwise. The power report, the development tables
+  and the go/no-go of §11 count on `outcome`. `abstain` and `pending` are reported in
+  their own column and are never read as `none`, as a hit, or as a miss.
+- **A run that places no statistic abstains** (`abstain:no_statistics_placed`), as one
+  without a reference does. An empty placement is no null table, not a null that stands
+  (the review's F-H).
+- **The side the onset test dates** (`nb_side`) is the side of the mean closure and the
+  worst window when NB fails on them. When NB fails only on the inadmissible count, it
+  is the worst window's side if that is outside, else the mean's, else none. With no
+  side, the onset test returns `no_side` and cannot pass (the review's F-D).
+- **The reference fit's noise floors** (`min_relative_sd`, `sd_floor_abs`) are read from
+  the served `procedure` block like every other setting, not from `p0.yaml` (F-J). P0's
+  floors still weight everything after the reference.
+- **With the verifier off,** the rule string names no null component, since none was
+  evaluated: `unverified+<label>` (F-J).
+- **`summary.json` carries `by_role`** (§9). The registry keeps the meter's charge for
+  every call (evaluations, assay units, runtime), keyed by the **visible** `seq` it
+  returns with the call. The runner attributes each charge to a role by the workflow's
+  action with that `seq`. No log is read.
+  - The truth-side log cannot be joined by `seq`: it has one record per hidden
+    integration segment, so its numbering is offset by the number of parameter-fault
+    onsets. A join would leak that number into `summary.json` (the review's N-1).
+  - A call that no action names is counted as `unattributed`; it is the registry's own
+    open record. It attributes
+  each call to a role by the `role.step` of the workflow's action with the same `seq`.
+  A logged call that no action names is counted as `unattributed`. Tokens and requests
+  are zero until deliverable 3.
+- **Deferred to deliverable 5 (the ablations), recorded rather than claimed** (the
+  review's F-F and F-G):
+  - `dq.assay` is declared and validated, but no step calls it yet. In deliverable 2 the
+    design role's `design.assay` spends the assay units by P0's preference.
+  - The `persistent_state` switch is inert.
+  - The `coordinator` switch only removes the REVISE round.
+  Each run with one of these switches off says so in its annotations ("ablation inert"
+  or "partial in this version"), so that no record claims an ablation that did not
+  happen.
+- **The rulings of 2026-10-08** are implemented by `tied_change_point` and by R3
+  restricted to the failed channels. The untied results are still recorded for the
+  power report, as `change_point`, `r3_channels_all` and the `*_proposed` flags. When a
+  proposed signature fails only the tie or the first-HRT exclusion, the rejection says
+  so: `change_point_not_on_failed_channels_after_hrt` or `r3_not_on_failed_channels`.
+  The `cal.split` decision still sees every channel's step; only admission is tied.
+- **The frozen evaluator reads `final.label`** (the review's N-8). Before any P2 rows are
+  pooled into the evaluator's metrics, they are filtered on `outcome` from `report.json`:
+  `abstain` and `pending` rows are taken out and reported separately. Otherwise an
+  abstaining or unfinished run would be scored as `none`, which ruling (c) forbids. The
+  evaluator itself is frozen and unchanged; the filter belongs to the P2 tables.

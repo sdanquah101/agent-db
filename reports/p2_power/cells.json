@@ -1,0 +1,955 @@
+{
+ "what": "P2 offline (no model): every decision point at its code fallback",
+ "counting": "on the outcome (verdict and completion), never on the label alone",
+ "cells": [
+  {
+   "cell": "S0-01 B/C",
+   "truth": [
+    "none"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "excluded": false,
+   "hit": true,
+   "null": {
+    "NB": false,
+    "NM": true,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "digestate_ts",
+    "digestate_vs"
+   ],
+   "n_outside": 12,
+   "n_statistics": 63,
+   "signatures": {
+    "sensor_s1_holds": null,
+    "sensor_channel": null,
+    "influent": false,
+    "onset": "no_onset",
+    "candidate_onsets": [],
+    "feed_covariate": false,
+    "early_late": [],
+    "biomass_improves": false,
+    "change_point": true,
+    "change_point_untied": {
+     "channels": [
+      "gas_flow",
+      "ph"
+     ],
+     "common": true,
+     "day": 15.0
+    },
+    "change_point_tied": {
+     "channels": [],
+     "common": false,
+     "day": null,
+     "first_hrt_excluded": [
+      "gas_flow",
+      "ph"
+     ],
+     "off_failed": [
+      "alkalinity",
+      "ch4_fraction",
+      "cod_total",
+      "h2_offgas",
+      "tan",
+      "vfa_ac",
+      "vfa_bu",
+      "vfa_pro",
+      "vfa_total",
+      "vfa_va"
+     ]
+    },
+    "inhibited": false,
+    "r3": false,
+    "r3_channels": [],
+    "r3_channels_all": [
+     "gas_flow",
+     "tan"
+    ],
+    "structural": false
+   },
+   "admitted": [],
+   "rejected": [
+    {
+     "code": "change_point_not_on_failed_channels_after_hrt",
+     "label": "parameter"
+    },
+    {
+     "code": "r3_not_on_failed_channels",
+     "label": "structural"
+    }
+   ],
+   "holdout_failed": false,
+   "steps": {
+    "first_hrt_end_d": 30.0,
+    "steps": {
+     "alkalinity": {
+      "step_day": 105.0,
+      "step_z": 4.035488581082712
+     },
+     "ch4_fraction": {
+      "step_day": 98.0,
+      "step_z": 3.090536694675714
+     },
+     "cod_total": {
+      "step_day": 105.0,
+      "step_z": 1.4857470751047241
+     },
+     "h2_offgas": {
+      "step_day": 103.0,
+      "step_z": 2.7998464507206324
+     },
+     "ph": {
+      "step_day": 23.0,
+      "step_z": 5.340792042711443
+     },
+     "gas_flow": {
+      "step_day": 15.0,
+      "step_z": 6.193440582042868
+     },
+     "tan": {
+      "step_day": 119.0,
+      "step_z": 4.378081927453185
+     },
+     "digestate_ts": {
+      "step_day": 70.0,
+      "step_z": 3.3245882712618418
+     },
+     "vfa_ac": {
+      "step_day": 119.0,
+      "step_z": 1.4517445370396531
+     },
+     "vfa_bu": {
+      "step_day": 98.0,
+      "step_z": 2.6327552685173967
+     },
+     "vfa_pro": {
+      "step_day": 112.0,
+      "step_z": 1.4572672681277992
+     },
+     "vfa_total": {
+      "step_day": 49.0,
+      "step_z": 1.0609132887336357
+     },
+     "vfa_va": {
+      "step_day": 77.0,
+      "step_z": 1.7801221019299822
+     },
+     "digestate_vs": {
+      "step_day": 70.0,
+      "step_z": 2.065164661159812
+     }
+    }
+   },
+   "completed": true,
+   "evaluations": "232/450",
+   "wall_min": 75.3,
+   "outcome_before": "parameter"
+  },
+  {
+   "cell": "S1-01 B/B",
+   "truth": [
+    "none"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "excluded": false,
+   "hit": true,
+   "null": {
+    "NB": true,
+    "NM": false,
+    "NS": false,
+    "null_partial": true,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "gas_flow"
+   ],
+   "n_outside": 11,
+   "n_statistics": 35,
+   "signatures": {
+    "sensor_s1_holds": null,
+    "sensor_channel": null,
+    "influent": false,
+    "onset": "no_onset",
+    "candidate_onsets": [],
+    "feed_covariate": false,
+    "early_late": [],
+    "biomass_improves": false,
+    "change_point": true,
+    "change_point_untied": {
+     "channels": [
+      "gas_flow",
+      "ph"
+     ],
+     "common": true,
+     "day": 59.0
+    },
+    "change_point_tied": {
+     "channels": [],
+     "common": false,
+     "day": null,
+     "first_hrt_excluded": [
+      "ch4_fraction",
+      "cod_total"
+     ],
+     "off_failed": [
+      "alkalinity",
+      "ph",
+      "tan",
+      "vfa_total"
+     ]
+    },
+    "inhibited": false,
+    "r3": false,
+    "r3_channels": [
+     "gas_flow"
+    ],
+    "r3_channels_all": [
+     "gas_flow",
+     "vfa_total"
+    ],
+    "structural": false
+   },
+   "admitted": [],
+   "rejected": [
+    {
+     "code": "signature_absent",
+     "label": "influent"
+    },
+    {
+     "code": "change_point_not_on_failed_channels_after_hrt",
+     "label": "parameter"
+    },
+    {
+     "code": "r3_not_on_failed_channels",
+     "label": "structural"
+    }
+   ],
+   "holdout_failed": true,
+   "steps": {
+    "first_hrt_end_d": 30.0,
+    "steps": {
+     "alkalinity": {
+      "step_day": 112.0,
+      "step_z": 2.3799090559476563
+     },
+     "ch4_fraction": {
+      "step_day": 5.0,
+      "step_z": 2.98424523477948
+     },
+     "cod_total": {
+      "step_day": 28.0,
+      "step_z": 2.045167111392495
+     },
+     "ph": {
+      "step_day": 71.0,
+      "step_z": 4.676515985200894
+     },
+     "gas_flow": {
+      "step_day": 59.0,
+      "step_z": 5.528402547426852
+     },
+     "tan": {
+      "step_day": 98.0,
+      "step_z": 2.501640645514812
+     },
+     "vfa_total": {
+      "step_day": 112.0,
+      "step_z": 2.486137579107554
+     }
+    }
+   },
+   "completed": true,
+   "evaluations": "149/450",
+   "wall_min": 51.9,
+   "outcome_before": "none"
+  },
+  {
+   "cell": "S2-01 B/B",
+   "truth": [
+    "sensor"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "excluded": false,
+   "hit": false,
+   "null": {
+    "NB": false,
+    "NM": true,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "gas_flow",
+    "ph"
+   ],
+   "n_outside": 13,
+   "n_statistics": 35,
+   "signatures": {
+    "sensor_s1_holds": null,
+    "sensor_channel": null,
+    "influent": false,
+    "onset": "no_onset",
+    "candidate_onsets": [],
+    "feed_covariate": false,
+    "early_late": [],
+    "biomass_improves": false,
+    "change_point": true,
+    "change_point_untied": {
+     "channels": [
+      "alkalinity",
+      "gas_flow"
+     ],
+     "common": true,
+     "day": 112.0
+    },
+    "change_point_tied": {
+     "channels": [],
+     "common": false,
+     "day": null,
+     "first_hrt_excluded": [
+      "ph"
+     ],
+     "off_failed": [
+      "alkalinity",
+      "ch4_fraction",
+      "cod_total",
+      "tan",
+      "vfa_total"
+     ]
+    },
+    "inhibited": false,
+    "r3": false,
+    "r3_channels": [
+     "gas_flow"
+    ],
+    "r3_channels_all": [
+     "gas_flow"
+    ],
+    "structural": false
+   },
+   "admitted": [],
+   "rejected": [
+    {
+     "code": "change_point_not_on_failed_channels_after_hrt",
+     "label": "parameter"
+    }
+   ],
+   "holdout_failed": true,
+   "steps": {
+    "first_hrt_end_d": 30.0,
+    "steps": {
+     "alkalinity": {
+      "step_day": 112.0,
+      "step_z": 3.0378044335708383
+     },
+     "ch4_fraction": {
+      "step_day": 58.0,
+      "step_z": 2.4939544057969516
+     },
+     "cod_total": {
+      "step_day": 77.0,
+      "step_z": 3.225135159470953
+     },
+     "ph": {
+      "step_day": 4.0,
+      "step_z": 11.740143604905882
+     },
+     "gas_flow": {
+      "step_day": 122.0,
+      "step_z": 5.7113421626515395
+     },
+     "tan": {
+      "step_day": 98.0,
+      "step_z": 1.3850924788287327
+     },
+     "vfa_total": {
+      "step_day": 42.0,
+      "step_z": 1.4610140005130101
+     }
+    }
+   },
+   "completed": true,
+   "evaluations": "198/450",
+   "wall_min": 65.5,
+   "outcome_before": "parameter"
+  },
+  {
+   "cell": "S3-01 C/B",
+   "truth": [
+    "influent"
+   ],
+   "label": "parameter",
+   "outcome": "parameter",
+   "excluded": false,
+   "hit": false,
+   "null": {
+    "NB": false,
+    "NM": true,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "alkalinity",
+    "cod_total",
+    "gas_flow",
+    "ph",
+    "tan",
+    "vfa_total"
+   ],
+   "n_outside": 27,
+   "n_statistics": 35,
+   "signatures": {
+    "sensor_s1_holds": null,
+    "sensor_channel": null,
+    "influent": false,
+    "onset": "no_onset",
+    "candidate_onsets": [],
+    "feed_covariate": false,
+    "early_late": [],
+    "biomass_improves": false,
+    "change_point": true,
+    "change_point_untied": {
+     "channels": [
+      "cod_total",
+      "gas_flow",
+      "vfa_total"
+     ],
+     "common": true,
+     "day": 28.0
+    },
+    "change_point_tied": {
+     "channels": [
+      "gas_flow",
+      "vfa_total"
+     ],
+     "common": true,
+     "day": 31.0,
+     "first_hrt_excluded": [
+      "cod_total"
+     ],
+     "off_failed": [
+      "ch4_fraction"
+     ]
+    },
+    "inhibited": false,
+    "r3": true,
+    "r3_channels": [
+     "alkalinity",
+     "gas_flow",
+     "tan",
+     "vfa_total"
+    ],
+    "r3_channels_all": [
+     "alkalinity",
+     "gas_flow",
+     "tan",
+     "vfa_total"
+    ],
+    "structural": true
+   },
+   "admitted": [
+    "parameter",
+    "structural"
+   ],
+   "rejected": [],
+   "holdout_failed": true,
+   "steps": {
+    "first_hrt_end_d": 30.0,
+    "steps": {
+     "alkalinity": {
+      "step_day": 70.0,
+      "step_z": 5.372059960208358
+     },
+     "ch4_fraction": {
+      "step_day": 71.0,
+      "step_z": 2.8619964563555462
+     },
+     "cod_total": {
+      "step_day": 28.0,
+      "step_z": 3.9730000228829434
+     },
+     "ph": {
+      "step_day": 122.0,
+      "step_z": 4.002403452286975
+     },
+     "gas_flow": {
+      "step_day": 31.0,
+      "step_z": 4.225336117266894
+     },
+     "tan": {
+      "step_day": 91.0,
+      "step_z": 7.458595858748947
+     },
+     "vfa_total": {
+      "step_day": 56.0,
+      "step_z": 3.83753754148742
+     }
+    }
+   },
+   "completed": true,
+   "evaluations": "204/600",
+   "wall_min": 66.5,
+   "outcome_before": "parameter"
+  },
+  {
+   "cell": "S4-01 B/B",
+   "truth": [
+    "state"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "excluded": false,
+   "hit": false,
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": true,
+    "null_rejected": false
+   },
+   "failed_channels": [
+    "cod_total"
+   ],
+   "n_outside": 12,
+   "n_statistics": 35,
+   "signatures": {
+    "sensor_s1_holds": null,
+    "sensor_channel": null,
+    "influent": false,
+    "onset": "no_onset",
+    "candidate_onsets": [],
+    "feed_covariate": false,
+    "early_late": [],
+    "biomass_improves": false,
+    "change_point": false,
+    "change_point_untied": {
+     "channels": [],
+     "common": false,
+     "day": null
+    },
+    "change_point_tied": {
+     "channels": [],
+     "common": false,
+     "day": null,
+     "first_hrt_excluded": [
+      "alkalinity",
+      "ch4_fraction",
+      "gas_flow"
+     ],
+     "off_failed": [
+      "ph",
+      "tan",
+      "vfa_total"
+     ]
+    },
+    "inhibited": false,
+    "r3": false,
+    "r3_channels": [],
+    "r3_channels_all": [
+     "gas_flow"
+    ],
+    "structural": false
+   },
+   "admitted": [],
+   "rejected": [],
+   "holdout_failed": false,
+   "steps": {
+    "first_hrt_end_d": 30.0,
+    "steps": {
+     "alkalinity": {
+      "step_day": 28.0,
+      "step_z": 2.0967394275937226
+     },
+     "ch4_fraction": {
+      "step_day": 6.0,
+      "step_z": 2.9685082298543657
+     },
+     "cod_total": {
+      "step_day": 105.0,
+      "step_z": 1.311202672137919
+     },
+     "ph": {
+      "step_day": 146.0,
+      "step_z": 7.570103067043291
+     },
+     "gas_flow": {
+      "step_day": 5.0,
+      "step_z": 3.5636398049415763
+     },
+     "tan": {
+      "step_day": 112.0,
+      "step_z": 2.556440901211428
+     },
+     "vfa_total": {
+      "step_day": 49.0,
+      "step_z": 1.6123119791892917
+     }
+    }
+   },
+   "completed": true,
+   "evaluations": "220/600",
+   "wall_min": 71.0,
+   "outcome_before": "none"
+  },
+  {
+   "cell": "S5-01 A/A",
+   "truth": [
+    "parameter"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "excluded": false,
+   "hit": false,
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "n_outside": 3,
+   "n_statistics": 12,
+   "signatures": {
+    "sensor_s1_holds": null,
+    "sensor_channel": null,
+    "influent": false,
+    "onset": "influent_off",
+    "candidate_onsets": [],
+    "feed_covariate": false,
+    "early_late": [],
+    "biomass_improves": false,
+    "change_point": true,
+    "change_point_untied": {
+     "channels": [
+      "gas_flow",
+      "ph"
+     ],
+     "common": true,
+     "day": 229.0
+    },
+    "change_point_tied": {
+     "channels": [],
+     "common": false,
+     "day": null,
+     "first_hrt_excluded": [],
+     "off_failed": [
+      "gas_flow",
+      "ph"
+     ]
+    },
+    "inhibited": false,
+    "r3": false,
+    "r3_channels": [],
+    "r3_channels_all": [
+     "gas_flow"
+    ],
+    "structural": false
+   },
+   "admitted": [],
+   "rejected": [
+    {
+     "code": "change_point_not_on_failed_channels_after_hrt",
+     "label": "parameter"
+    }
+   ],
+   "holdout_failed": false,
+   "steps": {
+    "first_hrt_end_d": 30.0,
+    "steps": {
+     "ph": {
+      "step_day": 251.0,
+      "step_z": 11.068645442711013
+     },
+     "gas_flow": {
+      "step_day": 229.0,
+      "step_z": 6.913761085316885
+     }
+    }
+   },
+   "completed": true,
+   "evaluations": "132/300",
+   "wall_min": 78.6,
+   "outcome_before": "none"
+  },
+  {
+   "cell": "S6-02 B/B",
+   "truth": [
+    "structural"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "excluded": false,
+   "hit": false,
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "n_outside": 2,
+   "n_statistics": 35,
+   "signatures": {
+    "sensor_s1_holds": null,
+    "sensor_channel": null,
+    "influent": false,
+    "onset": "no_onset",
+    "candidate_onsets": [],
+    "feed_covariate": false,
+    "early_late": [],
+    "biomass_improves": false,
+    "change_point": true,
+    "change_point_untied": {
+     "channels": [
+      "ch4_fraction",
+      "gas_flow",
+      "ph"
+     ],
+     "common": true,
+     "day": 9.0
+    },
+    "change_point_tied": {
+     "channels": [],
+     "common": false,
+     "day": null,
+     "first_hrt_excluded": [
+      "gas_flow",
+      "ph"
+     ],
+     "off_failed": [
+      "alkalinity",
+      "ch4_fraction",
+      "cod_total",
+      "tan",
+      "vfa_total"
+     ]
+    },
+    "inhibited": false,
+    "r3": false,
+    "r3_channels": [],
+    "r3_channels_all": [
+     "tan"
+    ],
+    "structural": false
+   },
+   "admitted": [],
+   "rejected": [
+    {
+     "code": "change_point_not_on_failed_channels_after_hrt",
+     "label": "parameter"
+    }
+   ],
+   "holdout_failed": false,
+   "steps": {
+    "first_hrt_end_d": 30.0,
+    "steps": {
+     "alkalinity": {
+      "step_day": 91.0,
+      "step_z": 1.2818886296649994
+     },
+     "ch4_fraction": {
+      "step_day": 38.0,
+      "step_z": 3.1205703610071684
+     },
+     "cod_total": {
+      "step_day": 112.0,
+      "step_z": 2.6184338615593057
+     },
+     "ph": {
+      "step_day": 30.0,
+      "step_z": 5.905743740136096
+     },
+     "gas_flow": {
+      "step_day": 9.0,
+      "step_z": 7.603961810561042
+     },
+     "tan": {
+      "step_day": 112.0,
+      "step_z": 3.1789691662906563
+     },
+     "vfa_total": {
+      "step_day": 119.0,
+      "step_z": 1.1653232373671736
+     }
+    }
+   },
+   "completed": true,
+   "evaluations": "259/750",
+   "wall_min": 85.2,
+   "outcome_before": "none"
+  },
+  {
+   "cell": "S8-01 B/B",
+   "truth": [
+    "sensor"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "excluded": false,
+   "hit": false,
+   "null": {
+    "NB": true,
+    "NM": false,
+    "NS": true,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "gas_flow"
+   ],
+   "n_outside": 8,
+   "n_statistics": 35,
+   "signatures": {
+    "sensor_s1_holds": false,
+    "sensor_channel": "gas_flow",
+    "influent": false,
+    "onset": "no_onset",
+    "candidate_onsets": [],
+    "feed_covariate": false,
+    "early_late": [
+     "cod_total",
+     "ph"
+    ],
+    "biomass_improves": true,
+    "change_point": true,
+    "change_point_untied": {
+     "channels": [
+      "gas_flow",
+      "ph"
+     ],
+     "common": true,
+     "day": 10.0
+    },
+    "change_point_tied": {
+     "channels": [],
+     "common": false,
+     "day": null,
+     "first_hrt_excluded": [
+      "gas_flow",
+      "ph"
+     ],
+     "off_failed": [
+      "alkalinity",
+      "ch4_fraction",
+      "cod_total",
+      "tan",
+      "vfa_total"
+     ]
+    },
+    "inhibited": false,
+    "r3": false,
+    "r3_channels": [
+     "gas_flow"
+    ],
+    "r3_channels_all": [
+     "gas_flow"
+    ],
+    "structural": false
+   },
+   "admitted": [],
+   "rejected": [
+    {
+     "code": "signature_absent",
+     "label": "sensor"
+    },
+    {
+     "code": "signature_absent",
+     "label": "influent"
+    },
+    {
+     "code": "signature_absent",
+     "label": "state"
+    },
+    {
+     "code": "change_point_not_on_failed_channels_after_hrt",
+     "label": "parameter"
+    }
+   ],
+   "holdout_failed": false,
+   "steps": {
+    "first_hrt_end_d": 30.0,
+    "steps": {
+     "alkalinity": {
+      "step_day": 98.0,
+      "step_z": 2.13451104447155
+     },
+     "ch4_fraction": {
+      "step_day": 61.0,
+      "step_z": 2.00751833896897
+     },
+     "cod_total": {
+      "step_day": 42.0,
+      "step_z": 3.756973403095631
+     },
+     "ph": {
+      "step_day": 30.0,
+      "step_z": 8.375904168422984
+     },
+     "gas_flow": {
+      "step_day": 10.0,
+      "step_z": 6.384246631143675
+     },
+     "tan": {
+      "step_day": 91.0,
+      "step_z": 3.198386573725891
+     },
+     "vfa_total": {
+      "step_day": 49.0,
+      "step_z": 3.1007954252055145
+     }
+    }
+   },
+   "completed": true,
+   "evaluations": "165/750",
+   "wall_min": 56.2,
+   "outcome_before": "none"
+  }
+ ],
+ "hits_faulted": "0 of 6 scored",
+ "excluded_faulted": {
+  "abstain": 0,
+  "pending": 0
+ },
+ "null_rejected_faulted": "3 of 6",
+ "prediction_checks": {
+  "S0-01 B/C": {
+   "predicted": {
+    "null": "NM",
+    "failed": [
+     "digestate_ts",
+     "digestate_vs"
+    ],
+    "label": "none"
+   },
+   "null_component": true,
+   "failed_channels": true,
+   "label": true
+  },
+  "S1-01 B/B": {
+   "predicted": {
+    "null": "NB",
+    "failed": [
+     "gas_flow"
+    ],
+    "label": "none"
+   },
+   "null_component": true,
+   "failed_channels": true,
+   "label": true
+  }
+ },
+ "before": {
+  "file": "cells_before_rulings.json",
+  "hits_faulted": "0 of 6 scored"
+ }
+}

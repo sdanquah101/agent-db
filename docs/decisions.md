@@ -7382,3 +7382,150 @@ outside" fires on 90 of 120 clean runs, and cannot be P2's null rule.
 - A count threshold on the statistics outside: rejected, because it carries no
   localisation, so no label could rest on it.
 - A margin on the envelope: excluded by the lead's ruling.
+
+
+## 2026-10-07 — RULINGS (the lead): P2's four design decisions, accepted as recommended; the null rule frozen
+
+**The lead's word** of 2026-10-07, about 13:00 UTC ("Implement your recommendation"),
+relayed by the coordinator (session_01Cu6G2kQjP2QSzvtkyP8cPr). PR #31 was merged at
+`2dab5d2` (merge commit `aad51ea`). The four decisions of `docs/p2_design.md` §13 are
+DECIDED as recommended.
+
+**(a) The null rule: accepted and frozen.**
+- The rule is `docs/p2_design.md` §4. It has three conjunctive components (NB, NM, NS)
+  against the declared background exactly as published, with no margin. A label is
+  admitted only over a failed null case that matches it (§4.4).
+- **Frozen** by the sha256 of the two files as they are at `aad51ea`:
+
+  | File | sha256 |
+  |---|---|
+  | `scripts/null_rule_loo.py` | `fb8e88917d440b1b50001d1f29b0e8f36a88256219f44ff81c19167549059812` |
+  | `reports/background/null_rule_loo.json` | `de537c459d737fa895d3af5cdf170c30ad3eebf6a847ce6be07c57230f094e9c` |
+
+  A test checks both hashes, and pins the workflow's own NB, NM and NS to the JSON's
+  counts (design §10.13).
+- *Reason:* a leave-one-out false-alarm rate of 19 of 120 clean runs (0.16; 95 %
+  interval 0.10–0.23), against 0.75 for "any statistic outside" and 0.55 for "any channel
+  mean outside". Scatter alone is not a fault, by the ladder's Level 1.
+- *Alternatives:*
+  - those two simpler rules;
+  - adding the gap case as a fourth component, which would give 26 of 120 (0.22);
+  - a margin on the envelope, which the lead's ruling of 2026-09-30 excludes.
+
+**(b) The go/no-go, two seeds per cell: accepted.**
+- Deliverable 3's go/no-go on S0-01 B/B is judged on each seed's final label. It stops
+  only if **both** seeds give a label other than `none`.
+- *Reason:* one seed's false alarm is expected at the rule's clean rate (about 0.16); two
+  together are about 0.03.
+- *Alternative:* stopping on either seed, which fires on about 30 % of clean pairs.
+
+**(c) A run with no completed null table: accepted.**
+- Such a run (an unfinished reference fit) **abstains**. It is excluded and reported, and
+  never counts as `none`, toward the go/no-go, or toward success.
+- *Reason:* without the table no label can be admitted, and `none` would be unsupported.
+- *Alternative:* reading it as `none`, which would reward a run for not finishing.
+
+**(d) The model: accepted.**
+- GPT `gpt-5.6-luna` with the frozen P1's settings: reasoning `high`, no temperature,
+  P1's caps. The total model budget is about USD 10 for deliverables 3–5.
+- *Reason:* a P2-versus-P1 difference is then the procedure's, not the model's, and it is
+  the cheapest arm.
+- *Alternative:* Claude Opus 5.5, whose assay choices the audit found apt in 9 of 10
+  runs, at about 20 times the cost per run.
+
+**What follows** (the coordinator's relay of the same word): deliverable 2 on
+`claude/p2-workflow`, cut from `main` at `aad51ea`:
+- the workflow code under `workflows/p2_multi_agent/`;
+- every test of design §10, with the review's R1–R4 carried in;
+- the offline power run with **no model call**.
+
+No live run happens before the coordinator's review of deliverable 2 and the lead's
+approval.
+
+## 2026-10-08 — RULINGS (the lead): two admission changes from the offline power run; no live run yet
+
+The lead's word, relayed by the coordinator: "Implement your recommendations." These are
+findings 1 and 2 of `reports/p2_power/findings.md` (deliverable 2).
+
+> **DEVELOPMENT-INFORMED.** Both changes were proposed **after** the offline results on
+> S0-01 B/C, S2-01 B/B and S3-01 C/B were seen. Those cells are therefore no evidence
+> for either change. Both must be judged on the **held-out variants**, never on these
+> cells. The re-run of the eight development cells is reported, not used to tune.
+
+**The null rule itself is unchanged.** NB, NM, NS and `null_partial` are as frozen on
+2026-10-07, and `scripts/null_rule_loo.py` and `reports/background/null_rule_loo.json`
+keep their sha256 (`fb8e8891…`, `de537c45…`; checked by a test). Only admission (design
+§4.4) changes: which signature may admit a label over a null case that has already
+failed.
+
+**(1) Channel-tied admission: accepted.**
+- *Ruling:* a label's admitting signature must lie on the channels whose null case
+  failed.
+  - `parameter`: the change point must be on failed channels. It is P0's R4 arithmetic
+    over the failed channels only, so `parameter_channels_min` (2) **failed** channels
+    must share the step within `step_day_tolerance_d`.
+  - `structural`: the R3 pattern is counted over failed channels only, so
+    `structural_channels_min` (2) failed channels must be structured.
+  - `state`: the early/late test, which was already tied this way.
+  - `sensor` (NS ties it to its channel) and `influent` (NB ties it to the balance) are
+    unchanged.
+- *Interpretation recorded* (the lead's text reads "on at least one failed channel; if
+  defined over several channels, common to failed channels"). P0's change point is
+  always defined over at least two channels, so the second clause governs. The step is
+  read as common to failed channels, and a step shared by one failed and one non-failed
+  channel does not admit. The looser reading (at least one of the sharing channels
+  failed) is the alternative. It would have kept S2-01's admission, whose step was on
+  alkalinity and gas while gas and pH failed.
+- *Reason:* on S0-01 B/C the null failed on TS and VS and the step was on gas and pH. On
+  S2-01 the step was on alkalinity and gas while gas and pH failed. A signature
+  elsewhere explains nothing about the failure it is admitted over.
+- *Alternatives:* the looser reading above, or leaving admission untied (the design of
+  2026-10-07).
+
+**(2) The first-HRT exclusion for change points: accepted.**
+- *Ruling:* a change point inside the first `transient_d` does not count as an
+  admitting signature. The boundary is the calibration start plus P0's `transient_d`
+  (30 d), taken by reference: the same boundary as the early/late test, `t ≤ boundary`.
+  The start-up transient belongs to the state test (decision 4 of 2026-09-30).
+- *Interpretation recorded:* the channel's located change point (P0's single
+  best-split search) is excluded if it falls inside. The search is **not** repeated
+  over the later days, which would be a new test.
+- *Reason:* the admitting steps on S0-01 B/C (day 15) and in the smoke run (day 13)
+  lay inside the start-up transient.
+- *Alternatives:* repeating the search after the transient, or keeping early steps.
+
+**(3) No live model run yet**, not even the 3-cell × 2-seed pilot, until these steps are
+done in order:
+1. these changes and the review's fixes (F-A, F-C, F-D, F-H, F-I, F-J, F-F/G) are in;
+2. the offline power run is re-run on the same eight cells;
+3. the coordinator has reviewed that re-run;
+4. the live wiring of deliverable 3 (F-B, F-E) has been reviewed;
+5. the lead has approved the first live run.
+
+**Tests** (`tests/test_p2_workflow.py`), each with its negative control:
+- a step on non-failed channels does not admit `parameter` (P0's arithmetic alone
+  would);
+- a step inside the first HRT does not admit, the boundary day included;
+- a step on the failed channels after the first HRT does admit;
+- R3 counted off the failed channels does not admit `structural`.
+
+The rejection codes are `change_point_not_on_failed_channels_after_hrt` and
+`r3_not_on_failed_channels`.
+
+**The lead's confirmation (2026-10-08, evening): the strict reading of ruling 1.**
+- *Ruling* (the review's N-7, relayed by the coordinator: "Implement your
+  recommendation"): the reading recorded above is **confirmed**. A change point defined
+  over several channels admits `parameter` only if it is common to **failed** channels.
+  A step shared by one failed and one non-failed channel does not admit.
+- **DEVELOPMENT-INFORMED**, like the rulings it qualifies. It was confirmed after the
+  development results were seen, so it is judged on the held-out variants.
+- *Reason:* the strict reading is the one implemented, tested and re-run. It is also
+  the only reading under which the admitting signature explains the channels that
+  failed.
+- *Alternative:* the looser reading (at least one of the sharing channels failed). It
+  would have kept S2-01 B/B's wrong `parameter`.
+- No code changes: `tied_change_point` already implements the strict reading.
+
+**Deliverable 3 (the live wiring) is approved to start only after PR #32 merges**, on a
+new branch cut from `main`. No live call is made, not even a smoke call, until the
+coordinator has reviewed deliverable 3 and the lead approves the pilot.

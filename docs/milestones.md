@@ -3701,7 +3701,7 @@ offline, after the review.
 Next: the coordinator's re-review, then the lead's rulings on (a)–(d) before any live
 call.
 
-**2026-10-06, about 23:53 UTC — the re-review of PR #31 (`3e84f3b`, PASS, ready for the lead's four decisions); its small fixes N1–N9 made.**
+**2026-10-05, about 23:53 UTC — the re-review of PR #31 (`3e84f3b`, PASS, ready for the lead's four decisions); its small fixes N1–N9 made.**
 - Design revision 3:
   - the onset test needs at least two evaluable windows before the onset, all inside,
     so day 0 on a uniform offset is refused;
@@ -3717,3 +3717,111 @@ call.
 
 Decisions (a)–(d) stay PENDING until the coordinator relays the lead's rulings. No live
 call.
+
+**2026-10-07, about 23:00 UTC — P2 deliverable 2 on `claude/p2-workflow` (draft PR #32).**
+- The lead's rulings of 2026-10-07 are recorded, and the null rule is frozen by sha256.
+- The workflow runs offline, with every test of design §10. CI is green on `e5d4926`.
+- **The offline power run (no model) is complete**: `reports/p2_power/`.
+  - **0 of 6 faulted cells** are labelled correctly, and the null is rejected on 3 of 6.
+  - **Three wrong `parameter` labels**, which are false kinetic updates: S2-01 B/B,
+    S3-01 C/B and the clean S0-01 B/C.
+  - The §4.5 predictions: S1-01 B/B holds; S0-01 B/C fails.
+  - S8-01 B/B would be a correct `sensor` with a model's S1 reading; offline it is blocked
+    by the declared fallback.
+- **Findings for the coordinator** (`reports/p2_power/findings.md`), none acted on:
+  - admission does not tie a signature to the channels whose null case failed;
+  - early change points sit inside the first HRT;
+  - `influent` is unreachable when only the worst window is outside;
+  - a single-channel fault can land in NM.
+- **A reporting correction**, with a test: the sensor rejection code is now
+  `signature_absent` when the S1 table holds but nothing reads it.
+
+No live call. The next step is the coordinator's review of deliverable 2 and the lead's
+word on the findings, before deliverable 3.
+
+**2026-10-08, about 09:30 UTC — PR #32: the coordinator's review of deliverable 2 (FIXES
+NEEDED, nothing blocking), fixed on `claude/p2-workflow`.**
+- **F-A:** every P2 count now keys on the outcome. `report.json` carries `outcome`
+  (`pending`, `abstain` or the label). `scripts/p2_power.py` reports abstain and pending
+  in their own column. The `..._never_reads_none` test now asserts what its name says.
+  The design records that the go/no-go keys on the verdict.
+- **F-C:** the frozen rule is pinned a second time, through `band_envelopes` and
+  `band_placement`:
+  - The 120 leave-one-out bands are built by the band driver's `aggregate` and served
+    through the tool's schema.
+  - The four §4.5 cells are placed against the served band.
+  - A mutation that drops `n_cod_inadmissible` fails the test.
+- **F-D:** `nb_side` is defined for every NB case, and the onset test refuses a run
+  with no side. It has a test.
+- **F-H:** a run that places no statistic abstains.
+- **F-I:** `holdout_failed` comes from the verifier's logged `validate` call on the
+  reference prediction. An unavailable bit rejects R3 as `holdout_unavailable`.
+- **F-J:**
+  - the reference fit reads the noise floors from the served procedure block;
+  - with the verifier off, the rule names no null component;
+  - `summary.json` carries `by_role`, from the call log;
+  - this entry.
+- **F-F and F-G:** `dq.assay`, `persistent_state` and the coordinator switch are
+  deferred to deliverable 5 (design §14). The record says so whenever one of those
+  switches is off.
+- **The power report** was regenerated with the new counting. No label or count
+  changed, and the cells were not re-run (`reports/p2_power/findings.md` says why).
+
+**Not started, as instructed:**
+- F-B and F-E are deferred to deliverable 3.
+- Power-run findings 1 and 2 were with the lead; they were **accepted the same day**
+  and implemented in `51c9782` (the next entry).
+- No live call has been made.
+
+The next step is the coordinator's re-review.
+
+**2026-10-08, about 16:30 UTC — P2: the lead's two admission rulings, and the offline
+power re-run (PR #32, draft).**
+- **The rulings of 2026-10-08** are implemented in `51c9782`, with tests and negative
+  controls, and recorded in `docs/decisions.md`. They are marked DEVELOPMENT-INFORMED:
+  - an admitting change point and R3 lie on the channels whose null case failed;
+  - a change point inside the first HRT never admits.
+  The null rule is unchanged.
+- **The runner's `by_role`** now reads the meter's counts from the full call log
+  (`15d0daf`). The sandboxed test found that the visible log has none.
+- **The offline re-run at `15d0daf`** is in `reports/p2_power/`, with each cell before
+  and after:
+  - 0 of 6 faulted cells right, as before;
+  - wrong non-`none` labels fell from 3 to 1 (S0-01 B/C and S2-01 are now `none`);
+  - S3-01 C/B is still `parameter`, which is reported, not adjusted for;
+  - both §4.5 predictions checked here now hold.
+  The improved cells are the ones the rulings came from, so they are no evidence for
+  the rulings.
+- **Next:**
+  1. the coordinator's review of the re-run;
+  2. then deliverable 3, the live wiring (F-B, F-E), for review;
+  3. no live call until the lead approves.
+
+**2026-10-08, about 19:30 UTC — PR #32: the coordinator's delta review at `15d0daf`
+(FIXES NEEDED, one MEDIUM), fixed.**
+- **Commits since the last review:**
+  - `51c9782`: the rulings;
+  - `15d0daf`: `by_role` from the full log;
+  - `493961d`: the re-run, in which wrong non-`none` labels fell from 3 to 1, matching
+    the reviewer's independent prediction.
+- **N-1 (MEDIUM).** `by_role` joined the visible log to the truth-side log by `seq`.
+  That log has one record per hidden integration segment, so the join was offset by
+  the number of fault onsets, and `unattributed` leaked that number. The registry now
+  keeps each call's charge keyed by the visible `seq`, and the runner reads no log. A
+  test runs this on a three-segment record and checks the per-role split. A negative
+  control shows that the old join misattributes.
+- **N-2:** `cells.json` carries each cell's change-point days, sizes and R3 channels,
+  regenerated from the existing records with no re-run.
+- **N-3:** this entry.
+- **N-4:** `outcome_of` reads the runner's `completed` first.
+- **N-5:** an `nb_side` test where the mean and the worst window disagree.
+- **N-6:** `first_hrt_excluded` lists only the channels whose step lies inside the
+  first HRT.
+- **N-8:** design §14 records that P2 rows are filtered on `outcome` before the frozen
+  evaluator's metrics are pooled.
+- **Item 8:** the runner no longer reads any log for `by_role`, so a malformed log line
+  cannot affect a P0 or P1 launch.
+- **N-7** (the strict reading of ruling 1) is with the lead; nothing changes unless the
+  lead rules.
+- **Next:** the lead's merge word on deliverable 2. Deliverable 3 (the live wiring)
+  does not start before the coordinator relays the lead's go-ahead. No live call.
