@@ -889,10 +889,7 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
     integration segment, so its numbering is offset by the number of parameter-fault
     onsets. A join would leak that number into `summary.json` (the review's N-1).
   - A call that no action names is counted as `unattributed`; it is the registry's own
-    open record. It attributes
-  each call to a role by the `role.step` of the workflow's action with the same `seq`.
-  A logged call that no action names is counted as `unattributed`. Tokens and requests
-  are zero until deliverable 3.
+    open record. Tokens and requests are zero until deliverable 3.
 - **Deferred to deliverable 5 (the ablations), recorded rather than claimed** (the
   review's F-F and F-G):
   - `dq.assay` is declared and validated, but no step calls it yet. In deliverable 2 the

@@ -7474,8 +7474,12 @@ failed.
   always defined over at least two channels, so the second clause governs. The step is
   read as common to failed channels, and a step shared by one failed and one non-failed
   channel does not admit. The looser reading (at least one of the sharing channels
-  failed) is the alternative. It would have kept S2-01's admission, whose step was on
-  alkalinity and gas while gas and pH failed.
+  failed) is the alternative. With the first-HRT exclusion it would have kept **both**
+  wrong `parameter` labels:
+  - S2-01 B/B: its later step is shared by alkalinity and gas, and gas failed;
+  - S0-01 B/C: its later step is shared by TS (day 70) and CH4 (day 98), and TS
+    failed.
+  The step days are in `reports/p2_power/cells.json`.
 - *Reason:* on S0-01 B/C the null failed on TS and VS and the step was on gas and pH. On
   S2-01 the step was on alkalinity and gas while gas and pH failed. A signature
   elsewhere explains nothing about the failure it is admitted over.
@@ -7523,7 +7527,7 @@ The rejection codes are `change_point_not_on_failed_channels_after_hrt` and
   the only reading under which the admitting signature explains the channels that
   failed.
 - *Alternative:* the looser reading (at least one of the sharing channels failed). It
-  would have kept S2-01 B/B's wrong `parameter`.
+  would have kept **both** S0-01 B/C's and S2-01 B/B's wrong `parameter`.
 - No code changes: `tied_change_point` already implements the strict reading.
 
 **Deliverable 3 (the live wiring) is approved to start only after PR #32 merges**, on a

@@ -3821,7 +3821,5 @@ power re-run (PR #32, draft).**
   evaluator's metrics are pooled.
 - **Item 8:** the runner no longer reads any log for `by_role`, so a malformed log line
   cannot affect a P0 or P1 launch.
-- **N-7** (the strict reading of ruling 1) is with the lead; nothing changes unless the
-  lead rules.
 - **Next:** the lead's merge word on deliverable 2. Deliverable 3 (the live wiring)
   does not start before the coordinator relays the lead's go-ahead. No live call.
