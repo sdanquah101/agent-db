@@ -889,10 +889,7 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
     integration segment, so its numbering is offset by the number of parameter-fault
     onsets. A join would leak that number into `summary.json` (the review's N-1).
   - A call that no action names is counted as `unattributed`; it is the registry's own
-    open record. It attributes
-  each call to a role by the `role.step` of the workflow's action with the same `seq`.
-  A logged call that no action names is counted as `unattributed`. Tokens and requests
-  are zero until deliverable 3.
+    open record. Tokens and requests are zero until deliverable 3.
 - **Deferred to deliverable 5 (the ablations), recorded rather than claimed** (the
   review's F-F and F-G):
   - `dq.assay` is declared and validated, but no step calls it yet. In deliverable 2 the
@@ -913,3 +910,68 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
   `abstain` and `pending` rows are taken out and reported separately. Otherwise an
   abstaining or unfinished run would be scored as `none`, which ruling (c) forbids. The
   evaluator itself is frozen and unchanged; the filter belongs to the P2 tables.
+
+## 15. The live wiring (deliverable 3): implementation notes
+
+None of this has made a live call. No call is made until the coordinator has reviewed
+deliverable 3 and the lead approves the pilot.
+
+- **The signatures come from the reference fit, on the raw record** (the review's F-B).
+  - The early/late test, the feed covariate, the change point, R3, the biomass pair and
+    the hold-out bit are computed against the reference fit: its prediction, its
+    optimum and its bounds. They use the raw record and the served weights.
+  - They never use a subset fit a decision chose, nor a record a decision quarantined.
+  - A test scripts `ident.subset`: the chosen subset's prediction moves, and no
+    signature does.
+- **The model is the frozen P1's.** `p2.yaml`'s `model` block equals `p1.yaml`'s, field
+  for field, and a test pins them: `gpt-5.6-luna`, reasoning `high`, no temperature,
+  P1's retry and prices.
+- **The caps** (`p2.yaml` `caps`) are enforced in the privileged gateway
+  (`tools/p2_live.py::P2Gateway`), never in the workflow.
+  - The limits: 60 requests and 6 M tokens per run (P1's), and USD 0.25 per run.
+  - Each request is **projected before it is sent**: its input at 2 characters per
+    token (conservative), plus the full `max_tokens` of output.
+  - A request that would take the run past any cap is refused unsent and unlogged. The
+    workflow then stops asking and abstains (`abstain:model_cap`), so a live run is
+    never a silent mixture of model and code decisions.
+- **The gateway is P1's** (`ModelGateway`, its retry, meter and `llm_calls.jsonl`). P2's
+  subclass accepts only a request the frozen decision layer produces:
+  - one of the twelve frozen templates as the system prompt;
+  - that decision's frozen tool;
+  - one user message, holding the declared inputs as JSON.
+  Every log line names the point and the role, both derived from the matched template,
+  never from the jail. `summary.json`'s `by_role` gains each role's tokens and requests.
+- **One tool, auto choice, not a forced call** (a deviation from §11's "forced tool").
+  - P1's clients refuse any `tool_choice` but auto (`check_responses_request`), and
+    P1's freeze relies on that check, so the shared clients are left unchanged.
+  - Each request offers exactly one tool. A reply without that tool's call is a failed
+    attempt: one retry, then the coded fallback, recorded with its reason.
+  - Forcing the call would mean changing the shared client, which is a question for
+    the coordinator.
+- **The template freeze** (`p2.yaml` `frozen`, checked by
+  `tools/p2_live.py::check_p2_frozen`):
+  - every template's text, every decision's output schema and the tool its request
+    offers, by sha256, and the model settings;
+  - the runner checks it before **every** P2 run, offline included, and refuses a run
+    on any difference;
+  - a changed template is a new freeze, which needs the lead's word.
+- **Live mode is an explicit flag, OFF by default**: `run_workflow(..., live=True)`, or
+  `--live` on the command line. `p2.yaml` cannot select it.
+  - Without the flag, the jail gets `decider: offline` and no gateway is built. A model
+    client passed without the flag is refused.
+  - A test shows that the default reaches no model: an offline run never calls
+    `tools.llm`, and the runner launches without a gateway.
+- **The pilot is prepared, not run** (`scripts/p2_pilot.py`).
+  - It is the three-role minimum (influent, identifiability and design off) on
+    S0-01 B/B, S2-01 B/B and S8-01 B/B. The two seeds per cell are replicates 0 and 1:
+    six runs, about USD 0.3.
+  - The pilot stops launching cells at USD 0.6.
+  - `APPROVED = False` refuses `run` before any client is built. Approval is a reviewed
+    one-line commit naming the lead's word.
+  - `plan` prints the cells, the caps and the command, and makes no call.
+- **Expectations, stated before any result** (the lead's request).
+  - A model can change only the outcomes of the twelve decision points. Every label is
+    still admitted by coded signatures over the frozen null rule.
+  - On the development cells the realistic gain is about **one cell**: S8-01 B/B, where
+    only the offline `insufficient` reading of the S1 table blocks `sensor`.
+  - S3-01, S5-01 and S6-02 are decided by coded rules and the frozen null rule.

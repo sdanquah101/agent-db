@@ -7474,8 +7474,12 @@ failed.
   always defined over at least two channels, so the second clause governs. The step is
   read as common to failed channels, and a step shared by one failed and one non-failed
   channel does not admit. The looser reading (at least one of the sharing channels
-  failed) is the alternative. It would have kept S2-01's admission, whose step was on
-  alkalinity and gas while gas and pH failed.
+  failed) is the alternative. With the first-HRT exclusion it would have kept **both**
+  wrong `parameter` labels:
+  - S2-01 B/B: its later step is shared by alkalinity and gas, and gas failed;
+  - S0-01 B/C: its later step is shared by TS (day 70) and CH4 (day 98), and TS
+    failed.
+  The step days are in `reports/p2_power/cells.json`.
 - *Reason:* on S0-01 B/C the null failed on TS and VS and the step was on gas and pH. On
   S2-01 the step was on alkalinity and gas while gas and pH failed. A signature
   elsewhere explains nothing about the failure it is admitted over.
@@ -7523,9 +7527,40 @@ The rejection codes are `change_point_not_on_failed_channels_after_hrt` and
   the only reading under which the admitting signature explains the channels that
   failed.
 - *Alternative:* the looser reading (at least one of the sharing channels failed). It
-  would have kept S2-01 B/B's wrong `parameter`.
+  would have kept **both** S0-01 B/C's and S2-01 B/B's wrong `parameter`.
 - No code changes: `tied_change_point` already implements the strict reading.
 
 **Deliverable 3 (the live wiring) is approved to start only after PR #32 merges**, on a
 new branch cut from `main`. No live call is made, not even a smoke call, until the
 coordinator has reviewed deliverable 3 and the lead approves the pilot.
+
+## 2026-10-10 — Proposed (P2 session): the live wiring's caps, tool form and seeds (deliverable 3, for the coordinator's review)
+
+Deliverable 3 was started on the lead's word, relayed by the coordinator after PR #32
+merged. Four implementation choices need ruling; each is implemented as proposed and
+can be changed. No live call has been made.
+
+1. **The USD cap per run: 0.25, projected before each request.**
+   - *Reason:* about 6× P1's measured USD 0.04 per run, so it should bind only on a
+     runaway. The projection assumes the full `max_tokens` of output, and an input of 2
+     characters per token (about half the usual 4), so a request is refused before it
+     could pass the cap.
+   - *Alternatives:* a tighter cap (0.10), which may refuse legitimate retries; or
+     checking only after the fact, as P1's gateway does for turns and tokens, which can
+     overshoot by one request.
+2. **One tool, with `tool_choice` auto, instead of a forced call.**
+   - *Reason:* P1's frozen clients accept only auto. Forcing the call would mean
+     changing `tools/llm.py`'s request checks, which P1's freeze relies on.
+   - With auto, a reply without the decision's call is a failed attempt: one retry,
+     then the coded fallback, recorded.
+   - *Alternative:* add a forced-call path for P2 only, a change to shared code that
+     would need its own review.
+3. **The template freeze is checked before offline runs too.**
+   - *Reason:* every decision record carries the template's sha256, so an offline run
+     with an edited template would carry a hash that no freeze records.
+   - *Alternative:* check only before live runs.
+4. **The pilot's two seeds are each cell's replicates 0 and 1** (`generate_run`'s
+   `replicate`).
+   - *Reason:* the matrix's own seed derivation, with no new seed list.
+   - *Alternative:* the same generated cell run twice, which measures the model's
+     variance alone.

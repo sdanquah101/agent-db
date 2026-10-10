@@ -9,9 +9,12 @@ routine through ``tools.call``, each through the calling role's allow-listed vie
 
 The design in one paragraph. Coordination is code: a fixed state machine (§5) over the
 §6.6 task state. The roles are procedures. A model is consulted only at twelve declared
-decision points (§2), each with a fixed output schema and a declared fallback; this
-deliverable runs **offline** (``decider: offline``), so every decision point takes its
-fallback and no model is called. Every test that sets a label's evidence is code. The
+decision points (§2), each with a fixed output schema and a declared fallback. By
+default the decider is **offline** (``decider: offline``): every decision point takes its
+fallback and no model is called. Only the runner's explicit live flag hands the jail
+``decider: live``, and then each decision is one request through the privileged
+gateway (``tools.llm``), with its frozen template and its one tool (deliverable 3). Every
+test that sets a label's evidence is code, in either mode. The
 first calibration is the **reference fit**, the declared background's own procedure,
 so its statistics are placed against the published band like for like (§3); the
 **null rule** (§4, frozen 2026-10-07) reads the placement, and a label is admitted only
@@ -743,6 +746,73 @@ class DecisionError(Exception):
     """A decision point asked with inputs it does not declare."""
 
 
+class AttemptFailed(Exception):
+    """One attempt at a decision failed (no decision call in the reply, a model error)."""
+
+
+class ModelCapReached(Exception):
+    """The gateway refused a request: a request, token or USD cap would be exceeded.
+
+    The run stops asking and abstains (deliverable 3, F-E): it does not fall back to code
+    for the rest of the run, so no live run is ever a silent mixture of the two.
+    """
+
+
+def decision_tool(point: str) -> dict[str, Any]:
+    """The one tool a decision request offers: its input schema is the decision's schema.
+
+    Deterministic, so the runner can freeze its digest beside the template's.
+    """
+    return {
+        "name": point.replace(".", "_"),
+        "description": "Return the decision as this tool's input. Its schema is the only "
+        "form accepted.",
+        "input_schema": DECISIONS[point]["model"].model_json_schema(),
+    }
+
+
+class LiveResponder:
+    """The live decider (deliverable 3): one request per attempt through the gateway.
+
+    The request is the template as the system prompt, the declared inputs as one user
+    message (JSON), and the decision's single tool. Nothing else reaches the model. A
+    reply without the decision's tool call, or a model error, is a failed attempt; a cap
+    refusal stops the run (:class:`ModelCapReached`).
+    """
+
+    def __init__(self) -> None:
+        """Start with no call ids pending."""
+        self.pending: list[int] = []
+
+    def take_call_ids(self) -> list[int]:
+        """The gateway turn ids of the attempts since the last take."""
+        out, self.pending = list(self.pending), []
+        return out
+
+    def __call__(self, point: str, template: str, inputs: dict[str, Any]) -> dict[str, Any]:
+        """One attempt."""
+        tool = decision_tool(point)
+        request = {
+            "system": template,
+            "messages": [{"role": "user", "content": json.dumps(_jsonable(inputs),
+                                                                sort_keys=True)}],
+            "tools": [tool],
+        }  # fmt: skip
+        try:
+            reply = tools.llm(request)
+        except tools.BudgetExceededError as exc:
+            raise ModelCapReached(str(exc)) from exc
+        except tools.ToolError as exc:
+            raise AttemptFailed(f"model: {str(exc)[:200]}") from exc
+        status = reply.get("status") or {}
+        if "turns_used" in status:
+            self.pending.append(int(status["turns_used"]) - 1)
+        for block in (reply.get("response") or {}).get("content") or []:
+            if block.get("type") == "tool_use" and block.get("name") == tool["name"]:
+                return dict(block.get("input") or {})
+        raise AttemptFailed("no decision call in the reply")
+
+
 class Decider:
     """Asks a decision point, validates its answer twice at most, else takes the fallback."""
 
@@ -775,7 +845,12 @@ class Decider:
         failures: list[str] = []
         output: BaseModel | None = None
         for _ in range(2):
-            raw = self.respond(point, template["text"], inputs)
+            try:
+                raw = self.respond(point, template["text"], inputs)
+            except AttemptFailed as exc:
+                attempts += 1
+                failures.append(str(exc))
+                continue
             if raw is None:
                 break
             attempts += 1
@@ -792,6 +867,7 @@ class Decider:
         used_fallback = output is None
         if output is None:
             output = model.model_validate(fallback)
+        take = getattr(self.respond, "take_call_ids", None)
         self.records.append(
             {
                 "role": spec["role"],
@@ -803,7 +879,7 @@ class Decider:
                 "attempts": attempts,
                 "failures": failures,
                 "fallback_used": used_fallback,
-                "llm_call_ids": [],
+                "llm_call_ids": take() if take is not None else [],
             }
         )
         return output
@@ -1086,6 +1162,8 @@ class Workflow:
         self.evidence: list[dict[str, Any]] = []
         self.reference: dict[str, Any] | None = None
         self.reference_prediction: Any = None
+        self.reference_fit: Any = None
+        self.reference_optimum: dict[str, float] = {}
         self.balance_index: int | None = None
         self.reference_sd: dict[str, np.ndarray] = {}
         self.band: dict[str, Any] | None = None
@@ -1407,6 +1485,7 @@ class Workflow:
         fitted = self.call("calibration", "reference", "simulate", model=MODEL, parameters=optimum)
         self.prediction, self.prediction_index = fitted, self.rec.last_index
         self.reference_prediction = fitted
+        self.reference_fit, self.reference_optimum = fit, dict(optimum)
         self.fit, self.optimum, self.approved = fit, optimum, list(approved)
         self.screening = {
             "declared": params,
@@ -1624,26 +1703,33 @@ class Workflow:
         return cov
 
     def step_residuals(self) -> None:
-        """Residual structure of every objective channel against the current prediction."""
-        if self.prediction is None:
+        """Residual structure of every objective channel against the **reference** fit.
+
+        The signatures read these residuals (the early/late test, the feed covariate,
+        the change point, R3), so they are taken on the raw record against the reference
+        prediction with the served weights, never against a subset fit a decision chose
+        nor on a record a decision quarantined (the review's F-B).
+        """
+        pred = self.reference_prediction
+        if pred is None:
             return
         role = "calibration" if self.on["calibration"] else "identifiability"
         covariates = self.covariates()
         transient = self.cal[0] + float(self.attr["transient_d"])
         self.residuals = {}
         for s in self.series.values():
-            if not s.in_objective or s.channel not in self.prediction.outputs:
+            if not s.in_objective or s.channel not in pred.outputs:
                 continue
-            m = np.isfinite(s.value) & (s.t >= self.cal[0]) & (s.t <= self.cal[1])
+            m = np.isfinite(s.raw) & (s.t >= self.cal[0]) & (s.t <= self.cal[1])
             t = s.t[m]
-            r = s.value[m] - np.interp(
+            r = s.raw[m] - np.interp(
                 t,
-                np.asarray(self.prediction.t, dtype=float),
-                np.asarray(self.prediction.outputs[s.channel], dtype=float),
+                np.asarray(pred.t, dtype=float),
+                np.asarray(pred.outputs[s.channel], dtype=float),
             )
             if r.size < 4:
                 continue
-            z = r / s.sd[m]
+            z = r / self.reference_sd.get(s.name, s.sd)[m]
             n = int(z.size)
             se = (
                 float(z.std(ddof=1) / math.sqrt(n))
@@ -1696,25 +1782,28 @@ class Workflow:
         firing = early_late(self.residuals, self.attr)
         improves = False
         pair: dict[str, Any] = {}
-        if firing and self.on["calibration"] and self.prediction is not None:
+        if firing and self.on["calibration"] and self.reference_prediction is not None:
             early = (self.cal[0], self.cal[0] + float(self.attr["transient_d"]))
 
             def early_rms(sim: Any) -> float:
                 vals = []
                 for name in firing:
                     s = self.series[name]
-                    summ = z_summary(s.t, s.value, s.sd, sim.t, sim.outputs[s.channel], early)
+                    sd = self.reference_sd.get(name, s.sd)
+                    summ = z_summary(s.t, s.raw, sd, sim.t, sim.outputs[s.channel], early)
                     if summ is not None:
                         vals.append(float(summ["rms_z"]))
                 return float(np.mean(vals)) if vals else float("inf")
 
-            reference = early_rms(self.prediction)
+            # the reference fit's prediction and optimum, never a subset fit's (F-B)
+            reference = early_rms(self.reference_prediction)
             for scale in self.cfg["biomass_scales"]:
                 if not self.plan.fits("biomass_pair", 1):
                     self.plan.skipped["biomass_pair"] = "the plan does not allow it"
                     break
                 sim = self.call("calibration", "state_test", "simulate", model=MODEL,
-                                parameters=self.optimum, biomass_scale=float(scale))  # fmt: skip
+                                parameters=self.reference_optimum,
+                                biomass_scale=float(scale))  # fmt: skip
                 pair[str(scale)] = early_rms(sim)
             improves = any(v < reference for v in pair.values())
             pair["reference"] = reference
@@ -1810,7 +1899,8 @@ class Workflow:
             self.signatures.get("biomass_improves")
         )
         self.signatures["initial_state_proposed"] = bool(firing)
-        at_bound = bool(self.fit is not None and list(self.fit.at_bound))
+        ref_fit = self.reference_fit
+        at_bound = bool(ref_fit is not None and list(ref_fit.at_bound))
         r3_all = structured_channels(self.residuals, self.attr, at_bound)
         r3 = [c for c in r3_all if c in set(failed)]  # R3 on failed channels (2026-10-08)
         need = int(self.attr["structural_channels_min"])
@@ -2231,30 +2321,55 @@ class Workflow:
 
     # -- the run -------------------------------------------------------------------------
     def run(self) -> None:
-        """The state machine of §5, in its fixed order."""
-        self.step_read()
-        self.step_qc()
-        self.step_reference()
-        self.step_null()
-        if self.reference is not None and self.placement:
-            self.step_screen()
-            self.intervals_from_fit()
-            self.step_mcmc()
-            self.step_residuals()
-            self.step_state_test()
-            self.step_profile()
-            self.step_assays()
-        self.step_verify()
+        """The state machine of §5, in its fixed order.
+
+        A model cap reached at any decision point stops the run's decisions: it abstains
+        (``abstain:model_cap``), and the record says where (deliverable 3, F-E).
+        """
+        try:
+            self.step_read()
+            self.step_qc()
+            self.step_reference()
+            self.step_null()
+            if self.reference is not None and self.placement:
+                self.step_screen()
+                self.intervals_from_fit()
+                self.step_mcmc()
+                self.step_residuals()
+                self.step_state_test()
+                self.step_profile()
+                self.step_assays()
+            self.step_verify()
+        except ModelCapReached as exc:
+            self.codes.append("model_cap")
+            self.annotations.append(f"model cap reached after {self.trace}: {str(exc)[:200]}")
+            self.verdict = {
+                "verdict": "abstain",
+                "label": self.lab["none"],
+                "admitted": [],
+                "rejected": [],
+                "holdout_failed": None,
+                "reason": "model_cap",
+            }
         self.step_conclude()
         self.completed = True
         self.write(completed=True)
+
+
+def responder_for(cfg: dict[str, Any]) -> Responder:
+    """The decider the jail document names: live only if it says ``live``.
+
+    The runner writes ``live`` only on its explicit flag; anything else, the default
+    included, is the offline decider, which never calls ``tools.llm``.
+    """
+    return LiveResponder() if cfg.get("decider") == "live" else offline_responder
 
 
 def main() -> int:
     """Run P2 on the run the registry serves."""
     with open(CONFIG_FILE, encoding="utf-8") as fh:
         cfg = json.load(fh)
-    workflow = Workflow(cfg)
+    workflow = Workflow(cfg, responder_for(cfg))
     try:
         workflow.run()
     except Exception as exc:

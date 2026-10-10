@@ -3821,7 +3821,34 @@ power re-run (PR #32, draft).**
   evaluator's metrics are pooled.
 - **Item 8:** the runner no longer reads any log for `by_role`, so a malformed log line
   cannot affect a P0 or P1 launch.
-- **N-7** (the strict reading of ruling 1) is with the lead; nothing changes unless the
-  lead rules.
 - **Next:** the lead's merge word on deliverable 2. Deliverable 3 (the live wiring)
   does not start before the coordinator relays the lead's go-ahead. No live call.
+
+**2026-10-10 — P2 deliverable 3 (the live wiring) on `claude/p2-live`, cut from `main` at
+`2b18433` (PR #32 merged). No live call.**
+- **The review nits** are in the first commit, `74185e0`:
+  - the N-7 alternative names both S0-01 B/C and S2-01, checked against `cells.json`;
+  - "z ≥ 3" in the findings;
+  - the stale N-7 line is removed;
+  - the old `by_role` text is removed.
+- **F-B:** the signatures come from the reference fit on the raw record. A test scripts
+  `ident.subset`.
+- **F-E:**
+  - the model block is the frozen P1's, pinned by a test;
+  - caps on requests, tokens and USD, projected before sending, enforced in
+    `tools/p2_live.py::P2Gateway`; a cap makes the run abstain;
+  - P1's gateway and its `llm_calls.jsonl`, with the point and role on each line;
+  - the template, schema and tool freeze, checked before every P2 run;
+  - live mode is an explicit runner flag, OFF by default, and a test shows the default
+    reaches no model.
+- **The pilot is prepared** (`scripts/p2_pilot.py`, `APPROVED = False`): S0-01 B/B,
+  S2-01 B/B and S8-01 B/B × 2 replicates, the three-role minimum, about USD 0.3.
+- **Four implementation choices** are proposed for ruling in `docs/decisions.md`:
+  - the USD cap, 0.25 per run;
+  - one tool with auto choice, not a forced call;
+  - the freeze is checked offline too;
+  - replicates as the pilot's seeds.
+- **Next:**
+  1. the coordinator's review of deliverable 3;
+  2. the lead's approval of the pilot;
+  3. only then a live call.

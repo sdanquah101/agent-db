@@ -5,15 +5,50 @@
 # here retypes one. The null rule is the frozen one (docs/decisions.md, 2026-10-07) and
 # the band is the declared background (configs/background.yaml), served by its tool.
 #
-# Deliverable 2 runs OFFLINE: `decider: offline`, so every decision point takes its
-# declared code fallback and no model is called. A live decider comes with deliverable 3,
-# after the coordinator's review and the lead's approval.
+# OFFLINE by default: `decider: offline`, so every decision point takes its declared code
+# fallback and no model is called. This file cannot select a live decider. Only the
+# runner's explicit live flag (`run_workflow(..., live=True)`, CLI `--live`) builds the
+# gateway below and tells the jail `decider: live` (deliverable 3). No live run happens
+# before the coordinator's review of deliverable 3 and the lead's approval of the pilot.
 
 version: 1
 workflow: p2
-workflow_version: "0.2-offline"
+workflow_version: "0.3-live-wiring"
 p0_config: p0.yaml
 decider: offline
+
+# The live decider's model: the frozen P1's settings exactly (decision d of 2026-10-07),
+# so a P2-versus-P1 difference is the procedure's, not the model's. A test pins every
+# field to configs/workflows/p1.yaml's `model` block. Privileged side only: the jail never
+# sees it. The key reaches the runner's environment as OPENAI_API_KEY and is never written.
+model:
+  provider: openai
+  model_id: gpt-5.6-luna
+  max_tokens: 16000
+  temperature: null
+  effort: high
+  prompt_caching: true
+  request_timeout_s: 600
+  retry:
+    max_attempts: 4
+    backoff_s: 2.0
+    max_backoff_s: 30.0
+  pricing_usd_per_mtok:
+    input: 0.20
+    output: 1.20
+    cache_write: 0.20
+    cache_read: 0.02
+
+# The per-run caps, enforced in the privileged gateway (tools/p2_live.py), never in the
+# workflow. Each request is projected BEFORE it is sent (its input at
+# `input_chars_per_token`, plus the full `max_tokens` of output): a request that would
+# take the run past a cap is refused, and the run stops asking and abstains
+# (abstain:model_cap). Requests and tokens are P1's per-run caps (design §9).
+caps:
+  max_requests: 60            # DESIGN  P1's 60 turns
+  max_total_tokens: 6000000   # DESIGN  P1's 6 M tokens
+  max_usd: 0.25               # DESIGN  about 6x P1's measured USD 0.04 per run
+  input_chars_per_token: 2.0  # DESIGN  conservative (about 4 for English and JSON)
 
 # the roles and the tools each may call (design §6.1); a call outside the list is
 # refused in the role's view, before the registry
@@ -91,3 +126,57 @@ templates:
 
 runner:
   timeout_margin_min: 15.0
+
+# The freeze of the decision layer (deliverable 3, F-E): every template's text, every
+# decision's output schema and the one tool its request offers, by sha256, and the model
+# settings. tools/p2_live.py::check_p2_frozen recomputes them before EVERY P2 run, offline
+# included, and refuses the run on any difference. A changed template is a new freeze.
+frozen:
+  date: "2026-10-10"
+  word: "Deliverable 3: freeze the twelve templates and schemas (the lead's go-ahead, 2026-10-10, relayed by the coordinator)"
+  templates_sha256:
+    dq.trust: 312267663f55e074441e48e0bd831d577990c7d68bfed0902fa5e53f7169882b
+    dq.assay: 8398182571419c54776c872638cce0e48d32a79f737497066fd8a03b4888fd8b
+    dq.coupled: bec2c4e2e31d73825f0da1a4f345d2617246ba89e97174f354063a1cb28efde5
+    influent.onset: ccd4739c9cd89be8b07b1eaa880146748b112ce29f1095a390414b0cc8e51875
+    influent.window: a6281f197a217a0e28cf476195aee219b8907e7fedea9ced82ccd6140651a442
+    influent.mechanism: fbc70c330854770748c28d2579138bc6be5cacd13a19ceed9117556d5fd2a4e3
+    ident.subset: 498b67401639c506092b350f6c9091325ac12003c19770aab5878047f2096736
+    cal.accept: c2d446055604412f1faa4aeb1b0d44f43eaca41fa17d69851cb91f229033630d
+    cal.bound: f088fd28a0ab7903ad355bb6871b0ae1878cf9f8656286396a850de88c21af6c
+    cal.split: f28ea106116f724e3812458fd848e5ba11bb7d646a956ce9fde730730cbbdf0a
+    design.assay: e3726da59ca275cb12b32d329d256c3f58b960d37d61a1c487232363225aff3e
+    verify.differential: 67511e64f10381805ecad262ca5a8cd9099267fe5617c52ed4220a58b935d670
+  schemas_sha256:
+    dq.trust: e41288a885edb96b6298c4e72e5d2f1a177fc390e939be305fc6a8a6251d1436
+    dq.assay: 32523ce0b06268f6346db56cd92623ebaed879240cbc7adf477797043d79d855
+    dq.coupled: e2d99b3548476075420ad031e372808fad3c56aa9a943c3bf9f39f32b966e1eb
+    influent.onset: a6f1ca5a2d8af3d319f15e0e27d0b5099b4f09e02b4c760c275261e6e881bec8
+    influent.window: 24c0c40c796736c258a60069f7ed56ba5cd969411a670ebd3682f5d93649966a
+    influent.mechanism: 318cdb28023edb82887a78767621bf48df85e8b36c58a9240db29a6a51b2d4c9
+    ident.subset: b915e20a9b08362fc8cbb11debd5dd17c2605c205ec8b838e6894a4bcf7fb639
+    cal.accept: b3bfe415a50845609dddbb8ae24e2e7a5204478158c3df8e4543d83f613c9a4c
+    cal.bound: 19e2833f5f5590972745aeb8846f495e0b71bc4e054a24ccf1b56bd4646e7572
+    cal.split: 235d2699272247a756bb6663495dcebae27c94267e9ec3592f79d7e38bf8f982
+    design.assay: 91df494ca34e25aed755f69e12fc018bb90849c43763b0f3a750a200052b6020
+    verify.differential: 20a29bfdeaee0c250cfd08ec7a0fca286cd2c10f0af348375048ba4bcc626825
+  tools_sha256:
+    dq.trust: 54bca814282795e9136e9035c0f0e0535a39b69355d9dcee6c2b647dd65dee65
+    dq.assay: e119ffc8fa3b93ab0ab56362e061207145da32a8cde64b0583f69a7371c67252
+    dq.coupled: 074e4ca6c984a8b93724e78e1ffb21a7b62b280714acf61b58043862e43c5272
+    influent.onset: 62bf6bdd4b8629c68d92fe4f9da61e01e5092ca602df2f576187fd4b8c0bf007
+    influent.window: b336fe45394cdedc9b1c333be952a6e1c20a61c06d515750bf3972d2d3c5353f
+    influent.mechanism: 5b50bf0a2c449b626900e0cbe9d2fc17973af1a459dc8692d1dbf5ffbdef6787
+    ident.subset: 5c2978842f54b336a8ae7d84279b3ec9a999da4dd8d165da509ffbbee05ba6b4
+    cal.accept: bd2498d755760fb6ba91bee8fb589f168202c7805945b35485322a194e64624e
+    cal.bound: 514f89f63907778e80851115d6b6276422c966de169a405400670d9cf2cce176
+    cal.split: 0a7eb8fffa3ed7bd1d1b49d47b4eb7dac0b5a667d8d6b8dc939a607753cca406
+    design.assay: 6b618011e9ad166531be730546625ecf3d15acda7468ac9ce0d6ec7c2be66a9f
+    verify.differential: 28c1f9c5496ebf99bf05e3fd34f674b9d56ca04737dd88c738dd2f8bd4d1c09f
+  model_id: gpt-5.6-luna
+  effort: high
+  max_tokens: 16000
+  retry:
+    max_attempts: 4
+    backoff_s: 2.0
+    max_backoff_s: 30.0
