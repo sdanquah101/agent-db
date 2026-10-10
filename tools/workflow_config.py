@@ -685,6 +685,41 @@ class P2Holdout(_Frozen):
     min_channels_failed: _PosInt
 
 
+class P2Caps(_Frozen):
+    """The live decider's per-run caps, enforced by the privileged gateway (F-E).
+
+    A request that would take the run past any of them is refused before it is sent,
+    and the run abstains (``abstain:model_cap``).
+    """
+
+    max_requests: _PosInt = Field(description="Model requests per run (P1's 60 turns)")
+    max_total_tokens: _PosInt = Field(description="Input + cache + output tokens per run")
+    max_usd: _Pos = Field(description="USD per run at the declared prices")
+    input_chars_per_token: _Pos = Field(
+        description="Characters per token assumed when projecting a request's input "
+        "before it is sent; low is conservative"
+    )
+
+
+class P2Frozen(_Frozen):
+    """The freeze of P2's decision layer (deliverable 3, F-E), checked before every run.
+
+    Every template's text, every decision's output schema and every decision's tool, by
+    sha256, and the model settings; :func:`tools.p2_live.check_p2_frozen` recomputes them
+    and refuses a run on any difference.
+    """
+
+    date: str
+    word: str
+    templates_sha256: dict[str, str]
+    schemas_sha256: dict[str, str]
+    tools_sha256: dict[str, str]
+    model_id: str
+    effort: str | None
+    max_tokens: int
+    retry: Retry
+
+
 class P2Config(_Frozen):
     """``configs/workflows/p2.yaml``; P0's settings come from ``p0_config``, not retyped."""
 
@@ -693,8 +728,12 @@ class P2Config(_Frozen):
     workflow_version: str
     p0_config: str = Field(description="P0's configuration file, beside this one")
     decider: Literal["offline"] = Field(
-        description="offline: every decision point takes its code fallback (deliverable 2)"
+        description="offline: every decision point takes its code fallback. The file "
+        "cannot select a live decider: only the runner's explicit live flag does"
     )
+    model: ModelSettings = Field(description="The live decider's model (P1's frozen settings)")
+    caps: P2Caps
+    frozen: P2Frozen | None = None
     roles: dict[_Roles, P2Role]
     ablation: P2Ablation
     coupled_channels: dict[str, tuple[str, ...]]
@@ -750,7 +789,7 @@ def load_workflow_config(workflow: str, path: Path | None = None) -> P0Config | 
     return loaders[workflow]() if path is None else loaders[workflow](path)
 
 
-def sandbox_config(config: P0Config | P1Config | P2Config) -> dict[str, Any]:
+def sandbox_config(config: P0Config | P1Config | P2Config, *, live: bool = False) -> dict[str, Any]:
     """What the runner writes into the sandbox as ``<workflow>_config.json``.
 
     The configuration itself, plus the declared sensor noise (``cv``, ``sd_abs`` per
@@ -784,8 +823,16 @@ def sandbox_config(config: P0Config | P1Config | P2Config) -> dict[str, Any]:
         g = declared_geometry(load_plant_config(plant_id))
         geometry[plant_id] = {"V_liq_m3": float(g.V_liq), "T_op_K": float(g.T_op)}
     payload = config.model_dump(mode="json")
+    if live and not isinstance(config, P2Config):
+        raise ValueError("only P2 has a live flag")
     if isinstance(config, P2Config):
         from tools.config import load_assays
+
+        # the model, its caps and the freeze stay on the privileged side; the jail is told
+        # only which decider runs, and it is live only on the runner's explicit flag
+        for key in ("model", "caps", "frozen"):
+            payload.pop(key, None)
+        payload["decider"] = "live" if live else "offline"
 
         p0 = sandbox_config(config.p0())
         for key in ("sensor_noise", "plant_geometry", "abstentions"):
