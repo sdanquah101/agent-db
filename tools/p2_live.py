@@ -389,7 +389,9 @@ APPROVAL_FILE = COMMITTED_P2.parent / "p2_live_approval.yaml"
 relays the word and the record is committed then, never before."""
 
 
-APPROVAL_FIELDS = ("ruling_date", "word", "runs", "caps", "frozen_sha256", "config_sha256")
+APPROVAL_FIELDS = (
+    "ruling_date", "word", "runs", "caps", "frozen_sha256", "config_sha256", "runs_root",
+)  # fmt: skip
 """What an approval record names, all under its digest."""
 
 
@@ -423,51 +425,70 @@ def frozen_record_sha256() -> str:
 
 
 def _git_clean(path: Path, repo: Path | None = None) -> tuple[bool, str]:
-    """Whether ``path`` is the committed, pushed record on a clean tree (B-3, N-B3a).
+    """Whether ``path`` is the record as pushed, on a clean tree (B-3, N-B3a, the re-review).
 
     - tracked, and the tracked tree has no change (``git status``);
-    - its bytes on disk are the blob at ``HEAD`` (so ``--assume-unchanged`` cannot hide
-      an edit from the status check);
-    - the commit that introduced it is contained in a remote-tracking branch (a local
-      commit the session made alone does not pass: the record must have been pushed,
-      which is where the coordinator relays the lead's word).
+    - its bytes on disk are the blob at ``HEAD`` (so ``--assume-unchanged`` or
+      ``--skip-worktree`` cannot hide an edit from the status check);
+    - **the checked-out commit itself** is contained in a remote-tracking branch, so a
+      local commit that edits a pushed record (or removes and re-adds it) is refused;
+    - and that branch's tip is the remote's own (``git ls-remote``), so a remote-tracking
+      ref faked locally with ``git update-ref`` is refused. A remote that cannot be
+      reached refuses too.
+
+    ``repo`` defaults to the repository the record lives in.
     """
     import subprocess
 
-    repo = COMMITTED_P2.parents[2] if repo is None else Path(repo)
-
-    def git(*args: str) -> subprocess.CompletedProcess:
-        return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True,
+    def git(*args: str, cwd: Path) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True,
                               check=False)  # fmt: skip
 
+    name = Path(path).name
+    if repo is None:
+        top = git("rev-parse", "--show-toplevel", cwd=Path(path).resolve().parent)
+        if top.returncode != 0:
+            return False, f"{name} is not in a git repository"
+        repo = Path(top.stdout.strip())
+    repo = Path(repo)
     try:
-        rel = str(Path(path).resolve().relative_to(Path(repo).resolve()))
+        rel = str(Path(path).resolve().relative_to(repo.resolve()))
     except ValueError:
-        return False, f"{Path(path).name} is not in the repository"
-    if git("ls-files", "--error-unmatch", rel).returncode != 0:
-        return False, f"{Path(path).name} is not committed"
-    if git("status", "--porcelain", "--untracked-files=no").stdout.strip():
+        return False, f"{name} is not in the repository"
+    if git("ls-files", "--error-unmatch", rel, cwd=repo).returncode != 0:
+        return False, f"{name} is not committed"
+    if git("status", "--porcelain", "--untracked-files=no", cwd=repo).stdout.strip():
         return False, "the working tree has uncommitted changes"
-    on_disk = git("hash-object", rel).stdout.strip()
-    at_head = git("rev-parse", f"HEAD:{rel}").stdout.strip()
+    on_disk = git("hash-object", rel, cwd=repo).stdout.strip()
+    at_head = git("rev-parse", f"HEAD:{rel}", cwd=repo).stdout.strip()
     if not on_disk or on_disk != at_head:
-        return False, f"{Path(path).name} on disk is not the blob at HEAD"
-    added = git("log", "--diff-filter=A", "--format=%H", "--", rel).stdout.split()
-    if not added:
-        return False, f"no commit introduces {Path(path).name}"
-    if not git("branch", "-r", "--contains", added[-1]).stdout.strip():
-        return False, f"the commit introducing {Path(path).name} is on no remote branch"
-    return True, ""
+        return False, f"{name} on disk is not the blob at HEAD"
+    branches = git("branch", "-r", "--contains", "HEAD", "--format=%(refname:short)",
+                   cwd=repo).stdout.split()  # fmt: skip
+    if not branches:
+        return False, "the checked-out commit is on no remote branch"
+    for branch in branches:
+        remote, _, ref = branch.partition("/")
+        local = git("rev-parse", f"refs/remotes/{branch}", cwd=repo).stdout.strip()
+        listed = git("ls-remote", remote, f"refs/heads/{ref}", cwd=repo)
+        tip = listed.stdout.split()[0] if listed.returncode == 0 and listed.stdout else ""
+        if tip and tip == local:
+            return True, ""
+    return False, "no remote branch containing the checked-out commit is confirmed by the remote"
 
 
-def require_live_approval(config: P2Config, cell: dict[str, Any] | None = None) -> dict:
+def require_live_approval(
+    config: P2Config, cell: dict[str, Any] | None = None, runs_root: Path | None = None
+) -> dict:
     """Refuse a live run without the lead's committed approval (the review of PR #33, B-3).
 
     The record must exist, be committed and pushed on a clean tree with its bytes those
     at ``HEAD`` (:func:`_git_clean`), carry a digest that matches its own content, name
     the caps the configuration has, the committed freeze and the digest of the exact
     configuration this run uses, and (with ``cell``: ``scenario``, ``plant``, ``tier``,
-    ``replicate``) list this run.
+    ``replicate``) list this run. With ``runs_root``, the record must name that run store:
+    "runs once" (the runner refuses a run whose live log exists) then holds across
+    invocations, since a fresh store is not the approved one.
 
     Returns:
         The record.
@@ -493,6 +514,8 @@ def require_live_approval(config: P2Config, cell: dict[str, Any] | None = None) 
         raise ValueError("the approval names another freeze than the committed one")
     if record.get("config_sha256") != config_digest(config):
         raise ValueError("the approval names another configuration than the one this run uses")
+    if runs_root is not None and record.get("runs_root") != str(Path(runs_root).resolve()):
+        raise ValueError("the approval names another run store than this one")
     if cell is not None:
         runs = [dict(r) for r in record.get("runs") or []]
         if dict(cell) not in runs:

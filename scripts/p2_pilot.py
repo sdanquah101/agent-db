@@ -101,6 +101,26 @@ def plan() -> dict[str, Any]:
     }
 
 
+def approval_draft(store: Path) -> dict[str, Any]:
+    """Every field an approval record for this pilot must carry, but the ruling's text.
+
+    The record is written and committed only on the coordinator's relay; this prints
+    what it must hold for a store, so nothing is retyped by hand.
+    """
+    from tools.p2_live import config_digest, frozen_record_sha256
+    from tools.workflow_config import load_p2
+
+    store = Path(store).resolve()
+    config = load_p2(write_config(store))
+    return {
+        "runs": approval_runs(),
+        "caps": config.caps.model_dump(mode="json"),
+        "frozen_sha256": frozen_record_sha256(),
+        "config_sha256": config_digest(config),
+        "runs_root": str(store / "runs"),
+    }
+
+
 def approval_runs() -> list[dict[str, Any]]:
     """The run list an approval record must name for this pilot, in order."""
     return [
@@ -122,15 +142,14 @@ def pilot_config_digest() -> str:
 
 
 def approved() -> bool:
-    """Whether the lead's committed approval record is in place (no call is made)."""
-    from tools.p2_live import require_live_approval
-    from tools.workflow_config import load_p2
+    """Whether an approval record exists (no call is made).
 
-    try:
-        require_live_approval(load_p2())
-    except ValueError:
-        return False
-    return True
+    Whether it is valid for a store (pushed, this configuration, this run store) is
+    checked by ``run`` and by the runner for every run.
+    """
+    from tools.p2_live import APPROVAL_FILE
+
+    return APPROVAL_FILE.is_file()
 
 
 def write_config(store: Path) -> Path:
@@ -157,8 +176,11 @@ def run(store: Path, *, live: bool) -> None:
     from tools.p2_live import require_live_approval
     from tools.workflow_config import load_p2
 
+    store = store.resolve()
     try:
-        require_live_approval(load_p2())  # the runner checks it again, per run
+        # against the configuration the pilot actually runs (the three-role copy) and
+        # its run store: the very checks the runner repeats for every run
+        require_live_approval(load_p2(write_config(store)), runs_root=store / "runs")
     except ValueError as exc:
         raise SystemExit(f"the pilot is not approved: {exc}") from exc
     if not os.environ.get(KEY_VARIABLE):
@@ -195,7 +217,9 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
     from tools.workflow_config import load_p2
 
     per_run = float(load_p2(config_path).caps.max_usd)
-    spent = 0.0
+    # the running total lives in the store, so a resumed pilot does not restart at 0
+    ledger = store / ("spent_usd.json" if live else "spent_usd_offline.json")
+    spent = float(json.loads(ledger.read_text())["usd"]) if ledger.is_file() else 0.0
     order = [(c, r) for c in CELLS for r in REPLICATES]
     for k, ((sid, plant_id, tier), rep) in enumerate(order):
         if k % n_part != i_part:
@@ -218,6 +242,7 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
             live=live,
         )
         spent += float(result.llm_cost_usd or 0.0)
+        ledger.write_text(json.dumps({"usd": spent}), encoding="utf-8")
         out = store / "runs" / art.run_id / "workflows" / "p2"
         path = out / "report.json"
         # a run that died wrote no report, or a partial or unreadable one: it is pending

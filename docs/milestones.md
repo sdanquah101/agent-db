@@ -3910,3 +3910,20 @@ power re-run (PR #32, draft).**
 
   Until then, no approval record and no live call.
 
+**2026-10-11, about 13:30 UTC — PR #33: the review of `b6c3e01` (FIXES NEEDED, 4
+blocking), fixed. Still no approval record, no live call.**
+- **Item 1:** the pilot's pre-check and the runner's per-run check now read the same
+  configuration and run store. A test shows the pilot passing both, end to end, with a
+  pushed record.
+- **Item 2:** the checked-out commit must be pushed and confirmed by the remote.
+- **Item 3:** the lead's L-1 ruling is recorded (`ada583d`), and the L-1 line is marked
+  resolved.
+- **Item 4:** the configuration digest is pinned by tests.
+- **Nits:**
+  - the remote is verified with `ls-remote`;
+  - the record names its run store;
+  - the pilot's total is persisted;
+  - the reserved-token and attempts reporting and the offline report generator are
+    tested;
+  - the pilot is the only live path for the record.
+

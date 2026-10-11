@@ -412,7 +412,7 @@ def test_the_default_reaches_no_model(monkeypatch, cfg, tmp_path):
         )
     # with an approval (stubbed here) the explicit flag builds the gateway; a scripted
     # client, so still no network
-    monkeypatch.setattr(p2_live, "require_live_approval", lambda config, cell=None: {})
+    monkeypatch.setattr(p2_live, "require_live_approval", lambda *a, **k: {})
     monkeypatch.setattr(p2_live, "cell_of", lambda path: {})
     summary = runner.run_workflow(
         "run_x", "p2", live=True, model_client=ScriptedClient(lambda p: {}), **kw
@@ -525,10 +525,13 @@ def test_a_billed_unreadable_reply_is_booked_against_the_usd_and_token_caps(tmp_
 # ------------------------------------------------------------------ B-3: the approval
 
 
-def _record(caps: dict[str, Any], runs: list[dict[str, Any]], config: Any = None) -> dict:
+def _record(
+    caps: dict[str, Any], runs: list[dict[str, Any]], config: Any = None, runs_root: Any = None
+) -> dict:
     rec = {"ruling_date": "2026-10-12", "word": "test only", "runs": runs, "caps": caps,
            "frozen_sha256": frozen_record_sha256(),
-           "config_sha256": p2_live.config_digest(config or load_p2())}  # fmt: skip
+           "config_sha256": p2_live.config_digest(config or load_p2()),
+           "runs_root": None if runs_root is None else str(Path(runs_root).resolve())}  # fmt: skip
     rec["digest"] = p2_live.approval_digest(rec)
     return rec
 
@@ -819,12 +822,31 @@ def test_the_approval_must_be_the_pushed_blob_on_a_clean_tree(tmp_path):
     ok, why = p2_live._git_clean(record, repo)
     assert not ok and "uncommitted changes" in why
     _git(repo, "checkout", "-q", "--", "other.txt")
+    # the record pushed, then edited and committed locally: the checked-out commit is on
+    # no remote branch (the re-review's item 2)
+    record.write_text("word: edited\n")
+    _git(repo, "commit", "-q", "-am", "edit the record locally")
+    ok, why = p2_live._git_clean(record, repo)
+    assert not ok and "on no remote branch" in why
+    # a remote-tracking ref faked locally to contain it: the remote does not confirm it
+    _git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    assert _git(repo, "branch", "-r", "--contains", "HEAD").strip()
+    ok, why = p2_live._git_clean(record, repo)
+    assert not ok and "confirmed by the remote" in why
+    _git(repo, "reset", "-q", "--hard", "HEAD~1")
+    _git(repo, "fetch", "-q", "origin")
+    _git(repo, "update-ref", "refs/remotes/origin/main", "origin/main")
+    assert p2_live._git_clean(record, repo) == (True, "")
     # an edit hidden from status with --assume-unchanged: the blob check refuses it
     _git(repo, "update-index", "--assume-unchanged", "approval.yaml")
     record.write_text("word: forged\n")
     assert _git(repo, "status", "--porcelain", "--untracked-files=no").strip() == ""
     ok, why = p2_live._git_clean(record, repo)
     assert not ok and "not the blob at HEAD" in why
+    # the default repository is the one the record lives in
+    _git(repo, "update-index", "--no-assume-unchanged", "approval.yaml")
+    _git(repo, "checkout", "-q", "--", "approval.yaml")
+    assert p2_live._git_clean(record) == (True, "")
 
 
 def test_the_runner_checks_this_run_against_a_real_record_and_runs_it_once(tmp_path, monkeypatch):
@@ -847,8 +869,9 @@ def test_the_runner_checks_this_run_against_a_real_record_and_runs_it_once(tmp_p
 
     monkeypatch.setattr(runner, "open_registry", registry)
     path = tmp_path / "p2_live_approval.yaml"
-    path.write_text(yaml.safe_dump(_record(load_p2().caps.model_dump(mode="json"),
-                                           p2_pilot.approval_runs())))  # fmt: skip
+    record = _record(load_p2().caps.model_dump(mode="json"), p2_pilot.approval_runs(),
+                     runs_root=tmp_path / "runs")  # fmt: skip
+    path.write_text(yaml.safe_dump(record))
     monkeypatch.setattr(p2_live, "APPROVAL_FILE", path)
     monkeypatch.setattr(p2_live, "_git_clean", lambda p, repo=None: (True, ""))
 
@@ -902,3 +925,177 @@ def test_the_pilot_stops_before_a_run_that_could_pass_its_total(tmp_path, monkey
     rows = [json.loads(x) for x in (tmp_path / "results.jsonl").read_text().splitlines()]
     assert [p2_pilot.outcome_of(r) for r in rows] == ["pending", "pending"]
     assert p2_pilot.read_report(tmp_path / "nowhere.json") == {}
+
+
+# ------------------------------------------------------------------ the re-review of b6c3e01
+
+
+def test_the_approval_binds_the_whole_configuration(tmp_path, monkeypatch):
+    """A copied configuration with other coupled channels, or other P0 seeds, is refused."""
+    import yaml
+
+    config = load_p2()
+    path = tmp_path / "p2_live_approval.yaml"
+    path.write_text(yaml.safe_dump(_record(config.caps.model_dump(mode="json"), [])))
+    monkeypatch.setattr(p2_live, "APPROVAL_FILE", path)
+    monkeypatch.setattr(p2_live, "_git_clean", lambda p, repo=None: (True, ""))
+    assert p2_live.require_live_approval(config)  # the negative control
+    coupled = _copy_config(tmp_path / "coupled")
+    _edit_yaml(coupled, lambda r: r["coupled_channels"].update({"gas_flow": ["ph"]}))
+    with pytest.raises(ValueError, match="another configuration"):
+        p2_live.require_live_approval(load_p2(coupled))
+    seeds = _copy_config(tmp_path / "seeds")
+    p0 = seeds.parent / "p0.yaml"
+    _edit_yaml(p0, lambda r: r["seeds"].update({"lsq": int(r["seeds"]["lsq"]) + 1}))
+    with pytest.raises(ValueError, match="another configuration"):
+        p2_live.require_live_approval(load_p2(seeds))
+    # and the run store: a fresh store is not the approved one
+    with pytest.raises(ValueError, match="another run store"):
+        p2_live.require_live_approval(config, runs_root=tmp_path / "elsewhere")
+
+
+def test_the_pilot_runs_end_to_end_past_both_checks_with_a_pushed_record(tmp_path, monkeypatch):
+    """A pushed record for the pilot's own configuration passes both checks (item 1).
+
+    The pilot's pre-check and the runner's per-run check; the client is stubbed, so no
+    network is reached.
+    """
+    import yaml
+
+    from scripts import p2_pilot
+    from tools import Budget, make_registry, runner
+
+    store = tmp_path / "store"
+    repo, remote = tmp_path / "repo", tmp_path / "remote.git"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "t@example.org")
+    _git(repo, "config", "user.name", "t")
+    record = {"ruling_date": "2026-10-11", "word": "test only",
+              **p2_pilot.approval_draft(store)}  # fmt: skip
+    record["digest"] = p2_live.approval_digest(record)
+    path = repo / "p2_live_approval.yaml"
+    path.write_text(yaml.safe_dump(record))
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "the approval")
+    _git(tmp_path, "init", "-q", "--bare", str(remote))
+    _git(repo, "remote", "add", "origin", str(remote))
+    _git(repo, "push", "-q", "origin", "main")
+    _git(repo, "fetch", "-q", "origin")
+    monkeypatch.setattr(p2_live, "APPROVAL_FILE", path)  # the real _git_clean, in repo
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-not-a-key")
+    monkeypatch.setattr(p2_live, "p2_live_client", lambda config: ScriptedClient(lambda p: {}))
+
+    def generate(scenario: Any, tier: Any, *, plant: Any, replicate: int = 0, **kw: Any) -> Any:
+        rid = f"run_{scenario.id}_{replicate}"
+        (kw["runs_root"] / rid).mkdir(parents=True, exist_ok=True)
+        truth = kw["runs_root"].parent / "truth_store" / rid
+        truth.mkdir(parents=True, exist_ok=True)
+        (truth / "manifest.json").write_text(json.dumps({
+            "scenario_id": scenario.id, "plant": plant.id, "tier": tier,
+            "seeds": {"replicate": replicate},
+        }))  # fmt: skip
+        return types.SimpleNamespace(run_id=rid)
+
+    gateways: list[Any] = []
+
+    def fake_launch(script: Any, registry: Any, **kw: Any) -> Any:
+        gateways.append(kw.get("model_gateway"))
+        return types.SimpleNamespace(returncode=0, stderr="")
+
+    def registry(*a: Any, **k: Any) -> Any:
+        return make_registry(budget=Budget(10, 5.0, 0), seed=1)
+
+    monkeypatch.setattr("sim.run.harness.generate_run", generate)
+    monkeypatch.setattr(runner, "launch", fake_launch)
+    monkeypatch.setattr(runner, "open_registry", registry)
+    p2_pilot.run(store, live=True)
+    assert len(gateways) == 6 and all(isinstance(g, P2Gateway) for g in gateways)
+    rows = [json.loads(x) for x in (store / "results.jsonl").read_text().splitlines()]
+    assert [(r["cell"], r["replicate"]) for r in rows] == [
+        (f"{s} {p}/{t}", r) for s, p, t in p2_pilot.CELLS for r in p2_pilot.REPLICATES
+    ]
+    assert json.loads((store / "spent_usd.json").read_text()) == {"usd": 0.0}
+    # the negative control: the committed (all-roles) configuration is not the approved one
+    with pytest.raises(ValueError, match="another configuration"):
+        p2_live.require_live_approval(load_p2(), runs_root=store / "runs")
+
+
+def test_the_runner_reports_reserved_tokens_and_attempts_sent(tmp_path, monkeypatch):
+    """``summary.json``: the booked worst case apart, and the attempts actually sent."""
+    from tests.eval_support import minimal_state
+    from tools import Budget, make_registry, runner
+    from tools.llm import RetryableModelError
+
+    calls = {"n": 0}
+
+    def policy(params: dict[str, Any]) -> dict[str, Any]:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RetryableModelError("429")
+        return _answer("cal_bound", {"code": "identifiability_limit"})
+
+    def fake_launch(script: Any, registry: Any, **kw: Any) -> Any:
+        gw = kw["model_gateway"]
+        gw.sleep = lambda s: None
+        gw.complete(_cal_bound_request())
+        out = tmp_path / "runs" / "run_x" / "workflows" / "p2"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "state.json").write_text(json.dumps(minimal_state("run_x", workflow="p2")))
+        return types.SimpleNamespace(returncode=0, stderr="")
+
+    def registry(*a: Any, **k: Any) -> Any:
+        return make_registry(budget=Budget(10, 5.0, 0), seed=1)
+
+    monkeypatch.setattr(runner, "launch", fake_launch)
+    monkeypatch.setattr(runner, "open_registry", registry)
+    monkeypatch.setattr(p2_live, "require_live_approval", lambda *a, **k: {})
+    monkeypatch.setattr(p2_live, "cell_of", lambda path: {})
+    (tmp_path / "runs" / "run_x").mkdir(parents=True)
+    summary = runner.run_workflow(
+        "run_x", "p2", live=True, model_client=ScriptedClient(policy),
+        runs_root=tmp_path / "runs", sandbox_root=tmp_path / "boxes",
+    )  # fmt: skip
+    tokens, _usd = P2Gateway.for_config(
+        load_p2(), client=ScriptedClient(policy), log_dir=tmp_path / "probe"
+    ).projected(_cal_bound_request())
+    row = summary.by_role["calibration"]
+    assert row["requests"] == 2 and row["tokens"] == 1500 and row["reserved_tokens"] == tokens
+    assert summary.llm_attempts == 2 and summary.llm_turns == 1
+
+
+def test_the_offline_report_is_generated_from_the_records(tmp_path, monkeypatch):
+    """``report_offline``: S1 from each run's report, and the generated reading."""
+    from scripts import p2_pilot
+
+    monkeypatch.setattr(p2_pilot, "REPORT_DIR", tmp_path / "out")
+    store = tmp_path / "store"
+    rows = [("S0-01 B/B", 0, ["none"], False, True, True), ("S8-01 B/B", 0, ["sensor"], True,
+             True, True), ("S2-01 B/B", 1, ["sensor"], False, True, False)]  # fmt: skip
+    lines = []
+    for cell, rep, truth, nb, ns, inside in rows:
+        rid = f"run_{rep}_{len(lines)}"
+        out = store / "runs" / rid / "workflows" / "p2"
+        out.mkdir(parents=True)
+        (out / "report.json").write_text(json.dumps({"signatures": {"sensor": {
+            "channel": "ph", "reading": "insufficient",
+            "s1": {"coupled_present": ["tan"], "coupled_inside": inside}}}}))  # fmt: skip
+        lines.append({"cell": cell, "replicate": rep, "run_id": rid, "truth": truth,
+                      "summary": {"completed": True}, "outcome": "none", "rule": "r",
+                      "null_table": {"NB": nb, "NS": ns, "null_rejected": True,
+                                     "failed_channels": ["ph"]}, "verdict": {}})  # fmt: skip
+    store.mkdir(exist_ok=True)
+    (store / "results_offline.0.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
+    out = p2_pilot.report_offline(store)
+    inside = {r["cell"]: r["s1"]["coupled_inside"] for r in out["rows"]}
+    assert inside == {"S0-01 B/B": True, "S8-01 B/B": True, "S2-01 B/B": False}
+    md = (tmp_path / "out" / "offline.md").read_text()
+    assert (
+        "| S0-01 B/B r0 | False | True | ph | tan | True | insufficient | `sensor`: **wrong** |"
+        in md
+    )
+    assert (
+        "| S8-01 B/B r0 | True | True | ph | tan | True | insufficient | `sensor`: **correct** |"
+        in md
+    )
+    assert "| S2-01 B/B r1 | False | True | ph | tan | False | insufficient | — |" in md

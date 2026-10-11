@@ -7601,7 +7601,9 @@ These are fixes, recorded here because they change what a run does and records.
   - be committed, with its bytes on disk equal to the blob at `HEAD`, so an edit hidden
     with `--assume-unchanged` is refused;
   - have been introduced by a commit that is on a remote-tracking branch, so a local
-    commit made by the session alone is refused;
+    commit made by the session alone is refused. *(Corrected below, 2026-10-11, the
+    re-review of `b6c3e01`: the checked-out commit itself must be pushed, and the remote
+    must confirm it.)*;
   - sit on a clean tracked tree;
   - carry a digest of its ruling date, run list, caps, the committed freeze, and the
     digest of the **exact configuration** the run uses: every field of the `p2.yaml` it
@@ -7621,8 +7623,8 @@ These are fixes, recorded here because they change what a run does and records.
   - A decision interrupted by a cap is recorded as `status: aborted_model_cap`, with
     no output and `fallback_used: false`.
 - **The gateway (N-new-1).** Any client exception is now a logged, booked attempt.
-- Still with the lead: L-1, the pilot's go/no-go cannot fire on these records, and
-  N-2b, the evaluator reads `final.label`.
+- ~~Still with the lead: L-1~~ **L-1 is resolved** by the lead's ruling of 2026-10-11
+  below. **Still with the lead: N-2b**, the evaluator reads `final.label`.
 
 ## 2026-10-11 — RULING (the lead) on L-1: the P2 pilot is approved in principle as a cost-and-wiring check (option 1)
 
@@ -7669,3 +7671,34 @@ design limitation, to be examined after the pilot.
 
 The results go to `reports/p2_pilot/`, with a cost table and the three `dq.coupled`
 readings.
+
+## 2026-10-11 — The coordinator's review of PR #33 at `b6c3e01`: the approval made usable and stricter (no ruling asked)
+
+- **The pilot could not start under any record** (item 1). Its pre-check read the
+  committed, all-roles configuration, while the runner checked each run against the
+  pilot's three-role copy, so a record could satisfy only one of them. Both now check
+  the configuration actually run and its run store. `scripts/p2_pilot.py` gains
+  `approval_draft(store)`, which gives every field a record for that store must carry,
+  so nothing is retyped. A test runs the pilot end to end with a pushed record in a
+  temporary repository with a fake remote, the client stubbed, and shows that all six
+  runs pass both checks.
+- **A pushed record edited locally passed** (item 2). The record's git check now
+  requires **the checked-out commit itself** to be on a remote-tracking branch. That
+  branch's tip must equal the remote's own, read with `git ls-remote`, so a ref faked
+  with `git update-ref` is refused, and so is an unreachable remote. Tests cover a
+  record pushed and then edited and committed locally, and a faked ref.
+- **The configuration digest** (item 4) is pinned by tests: a copied configuration with
+  other coupled channels, or other P0 seeds, is refused.
+- **"Runs once" across stores.** The record names its run store (`runs_root`). A fresh
+  `--store` is not the approved one, so a run cannot be repeated by starting over
+  elsewhere.
+- **The pilot's running total** is kept in the store (`spent_usd.json`), so a resumed
+  pilot does not restart at 0, and the USD 0.6 bound holds across invocations.
+- **The pilot is the only live path for this record.** The record binds the pilot's
+  three-role configuration and its store. The runner's `--live` with the committed
+  configuration is a different configuration, so one record cannot serve both.
+- **Residual, stated rather than closed.** `git ls-remote` trusts the remote URL in the
+  repository's configuration. A session that rewrote that URL to a remote it controls
+  could still fake confirmation. The coordinator's verification of the record (step 4
+  of the lead's order) is the check on that.
+

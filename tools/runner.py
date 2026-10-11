@@ -309,8 +309,8 @@ def run_workflow(
         # refuses a changed template, schema, tool, model block or cap
         provenance = p2_provenance(config, live=live)
         if live:  # the lead's committed approval, naming this very run (B-3)
-            require_live_approval(config)  # the record itself first
-            require_live_approval(config, cell_of(paths.truth_manifest))
+            require_live_approval(config, runs_root=runs_root)  # the record itself first
+            require_live_approval(config, cell_of(paths.truth_manifest), runs_root=runs_root)
             # an approval is for one execution of each run: a run whose live record
             # exists is never re-run silently, nor its record truncated (N-B3b)
             previous = paths.root / OUTPUTS_DIR / out_name / "llm_calls.jsonl"
