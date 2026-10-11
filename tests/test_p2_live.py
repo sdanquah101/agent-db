@@ -203,7 +203,7 @@ def test_the_gateway_sends_only_a_frozen_decisions_request_and_logs_point_and_ro
     line = json.loads((tmp_path / "llm_calls.jsonl").read_text().splitlines()[0])
     assert line["provenance"]["point"] == "dq.coupled"
     assert line["provenance"]["role"] == "data_quality"
-    assert gw.by_role["data_quality"] == {"tokens": 1500, "requests": 1}
+    assert gw.by_role["data_quality"] == {"tokens": 1500, "requests": 1, "reserved_tokens": 0}
     # refused before sending: another system prompt, another tool, two messages, a key
     bad = [
         {**_request("dq.coupled"), "system": "You are a helpful assistant."},
@@ -295,6 +295,8 @@ def test_a_live_run_records_every_attempt_and_a_cap_makes_it_abstain(monkeypatch
     assert asked and all(r["attempts"] == 2 and r["fallback_used"] for r in asked)
     assert all(r["failures"] == ["no decision call in the reply"] * 2 for r in asked)
     assert all(len(r["llm_call_ids"]) == 2 for r in records)
+    assert {r["status"] for r in records} <= {"decided", "fallback"}
+    assert all(r["status"] == ("fallback" if r["fallback_used"] else "decided") for r in records)
     n_log = len((tmp_path / "llm_calls.jsonl").read_text().splitlines())
     assert n_log == sum(len(r["llm_call_ids"]) for r in records)
     cited = sorted(i for r in records for i in r["llm_call_ids"])
@@ -313,7 +315,10 @@ def test_a_live_run_records_every_attempt_and_a_cap_makes_it_abstain(monkeypatch
     # the interrupted decision is recorded too, and every logged line (the refusal
     # included) is cited by some decision record (N-2a, N-2c)
     records = [json.loads(x) for x in fake.run.outputs[wf.DECISIONS_FILE].splitlines()]
-    assert records[-1]["failures"][-1] == "model_cap" and records[-1]["fallback_used"]
+    # aborted, not a fallback: no decision is taken or applied (N-new-4)
+    assert records[-1]["failures"][-1] == "model_cap" and not records[-1]["fallback_used"]
+    assert records[-1]["status"] == "aborted_model_cap" and records[-1]["output"] is None
+    assert {r["status"] for r in records[:-1]} <= {"decided", "fallback"}
     n_log = len((tmp_path / "capped" / "llm_calls.jsonl").read_text().splitlines())
     assert sorted(i for r in records for i in r["llm_call_ids"]) == list(range(n_log))
 
@@ -484,6 +489,9 @@ def test_every_retry_counts_against_the_request_cap(tmp_path):
     assert client.calls == 2  # not P1's four attempts: the third was refused unsent
     tokens, usd = gw.projected(_cal_bound_request())
     assert gw.reserved_tokens == 2 * tokens and gw.cost_usd() == pytest.approx(2 * usd)
+    # metered tokens and the booked worst case are reported apart (N-new-2)
+    assert gw.by_role["calibration"] == {"tokens": 0, "requests": 2,
+                                         "reserved_tokens": 2 * tokens}  # fmt: skip
     lines = [json.loads(x) for x in (tmp_path / "llm_calls.jsonl").read_text().splitlines()]
     assert [bool(x.get("refused")) for x in lines] == [False, False, True]
 
@@ -517,9 +525,10 @@ def test_a_billed_unreadable_reply_is_booked_against_the_usd_and_token_caps(tmp_
 # ------------------------------------------------------------------ B-3: the approval
 
 
-def _record(caps: dict[str, Any], runs: list[dict[str, Any]]) -> dict[str, Any]:
+def _record(caps: dict[str, Any], runs: list[dict[str, Any]], config: Any = None) -> dict:
     rec = {"ruling_date": "2026-10-12", "word": "test only", "runs": runs, "caps": caps,
-           "frozen_sha256": frozen_record_sha256()}  # fmt: skip
+           "frozen_sha256": frozen_record_sha256(),
+           "config_sha256": p2_live.config_digest(config or load_p2())}  # fmt: skip
     rec["digest"] = p2_live.approval_digest(rec)
     return rec
 
@@ -558,6 +567,7 @@ def test_live_needs_the_leads_committed_approval_on_every_path(tmp_path, monkeyp
         ({"runs": [*record["runs"], {**cell, "replicate": 9}]}, "digest"),
         ({"caps": {**record["caps"], "max_usd": 5.0}}, "caps"),
         ({"frozen_sha256": "0" * 64}, "freeze"),
+        ({"config_sha256": "0" * 64}, "configuration"),
     ):
         bad = {**record, **edit}
         if why != "digest":
@@ -583,10 +593,27 @@ def _edit_yaml(path: Path, fn: Any) -> None:
 
 def test_the_whole_model_block_and_the_caps_are_frozen(tmp_path, monkeypatch):
     for name, fn, why in (
-        ("price", lambda r: r["model"]["pricing_usd_per_mtok"].update(output=0.6), "model block"),
-        ("cap", lambda r: r["caps"].update(max_usd=1.0), "caps block"),
-        ("timeout", lambda r: r["model"].update(request_timeout_s=60), "model block"),
-        ("chars", lambda r: r["caps"].update(input_chars_per_token=8.0), "caps block"),
+        # each names the frozen-block check that fired (N-B4a), not the P1 check after it
+        (
+            "price",
+            lambda r: r["model"]["pricing_usd_per_mtok"].update(output=0.6),
+            r"the model block is not the frozen one \(\['pricing_usd_per_mtok'\]\)",
+        ),
+        (
+            "cap",
+            lambda r: r["caps"].update(max_usd=1.0),
+            r"the caps block is not the frozen one \(\['max_usd'\]\)",
+        ),
+        (
+            "timeout",
+            lambda r: r["model"].update(request_timeout_s=60),
+            r"the model block is not the frozen one \(\['request_timeout_s'\]\)",
+        ),
+        (
+            "chars",
+            lambda r: r["caps"].update(input_chars_per_token=8.0),
+            r"the caps block is not the frozen one \(\['input_chars_per_token'\]\)",
+        ),
     ):
         path = _copy_config(tmp_path / name)
         _edit_yaml(path, fn)
@@ -736,3 +763,142 @@ def test_a_quarantine_cannot_drop_a_sensor_from_the_objective(monkeypatch, cfg):
     assert ph.count(run.cal, raw=True) >= int(cfg["p0"]["qc"]["min_samples"])
     assert ph.in_objective is base.series["ph"].in_objective is True
     assert set(run.residuals) == set(base.residuals)  # the signatures see the same channels
+
+
+# ------------------------------------------------------------------ the re-review's nits
+
+
+def test_any_client_failure_is_logged_and_booked(tmp_path):
+    """A client exception that is not a ModelError is still a logged attempt (N-new-1)."""
+
+    class Broken:
+        name = "broken"
+
+        def create(self, params: dict[str, Any]) -> dict[str, Any]:
+            raise RuntimeError("socket closed")
+
+    gw = _gateway(tmp_path, None, client=Broken())
+    with pytest.raises(ModelError, match=r"client error: RuntimeError.*\[llm_lines=0\]"):
+        gw.complete(_cal_bound_request())
+    lines = [json.loads(x) for x in (tmp_path / "llm_calls.jsonl").read_text().splitlines()]
+    assert len(lines) == 1 and "RuntimeError" in lines[0]["error"]
+    assert gw.reserved_tokens > 0 and gw.attempts_sent == 1
+
+
+def _git(repo: Path, *args: str) -> str:
+    import subprocess
+
+    out = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True)
+    return out.stdout
+
+
+def test_the_approval_must_be_the_pushed_blob_on_a_clean_tree(tmp_path):
+    """The real ``_git_clean`` (N-B3a, N-B3d): pushed, at HEAD, nothing dirty or hidden."""
+    repo, remote = tmp_path / "repo", tmp_path / "remote.git"
+    repo.mkdir()
+    _git(repo, "init", "-q", "-b", "main")
+    _git(repo, "config", "user.email", "t@example.org")
+    _git(repo, "config", "user.name", "t")
+    record, other = repo / "approval.yaml", repo / "other.txt"
+    # untracked: refused
+    record.write_text("word: x\n")
+    assert p2_live._git_clean(record, repo) == (False, "approval.yaml is not committed")
+    other.write_text("a\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "record")
+    # committed but never pushed (a local commit the session made alone): refused
+    ok, why = p2_live._git_clean(record, repo)
+    assert not ok and "on no remote branch" in why
+    _git(tmp_path, "init", "-q", "--bare", str(remote))
+    _git(repo, "remote", "add", "origin", str(remote))
+    _git(repo, "push", "-q", "origin", "main")
+    _git(repo, "fetch", "-q", "origin")
+    assert p2_live._git_clean(record, repo) == (True, "")  # the negative control
+    # a dirty tracked file: refused
+    other.write_text("b\n")
+    ok, why = p2_live._git_clean(record, repo)
+    assert not ok and "uncommitted changes" in why
+    _git(repo, "checkout", "-q", "--", "other.txt")
+    # an edit hidden from status with --assume-unchanged: the blob check refuses it
+    _git(repo, "update-index", "--assume-unchanged", "approval.yaml")
+    record.write_text("word: forged\n")
+    assert _git(repo, "status", "--porcelain", "--untracked-files=no").strip() == ""
+    ok, why = p2_live._git_clean(record, repo)
+    assert not ok and "not the blob at HEAD" in why
+
+
+def test_the_runner_checks_this_run_against_a_real_record_and_runs_it_once(tmp_path, monkeypatch):
+    """The runner's per-run check with a real record (MB3a2) and one execution (N-B3b)."""
+    import yaml
+
+    from scripts import p2_pilot
+    from tools import Budget, make_registry, runner
+
+    seen: dict[str, Any] = {}
+
+    def fake_launch(script: Any, registry: Any, **kw: Any) -> Any:
+        seen["gateway"] = kw.get("model_gateway")
+        return types.SimpleNamespace(returncode=0, stderr="")
+
+    monkeypatch.setattr(runner, "launch", fake_launch)
+
+    def registry(*a: Any, **k: Any) -> Any:
+        return make_registry(budget=Budget(10, 5.0, 0), seed=1)
+
+    monkeypatch.setattr(runner, "open_registry", registry)
+    path = tmp_path / "p2_live_approval.yaml"
+    path.write_text(yaml.safe_dump(_record(load_p2().caps.model_dump(mode="json"),
+                                           p2_pilot.approval_runs())))  # fmt: skip
+    monkeypatch.setattr(p2_live, "APPROVAL_FILE", path)
+    monkeypatch.setattr(p2_live, "_git_clean", lambda p, repo=None: (True, ""))
+
+    def run(run_id: str, replicate: int) -> Any:
+        truth = tmp_path / "truth_store" / run_id
+        truth.mkdir(parents=True, exist_ok=True)
+        (truth / "manifest.json").write_text(json.dumps({
+            "scenario_id": "S0-01", "plant": "B", "tier": "B", "seeds": {"replicate": replicate},
+        }))  # fmt: skip
+        (tmp_path / "runs" / run_id).mkdir(parents=True, exist_ok=True)
+        return runner.run_workflow(
+            run_id, "p2", live=True, model_client=ScriptedClient(lambda p: {}),
+            runs_root=tmp_path / "runs", sandbox_root=tmp_path / "boxes",
+        )  # fmt: skip
+
+    with pytest.raises(ValueError, match="does not list this run"):
+        run("run_r7", 7)  # a replicate the record does not list
+    assert "gateway" not in seen
+    run("run_r0", 0)  # listed: the gateway is built
+    assert isinstance(seen["gateway"], P2Gateway)
+    # it ran once: its live record exists, so it is not re-run, nor its record truncated
+    log = tmp_path / "runs" / "run_r0" / "workflows" / "p2" / "llm_calls.jsonl"
+    log.write_text('{"turn": 0}\n')
+    with pytest.raises(ValueError, match="runs once"):
+        run("run_r0", 0)
+    assert log.read_text() == '{"turn": 0}\n'
+
+
+def test_the_pilot_stops_before_a_run_that_could_pass_its_total(tmp_path, monkeypatch):
+    """Running total plus one run's cap (N-new-5); an unreadable report is pending (N-11f')."""
+    from scripts import p2_pilot
+
+    launched: list[str] = []
+
+    def generate(scenario: Any, tier: Any, *, replicate: int = 0, **kw: Any) -> Any:
+        rid = f"run_{scenario.id}_{replicate}"
+        out = kw["runs_root"] / rid / "workflows" / "p2"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "report.json").write_text('{"outcome": "no')  # truncated by a killed run
+        return types.SimpleNamespace(run_id=rid)
+
+    def run_workflow(run_id: str, *a: Any, **kw: Any) -> Any:
+        launched.append(run_id)
+        return types.SimpleNamespace(llm_cost_usd=0.2, as_dict=lambda: {"completed": False})
+
+    monkeypatch.setattr("sim.run.harness.generate_run", generate)
+    monkeypatch.setattr("tools.runner.run_workflow", run_workflow)
+    p2_pilot._runs(tmp_path, live=True)
+    # 0 + 0.25 and 0.2 + 0.25 fit 0.6; 0.4 + 0.25 does not: two runs, then a stop
+    assert len(launched) == 2
+    rows = [json.loads(x) for x in (tmp_path / "results.jsonl").read_text().splitlines()]
+    assert [p2_pilot.outcome_of(r) for r in rows] == ["pending", "pending"]
+    assert p2_pilot.read_report(tmp_path / "nowhere.json") == {}

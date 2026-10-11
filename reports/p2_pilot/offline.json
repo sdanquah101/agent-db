@@ -2,6 +2,12 @@
  "what": "the six pilot runs, offline (no model), three-role minimum, at one commit",
  "rows": [
   {
+   "s1": {
+    "channel": null,
+    "coupled_present": null,
+    "coupled_inside": null,
+    "reading": null
+   },
    "cell": "S0-01 B/B",
    "replicate": 0,
    "truth": [
@@ -24,6 +30,16 @@
    "commit": "42c68629398eeb2d8f2fe1f50b3a4d5ee2d3991c"
   },
   {
+   "s1": {
+    "channel": "ph",
+    "coupled_present": [
+     "alkalinity",
+     "vfa_total",
+     "tan"
+    ],
+    "coupled_inside": true,
+    "reading": "insufficient"
+   },
    "cell": "S0-01 B/B",
    "replicate": 1,
    "truth": [
@@ -48,6 +64,12 @@
    "commit": "42c68629398eeb2d8f2fe1f50b3a4d5ee2d3991c"
   },
   {
+   "s1": {
+    "channel": null,
+    "coupled_present": null,
+    "coupled_inside": null,
+    "reading": null
+   },
    "cell": "S2-01 B/B",
    "replicate": 0,
    "truth": [
@@ -73,6 +95,16 @@
    "commit": "42c68629398eeb2d8f2fe1f50b3a4d5ee2d3991c"
   },
   {
+   "s1": {
+    "channel": "ph",
+    "coupled_present": [
+     "alkalinity",
+     "vfa_total",
+     "tan"
+    ],
+    "coupled_inside": true,
+    "reading": "insufficient"
+   },
    "cell": "S2-01 B/B",
    "replicate": 1,
    "truth": [
@@ -97,6 +129,14 @@
    "commit": "42c68629398eeb2d8f2fe1f50b3a4d5ee2d3991c"
   },
   {
+   "s1": {
+    "channel": "gas_flow",
+    "coupled_present": [
+     "ch4_fraction"
+    ],
+    "coupled_inside": true,
+    "reading": "insufficient"
+   },
    "cell": "S8-01 B/B",
    "replicate": 0,
    "truth": [
@@ -121,6 +161,12 @@
    "commit": "42c68629398eeb2d8f2fe1f50b3a4d5ee2d3991c"
   },
   {
+   "s1": {
+    "channel": null,
+    "coupled_present": null,
+    "coupled_inside": null,
+    "reading": null
+   },
    "cell": "S8-01 B/B",
    "replicate": 1,
    "truth": [

@@ -315,8 +315,8 @@ class P2Gateway(ModelGateway):
         except GatewayRefusal as exc:
             self.log_refusal(self.params(request), str(exc))
             raise GatewayRefusal(f"{exc} [llm_lines={_ids(self._lines)}]") from exc
-        used = self.by_role.setdefault(role, {"tokens": 0, "requests": 0})
-        before = self.meter.total + self.reserved_tokens
+        used = self.by_role.setdefault(role, {"tokens": 0, "requests": 0, "reserved_tokens": 0})
+        before = self.meter.total
         self._inner = self.client
         self.client = _Guarded(self, self._inner, point, role, tokens, usd)
         try:
@@ -327,7 +327,7 @@ class P2Gateway(ModelGateway):
             raise ModelError(f"{exc} [llm_lines={_ids(self._lines)}]") from exc
         finally:
             self.client = self._inner
-            used["tokens"] += self.meter.total + self.reserved_tokens - before
+            used["tokens"] += self.meter.total - before  # metered; reserved apart
         out["status"] = {**out["status"], "llm_lines": list(self._lines)}
         return out
 
@@ -366,10 +366,20 @@ class _Guarded:
         gw.by_role[self._role]["requests"] += 1
         try:
             return self._inner.create(params)
-        except Exception:
-            gw.reserved_tokens += self._tokens
-            gw.reserved_usd += float(self._usd or 0.0)
+        except ModelError:
+            self._book()
             raise
+        except Exception as exc:
+            # any other failure of the client is a failed attempt too: booked, and raised
+            # as a ModelError so P1's gateway logs it (N-new-1); tools/llm.py unchanged
+            self._book()
+            raise ModelError(f"client error: {type(exc).__name__}: {str(exc)[:200]}") from exc
+
+    def _book(self) -> None:
+        gw = self._gw
+        gw.reserved_tokens += self._tokens
+        gw.reserved_usd += float(self._usd or 0.0)
+        gw.by_role[self._role]["reserved_tokens"] += self._tokens
 
 
 # ------------------------------------------------------------------ the approval (B-3)
@@ -379,9 +389,27 @@ APPROVAL_FILE = COMMITTED_P2.parent / "p2_live_approval.yaml"
 relays the word and the record is committed then, never before."""
 
 
+APPROVAL_FIELDS = ("ruling_date", "word", "runs", "caps", "frozen_sha256", "config_sha256")
+"""What an approval record names, all under its digest."""
+
+
 def approval_digest(record: dict[str, Any]) -> str:
-    """The digest a record carries of its own ruling, run list, caps and freeze."""
-    body = {k: record.get(k) for k in ("ruling_date", "word", "runs", "caps", "frozen_sha256")}
+    """The digest a record carries of its ruling, run list, caps, freeze and configuration."""
+    body = {k: record.get(k) for k in APPROVAL_FIELDS}
+    return _sha(json.dumps(body, sort_keys=True, default=str))
+
+
+def config_digest(config: P2Config) -> str:
+    """The digest of the exact configuration a run uses (N-B3c).
+
+    Every field of ``p2.yaml`` as loaded (the roles, the ablation, the coupled channels,
+    the hold-out, the onset test, ...) and every field of the ``p0.yaml`` beside it, so an
+    approval binds the configuration, not only its caps and freeze.
+    """
+    body = {
+        "p2": config.model_dump(mode="json"),
+        "p0": config.p0().model_dump(mode="json"),
+    }
     return _sha(json.dumps(body, sort_keys=True, default=str))
 
 
@@ -394,29 +422,52 @@ def frozen_record_sha256() -> str:
                            sort_keys=True))  # fmt: skip
 
 
-def _git_clean(path: Path) -> tuple[bool, str]:
-    """Whether ``path`` is committed unchanged and the tracked tree is clean."""
+def _git_clean(path: Path, repo: Path | None = None) -> tuple[bool, str]:
+    """Whether ``path`` is the committed, pushed record on a clean tree (B-3, N-B3a).
+
+    - tracked, and the tracked tree has no change (``git status``);
+    - its bytes on disk are the blob at ``HEAD`` (so ``--assume-unchanged`` cannot hide
+      an edit from the status check);
+    - the commit that introduced it is contained in a remote-tracking branch (a local
+      commit the session made alone does not pass: the record must have been pushed,
+      which is where the coordinator relays the lead's word).
+    """
     import subprocess
 
-    repo = COMMITTED_P2.parents[2]
+    repo = COMMITTED_P2.parents[2] if repo is None else Path(repo)
 
     def git(*args: str) -> subprocess.CompletedProcess:
         return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True,
                               check=False)  # fmt: skip
 
-    if git("ls-files", "--error-unmatch", str(path)).returncode != 0:
-        return False, f"{path.name} is not committed"
+    try:
+        rel = str(Path(path).resolve().relative_to(Path(repo).resolve()))
+    except ValueError:
+        return False, f"{Path(path).name} is not in the repository"
+    if git("ls-files", "--error-unmatch", rel).returncode != 0:
+        return False, f"{Path(path).name} is not committed"
     if git("status", "--porcelain", "--untracked-files=no").stdout.strip():
         return False, "the working tree has uncommitted changes"
+    on_disk = git("hash-object", rel).stdout.strip()
+    at_head = git("rev-parse", f"HEAD:{rel}").stdout.strip()
+    if not on_disk or on_disk != at_head:
+        return False, f"{Path(path).name} on disk is not the blob at HEAD"
+    added = git("log", "--diff-filter=A", "--format=%H", "--", rel).stdout.split()
+    if not added:
+        return False, f"no commit introduces {Path(path).name}"
+    if not git("branch", "-r", "--contains", added[-1]).stdout.strip():
+        return False, f"the commit introducing {Path(path).name} is on no remote branch"
     return True, ""
 
 
 def require_live_approval(config: P2Config, cell: dict[str, Any] | None = None) -> dict:
     """Refuse a live run without the lead's committed approval (the review of PR #33, B-3).
 
-    The record must exist, be committed on a clean tree, carry a digest that matches its
-    own content, name the caps the configuration has and the committed freeze, and (with
-    ``cell``: ``scenario``, ``plant``, ``tier``, ``replicate``) list this run.
+    The record must exist, be committed and pushed on a clean tree with its bytes those
+    at ``HEAD`` (:func:`_git_clean`), carry a digest that matches its own content, name
+    the caps the configuration has, the committed freeze and the digest of the exact
+    configuration this run uses, and (with ``cell``: ``scenario``, ``plant``, ``tier``,
+    ``replicate``) list this run.
 
     Returns:
         The record.
@@ -440,6 +491,8 @@ def require_live_approval(config: P2Config, cell: dict[str, Any] | None = None) 
         raise ValueError("the approval names other caps than the configuration's")
     if record.get("frozen_sha256") != frozen_record_sha256():
         raise ValueError("the approval names another freeze than the committed one")
+    if record.get("config_sha256") != config_digest(config):
+        raise ValueError("the approval names another configuration than the one this run uses")
     if cell is not None:
         runs = [dict(r) for r in record.get("runs") or []]
         if dict(cell) not in runs:

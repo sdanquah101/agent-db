@@ -74,7 +74,8 @@ THREE_ROLES = {"influent": False, "identifiability": False, "design": False}
 """The three-role minimum: data quality, calibration and verification stay on."""
 
 PILOT_MAX_USD = 0.6
-"""No further cell is launched once the pilot has spent this much (about twice the plan)."""
+"""The pilot's total. A run is launched only if the running total plus one run's whole
+cap (``caps.max_usd``) stays within it (N-new-5), so the worst case is this figure."""
 
 KEY_VARIABLE = "OPENAI_API_KEY"
 
@@ -94,6 +95,7 @@ def plan() -> dict[str, Any]:
         "effort": config.model.effort,
         "caps_per_run": config.caps.model_dump(),
         "pilot_max_usd": PILOT_MAX_USD,
+        "config_sha256": pilot_config_digest(),
         "expected_usd": 0.3,
         "command": "python -m scripts.p2_pilot run --store <DIR outside the repo> --live",
     }
@@ -106,6 +108,17 @@ def approval_runs() -> list[dict[str, Any]]:
         for s, p, t in CELLS
         for r in REPLICATES
     ]
+
+
+def pilot_config_digest() -> str:
+    """The digest an approval record must name for the pilot's configuration (N-B3c)."""
+    import tempfile
+
+    from tools.p2_live import config_digest
+    from tools.workflow_config import load_p2
+
+    with tempfile.TemporaryDirectory() as tmp:
+        return config_digest(load_p2(write_config(Path(tmp))))
 
 
 def approved() -> bool:
@@ -179,6 +192,9 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
         done = {
             (x["cell"], x["replicate"]) for x in map(json.loads, results.read_text().splitlines())
         }
+    from tools.workflow_config import load_p2
+
+    per_run = float(load_p2(config_path).caps.max_usd)
     spent = 0.0
     order = [(c, r) for c in CELLS for r in REPLICATES]
     for k, ((sid, plant_id, tier), rep) in enumerate(order):
@@ -187,8 +203,8 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
         cell = f"{sid} {plant_id}/{tier}"
         if (cell, rep) in done:
             continue
-        if live and spent >= PILOT_MAX_USD:
-            print(f"STOP: USD {spent:.3f} spent, the pilot's cap is {PILOT_MAX_USD}")
+        if live and spent + per_run > PILOT_MAX_USD:
+            print(f"STOP: USD {spent:.3f} spent; one more run could pass {PILOT_MAX_USD}")
             return
         plant = load_plant_config(plant_id)
         scenario = at_plant_horizon(load_scenario(REPO / "scenarios" / f"{sid}.yaml"), plant)
@@ -204,8 +220,9 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
         spent += float(result.llm_cost_usd or 0.0)
         out = store / "runs" / art.run_id / "workflows" / "p2"
         path = out / "report.json"
-        # a run that died wrote no report, or a partial one: it is pending (N-11f)
-        report = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+        # a run that died wrote no report, or a partial or unreadable one: it is pending
+        # (N-11f, N-11f')
+        report = read_report(path)
         line = {
             "cell": cell,
             "replicate": rep,
@@ -221,6 +238,15 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
         with results.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(line, sort_keys=True, default=str) + "\n")
         print(f"{cell} r{rep}: {outcome_of(line)} (USD {spent:.3f} so far)", flush=True)
+
+
+def read_report(path: Path) -> dict[str, Any]:
+    """A run's ``report.json``, or ``{}`` when it is missing, truncated or unreadable."""
+    try:
+        out = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return out if isinstance(out, dict) else {}
 
 
 def outcome_of(line: dict[str, Any]) -> str:
@@ -293,7 +319,14 @@ def report_offline(store: Path) -> dict[str, Any]:
     rows = []
     for x in lines:
         t = x.get("null_table") or {}
+        full = read_report(
+            store / "runs" / str(x.get("run_id")) / "workflows" / "p2" / "report.json"
+        )
+        sensor = (full.get("signatures") or {}).get("sensor") or {}
+        s1 = sensor.get("s1") or {}
         rows.append({
+            "s1": {"channel": sensor.get("channel"), "coupled_present": s1.get("coupled_present"),
+                   "coupled_inside": s1.get("coupled_inside"), "reading": sensor.get("reading")},
             "cell": x["cell"], "replicate": x["replicate"], "truth": x["truth"],
             "outcome": outcome_of(x), "rule": x.get("rule"),
             "null": {k: t.get(k) for k in ("NB", "NM", "NS", "null_partial", "null_rejected")},
@@ -327,8 +360,54 @@ def report_offline(store: Path) -> dict[str, Any]:
         f"{r['rule']} | {r['failed_channels']} | {r['power_run_outcome'] or '—'} |"
         for r in rows
     ]
+    md += reading(rows)
     (REPORT_DIR / "offline.md").write_text("\n".join(md) + "\n", encoding="utf-8")
     return out
+
+
+def reading(rows: list[dict[str, Any]]) -> list[str]:
+    """What a live ``dq.coupled`` reading could change, generated from the rows (N-B2b).
+
+    A run can gain ``sensor`` only where NS failed on one channel and the S1 table holds
+    (every coupled channel's after-fit mean inside); then only the offline reading
+    (``insufficient``) blocks it.
+    """
+    md = [
+        "",
+        "## What a live decider can change here (generated from the rows above)",
+        "",
+        "`sensor` can be admitted only where NS failed and the S1 table holds; there the",
+        "offline `dq.coupled` reading (`insufficient`) is all that blocks it.",
+        "",
+        "| run | NB | NS | NS channel | coupled channels | S1 table holds | offline reading "
+        "| live `coupled_inside` would give |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for r in rows:
+        n, s1 = r["null"], r["s1"]
+        open_ = bool(n.get("NS")) and s1.get("coupled_inside") is True
+        verdict = "—"
+        if open_:
+            verdict = "`sensor`: **correct**" if "sensor" in r["truth"] else "`sensor`: **wrong**"
+        md.append(
+            f"| {r['cell']} r{r['replicate']} | {n.get('NB')} | {n.get('NS')} | "
+            f"{s1.get('channel') or '—'} | {', '.join(s1.get('coupled_present') or []) or '—'} | "
+            f"{s1.get('coupled_inside') if s1.get('channel') else '—'} | "
+            f"{s1.get('reading') or '—'} | {verdict} |"
+        )
+    gate = [r for r in rows if r["cell"] == "S0-01 B/B"]
+    stands = [r["replicate"] for r in gate if not r["null"].get("null_rejected")]
+    md += [
+        "",
+        "A run whose null stands is `none` whatever a decision says. "
+        + (
+            f"S0-01 B/B r{', r'.join(map(str, stands))}: the null stands, so at most "
+            f"{len(gate) - len(stands)} seed(s) of the go/no-go cell can be labelled."
+            if stands
+            else "Both seeds of S0-01 B/B reject the null."
+        ),
+    ]
+    return md
 
 
 def main(argv: list[str] | None = None) -> int:

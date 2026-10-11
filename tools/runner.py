@@ -311,6 +311,14 @@ def run_workflow(
         if live:  # the lead's committed approval, naming this very run (B-3)
             require_live_approval(config)  # the record itself first
             require_live_approval(config, cell_of(paths.truth_manifest))
+            # an approval is for one execution of each run: a run whose live record
+            # exists is never re-run silently, nor its record truncated (N-B3b)
+            previous = paths.root / OUTPUTS_DIR / out_name / "llm_calls.jsonl"
+            if previous.is_file() and previous.stat().st_size > 0:
+                raise ValueError(
+                    f"{run_id} already has a live record ({previous.name}): an approved "
+                    "run runs once"
+                )
     registry = open_registry(run_id, runs_root=runs_root, truth_store=store, scenario=scenario)
     if timeout_s is None:
         timeout_s = (registry.budget.wall_clock_min + config.runner.timeout_margin_min) * 60.0
@@ -390,7 +398,9 @@ def run_workflow(
         summary.tokens_cache_write = meter.cache_write
         summary.tokens_cache_read = meter.cache_read
         summary.llm_turns = meter.requests
-        summary.llm_attempts = meter.attempts
+        # P2 reports the attempts actually sent; P1's meter also counts a refused one
+        # (N-new-3)
+        summary.llm_attempts = int(getattr(gateway, "attempts_sent", meter.attempts))
         cost = gateway.cost_usd()
         summary.llm_cost_usd = None if cost is None else round(cost, 6)
         summary.provider = gateway.settings.provider
@@ -407,6 +417,11 @@ def run_workflow(
                 )  # fmt: skip
                 row["tokens"] += int(used["tokens"])
                 row["requests"] += int(used["requests"])
+                # the worst case booked for failed attempts, apart from the metered
+                # tokens (N-new-2)
+                row["reserved_tokens"] = row.get("reserved_tokens", 0) + int(
+                    used.get("reserved_tokens", 0)
+                )
     if isinstance(config, P2Config):
         summary.decider = "live" if live else "offline"
         if gateway is None:

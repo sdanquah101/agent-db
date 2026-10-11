@@ -866,8 +866,9 @@ class Decider:
             except ModelCapReached:
                 # the decision is interrupted, not lost: its record cites every attempt
                 # the gateway logged for it, then the run stops asking (N-2a)
-                self._record(spec, point, template, inputs, model.model_validate(fallback),
-                             attempts, [*failures, "model_cap"], True)  # fmt: skip
+                # no decision was taken and none is applied: the run abstains (N-new-4)
+                self._record(spec, point, template, inputs, None, attempts,
+                             [*failures, "model_cap"], False, "aborted_model_cap")  # fmt: skip
                 raise
             if raw is None:
                 break
@@ -885,7 +886,9 @@ class Decider:
         used_fallback = output is None
         if output is None:
             output = model.model_validate(fallback)
-        self._record(spec, point, template, inputs, output, attempts, failures, used_fallback)
+        status = "fallback" if used_fallback else "decided"
+        self._record(spec, point, template, inputs, output, attempts, failures, used_fallback,
+                     status)  # fmt: skip
         return output
 
     def _record(
@@ -894,10 +897,11 @@ class Decider:
         point: str,
         template: dict[str, str],
         inputs: dict[str, Any],
-        output: BaseModel,
+        output: BaseModel | None,
         attempts: int,
         failures: list[str],
         used_fallback: bool,
+        status: str,
     ) -> None:
         take = getattr(self.respond, "take_call_ids", None)
         self.records.append(
@@ -907,7 +911,8 @@ class Decider:
                 "template_sha256": template["sha256"],
                 "schema_sha256": schema_sha256(spec["model"]),
                 "inputs_digest": _digest(inputs),
-                "output": output.model_dump(mode="json"),
+                "output": None if output is None else output.model_dump(mode="json"),
+                "status": status,
                 "attempts": attempts,
                 "failures": failures,
                 "fallback_used": used_fallback,

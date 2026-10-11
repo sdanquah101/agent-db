@@ -7593,3 +7593,33 @@ These are fixes, recorded here because they change what a run does and records.
   of P2**: the frozen evaluator reads `final.label`, so it would score a model-cap abstain
   on a `none`-truth cell as correct. P2's own counts key on `outcome`. `eval/` is not
   changed.
+
+## 2026-10-11 — The coordinator's re-review of PR #33 at `80de6cc`: nits fixed (no ruling asked)
+
+- **The approval record (N-B3a to N-B3d).** For a live run the record must now meet
+  all of these:
+  - be committed, with its bytes on disk equal to the blob at `HEAD`, so an edit hidden
+    with `--assume-unchanged` is refused;
+  - have been introduced by a commit that is on a remote-tracking branch, so a local
+    commit made by the session alone is refused;
+  - sit on a clean tracked tree;
+  - carry a digest of its ruling date, run list, caps, the committed freeze, and the
+    digest of the **exact configuration** the run uses: every field of the `p2.yaml` it
+    loads and of the `p0.yaml` beside it. `scripts/p2_pilot.py plan` prints the
+    pilot's configuration digest.
+
+  A run whose `llm_calls.jsonl` already has a record is refused: an approved run runs
+  once, and its record is never truncated.
+- **The pilot's total (N-new-5).** A run is launched only if the running total plus
+  one run's whole cap (USD 0.25) stays within USD 0.6. So the pilot's worst case is USD
+  0.6, not about 0.85.
+- **Reporting (N-new-2, N-new-3, N-new-4).**
+  - `by_role` gives the metered `tokens` and the booked worst case (`reserved_tokens`)
+    separately.
+  - `summary.llm_attempts` is the attempts actually sent; P1's meter also counts a
+    refused one.
+  - A decision interrupted by a cap is recorded as `status: aborted_model_cap`, with
+    no output and `fallback_used: false`.
+- **The gateway (N-new-1).** Any client exception is now a logged, booked attempt.
+- Still with the lead: L-1, the pilot's go/no-go cannot fire on these records, and
+  N-2b, the evaluator reads `final.label`.

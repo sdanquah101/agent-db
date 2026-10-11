@@ -3878,3 +3878,22 @@ power re-run (PR #32, draft).**
 - **Next:** the coordinator's re-review, then the lead's approval and only then the
   approval record.
 
+**2026-10-11, later — PR #33: the coordinator's re-review at `80de6cc`.**
+- **No blocking finding.** The pilot is not approved, and **L-1** is with the lead: the
+  go/no-go cannot fire, because S0-01 B/B r0's null stands.
+- **The nits, fixed in one push:**
+  - **The approval record** must be pushed, with its blob at `HEAD`. It binds the exact
+    configuration, and each run executes once (N-B3a to N-B3c). Tests run the real git
+    checks and the runner's per-run check against a real record (N-B3d).
+  - **N-B4a:** a test now names which frozen-block check fired.
+  - **N-B2a, N-B2b:** the offline report carries each run's S1 table, and its reading
+    is generated, with NB stated.
+  - **N-new-1 to N-new-5:**
+    - any client failure is logged and booked;
+    - reserved tokens are reported apart;
+    - attempts sent are reported;
+    - an aborted decision is recorded as such;
+    - the pilot's total is checked with one run's cap ahead.
+  - **N-11f':** an unreadable report is pending.
+- No live call, no approval record.
+

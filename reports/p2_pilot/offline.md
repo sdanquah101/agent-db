@@ -13,28 +13,18 @@ full-role run of `reports/p2_power/` before F-B, shown where the cell overlaps.
 | S8-01 B/B | 0 | sensor | none | null_failed_unexplained | ['gas_flow'] | none |
 | S8-01 B/B | 1 | sensor | none | null_stands | [] | — |
 
-## What the live decider can change here (read from these records)
+## What a live decider can change here (generated from the rows above)
 
-**Every run is `none` offline.** On three of them the null fails on exactly one channel
-(NS), the S1 table **holds** (every coupled channel's after-fit mean is inside), and
-only the offline `dq.coupled` reading (`insufficient`, its fallback) blocks `sensor`.
+`sensor` can be admitted only where NS failed and the S1 table holds; there the
+offline `dq.coupled` reading (`insufficient`) is all that blocks it.
 
-| run | NS channel | S1 table holds | live `coupled_inside` would give |
-|---|---|---|---|
-| S8-01 B/B r0 | gas_flow (coupled: CH4) | yes | `sensor`: **correct** |
-| S2-01 B/B r1 | ph (coupled: alkalinity, VFA, TAN) | yes | `sensor`: **correct** |
-| S0-01 B/B r1 | ph (coupled: alkalinity, VFA, TAN) | yes | `sensor`: **wrong** (a clean cell) |
+| run | NB | NS | NS channel | coupled channels | S1 table holds | offline reading | live `coupled_inside` would give |
+|---|---|---|---|---|---|---|---|
+| S0-01 B/B r0 | False | False | — | — | — | — | — |
+| S0-01 B/B r1 | False | True | ph | alkalinity, vfa_total, tan | True | insufficient | `sensor`: **wrong** |
+| S2-01 B/B r0 | False | False | — | — | — | — | — |
+| S2-01 B/B r1 | False | True | ph | alkalinity, vfa_total, tan | True | insufficient | `sensor`: **correct** |
+| S8-01 B/B r0 | True | True | gas_flow | ch4_fraction | True | insufficient | `sensor`: **correct** |
+| S8-01 B/B r1 | False | False | — | — | — | — | — |
 
-The other three runs:
-- S0-01 B/B r0 and S8-01 B/B r1: the null stands.
-- S2-01 B/B r0: NM, where no `sensor` can be admitted.
-
-No decision a model makes changes these three.
-
-**The go/no-go cannot stop the pilot on these records.** S0-01 B/B r0's null stands, so
-at most one seed of the go/no-go cell can be labelled.
-
-**Comparison with the power run.** Replicate 0 of S2-01 B/B and of S8-01 B/B also
-appears in the power run, which had all roles on and predated F-B. Both are `none`
-there and here. The configurations differ (three roles here, all roles there), so the
-agreement is reported, not used.
+A run whose null stands is `none` whatever a decision says. S0-01 B/B r0: the null stands, so at most 1 seed(s) of the go/no-go cell can be labelled.
