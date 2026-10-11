@@ -3897,3 +3897,16 @@ power re-run (PR #32, draft).**
   - **N-11f':** an unreadable report is pending.
 - No live call, no approval record.
 
+**2026-10-11, about 11:00 UTC — the lead's ruling on L-1** (`docs/decisions.md`).
+- The P2 pilot is approved in principle, as a cost-and-wiring check: the same six runs
+  and caps.
+- The go/no-go is recorded as unable to fire on these records.
+- A `sensor` on the clean S0-01 r1 would be a known design limitation.
+- **Next:**
+  1. the coordinator re-reviews this head;
+  2. on the coordinator's relay, the approval record is committed;
+  3. the coordinator verifies it;
+  4. on the coordinator's relay, the pilot runs.
+
+  Until then, no approval record and no live call.
+

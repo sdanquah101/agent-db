@@ -7623,3 +7623,49 @@ These are fixes, recorded here because they change what a run does and records.
 - **The gateway (N-new-1).** Any client exception is now a logged, booked attempt.
 - Still with the lead: L-1, the pilot's go/no-go cannot fire on these records, and
   N-2b, the evaluator reads `final.label`.
+
+## 2026-10-11 — RULING (the lead) on L-1: the P2 pilot is approved in principle as a cost-and-wiring check (option 1)
+
+Relayed by the coordinator.
+
+**(a) The pilot runs as relayed:**
+- the cells S0-01 B/B, S2-01 B/B and S8-01 B/B;
+- replicates 0 and 1 of each;
+- the three-role minimum (data quality, calibration, verification; coordination is
+  code);
+- the current caps: 60 requests, 6 M tokens and USD 0.25 per run, USD 0.6 for the
+  pilot.
+
+**(b) The go/no-go is UNABLE TO FIRE on these records.** The go/no-go is ruling (b) of
+2026-10-07: stop only if both seeds of S0-01 B/B label something other than `none`. On
+these records, S0-01 B/B r0's null **stands before any decision**, so its outcome is
+`none` whatever a live decision says. Both seeds can therefore never be non-`none`. This
+is recorded explicitly. Ruling (b) itself is not removed or reworded.
+
+**(c) The pilot's purposes are:**
+1. the real cost and token use, per run and per role;
+2. an end-to-end check of the live wiring (gateway, caps, logs, records);
+3. the model's `dq.coupled` readings on the three NS runs (S8-01 r0, S2-01 r1 and
+   S0-01 r1), recorded as **development evidence**.
+
+**(d) A known DESIGN LIMITATION, not a model error and not a stop criterion.** The
+protocol may admit `sensor` on the clean S0-01 B/B r1 through a `coupled_inside` reading:
+there the null fails on pH alone and the S1 table holds. If it does, that is a known
+design limitation, to be examined after the pilot.
+
+**(e) No change** to the cells, seeds, caps or the stop rule.
+
+**The order of operations:**
+1. This entry is pushed with the nit fixes. No approval record exists, and no live call
+   is made.
+2. The coordinator re-reviews that head.
+3. Only after the coordinator relays "create the approval record" is
+   `configs/workflows/p2_live_approval.yaml` committed and pushed to the PR branch. It
+   carries the ruling date 2026-10-11, the exact six-run list, the caps, the frozen
+   digest and the configuration digest, and it must pass the remote-containment check.
+4. The coordinator verifies the record.
+5. Only after the coordinator relays "run the pilot" is `scripts/p2_pilot.py run`
+   executed.
+
+The results go to `reports/p2_pilot/`, with a cost table and the three `dq.coupled`
+readings.
