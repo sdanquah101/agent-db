@@ -10,16 +10,25 @@ coordination is code) with the live decider, on three development cells x two se
 | S2-01 B/B | ``sensor`` (pH drift) | data quality's S1 path |
 | S8-01 B/B | ``sensor`` (gas scale), injected sampler failure | calibration's Level-8 path |
 
-**No live call is made from this file until the lead approves the pilot**, after the
-coordinator's review of deliverable 3. :data:`APPROVED` is ``False``; ``run`` refuses
-while it is, whatever the flags, and before any client is built. Approving it is a
-reviewed one-line commit that names the lead's word.
+**No live call is made until the lead approves the pilot**, after the coordinator's review
+of deliverable 3. The gate is not here: it is the runner's. ``run_workflow(live=True)``
+refuses without the lead's committed approval record
+(``configs/workflows/p2_live_approval.yaml``, checked by digest on a clean tree, naming
+this exact run list and the caps; :func:`tools.p2_live.require_live_approval`). The
+record does not exist until the lead approves. ``run`` checks it first, before any
+client is built.
 
 Usage::
 
     python -m scripts.p2_pilot plan                       # no call: cells, caps, layout
-    python -m scripts.p2_pilot run --store DIR --live     # refused until APPROVED
+    python -m scripts.p2_pilot offline --store DIR        # the same six runs, OFFLINE
+    python -m scripts.p2_pilot run --store DIR --live     # refused without the record
     python -m scripts.p2_pilot report --store DIR         # reports/p2_pilot/
+
+``offline`` runs the six pilot runs with the offline decider at the same commit and the
+same configuration (the review of PR #33, B-2): the baseline a live-versus-offline
+difference is measured against. It writes ``DIR/results_offline.jsonl`` and
+``reports/p2_pilot/offline.json`` and ``offline.md``.
 
 **The record layout.** ``DIR`` lies outside the repository:
 
@@ -53,9 +62,6 @@ import yaml
 REPO = Path(__file__).resolve().parents[1]
 REPORT_DIR = REPO / "reports" / "p2_pilot"
 
-APPROVED = False
-"""The lead's approval of the pilot. False until a reviewed commit names the lead's word."""
-
 CELLS: tuple[tuple[str, str, str], ...] = (
     ("S0-01", "B", "B"),
     ("S2-01", "B", "B"),
@@ -79,7 +85,7 @@ def plan() -> dict[str, Any]:
 
     config = load_p2()
     return {
-        "approved": APPROVED,
+        "approved": approved(),
         "cells": [f"{s} {p}/{t}" for s, p, t in CELLS],
         "replicates": list(REPLICATES),
         "runs": len(CELLS) * len(REPLICATES),
@@ -91,6 +97,27 @@ def plan() -> dict[str, Any]:
         "expected_usd": 0.3,
         "command": "python -m scripts.p2_pilot run --store <DIR outside the repo> --live",
     }
+
+
+def approval_runs() -> list[dict[str, Any]]:
+    """The run list an approval record must name for this pilot, in order."""
+    return [
+        {"scenario": s, "plant": p, "tier": t, "replicate": r}
+        for s, p, t in CELLS
+        for r in REPLICATES
+    ]
+
+
+def approved() -> bool:
+    """Whether the lead's committed approval record is in place (no call is made)."""
+    from tools.p2_live import require_live_approval
+    from tools.workflow_config import load_p2
+
+    try:
+        require_live_approval(load_p2())
+    except ValueError:
+        return False
+    return True
 
 
 def write_config(store: Path) -> Path:
@@ -107,17 +134,34 @@ def write_config(store: Path) -> Path:
 
 
 def run(store: Path, *, live: bool) -> None:
-    """Run the pilot: refused unless approved, live and keyed; caps enforced throughout.
+    """Run the pilot live: refused without ``--live``, the approval record or the key.
 
     Raises:
-        SystemExit: Not approved, not ``--live``, no key, or a store inside the repository.
+        SystemExit: Not ``--live``, no approval, no key, or a store inside the repository.
     """
-    if not APPROVED:
-        raise SystemExit("the pilot is not approved: no live call before the lead's word")
     if not live:
-        raise SystemExit("the pilot is live: pass --live")
+        raise SystemExit("the pilot is live: pass --live (or run `offline`)")
+    from tools.p2_live import require_live_approval
+    from tools.workflow_config import load_p2
+
+    try:
+        require_live_approval(load_p2())  # the runner checks it again, per run
+    except ValueError as exc:
+        raise SystemExit(f"the pilot is not approved: {exc}") from exc
     if not os.environ.get(KEY_VARIABLE):
         raise SystemExit(f"{KEY_VARIABLE} is not set")
+    _runs(store, live=True)
+
+
+def offline(store: Path, part: str = "0/1") -> None:
+    """The six pilot runs with the offline decider: no model, no approval needed (B-2).
+
+    ``part`` ``i/n`` runs every n-th run from the i-th, so two processes can share them.
+    """
+    _runs(store, live=False, part=part)
+
+
+def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
     store = store.resolve()
     if store == REPO or REPO in store.parents:
         raise SystemExit("the store must be outside the repository")
@@ -128,39 +172,55 @@ def run(store: Path, *, live: bool) -> None:
     from tools.runner import run_workflow
 
     config_path = write_config(store)
-    results = store / "results.jsonl"
+    i_part, n_part = (int(x) for x in part.split("/"))
+    results = store / ("results.jsonl" if live else f"results_offline.{i_part}.jsonl")
+    done = set()
+    if results.is_file():
+        done = {
+            (x["cell"], x["replicate"]) for x in map(json.loads, results.read_text().splitlines())
+        }
     spent = 0.0
-    for sid, plant_id, tier in CELLS:
-        for rep in REPLICATES:
-            if spent >= PILOT_MAX_USD:
-                print(f"STOP: USD {spent:.3f} spent, the pilot's cap is {PILOT_MAX_USD}")
-                return
-            plant = load_plant_config(plant_id)
-            scenario = at_plant_horizon(load_scenario(REPO / "scenarios" / f"{sid}.yaml"), plant)
-            art = generate_run(scenario, tier, plant=plant, replicate=rep, runs_root=store / "runs")
-            result = run_workflow(
-                art.run_id,
-                "p2",
-                runs_root=store / "runs",
-                scenario=scenario,
-                config_path=config_path,
-                live=True,
-            )
-            spent += float(result.llm_cost_usd or 0.0)
-            out = store / "runs" / art.run_id / "workflows" / "p2"
-            report = json.loads((out / "report.json").read_text(encoding="utf-8"))
-            line = {
-                "cell": f"{sid} {plant_id}/{tier}",
-                "replicate": rep,
-                "truth": list(scenario.truth_label),
-                "summary": result.as_dict(),
-                "outcome": report.get("outcome"),
-                "label": report.get("label"),
-                "rule": report.get("rule"),
-            }
-            with results.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(line, sort_keys=True) + "\n")
-            print(f"{line['cell']} r{rep}: {line['outcome']} (USD {spent:.3f} so far)")
+    order = [(c, r) for c in CELLS for r in REPLICATES]
+    for k, ((sid, plant_id, tier), rep) in enumerate(order):
+        if k % n_part != i_part:
+            continue
+        cell = f"{sid} {plant_id}/{tier}"
+        if (cell, rep) in done:
+            continue
+        if live and spent >= PILOT_MAX_USD:
+            print(f"STOP: USD {spent:.3f} spent, the pilot's cap is {PILOT_MAX_USD}")
+            return
+        plant = load_plant_config(plant_id)
+        scenario = at_plant_horizon(load_scenario(REPO / "scenarios" / f"{sid}.yaml"), plant)
+        art = generate_run(scenario, tier, plant=plant, replicate=rep, runs_root=store / "runs")
+        result = run_workflow(
+            art.run_id,
+            "p2",
+            runs_root=store / "runs",
+            scenario=scenario,
+            config_path=config_path,
+            live=live,
+        )
+        spent += float(result.llm_cost_usd or 0.0)
+        out = store / "runs" / art.run_id / "workflows" / "p2"
+        path = out / "report.json"
+        # a run that died wrote no report, or a partial one: it is pending (N-11f)
+        report = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {}
+        line = {
+            "cell": cell,
+            "replicate": rep,
+            "run_id": art.run_id,
+            "truth": list(scenario.truth_label),
+            "summary": result.as_dict(),
+            "outcome": report.get("outcome", "pending"),
+            "label": report.get("label"),
+            "rule": report.get("rule"),
+            "null_table": report.get("null_table"),
+            "verdict": report.get("verdict"),
+        }
+        with results.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(line, sort_keys=True, default=str) + "\n")
+        print(f"{cell} r{rep}: {outcome_of(line)} (USD {spent:.3f} so far)", flush=True)
 
 
 def outcome_of(line: dict[str, Any]) -> str:
@@ -212,11 +272,74 @@ def report(store: Path) -> dict[str, Any]:
     return out
 
 
+def report_offline(store: Path) -> dict[str, Any]:
+    """``reports/p2_pilot/offline.{json,md}``: the six runs offline (B-2).
+
+    Where a cell is also a power-run cell (replicate 0 of S2-01 B/B and S8-01 B/B), the
+    power run's outcome is shown beside it. That run had **every** role on and predates
+    F-B, so a difference is the configuration's and F-B's together.
+    """
+    lines = [
+        json.loads(x)
+        for f in sorted(store.glob("results_offline.*.jsonl"))
+        for x in f.read_text(encoding="utf-8").splitlines()
+        if x.strip()
+    ]
+    order = {(f"{s} {p}/{t}", r): k for k, ((s, p, t), r) in enumerate(
+        (c, r) for c in CELLS for r in REPLICATES)}  # fmt: skip
+    lines.sort(key=lambda x: order.get((x["cell"], x["replicate"]), 99))
+    power = json.loads((REPO / "reports" / "p2_power" / "cells.json").read_text())
+    before = {c["cell"]: c.get("outcome", c["label"]) for c in power["cells"]}
+    rows = []
+    for x in lines:
+        t = x.get("null_table") or {}
+        rows.append({
+            "cell": x["cell"], "replicate": x["replicate"], "truth": x["truth"],
+            "outcome": outcome_of(x), "rule": x.get("rule"),
+            "null": {k: t.get(k) for k in ("NB", "NM", "NS", "null_partial", "null_rejected")},
+            "failed_channels": t.get("failed_channels"),
+            "admitted": (x.get("verdict") or {}).get("admitted"),
+            "power_run_outcome": before.get(x["cell"]) if x["replicate"] == 0 else None,
+            "evaluations": (x["summary"] or {}).get("simulator_evals_used"),
+            "wall_min": round(float((x["summary"] or {}).get("wall_s") or 0.0) / 60.0, 1),
+            "commit": (x["summary"] or {}).get("git_commit"),
+        })  # fmt: skip
+    gate = [r["outcome"] for r in rows if r["cell"] == "S0-01 B/B"]
+    out = {
+        "what": "the six pilot runs, offline (no model), three-role minimum, at one commit",
+        "rows": rows,
+        "go_no_go_offline": {"S0-01 B/B": gate},
+    }
+    REPORT_DIR.mkdir(parents=True, exist_ok=True)
+    (REPORT_DIR / "offline.json").write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8")
+    md = [
+        "# P2 pilot runs, offline (B-2)",
+        "",
+        "The six pilot runs with the offline decider: three-role minimum, every decision at",
+        "its code fallback, no model. The power-run column (replicate 0 only) is the",
+        "full-role run of `reports/p2_power/` before F-B, shown where the cell overlaps.",
+        "",
+        "| cell | seed | truth | offline outcome | rule | failed channels | power run |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    md += [
+        f"| {r['cell']} | {r['replicate']} | {','.join(r['truth'])} | {r['outcome']} | "
+        f"{r['rule']} | {r['failed_channels']} | {r['power_run_outcome'] or '—'} |"
+        for r in rows
+    ]
+    (REPORT_DIR / "offline.md").write_text("\n".join(md) + "\n", encoding="utf-8")
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("action", choices=["plan", "run", "report"], nargs="?", default="plan")
+    parser.add_argument(
+        "action", choices=["plan", "offline", "run", "report", "report-offline"], nargs="?",
+        default="plan",
+    )  # fmt: skip
     parser.add_argument("--store", type=Path, default=None)
     parser.add_argument("--live", action="store_true")
+    parser.add_argument("--part", default="0/1", help="offline only: i/n of the runs")
     args = parser.parse_args(argv)
     if args.action == "plan":
         print(json.dumps(plan(), indent=1))
@@ -225,6 +348,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--store is required")
     if args.action == "run":
         run(args.store, live=args.live)
+    elif args.action == "offline":
+        offline(args.store, args.part)
+    elif args.action == "report-offline":
+        report_offline(args.store)
     else:
         report(args.store)
     return 0

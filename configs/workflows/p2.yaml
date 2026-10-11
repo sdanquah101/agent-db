@@ -173,10 +173,25 @@ frozen:
     cal.split: 0a7eb8fffa3ed7bd1d1b49d47b4eb7dac0b5a667d8d6b8dc939a607753cca406
     design.assay: 6b618011e9ad166531be730546625ecf3d15acda7468ac9ce0d6ec7c2be66a9f
     verify.differential: 28c1f9c5496ebf99bf05e3fd34f674b9d56ca04737dd88c738dd2f8bd4d1c09f
-  model_id: gpt-5.6-luna
-  effort: high
-  max_tokens: 16000
-  retry:
-    max_attempts: 4
-    backoff_s: 2.0
-    max_backoff_s: 30.0
+  model:                      # the whole block (B-4): a lower price would weaken the USD cap
+    provider: openai
+    model_id: gpt-5.6-luna
+    max_tokens: 16000
+    temperature: null
+    effort: high
+    prompt_caching: true
+    request_timeout_s: 600
+    retry:
+      max_attempts: 4
+      backoff_s: 2.0
+      max_backoff_s: 30.0
+    pricing_usd_per_mtok:
+      input: 0.20
+      output: 1.20
+      cache_write: 0.20
+      cache_read: 0.02
+  caps:                       # and the caps: a higher cap must be a new freeze
+    max_requests: 60
+    max_total_tokens: 6000000
+    max_usd: 0.25
+    input_chars_per_token: 2.0

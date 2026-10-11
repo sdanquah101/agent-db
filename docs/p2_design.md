@@ -917,6 +917,8 @@ None of this has made a live call. No call is made until the coordinator has rev
 deliverable 3 and the lead approves the pilot.
 
 - **The signatures come from the reference fit, on the raw record** (the review's F-B).
+  The sensors in the objective are also chosen by the raw record's sample count (N-5b),
+  so a quarantine a decision chose cannot change which channels the signatures see.
   - The early/late test, the feed covariate, the change point, R3, the biomass pair and
     the hold-out bit are computed against the reference fit: its prediction, its
     optimum and its bounds. They use the raw record and the served weights.
@@ -929,11 +931,19 @@ deliverable 3 and the lead approves the pilot.
 - **The caps** (`p2.yaml` `caps`) are enforced in the privileged gateway
   (`tools/p2_live.py::P2Gateway`), never in the workflow.
   - The limits: 60 requests and 6 M tokens per run (P1's), and USD 0.25 per run.
-  - Each request is **projected before it is sent**: its input at 2 characters per
-    token (conservative), plus the full `max_tokens` of output.
-  - A request that would take the run past any cap is refused unsent and unlogged. The
-    workflow then stops asking and abstains (`abstain:model_cap`), so a live run is
-    never a silent mixture of model and code decisions.
+  - **Every attempt** is projected before it is sent, retries included (the review of
+    PR #33, B-1): its input at 2 characters per token (conservative), plus the full
+    `max_tokens` of output. Every attempt counts against the request cap.
+  - A failed attempt is booked at its projected worst case. That covers a retryable
+    error, and a reply that arrived but could not be read, which may have been billed.
+  - An attempt that would take the run past any cap is refused unsent and logged as a
+    refusal (`refused: cap`). The workflow then stops asking and abstains
+    (`abstain:model_cap`), so a live run is never a silent mixture of model and code
+    decisions.
+  - The interrupted decision is still recorded. Every log line, refusals included, is
+    cited by a decision record's `llm_call_ids`.
+  - Twelve points × two attempts project to about USD 0.46, so the USD 0.25 cap can
+    bind on a legitimate run, by design.
 - **The gateway is P1's** (`ModelGateway`, its retry, meter and `llm_calls.jsonl`). P2's
   subclass accepts only a request the frozen decision layer produces:
   - one of the twelve frozen templates as the system prompt;
@@ -951,12 +961,19 @@ deliverable 3 and the lead approves the pilot.
 - **The template freeze** (`p2.yaml` `frozen`, checked by
   `tools/p2_live.py::check_p2_frozen`):
   - every template's text, every decision's output schema and the tool its request
-    offers, by sha256, and the model settings;
+    offers, by sha256, and the **whole** model block and caps (B-4);
+  - a configuration's `frozen` record must be the committed one, so a copied
+    configuration with edited hashes is refused. The model block is checked against the
+    frozen P1's on the configuration the run uses;
   - the runner checks it before **every** P2 run, offline included, and refuses a run
     on any difference;
   - a changed template is a new freeze, which needs the lead's word.
 - **Live mode is an explicit flag, OFF by default**: `run_workflow(..., live=True)`, or
-  `--live` on the command line. `p2.yaml` cannot select it.
+  `--live` on the command line. `p2.yaml` cannot select it. **Either path also requires
+  the lead's committed approval record** (B-3). The record is
+  `configs/workflows/p2_live_approval.yaml`. It is checked by digest on a clean tree,
+  and it names the caps, the committed freeze and the exact run list, matched against
+  the run's truth manifest. It does not exist until the lead approves.
   - Without the flag, the jail gets `decider: offline` and no gateway is built. A model
     client passed without the flag is refused.
   - A test shows that the default reaches no model: an offline run never calls
@@ -966,8 +983,11 @@ deliverable 3 and the lead approves the pilot.
     S0-01 B/B, S2-01 B/B and S8-01 B/B. The two seeds per cell are replicates 0 and 1:
     six runs, about USD 0.3.
   - The pilot stops launching cells at USD 0.6.
-  - `APPROVED = False` refuses `run` before any client is built. Approval is a reviewed
-    one-line commit naming the lead's word.
+  - `run` refuses without the approval record, before any client is built. The runner
+    checks the record again for each run.
+  - `offline` runs the same six runs with the offline decider, at the same commit and
+    configuration. That is the baseline a live-versus-offline difference is measured
+    against (B-2; `reports/p2_pilot/offline.md`).
   - `plan` prints the cells, the caps and the command, and makes no call.
 - **Expectations, stated before any result** (the lead's request).
   - A model can change only the outcomes of the twelve decision points. Every label is

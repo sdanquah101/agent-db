@@ -785,9 +785,20 @@ class LiveResponder:
         self.pending: list[int] = []
 
     def take_call_ids(self) -> list[int]:
-        """The gateway turn ids of the attempts since the last take."""
+        """The ``llm_calls.jsonl`` line numbers of every attempt since the last take.
+
+        Failed and refused attempts included: the gateway names its lines in a reply's
+        status and in an error's message, so every logged attempt is cited by the
+        decision record that caused it (the review of PR #33, N-2a).
+        """
         out, self.pending = list(self.pending), []
         return out
+
+    def _cite(self, message: str) -> None:
+        tag = "[llm_lines="
+        if tag in message:
+            ids = message.rsplit(tag, 1)[1].split("]", 1)[0]
+            self.pending += [int(i) for i in ids.split(",") if i.strip().isdigit()]
 
     def __call__(self, point: str, template: str, inputs: dict[str, Any]) -> dict[str, Any]:
         """One attempt."""
@@ -801,12 +812,13 @@ class LiveResponder:
         try:
             reply = tools.llm(request)
         except tools.BudgetExceededError as exc:
+            self._cite(str(exc))
             raise ModelCapReached(str(exc)) from exc
         except tools.ToolError as exc:
+            self._cite(str(exc))
             raise AttemptFailed(f"model: {str(exc)[:200]}") from exc
         status = reply.get("status") or {}
-        if "turns_used" in status:
-            self.pending.append(int(status["turns_used"]) - 1)
+        self.pending += [int(i) for i in status.get("llm_lines") or []]
         for block in (reply.get("response") or {}).get("content") or []:
             if block.get("type") == "tool_use" and block.get("name") == tool["name"]:
                 return dict(block.get("input") or {})
@@ -851,6 +863,12 @@ class Decider:
                 attempts += 1
                 failures.append(str(exc))
                 continue
+            except ModelCapReached:
+                # the decision is interrupted, not lost: its record cites every attempt
+                # the gateway logged for it, then the run stops asking (N-2a)
+                self._record(spec, point, template, inputs, model.model_validate(fallback),
+                             attempts, [*failures, "model_cap"], True)  # fmt: skip
+                raise
             if raw is None:
                 break
             attempts += 1
@@ -867,13 +885,27 @@ class Decider:
         used_fallback = output is None
         if output is None:
             output = model.model_validate(fallback)
+        self._record(spec, point, template, inputs, output, attempts, failures, used_fallback)
+        return output
+
+    def _record(
+        self,
+        spec: dict[str, Any],
+        point: str,
+        template: dict[str, str],
+        inputs: dict[str, Any],
+        output: BaseModel,
+        attempts: int,
+        failures: list[str],
+        used_fallback: bool,
+    ) -> None:
         take = getattr(self.respond, "take_call_ids", None)
         self.records.append(
             {
                 "role": spec["role"],
                 "point": point,
                 "template_sha256": template["sha256"],
-                "schema_sha256": schema_sha256(model),
+                "schema_sha256": schema_sha256(spec["model"]),
                 "inputs_digest": _digest(inputs),
                 "output": output.model_dump(mode="json"),
                 "attempts": attempts,
@@ -882,7 +914,6 @@ class Decider:
                 "llm_call_ids": take() if take is not None else [],
             }
         )
-        return output
 
 
 # ------------------------------------------------------------------ messages (§6.2)
@@ -1122,9 +1153,10 @@ class Series:
             "unit": self.unit,
         }
 
-    def count(self, window: tuple[float, float]) -> int:
-        """Observed samples inside ``window``."""
-        return int((np.isfinite(self.value) & (self.t >= window[0]) & (self.t <= window[1])).sum())
+    def count(self, window: tuple[float, float], *, raw: bool = False) -> int:
+        """Observed samples inside ``window`` (of the raw record with ``raw``)."""
+        v = self.raw if raw else self.value
+        return int((np.isfinite(v) & (self.t >= window[0]) & (self.t <= window[1])).sum())
 
 
 # ------------------------------------------------------------------ the workflow
@@ -1334,7 +1366,9 @@ class Workflow:
                     s.flags.append("drift_within_declared_bound")
             if r.informative_missingness:
                 self.abstentions.append("missing_transient")
-            if s.count(self.cal) < int(qc["min_samples"]):
+            # counted on the raw record: a quarantine a decision chose cannot drop a
+            # sensor from the objective, and so from the signatures (N-5b)
+            if s.count(self.cal, raw=True) < int(qc["min_samples"]):
                 s.in_objective = False
                 if s.status == "ok":
                     s.status = "excluded"
@@ -2190,7 +2224,9 @@ class Workflow:
             "evidence": self.evidence, "flag_sensor": flag, "scale_factor": scale,
             "revise_influent_mapping": label == lab["influent"],
             "recommend_structural_review": label == lab["structural"],
-            "kinetic_update": label in (lab["parameter"], lab["none"]),
+            # an abstaining run claims nothing, a kinetic update included (N-2b)
+            "kinetic_update": label in (lab["parameter"], lab["none"])
+            and v.get("verdict") != "abstain",
         }  # fmt: skip
         self.validation = self.validate("harness", "final")
         self.checkpoint("conclude")

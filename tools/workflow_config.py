@@ -705,8 +705,9 @@ class P2Frozen(_Frozen):
     """The freeze of P2's decision layer (deliverable 3, F-E), checked before every run.
 
     Every template's text, every decision's output schema and every decision's tool, by
-    sha256, and the model settings; :func:`tools.p2_live.check_p2_frozen` recomputes them
-    and refuses a run on any difference.
+    sha256, and the **whole** model block and caps (the review of PR #33, B-4: a lower
+    price or a higher cap must trip the freeze); :func:`tools.p2_live.check_p2_frozen`
+    recomputes them and refuses a run on any difference.
     """
 
     date: str
@@ -714,10 +715,8 @@ class P2Frozen(_Frozen):
     templates_sha256: dict[str, str]
     schemas_sha256: dict[str, str]
     tools_sha256: dict[str, str]
-    model_id: str
-    effort: str | None
-    max_tokens: int
-    retry: Retry
+    model: ModelSettings
+    caps: P2Caps
 
 
 class P2Config(_Frozen):

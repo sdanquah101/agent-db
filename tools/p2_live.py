@@ -24,6 +24,7 @@ import hashlib
 import json
 import math
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from tools.llm import (
@@ -32,6 +33,7 @@ from tools.llm import (
     ModelGateway,
     OpenAIResponsesClient,
     check_agent_request,
+    request_digest,
     system_digest,
     tools_digest,
 )
@@ -44,6 +46,10 @@ __all__ = [
     "p2_live_client",
     "p2_provenance",
 ]
+
+
+COMMITTED_P2 = Path(__file__).resolve().parents[1] / "configs" / "workflows" / "p2.yaml"
+"""The committed configuration whose ``frozen`` record every P2 run is checked against."""
 
 
 def _sha(text: str) -> str:
@@ -72,13 +78,26 @@ def check_p2_frozen(config: P2Config) -> P2Frozen:
     Returns:
         The freeze record, when everything matches.
 
+    Checked, in order: the record exists and is the **committed** one (a configuration
+    copied elsewhere, the pilot's for example, cannot carry its own edited record); every
+    template, output schema and tool against it; the whole model block and the caps
+    against it; and the model block against the frozen P1's (decision d), on the very
+    configuration the run uses.
+
     Raises:
-        ValueError: There is no freeze record, or a template, an output schema, a tool
-            or a model setting differs from it (naming the first difference).
+        ValueError: Naming the first difference.
     """
+    from tools.workflow_config import load_p1, load_p2
+
     frozen = config.frozen
     if frozen is None:
         raise ValueError("p2.yaml has no frozen record: P2's decision layer is not frozen")
+    committed = load_p2(COMMITTED_P2).frozen
+    if frozen != committed:
+        raise ValueError(
+            "the configuration's frozen record is not the committed one "
+            f"({COMMITTED_P2.name}): refused"
+        )
     now = frozen_digests(config)
     for kind, recorded in (
         ("templates", frozen.templates_sha256),
@@ -93,31 +112,38 @@ def check_p2_frozen(config: P2Config) -> P2Frozen:
                     f"the {kind[:-1]} of {point!r} is not the frozen one "
                     f"({now[kind][point][:12]}… vs {recorded[point][:12]}…): refused"
                 )
-    m = config.model
     for name, have, want in (
-        ("model_id", m.model_id, frozen.model_id),
-        ("effort", m.effort, frozen.effort),
-        ("max_tokens", m.max_tokens, frozen.max_tokens),
-        ("retry", m.retry, frozen.retry),
+        ("model", config.model, frozen.model),
+        ("caps", config.caps, frozen.caps),
     ):
         if have != want:
-            raise ValueError(f"the model's {name} ({have!r}) is not the frozen {want!r}")
+            diff = sorted(
+                k for k in have.model_dump() if have.model_dump()[k] != want.model_dump()[k]
+            )
+            raise ValueError(f"the {name} block is not the frozen one ({diff}): refused")
+    if config.model != load_p1().model:
+        raise ValueError("the model block is not the frozen P1's (decision d): refused")
     return frozen
 
 
-def p2_provenance(config: P2Config) -> dict[str, str]:
-    """What every ``llm_calls.jsonl`` line and the summary carry; refuses an unfrozen run."""
+def p2_provenance(config: P2Config, *, live: bool = True) -> dict[str, str]:
+    """What every ``llm_calls.jsonl`` line and the summary carry; refuses an unfrozen run.
+
+    An offline run names no model (the review's N-10b): none was reachable.
+    """
     from tools.runner import git_commit
 
     check_p2_frozen(config)
     now = frozen_digests(config)
-    return {
+    out = {
         "templates_sha256": _sha(json.dumps(now["templates"], sort_keys=True)),
         "schemas_sha256": _sha(json.dumps(now["schemas"], sort_keys=True)),
         "tools_sha256": _sha(json.dumps(now["tools"], sort_keys=True)),
-        "model_id": config.model.model_id,
         "git_commit": git_commit(),
     }
+    if live:
+        out["model_id"] = config.model.model_id
+    return out
 
 
 def p2_live_client(config: P2Config) -> OpenAIResponsesClient:
@@ -141,6 +167,12 @@ class P2Gateway(ModelGateway):
     allowed: dict[str, tuple[str, str, str]] = field(default_factory=dict)
     base_provenance: dict[str, str] = field(default_factory=dict)
     by_role: dict[str, dict[str, int]] = field(default_factory=dict)
+    attempts_sent: int = 0
+    reserved_tokens: int = 0
+    reserved_usd: float = 0.0
+    lines_written: int = 0
+    _lines: list[int] = field(default_factory=list, init=False, repr=False)
+    _inner: Any = field(default=None, init=False, repr=False)
 
     @classmethod
     def for_config(cls, config: P2Config, client: Any, log_dir: Any) -> P2Gateway:
@@ -202,21 +234,32 @@ class P2Gateway(ModelGateway):
         usd = None if p is None else (tokens_in * p.input + tokens_out * p.output) / 1e6
         return tokens_in + tokens_out, usd
 
-    def complete(self, request: dict[str, Any]) -> dict[str, Any]:
-        """One decision request: checked, projected against every cap, then sent.
+    # -- the caps, per attempt (the review of PR #33, B-1) -----------------------------
+    def cost_usd(self) -> float | None:
+        """The run's cost: what the meter booked, plus every failed attempt's worst case.
+
+        A failed attempt (a retryable error, or a reply that arrived but could not be
+        read) may have been billed and is never metered by P1's gateway, so it is booked
+        here at its projected worst case. The pilot's stop reads this figure too.
+        """
+        base = super().cost_usd()
+        return None if base is None else base + self.reserved_usd
+
+    def check_attempt(self, point: str, tokens: int, usd: float | None) -> None:
+        """Refuse the next attempt if it could take the run past any cap.
+
+        Every attempt counts against ``max_turns``, a retry included; the token and USD
+        checks include the worst case booked for every failed attempt.
 
         Raises:
-            GatewayRefusal: The request would take the run past a cap; nothing was sent.
-            ModelError: The request is not a frozen decision's, or the call failed.
+            GatewayRefusal: Naming the cap.
         """
-        point, role = self.decision_of(request)
-        tokens, usd = self.projected(request)
-        if self.meter.requests + 1 > self.max_turns:
+        if self.attempts_sent + 1 > self.max_turns:
             raise GatewayRefusal(f"{point}: the run's {self.max_turns} requests are spent")
-        if self.meter.total + tokens > self.max_total_tokens:
+        used = self.meter.total + self.reserved_tokens
+        if used + tokens > self.max_total_tokens:
             raise GatewayRefusal(
-                f"{point}: {self.meter.total} + {tokens} tokens would pass the run's "
-                f"{self.max_total_tokens}"
+                f"{point}: {used} + {tokens} tokens would pass the run's {self.max_total_tokens}"
             )
         spent = self.cost_usd()
         if usd is None or spent is None:
@@ -225,10 +268,191 @@ class P2Gateway(ModelGateway):
             raise GatewayRefusal(
                 f"{point}: USD {spent:.4f} + {usd:.4f} would pass the run's {self.max_usd}"
             )
+
+    def _log(self, *args: Any, **kwargs: Any) -> None:
+        """P1's log line, numbered, so a decision record can cite it."""
+        super()._log(*args, **kwargs)
+        self._lines.append(self.lines_written)
+        self.lines_written += 1
+
+    def log_refusal(self, params: dict[str, Any], reason: str) -> None:
+        """A refused attempt, auditable from the log: nothing was sent (N-2c)."""
+        line = {
+            "turn": self.meter.requests,
+            "attempt": None,
+            "client": getattr(self._inner, "name", ""),
+            "request_sha256": request_digest(params),
+            "provenance": dict(self.provenance),
+            "refused": True,
+            "response": None,
+            "error": f"refused: cap: {reason}",
+        }
+        with self.log_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(line, sort_keys=True, default=str) + "\n")
+        self._lines.append(self.lines_written)
+        self.lines_written += 1
+
+    def complete(self, request: dict[str, Any]) -> dict[str, Any]:
+        """One decision request: checked, then every attempt checked against every cap.
+
+        The reply's ``status`` names the log lines this request wrote (``llm_lines``);
+        a refusal or a failure names them in its message, so the workflow's decision
+        record cites every attempt.
+
+        Raises:
+            GatewayRefusal: An attempt would take the run past a cap; it was not sent.
+            ModelError: The request is not a frozen decision's, or the call failed.
+        """
+        point, role = self.decision_of(request)
+        tokens, usd = self.projected(request)
         self.provenance = {**self.base_provenance, "point": point, "role": role}
-        before = self.meter.total
-        out = super().complete(request)
+        self._lines = []
+        self._inner = self.client
+        # checked here first, so a refusal at the first attempt is logged too (P1's own
+        # pre-check would refuse it silently)
+        try:
+            self.check_attempt(point, tokens, usd)
+        except GatewayRefusal as exc:
+            self.log_refusal(self.params(request), str(exc))
+            raise GatewayRefusal(f"{exc} [llm_lines={_ids(self._lines)}]") from exc
         used = self.by_role.setdefault(role, {"tokens": 0, "requests": 0})
-        used["tokens"] += self.meter.total - before
-        used["requests"] += 1
+        before = self.meter.total + self.reserved_tokens
+        self._inner = self.client
+        self.client = _Guarded(self, self._inner, point, role, tokens, usd)
+        try:
+            out = super().complete(request)
+        except GatewayRefusal as exc:
+            raise GatewayRefusal(f"{exc} [llm_lines={_ids(self._lines)}]") from exc
+        except ModelError as exc:
+            raise ModelError(f"{exc} [llm_lines={_ids(self._lines)}]") from exc
+        finally:
+            self.client = self._inner
+            used["tokens"] += self.meter.total + self.reserved_tokens - before
+        out["status"] = {**out["status"], "llm_lines": list(self._lines)}
         return out
+
+
+def _ids(lines: list[int]) -> str:
+    return ",".join(str(i) for i in lines)
+
+
+class _Guarded:
+    """The client as P2's gateway hands it to P1's retry loop: each attempt checked first.
+
+    Before every attempt, the first and each retry alike, the caps are checked
+    (:meth:`P2Gateway.check_attempt`); a refusal is logged and raised, and nothing is
+    sent. An attempt that fails, retryably or with a reply that arrived but could not be
+    read, is booked at its projected worst case.
+    """
+
+    def __init__(
+        self, gw: P2Gateway, inner: Any, point: str, role: str, tokens: int, usd: float | None
+    ) -> None:
+        self._gw, self._inner = gw, inner
+        self._point, self._role, self._tokens, self._usd = point, role, tokens, usd
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+    def create(self, params: dict[str, Any]) -> dict[str, Any]:
+        """One attempt, if every cap allows it."""
+        gw = self._gw
+        try:
+            gw.check_attempt(self._point, self._tokens, self._usd)
+        except GatewayRefusal as exc:
+            gw.log_refusal(params, str(exc))
+            raise
+        gw.attempts_sent += 1
+        gw.by_role[self._role]["requests"] += 1
+        try:
+            return self._inner.create(params)
+        except Exception:
+            gw.reserved_tokens += self._tokens
+            gw.reserved_usd += float(self._usd or 0.0)
+            raise
+
+
+# ------------------------------------------------------------------ the approval (B-3)
+
+APPROVAL_FILE = COMMITTED_P2.parent / "p2_live_approval.yaml"
+"""The lead's approval of live P2 runs. **Absent until the lead approves**; the coordinator
+relays the word and the record is committed then, never before."""
+
+
+def approval_digest(record: dict[str, Any]) -> str:
+    """The digest a record carries of its own ruling, run list, caps and freeze."""
+    body = {k: record.get(k) for k in ("ruling_date", "word", "runs", "caps", "frozen_sha256")}
+    return _sha(json.dumps(body, sort_keys=True, default=str))
+
+
+def frozen_record_sha256() -> str:
+    """The digest of the committed configuration's ``frozen`` record."""
+    from tools.workflow_config import load_p2
+
+    frozen = load_p2(COMMITTED_P2).frozen
+    return _sha(json.dumps(None if frozen is None else frozen.model_dump(mode="json"),
+                           sort_keys=True))  # fmt: skip
+
+
+def _git_clean(path: Path) -> tuple[bool, str]:
+    """Whether ``path`` is committed unchanged and the tracked tree is clean."""
+    import subprocess
+
+    repo = COMMITTED_P2.parents[2]
+
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True,
+                              check=False)  # fmt: skip
+
+    if git("ls-files", "--error-unmatch", str(path)).returncode != 0:
+        return False, f"{path.name} is not committed"
+    if git("status", "--porcelain", "--untracked-files=no").stdout.strip():
+        return False, "the working tree has uncommitted changes"
+    return True, ""
+
+
+def require_live_approval(config: P2Config, cell: dict[str, Any] | None = None) -> dict:
+    """Refuse a live run without the lead's committed approval (the review of PR #33, B-3).
+
+    The record must exist, be committed on a clean tree, carry a digest that matches its
+    own content, name the caps the configuration has and the committed freeze, and (with
+    ``cell``: ``scenario``, ``plant``, ``tier``, ``replicate``) list this run.
+
+    Returns:
+        The record.
+
+    Raises:
+        ValueError: Naming the first reason it is refused.
+    """
+    import yaml
+
+    if not APPROVAL_FILE.is_file():
+        raise ValueError(
+            f"no approval record ({APPROVAL_FILE.name}): no live P2 run before the lead's word"
+        )
+    clean, why = _git_clean(APPROVAL_FILE)
+    if not clean:
+        raise ValueError(f"live P2 refused: {why}")
+    record = yaml.safe_load(APPROVAL_FILE.read_text(encoding="utf-8")) or {}
+    if record.get("digest") != approval_digest(record):
+        raise ValueError("the approval record's digest does not match its content")
+    if record.get("caps") != config.caps.model_dump(mode="json"):
+        raise ValueError("the approval names other caps than the configuration's")
+    if record.get("frozen_sha256") != frozen_record_sha256():
+        raise ValueError("the approval names another freeze than the committed one")
+    if cell is not None:
+        runs = [dict(r) for r in record.get("runs") or []]
+        if dict(cell) not in runs:
+            raise ValueError(f"the approval does not list this run {cell}")
+    return record
+
+
+def cell_of(truth_manifest: Path) -> dict[str, Any]:
+    """The run's public cell tuple, read on the privileged side from its truth manifest."""
+    m = json.loads(truth_manifest.read_text(encoding="utf-8"))
+    return {
+        "scenario": str(m["scenario_id"]),
+        "plant": str(m["plant"]),
+        "tier": str(m["tier"]),
+        "replicate": int((m.get("seeds") or {}).get("replicate", 0)),
+    }

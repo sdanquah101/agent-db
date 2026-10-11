@@ -7542,7 +7542,11 @@ can be changed. No live call has been made.
 
 1. **The USD cap per run: 0.25, projected before each request.**
    - *Reason:* about 6× P1's measured USD 0.04 per run, so it should bind only on a
-     runaway. The projection assumes the full `max_tokens` of output, and an input of 2
+     runaway. **The cap can bind on a legitimate run, by design** (the review's N-11g).
+     The worst-case projection of one attempt is about USD 0.019 (16,000 output tokens
+     at USD 1.20 per M, plus the input). Twelve decision points × two attempts project
+     to about USD 0.46 against the 0.25 cap. A run that would pass it stops asking and
+     abstains, rather than spending past the cap. The projection assumes the full `max_tokens` of output, and an input of 2
      characters per token (about half the usual 4), so a request is refused before it
      could pass the cap.
    - *Alternatives:* a tighter cap (0.10), which may refuse legitimate retries; or
@@ -7564,3 +7568,28 @@ can be changed. No live call has been made.
    - *Reason:* the matrix's own seed derivation, with no new seed list.
    - *Alternative:* the same generated cell run twice, which measures the model's
      variance alone.
+
+## 2026-10-11 — The coordinator's review of PR #33: what changed (no ruling asked)
+
+These are fixes, recorded here because they change what a run does and records.
+- **B-1, the caps hold per attempt.** Every attempt counts against the request cap,
+  retries included. Before each attempt the gateway re-projects its tokens and USD. Each
+  failed attempt is booked at its projected worst case, and the token and USD checks and
+  `cost_usd()` include those bookings. A failed attempt is either a retryable error or a
+  reply that arrived but could not be read, which may have been billed. P1's
+  `tools/llm.py` is unchanged: P2's gateway wraps the client it hands to P1's retry loop.
+- **B-3, approval.** `run_workflow(live=True)`, the runner's `--live` and the pilot all
+  require `configs/workflows/p2_live_approval.yaml`. The record must:
+  - be committed, on a clean tree;
+  - carry a digest of its ruling date, run list, caps and the committed freeze;
+  - list this exact run, matched by its truth manifest.
+
+  **The record does not exist. It is committed only after the lead's word.**
+- **B-4, the freeze** now covers the whole model block and the caps. A configuration's
+  `frozen` record must equal the committed one. The model block is checked against the
+  frozen P1's on the configuration the run actually uses.
+- **N-2b.** An abstaining run sets `kinetic_update` false. Its `final.label` is still
+  `none`, which predates this PR. **This needs a ruling before any `eval/`-based scoring
+  of P2**: the frozen evaluator reads `final.label`, so it would score a model-cap abstain
+  on a `none`-truth cell as correct. P2's own counts key on `outcome`. `eval/` is not
+  changed.

@@ -304,9 +304,13 @@ def run_workflow(
     if isinstance(config, P1Config):
         provenance = p1_provenance(config)  # refuses a post-freeze prompt change
     elif isinstance(config, P2Config):
-        from tools.p2_live import p2_provenance
+        from tools.p2_live import cell_of, p2_provenance, require_live_approval
 
-        provenance = p2_provenance(config)  # refuses a changed template, schema or tool
+        # refuses a changed template, schema, tool, model block or cap
+        provenance = p2_provenance(config, live=live)
+        if live:  # the lead's committed approval, naming this very run (B-3)
+            require_live_approval(config)  # the record itself first
+            require_live_approval(config, cell_of(paths.truth_manifest))
     registry = open_registry(run_id, runs_root=runs_root, truth_store=store, scenario=scenario)
     if timeout_s is None:
         timeout_s = (registry.budget.wall_clock_min + config.runner.timeout_margin_min) * 60.0
@@ -817,6 +821,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.live and args.workflow != "p2":
         parser.error("--live is P2's flag")
+    if args.live:
+        from tools.p2_live import require_live_approval
+        from tools.workflow_config import load_p2
+
+        require_live_approval(load_p2())  # before any cell is selected or run (B-3)
     if args.replay is not None and (not args.run or len(args.run) != 1):
         parser.error("--replay replays one run: give exactly one --run")
 
