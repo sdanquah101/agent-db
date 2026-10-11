@@ -992,6 +992,15 @@ deliverable 3 and the lead approves the pilot.
 - **Expectations, stated before any result** (the lead's request).
   - A model can change only the outcomes of the twelve decision points. Every label is
     still admitted by coded signatures over the frozen null rule.
-  - On the development cells the realistic gain is about **one cell**: S8-01 B/B, where
-    only the offline `insufficient` reading of the S1 table blocks `sensor`.
+  - Before B-2, the realistic gain on the development cells was put at about **one
+    cell**: S8-01 B/B.
+  - **Updated after the offline re-run of the six pilot runs** (B-2; the outcomes
+    moved, so this says so). Offline, all six are `none`. On three, the null fails on
+    one channel (NS), the S1 table holds, and only the offline reading blocks `sensor`.
+    A live `coupled_inside` reading would give:
+    - `sensor` on S8-01 B/B r0, which is **correct**;
+    - `sensor` on S2-01 B/B r1, which is **correct**;
+    - `sensor` on the clean S0-01 B/B r1, which is **wrong**.
+  - So the pilot can show at most two gains and one false alarm. S0-01 B/B r0's null
+    stands, so the go/no-go cannot stop on these records (`reports/p2_pilot/offline.md`).
   - S3-01, S5-01 and S6-02 are decided by coded rules and the frozen null rule.

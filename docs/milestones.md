@@ -3852,3 +3852,29 @@ power re-run (PR #32, draft).**
   1. the coordinator's review of deliverable 3;
   2. the lead's approval of the pilot;
   3. only then a live call.
+
+**2026-10-11 — PR #33: the coordinator's review at `0a8e1cd` (FIXES NEEDED), fixed at
+`42c6862`. No live call.**
+- **B-1:** caps per attempt.
+  - Every attempt counts against the request cap, retries included, and is projected
+    against the token and USD caps before it is sent.
+  - A failed or unreadable attempt is booked at its worst case.
+  - Each refusal is logged.
+  - `tools/llm.py` is untouched.
+- **B-3:** a live run needs the lead's committed approval record, on every path. **None
+  exists.**
+- **B-4:** the whole model block and the caps are frozen. A copied configuration must
+  carry the committed freeze. The P1 check runs on the configuration actually used.
+- **Test gaps** are closed, and the reviewer's surviving mutations are now killed.
+- **Nits:** N-1a, N-2a, N-2b, N-2c, N-5b, N-10b, N-11f and N-11g.
+  - N-2b also needs a lead ruling: the evaluator reads `final.label`, so it would score
+    an abstain on a `none`-truth cell as correct. `eval/` is not changed.
+- **B-2:** the six pilot runs offline at `42c6862`, in `reports/p2_pilot/offline.md`.
+  - All six are `none`.
+  - On three, NS with the S1 table holding: a live reading could give two correct
+    `sensor` labels (S8-01 r0, S2-01 r1) and one false one (S0-01 r1).
+  - The go/no-go cannot stop on these records.
+  - The §15 expectation is updated to match.
+- **Next:** the coordinator's re-review, then the lead's approval and only then the
+  approval record.
+
