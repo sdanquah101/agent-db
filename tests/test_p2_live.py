@@ -360,6 +360,10 @@ def test_a_changed_template_schema_or_tool_is_refused(tmp_path, monkeypatch):
 
 def test_the_default_reaches_no_model(monkeypatch, cfg, tmp_path):
     """Offline is the default everywhere: the config, the jail document, the runner."""
+    # the approval file is a temporary path that does not exist: these refusals hold
+    # whatever the repository holds (a committed record included)
+    absent = tmp_path / "no_approval" / "p2_live_approval.yaml"
+    monkeypatch.setattr(p2_live, "APPROVAL_FILE", absent)
     assert load_p2().decider == "offline"
     assert cfg["decider"] == "offline"
     assert not {"model", "caps", "frozen"} & set(cfg)  # privileged side only
@@ -427,6 +431,10 @@ def test_the_default_reaches_no_model(monkeypatch, cfg, tmp_path):
 def test_the_pilot_is_prepared_and_refused_until_approved(tmp_path, monkeypatch):
     from scripts import p2_pilot
 
+    # the approval file is a temporary path that does not exist: these refusals hold
+    # whatever the repository holds (a committed record included)
+    absent = tmp_path / "no_approval" / "p2_live_approval.yaml"
+    monkeypatch.setattr(p2_live, "APPROVAL_FILE", absent)
     plan = p2_pilot.plan()
     assert plan["approved"] is False and plan["runs"] == 6
     assert "S0-01 B/B" in plan["cells"] and plan["roles_off"] == [
@@ -542,8 +550,13 @@ def test_live_needs_the_leads_committed_approval_on_every_path(tmp_path, monkeyp
     from scripts import p2_pilot
     from tools import runner
 
+    # the approval file is a temporary path that does not exist: these refusals hold
+    # whatever the repository holds (a committed record included)
+    absent = tmp_path / "no_approval" / "p2_live_approval.yaml"
+    monkeypatch.setattr(p2_live, "APPROVAL_FILE", absent)
     config = load_p2()
-    assert not p2_live.APPROVAL_FILE.exists()  # not created before the lead's word
+    assert not absent.exists()
+    assert absent == p2_live.APPROVAL_FILE
     with pytest.raises(ValueError, match="no approval record"):
         p2_live.require_live_approval(config)
     # the command line refuses before any cell is selected
