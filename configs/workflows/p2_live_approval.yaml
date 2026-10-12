@@ -1,0 +1,37 @@
+ruling_date: '2026-10-11'
+word: The lead approved the P2 pilot as a cost-and-wiring check (option 1) on 2026-10-11;
+  relayed by the coordinator session_01Cu6G2kQjP2QSzvtkyP8cPr at 10:48 UTC.
+runs:
+- scenario: S0-01
+  plant: B
+  tier: B
+  replicate: 0
+- scenario: S0-01
+  plant: B
+  tier: B
+  replicate: 1
+- scenario: S2-01
+  plant: B
+  tier: B
+  replicate: 0
+- scenario: S2-01
+  plant: B
+  tier: B
+  replicate: 1
+- scenario: S8-01
+  plant: B
+  tier: B
+  replicate: 0
+- scenario: S8-01
+  plant: B
+  tier: B
+  replicate: 1
+caps:
+  max_requests: 60
+  max_total_tokens: 6000000
+  max_usd: 0.25
+  input_chars_per_token: 2.0
+frozen_sha256: b2fad49a246c6782a6b4e983c0dc3fb97efd573b4c4209b925619c4deddf7468
+config_sha256: 19370062de8b7cb30834f99350db51f2bfb390e28a76d252efc9f7465989b6fd
+runs_root: /home/user/p2_pilot_store/runs
+digest: 27e59f6aec2a74ada71baaa3db753c51c2a111b1f7bf23943994ec6458948aa8
