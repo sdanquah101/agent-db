@@ -15,8 +15,8 @@ of deliverable 3. The gate is not here: it is the runner's. ``run_workflow(live=
 refuses without the lead's committed approval record
 (``configs/workflows/p2_live_approval.yaml``, checked by digest on a clean tree, naming
 this exact run list and the caps; :func:`tools.p2_live.require_live_approval`). The
-record does not exist until the lead approves. ``run`` checks it first, before any
-client is built.
+record is committed only on the lead's word, and one that no longer matches the
+configuration refuses. ``run`` checks it first, before any client is built.
 
 Usage::
 

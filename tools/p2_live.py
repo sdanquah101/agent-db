@@ -385,8 +385,10 @@ class _Guarded:
 # ------------------------------------------------------------------ the approval (B-3)
 
 APPROVAL_FILE = COMMITTED_P2.parent / "p2_live_approval.yaml"
-"""The lead's approval of live P2 runs. **Absent until the lead approves**; the coordinator
-relays the word and the record is committed then, never before."""
+"""The lead's approval of live P2 runs, committed only on the lead's word as the
+coordinator relays it. A record that no longer matches what it names (the configuration,
+the freeze, the caps, the runs or the store) refuses every live run, so a changed
+configuration needs a new record before any live call."""
 
 
 APPROVAL_FIELDS = (

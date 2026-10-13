@@ -7702,3 +7702,58 @@ readings.
   could still fake confirmation. The coordinator's verification of the record (step 4
   of the lead's order) is the check on that.
 
+
+## 2026-10-13 — RULING (the lead): P2 runs have NO wall-clock limit
+
+**Decision.** P2 runs have no wall-clock limit. The ruling was relayed by the coordinator
+(session_01Cu6G2kQjP2QSzvtkyP8cPr) at 19:03 UTC. Everything else stays as it was for P2:
+- the simulator-evaluation budget;
+- the assay-unit budget;
+- the model caps (60 requests, 6M tokens, USD 0.25 per run);
+- the cells, the seeds, the null rule and every frozen item.
+
+P0 and P1 keep their limits.
+
+**Reason, as stated.** A multi-agent system should not be held to the same time limit as
+single agents and scripted models.
+
+**Why it came up.** In the pilot's first attempt (`reports/p2_pilot/attempt1/`), S0-01 B/B
+r1 spent the cell's 90-min allowance on calibration and identifiability. The registry
+refused `declared_background` at `step_null`, and the uncaught refusal crashed the run
+(`pending`). The attempt was stopped there.
+
+**Alternatives considered.**
+- An allowance of 2× the cell's.
+- An allowance of 3× the cell's.
+- Keeping the cell's 90 or 120 min.
+
+The lead chose no limit over all three.
+
+**Consequences.**
+- **Wall-clock becomes a cost metric for P2.** It is reported per run as a cost: the
+  runner's `wall_s` in `summary.json`, and each role's `wall_clock_s` there, measured by
+  the registry. The comparison with P0 and P1 shows it.
+- **How it is implemented.**
+  - `p2.yaml`'s `runner.wall_clock_limit: false` is the only value its schema accepts.
+  - The runner opens a P2 run's registry with the wall clock unenforced. The registry
+    then never refuses on the clock, and `remaining()` reports the cell's allowance
+    unconsumed.
+  - The jail gets no timeout.
+  - The budgets stay in the registry, not in the workflow. The evaluation and assay
+    refusals are unchanged.
+- **P2's plan sizing.** P2 shares P0's plan, which still sizes each step from the cell's
+  nominal allowance at the assumed seconds per evaluation, so P2's step sizes stay P0's.
+  The measured-rate guard never trips, because no elapsed time is consumed.
+- **What still bounds a P2 run.** The only time bound left is the model client's
+  per-request timeout (600 s, P1's frozen setting), which is one request's limit, not
+  the run's.
+- **The crash fix.** A registry budget refusal that no step's own fallback handles now
+  ends a P2 run as a recorded abstention, `abstain:budget`, at any step: never a crash,
+  never `pending`. Refusals a step already handles by design (the MCMC ladder, the
+  missing null table) keep P0's fallbacks.
+- **What changes in the records.**
+  - The pilot's configuration digest and the approval record must be renewed: the
+    `runner` block changed. The coordinator will relay the new record's fields, with a
+    fresh run store, ruling date 2026-10-13 and new wording.
+  - The decision layer's freeze (`p2.yaml`'s `frozen`: templates, schemas, tools,
+    model, caps) is unchanged.

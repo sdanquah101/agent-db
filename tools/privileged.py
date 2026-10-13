@@ -64,6 +64,7 @@ def open_registry(
     scenario: Scenario | None = None,
     scenarios_dir: Path = SCENARIOS_DIR,
     clock: Callable[[], float] = time.monotonic,
+    wall_clock_enforced: bool = True,
 ) -> Registry:
     """Open the registry of a generated run.
 
@@ -75,6 +76,8 @@ def open_registry(
             looked up through the truth-side index.
         scenarios_dir: Where the scenario files live.
         clock: The wall clock the budget is enforced against.
+        wall_clock_enforced: False opens the run with no wall-clock limit (P2 only, the
+            lead's ruling of 2026-10-13); the evaluation and assay budgets are unchanged.
 
     Returns:
         The registry, with ``adm1_fitted`` registered, the assay channel attached, the
@@ -104,7 +107,7 @@ def open_registry(
     assays = AssayServer.from_truth_store(paths.truth, seed=seed)
     return Registry(
         specs=full_specs(),
-        budget=Budget.of(scenario.budget),
+        budget=Budget.of(scenario.budget, wall_clock_enforced=wall_clock_enforced),
         seed=seed,
         run_dir=paths.root,
         truth_log_dir=paths.truth,

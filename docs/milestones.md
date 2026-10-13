@@ -3927,3 +3927,25 @@ blocking), fixed. Still no approval record, no live call.**
     tested;
   - the pilot is the only live path for the record.
 
+
+**2026-10-13 — the live pilot's first attempt, stopped, and the lead's ruling "P2 runs have
+NO wall-clock limit".**
+- **The attempt.** The pilot was launched once at `679f327`, at 14:24:47 UTC.
+  - S0-01 B/B r0 concluded `none` (USD 0.0021).
+  - S0-01 B/B r1 spent the 90-min allowance; the registry refused `declared_background`
+    at `step_null`, and the uncaught refusal crashed the run (`pending`).
+  - It was stopped at 18:28:37 UTC (SIGTERM), mid S2-01 r0.
+  - The record is in `reports/p2_pilot/attempt1/`.
+- **The ruling** (relayed 19:03 UTC) is recorded in `docs/decisions.md`.
+  - **Implemented:** `p2.yaml`'s `runner.wall_clock_limit: false`. The runner opens a P2
+    run's registry with the wall clock unenforced and gives the jail no timeout. P0 and
+    P1 are unchanged.
+  - **The crash fix:** a budget refusal that escapes a step ends a P2 run as
+    `abstain:budget`.
+  - **Tests:** `tests/test_p2_wall_clock.py`.
+  - **Also done:** MG4, MR2 and nits 1–2.
+- **Blocked:** the approval record of 2026-10-11 no longer matches the configuration, so
+  every live run is refused until a new record exists. The coordinator will relay its
+  fields (a fresh store, ruling date 2026-10-13).
+- **Next:** the coordinator reviews commit 2; then the new record; then, on the relay,
+  the pilot.

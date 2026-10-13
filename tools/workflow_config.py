@@ -719,6 +719,22 @@ class P2Frozen(_Frozen):
     caps: P2Caps
 
 
+class P2Runner(_Frozen):
+    """P2's runner settings: no wall-clock limit (the lead's ruling of 2026-10-13).
+
+    The registry opens a P2 run with the wall clock unenforced and the runner gives the
+    jail no timeout; the evaluation and assay budgets are the cell's, as for P0 and P1.
+    The wall clock is reported per run as a cost (``summary.json``'s ``wall_s`` and each
+    role's ``wall_clock_s``).
+    """
+
+    wall_clock_limit: Literal[False] = Field(
+        description="False: no wall-clock allowance and no jail timeout for P2 (the "
+        "lead's ruling of 2026-10-13: a multi-agent system is not held to the single "
+        "agent's or the scripted model's time limit)"
+    )
+
+
 class P2Config(_Frozen):
     """``configs/workflows/p2.yaml``; P0's settings come from ``p0_config``, not retyped."""
 
@@ -741,7 +757,7 @@ class P2Config(_Frozen):
     biomass_scales: tuple[_Pos, _Pos]
     holdout: P2Holdout
     templates: dict[str, str]
-    runner: Runner
+    runner: P2Runner
     config_dir: Path = Field(default=WORKFLOW_CONFIG_DIR, exclude=True)
 
     @model_validator(mode="after")

@@ -101,14 +101,19 @@ class Budget:
     simulator_evals: int
     wall_clock_min: float
     assay_units: int
+    wall_clock_enforced: bool = True
+    """False for a workflow with no wall-clock limit (P2: the lead's ruling of 2026-10-13).
+    The allowance is then never refused on, and :meth:`Registry.remaining` reports it
+    unconsumed; the evaluation and assay budgets are enforced as for every workflow."""
 
     @classmethod
-    def of(cls, budget: Any) -> Budget:
+    def of(cls, budget: Any, *, wall_clock_enforced: bool = True) -> Budget:
         """From anything with the three attributes (``scenarios.schema.Budget`` included)."""
         return cls(
             simulator_evals=int(budget.simulator_evals),
             wall_clock_min=float(budget.wall_clock_min),
             assay_units=int(budget.assay_units),
+            wall_clock_enforced=bool(wall_clock_enforced),
         )
 
 
@@ -355,17 +360,22 @@ class Registry:
         # evaluator reconstructs the allowance from; the projection carries the fact that
         # the registry opened and the budget it opened with, which the workflow can read
         # from `remaining()` anyway
+        opened = {
+            "simulator_evals": budget.simulator_evals,
+            "wall_clock_min": budget.wall_clock_min,
+            "assay_units": budget.assay_units,
+        }
+        if not budget.wall_clock_enforced:  # P0's and P1's records are unchanged
+            opened["wall_clock_enforced"] = False
         self._log(
             "registry.open",
             self.configs.registry.registry_version,
-            {
-                "simulator_evals": budget.simulator_evals,
-                "wall_clock_min": budget.wall_clock_min,
-                "assay_units": budget.assay_units,
-            },
+            opened,
             self._opened,
             "ok",
-            "clock start: the wall-clock allowance runs from this record",
+            "clock start: the wall-clock allowance runs from this record"
+            if budget.wall_clock_enforced
+            else "clock start: no wall-clock limit (the wall clock is reported, never refused on)",
             0,
         )
         self._n_calls = 0
@@ -452,10 +462,18 @@ class Registry:
 
     def remaining(self) -> RemainingBudget:
         """The budget left, for the task state (§6.6)."""
+        # with no wall-clock limit nothing of the allowance is consumed, so a workflow's
+        # time-based guard never shrinks a step; the elapsed time is still measured, on the
+        # privileged side (`charged_calls`' runtimes, the runner's `wall_s`)
+        left = (
+            max(self.budget.wall_clock_min - self._elapsed_min(), 0.0)
+            if self.budget.wall_clock_enforced
+            else self.budget.wall_clock_min
+        )
         return RemainingBudget(
             simulator_evals=self._meter.remaining,
             simulator_evals_total=self.budget.simulator_evals,
-            wall_clock_min=max(self.budget.wall_clock_min - self._elapsed_min(), 0.0),
+            wall_clock_min=left,
             wall_clock_min_total=self.budget.wall_clock_min,
             assay_units=max(self.budget.assay_units - self._assay_units_used, 0),
             assay_units_total=self.budget.assay_units,
@@ -625,7 +643,7 @@ class Registry:
     def _refusal(self, spec: ToolSpec, inp: ToolInput, context: ToolContext) -> str | None:
         """Why the call would exceed the budget, or ``None`` if it may run."""
         elapsed = self._elapsed_min()
-        if elapsed >= self.budget.wall_clock_min:
+        if self.budget.wall_clock_enforced and elapsed >= self.budget.wall_clock_min:
             return (
                 f"wall-clock allowance of {self.budget.wall_clock_min:g} min spent "
                 f"({elapsed:.2f} min elapsed)"

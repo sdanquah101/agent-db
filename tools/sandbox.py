@@ -463,7 +463,7 @@ def launch(
     *,
     sandbox: str | Path,
     run_dir: str | Path | None = None,
-    timeout_s: float = 600.0,
+    timeout_s: float | None = 600.0,
     workflow: str | None = None,
     model_gateway: ModelGateway | None = None,
 ) -> SandboxResult:
@@ -480,7 +480,8 @@ def launch(
             launch a fresh directory; ``launch`` re-stages the stub, the workflow, the
             socket and the marker, but does not empty the directory.
         run_dir: ``runs/<id>/`` whose observations the run view serves, if any.
-        timeout_s: Kill the workflow after this long.
+        timeout_s: Kill the workflow after this long; ``None`` never kills it (P2, which
+            has no wall-clock limit).
         workflow: The workflow's name; with ``run_dir``, lets the workflow write its own
             outputs into ``runs/<id>/workflows/<workflow>/`` through ``tools.run.write_output``.
         model_gateway: For an LLM workflow, the gateway its model turns go through

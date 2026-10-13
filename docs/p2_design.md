@@ -973,7 +973,8 @@ deliverable 3 and the lead approves the pilot.
   the lead's committed approval record** (B-3). The record is
   `configs/workflows/p2_live_approval.yaml`. It is checked by digest on a clean tree,
   and it names the caps, the committed freeze and the exact run list, matched against
-  the run's truth manifest. It does not exist until the lead approves.
+  the run's truth manifest. It is committed only on the lead's word, and a record that
+  no longer matches the configuration refuses every live run.
   - Without the flag, the jail gets `decider: offline` and no gateway is built. A model
     client passed without the flag is refused.
   - A test shows that the default reaches no model: an offline run never calls

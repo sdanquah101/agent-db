@@ -2365,7 +2365,11 @@ class Workflow:
         """The state machine of §5, in its fixed order.
 
         A model cap reached at any decision point stops the run's decisions: it abstains
-        (``abstain:model_cap``), and the record says where (deliverable 3, F-E).
+        (``abstain:model_cap``), and the record says where (deliverable 3, F-E). A registry
+        budget refusal (evaluations, assay units) that no step's own fallback handles ends
+        the run the same way, as ``abstain:budget``: never a crash, never ``pending`` (the
+        lead's ruling of 2026-10-13, after the pilot's first attempt crashed at
+        ``step_null``).
         """
         try:
             self.step_read()
@@ -2391,6 +2395,17 @@ class Workflow:
                 "rejected": [],
                 "holdout_failed": None,
                 "reason": "model_cap",
+            }
+        except tools.BudgetExceededError as exc:
+            self.codes.append("budget")
+            self.annotations.append(f"budget refused after {self.trace}: {str(exc)[:200]}")
+            self.verdict = {
+                "verdict": "abstain",
+                "label": self.lab["none"],
+                "admitted": [],
+                "rejected": [],
+                "holdout_failed": None,
+                "reason": "budget",
             }
         self.step_conclude()
         self.completed = True

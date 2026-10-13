@@ -591,7 +591,7 @@ def test_live_needs_the_leads_committed_approval_on_every_path(tmp_path, monkeyp
         path.write_text(yaml.safe_dump(bad))
         with pytest.raises(ValueError, match=why):
             p2_live.require_live_approval(config, cell)
-    # the real check reads git: this repository has no record committed
+    # the real check reads git: a path that is not in the repository is refused
     monkeypatch.undo()
     assert p2_live._git_clean(tmp_path / "nowhere.yaml")[0] is False
 
@@ -850,6 +850,14 @@ def test_the_approval_must_be_the_pushed_blob_on_a_clean_tree(tmp_path):
     _git(repo, "fetch", "-q", "origin")
     _git(repo, "update-ref", "refs/remotes/origin/main", "origin/main")
     assert p2_live._git_clean(record, repo) == (True, "")
+    # MG4: a remote that cannot be reached confirms nothing: refused, though the local
+    # remote-tracking ref still contains the commit
+    _git(repo, "remote", "set-url", "origin", str(tmp_path / "gone.git"))
+    assert _git(repo, "branch", "-r", "--contains", "HEAD").strip()
+    ok, why = p2_live._git_clean(record, repo)
+    assert not ok and "confirmed by the remote" in why
+    _git(repo, "remote", "set-url", "origin", str(remote))
+    assert p2_live._git_clean(record, repo) == (True, "")  # the negative control
     # an edit hidden from status with --assume-unchanged: the blob check refuses it
     _git(repo, "update-index", "--assume-unchanged", "approval.yaml")
     record.write_text("word: forged\n")
@@ -902,6 +910,19 @@ def test_the_runner_checks_this_run_against_a_real_record_and_runs_it_once(tmp_p
 
     with pytest.raises(ValueError, match="does not list this run"):
         run("run_r7", 7)  # a replicate the record does not list
+    assert "gateway" not in seen
+    # MR2: the runner's own run-store check, with the real record: a listed run in a
+    # store the record does not name is refused before any gateway
+    other = tmp_path / "other_store" / "runs"
+    truth = other.parent / "truth_store" / "run_r0"
+    truth.mkdir(parents=True)
+    (truth / "manifest.json").write_text(json.dumps({
+        "scenario_id": "S0-01", "plant": "B", "tier": "B", "seeds": {"replicate": 0},
+    }))  # fmt: skip
+    (other / "run_r0").mkdir(parents=True)
+    with pytest.raises(ValueError, match="run store"):
+        runner.run_workflow("run_r0", "p2", live=True, model_client=ScriptedClient(lambda p: {}),
+                            runs_root=other, sandbox_root=tmp_path / "boxes")  # fmt: skip
     assert "gateway" not in seen
     run("run_r0", 0)  # listed: the gateway is built
     assert isinstance(seen["gateway"], P2Gateway)

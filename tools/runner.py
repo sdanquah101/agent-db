@@ -269,7 +269,8 @@ def run_workflow(
         sandbox_root: Where to make the sandbox directory (default: the host's temporary
             directory). Must lie outside the repository and the run store's parent.
         timeout_s: Kill the jail after this long (default: the cell's wall-clock allowance
-            plus ``runner.timeout_margin_min``).
+            plus ``runner.timeout_margin_min``; for P2, which has no wall-clock limit, no
+            timeout unless the caller passes one).
         scenario: The run's scenario, if the caller holds it (else the truth-side index).
         keep_sandbox: Leave the sandbox directory behind for inspection.
         config_path: A different workflow configuration (tests).
@@ -319,8 +320,17 @@ def run_workflow(
                     f"{run_id} already has a live record ({previous.name}): an approved "
                     "run runs once"
                 )
-    registry = open_registry(run_id, runs_root=runs_root, truth_store=store, scenario=scenario)
-    if timeout_s is None:
+    # P2 has no wall-clock limit (the lead's ruling of 2026-10-13): the registry never
+    # refuses on the clock and the jail gets no timeout; P0 and P1 keep both
+    unlimited = isinstance(config, P2Config) and not config.runner.wall_clock_limit
+    registry = open_registry(
+        run_id,
+        runs_root=runs_root,
+        truth_store=store,
+        scenario=scenario,
+        wall_clock_enforced=not unlimited,
+    )
+    if timeout_s is None and not unlimited:
         timeout_s = (registry.budget.wall_clock_min + config.runner.timeout_margin_min) * 60.0
     box = _fresh_sandbox(sandbox_root, workflow)
     (box / "cwd").mkdir(exist_ok=True)

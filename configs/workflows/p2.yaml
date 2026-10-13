@@ -124,8 +124,12 @@ templates:
   design.assay: p2_prompts/design.assay.md
   verify.differential: p2_prompts/verify.differential.md
 
+# The lead's ruling of 2026-10-13: P2 runs have NO wall-clock limit. The registry opens a
+# P2 run with the wall clock unenforced and the runner gives the jail no timeout; the
+# evaluation and assay budgets and the model caps are unchanged. Wall-clock is reported
+# per run as a cost (summary.json: wall_s, by_role[*].wall_clock_s).
 runner:
-  timeout_margin_min: 15.0
+  wall_clock_limit: false
 
 # The freeze of the decision layer (deliverable 3, F-E): every template's text, every
 # decision's output schema and the one tool its request offers, by sha256, and the model
