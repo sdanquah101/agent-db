@@ -932,8 +932,10 @@ class LiveResponder:
         tool = decision_tool(point, inputs)
         request = {
             "system": template,
-            "messages": [{"role": "user", "content": json.dumps(_jsonable(inputs),
-                                                                sort_keys=True)}],
+            # the inputs as one JSON object (design §6.3; the lead's ruling of 2026-10-14:
+            # until then the jail sent str(inputs), a Python literal inside a JSON string)
+            "messages": [{"role": "user", "content": json.dumps(inputs, sort_keys=True,
+                                                                default=_jsonable)}],
             "tools": [tool],
         }  # fmt: skip
         try:

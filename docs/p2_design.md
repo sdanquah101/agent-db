@@ -600,7 +600,9 @@ Every exchange between roles is a typed message (Pydantic), appended to
 
 Each decision point's request is assembled from:
 - its template, `configs/workflows/p2_prompts/<point>.md`;
-- its declared inputs, as data.
+- its declared inputs, as data: one JSON object in the single user message (the lead's
+  ruling of 2026-10-14; until then the jail sent `str(inputs)`, a Python literal inside a
+  JSON string).
 
 `p2.yaml` lists every template with its version. The template's sha256 goes into every
 `DecisionRecord`, and the runner refuses a run whose templates differ from the committed

@@ -3984,3 +3984,9 @@ of attempt 1 fixed in one commit, with no live call.**
 - **S-1:** the per-call enum must be a subset of P0's label vocabulary.
 - **Nits N-1 to N-5** done; the `_jsonable` finding is held for the lead's word.
 - **Next:** the coordinator's review; then the new approval record's fields.
+
+**2026-10-14, 10:42 UTC — the lead's ruling "Yes, fix it before the re-run": the decision
+inputs are sent as JSON.** One small commit after the review fixes: `json.dumps(inputs,
+sort_keys=True, default=_jsonable)`; no freeze or configuration digest moves; every
+`request_sha256` differs from attempt 1's. **Next:** the coordinator's review of both
+commits, then the approval record's fields.

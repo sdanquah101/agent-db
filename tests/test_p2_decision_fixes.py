@@ -51,9 +51,10 @@ def attempt1() -> dict[str, dict[str, Any]]:
         messages = rec.get("messages") or []
         if point in out or not messages:
             continue
-        # the jail serialises its inputs through str(): a Python literal inside a JSON
-        # string (reported in docs/decisions.md, 2026-10-14; not changed by this ruling)
-        out[point] = ast.literal_eval(json.loads(messages[-1]["content"]))
+        # attempt 1 predates the ruling of 2026-10-14 on the request's form: its jail sent
+        # str(inputs), a Python literal inside a JSON string; a record made since is JSON
+        parsed = json.loads(messages[-1]["content"])
+        out[point] = ast.literal_eval(parsed) if isinstance(parsed, str) else parsed
     return out
 
 
@@ -229,6 +230,33 @@ def test_the_verifier_offers_the_allowed_labels_and_still_accepts_only_them(monk
     monkeypatch.setattr(wf, "narrow_tool", lambda tool, point, inputs: tool)
     tool = wf.decision_tool("verify.differential", {"allowed_labels": ["none"]})
     assert "enum" not in tool["input_schema"]["properties"]["label"]
+
+
+def test_the_request_carries_the_inputs_as_json(monkeypatch):
+    """The user message is JSON data (the ruling of 2026-10-14); attempt 1's was not."""
+    seen: dict[str, Any] = {}
+
+    class Capture(FakeTools):
+        def llm(self, request: dict[str, Any]) -> dict[str, Any]:
+            seen["request"] = request
+            return {"status": {}, "response": {"content": []}}
+
+    monkeypatch.setattr(wf, "tools", Capture())
+    inputs = {"steps": {"tan": {"step_z": np.float64(4.5), "step_day": 105.0}},
+              "series": np.arange(3.0), "n": np.int64(7), "flag": np.bool_(True)}  # fmt: skip
+    with pytest.raises(wf.AttemptFailed, match="no decision call"):
+        wf.LiveResponder()("cal.split", "t", inputs)
+    content = seen["request"]["messages"][0]["content"]
+    parsed = json.loads(content)
+    assert isinstance(parsed, dict)
+    assert parsed == {"steps": {"tan": {"step_z": 4.5, "step_day": 105.0}},
+                      "series": [0.0, 1.0, 2.0], "n": 7, "flag": True}  # fmt: skip
+    assert "'" not in content and "None" not in content
+    # the negative control: attempt 1's recorded message is a Python literal inside a JSON
+    # string, which json reads as a str, not a dict
+    first = json.loads(ATTEMPT1.read_text(encoding="utf-8").splitlines()[0])
+    recorded = json.loads(first["messages"][-1]["content"])
+    assert isinstance(recorded, str) and recorded.startswith("{'")
 
 
 # ------------------------------------------------------------------ b. dq.trust

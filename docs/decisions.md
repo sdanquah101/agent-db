@@ -7849,3 +7849,23 @@ here rather than changed.
   step handles by P0's design keep its fallback, every one visible in the record.
 - **Held:** the `_jsonable` finding (a Python literal inside the JSON string) awaits the
   lead's word; nothing is prepared that depends on it.
+
+## 2026-10-14 — RULING (the lead): the decision inputs are sent as JSON ("Yes, fix it before the re-run")
+
+**The defect.** The jail built a decision's user message as `json.dumps(_jsonable(inputs))`,
+and `_jsonable` returns `str(x)` for a dict, so the model received a Python literal
+(single quotes, `None`, `False`) inside a JSON string, not the JSON object design §6.3
+describes. Found while fixing the decision-layer defects; attempt 1's `verify.differential`
+answer of `null` plausibly came from seeing `None` in that literal.
+
+**The lead's word**, relayed by the coordinator at 10:42 UTC: fix it before the re-run.
+
+**The fix.** `json.dumps(inputs, sort_keys=True, default=_jsonable)`: the inputs are one
+JSON object; NumPy arrays and scalars are converted by `_jsonable` as before. It is the
+only model-facing serialisation path (the gateway serialises nothing of the inputs).
+
+**What moves.** No freeze digest (`frozen_record_sha256` stays `fbe88dd0…8078`: the
+templates, schemas, tools, model block and caps are untouched) and no configuration
+digest. Every request's `request_sha256` and `replay_sha256` differ from attempt 1's,
+because the user message's text differs. Attempt 1's records keep their form; the test
+fixture reads both.
