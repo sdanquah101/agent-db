@@ -7769,3 +7769,63 @@ The lead chose no limit over all three.
     fresh run store, ruling date 2026-10-13 and new wording.
   - The decision layer's freeze (`p2.yaml`'s `frozen`: templates, schemas, tools,
     model, caps) is unchanged.
+
+## 2026-10-14 — RULING (the lead): the three decision-layer defects of attempt 1 are fixed ("Yes, fix all three")
+
+**Relayed** by the coordinator at 01:03 UTC. The coordinator's fresh-context review of
+`6fc58b9` + `7ef1238` found three design defects in the frozen decision layer, all older
+than those commits; fixing them changes the decision-layer freeze, which the lead approved.
+
+**The reason, found in attempt 1's decision table** (`reports/p2_pilot/attempt1/`,
+`run_c2509d5aec41`): all three of the model's non-trivial decisions fell back, each on a
+defect of the layer rather than of the model.
+- `verify.differential`: the model answered `null`; the code needs `none`, and the tool
+  offered no enum.
+- `dq.trust`: the model was shown pH's spike at day 172, inside a hold-out that starts at
+  day 150, and its quarantine of it was refused by the hold-out constraint.
+- `cal.split`: the model proposed `tan` + `cod_total` at day 105 (refused, `cod_total` at
+  z 1.43), while the valid `tan` + `alkalinity` pair at days 105 and 112 could not have
+  been accepted either: the code accepted only R4's earliest common day (day 15,
+  `gas_flow` + `ph`).
+
+**The three decisions.**
+- **(a)** `verify.differential` is given its allowed answers. The output schema is per
+  call: `label` is an enum of the admitted labels and `none`, offered as the tool's enum
+  and given as the `allowed_labels` input; each `rejected` entry is `{label, code}` with
+  the code in {`null_not_failed`, `signature_absent`, `coupled_outside`,
+  `holdout_passed`, `superseded`}; the template names the values, the literal `none`
+  included. The code's acceptance check is unchanged (admitted ∪ {none}). The frozen tool
+  is the form without the enum; the gateway accepts the per-call enum as the one
+  difference, and requires it to be a non-empty list of distinct strings holding the null
+  label. The fallback's set-aside codes are mapped onto the enum (code's finer codes,
+  `..._not_on_failed_channels` and `holdout_unavailable`, become `signature_absent` in the
+  decision's fallback; the verdict keeps them).
+- **(b)** `dq.trust` is not shown the hold-out. Only QC-flagged windows before the
+  hold-out start are passed, a window crossing it is trimmed to its last calibration
+  sample, and the sample count is the calibration window's before that start. The code
+  constraint that refuses a hold-out quarantine stays, as defence in depth. The template's
+  "on the calibration window" is now true. The `p2.dq.refused` log entry and count that
+  §2.2 promised are implemented (a `tool_failures` entry, `dq_refused` in the report, a
+  `dq.refused:<sensor>` code).
+- **(c)** `cal.split` accepts any valid common step: at least R4's channel count, each
+  named channel's own step z at or above R4's threshold, their step days within R4's
+  30-day tolerance of one another and of the proposed day. The fallback stays R4's
+  earliest common day. A channel below the threshold is refused: attempt 1's `cod_total`
+  still is.
+
+**Alternatives considered.** Leaving the three points frozen, and reading attempt 2 with
+them as they were. Rejected: each defect made a model decision fail on the layer, not
+on the model, so the pilot's cost-and-wiring reading would have been of the layer's
+defects.
+
+**The freeze.** `frozen_record_sha256` moves from `b2fad49a…7468` to `fbe88dd0…8078`:
+the templates of `dq.trust` and `verify.differential`, and the schema and tool of
+`verify.differential`. `cal.split`'s template and schema are unchanged (its fix is in
+the code's acceptance check). The record of 2026-10-11 names the old freeze and the old
+configuration, so it refuses every live run until the new record is relayed.
+
+**Found while fixing, not fixed (for a ruling).** The jail serialises a decision's inputs
+through `str()` before `json.dumps` (`_jsonable` on a dict), so the model receives a
+Python literal inside a JSON string, not the JSON the design describes. The model read
+it in attempt 1. Changing it changes every request's user message, so it is reported
+here rather than changed.

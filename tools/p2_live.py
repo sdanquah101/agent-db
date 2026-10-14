@@ -165,6 +165,8 @@ class P2Gateway(ModelGateway):
     max_usd: float = 0.0
     input_chars_per_token: float = 2.0
     allowed: dict[str, tuple[str, str, str]] = field(default_factory=dict)
+    null_label: str = "none"
+    """P0's null label, which every per-call enum must offer (``p0.yaml`` ``labels.none``)."""
     base_provenance: dict[str, str] = field(default_factory=dict)
     by_role: dict[str, dict[str, int]] = field(default_factory=dict)
     attempts_sent: int = 0
@@ -200,6 +202,7 @@ class P2Gateway(ModelGateway):
             max_usd=float(config.caps.max_usd),
             input_chars_per_token=float(config.caps.input_chars_per_token),
             allowed=allowed,
+            null_label=str(config.p0().labels.none),
             base_provenance=dict(provenance),
         )
 
@@ -209,12 +212,31 @@ class P2Gateway(ModelGateway):
         Raises:
             ModelError: The request is not one the frozen decision layer produces.
         """
+        from workflows.p2_multi_agent import workflow as wf
+
         check_agent_request(request, None, None)
         entry = self.allowed.get(system_digest(request.get("system", "")))
         if entry is None:
             raise ModelError("the system prompt is not one of P2's frozen templates")
         point, role, tools_sha = entry
-        if tools_digest(request.get("tools") or []) != tools_sha:
+        offered = list(request.get("tools") or [])
+        if len(offered) == 1 and point in wf.PER_CALL_ENUM:
+            # the one per-call difference allowed (the ruling of 2026-10-14, a): the field's
+            # enum, a non-empty list of distinct strings that holds the null label
+            field_name = wf.PER_CALL_ENUM[point][0]
+            enum = (offered[0].get("input_schema", {}).get("properties", {})
+                    .get(field_name, {}).get("enum"))  # fmt: skip
+            if (
+                not isinstance(enum, list)
+                or not enum
+                or not all(isinstance(v, str) for v in enum)
+                or len(set(enum)) != len(enum)
+                or self.null_label not in enum
+            ):
+                raise ModelError(f"{point}: the tool must offer {field_name!r} as an enum "
+                                 f"holding {self.null_label!r}")  # fmt: skip
+            offered = [wf.base_tool(offered[0], point)]
+        if tools_digest(offered) != tools_sha:
             raise ModelError(f"{point}: the tool is not the decision's frozen tool")
         messages = request.get("messages") or []
         if (

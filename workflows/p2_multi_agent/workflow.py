@@ -376,6 +376,38 @@ def common_change_point(
     return {"common": False, "day": None, "channels": []}
 
 
+def split_agrees(
+    day: float | None,
+    channels: Sequence[str],
+    steps: dict[str, dict[str, Any]],
+    attr: dict[str, Any],
+) -> bool:
+    """Whether ``cal.split``'s proposal is a valid common step by P0's R4 arithmetic.
+
+    Accepted (the lead's ruling of 2026-10-14, defect c): no day with no channel; or at
+    least ``parameter_channels_min`` named channels, each with its own step at or above
+    ``parameter_step_z``, whose step days all lie within ``step_day_tolerance_d`` of one
+    another and of the proposed day. Before the ruling only R4's earliest common day was
+    accepted, so a later valid common step (attempt 1's ``tan`` and ``alkalinity`` at days
+    105 and 112) was refused. A channel below the threshold (attempt 1's ``cod_total`` at
+    z 1.43) is still refused.
+    """
+    if day is None:
+        return not channels
+    if len(channels) < int(attr["parameter_channels_min"]) or len(set(channels)) != len(channels):
+        return False
+    z_min, tol = float(attr["parameter_step_z"]), float(attr["step_day_tolerance_d"])
+    days = []
+    for ch in channels:
+        r = steps.get(ch) or {}
+        if r.get("step_z") is None or r.get("step_day") is None or float(r["step_z"]) < z_min:
+            return False
+        days.append(float(r["step_day"]))
+    if max(days) - min(days) > tol:
+        return False
+    return all(abs(d - float(day)) <= tol for d in days)
+
+
 def tied_change_point(
     residuals: dict[str, dict[str, Any]],
     failed: Sequence[str],
@@ -583,6 +615,23 @@ def constrain_quarantine(
     }
 
 
+def shown_to_dq_trust(
+    t: np.ndarray, value: np.ndarray, flagged: np.ndarray, cal_start: float, holdout_start: float
+) -> tuple[list[list[float]], int]:
+    """What ``dq.trust`` is shown: QC's flagged windows and the sample count, before the hold-out.
+
+    The lead's ruling of 2026-10-14 (defect b): only samples with ``t`` before the hold-out
+    start are shown, so a flagged window inside the hold-out is dropped and one crossing
+    the start is trimmed to its last calibration sample (attempt 1 showed the model a pH
+    spike at day 172 of a hold-out starting at day 150). The count is the observed samples
+    of the calibration window before the hold-out start.
+    """
+    before = t < float(holdout_start)
+    windows = mask_windows(t, flagged & before)
+    count = int((np.isfinite(value) & (t >= float(cal_start)) & before).sum())
+    return windows, count
+
+
 def mask_windows(t: np.ndarray, mask: np.ndarray) -> list[list[float]]:
     """A sample mask as the contiguous windows it covers, [first, last] sample days."""
     out: list[list[float]] = []
@@ -685,11 +734,42 @@ class DesignAssay(_Out):
     prediction: str | None
 
 
-class VerifyDifferential(_Out):
-    """``verify.differential``: one admitted label or the null label; codes for the rest."""
+REJECTION_CODES = (
+    "null_not_failed", "signature_absent", "coupled_outside", "holdout_passed", "superseded",
+)  # fmt: skip
+"""The codes a set-aside candidate may carry (design §2.7; the ruling of 2026-10-14, a)."""
+
+
+def design_code(code: str) -> str:
+    """Code's finer rejection code as one of :data:`REJECTION_CODES`, for the fallback.
+
+    The verdict keeps code's own codes (the 2026-10-08 rulings' ``..._not_on_failed_
+    channels`` and ``holdout_unavailable`` among them); the decision's fallback, which the
+    output schema validates, carries the design's code. A signature not on the failed
+    channels, or a hold-out that could not be checked, is a signature absent.
+    """
+    return code if code in REJECTION_CODES else "signature_absent"
+
+
+class Rejected(_Out):
+    """One candidate set aside: its label and the design's code."""
 
     label: str
-    rejected: list[dict[str, str]] = Field(default_factory=list)
+    code: Literal[
+        "null_not_failed", "signature_absent", "coupled_outside", "holdout_passed", "superseded"
+    ]
+
+
+class VerifyDifferential(_Out):
+    """``verify.differential``: one admitted label or the null label; codes for the rest.
+
+    ``label``'s allowed values are per call: the admitted labels and the null label, given
+    as the ``allowed_labels`` input and offered as the tool's enum (the ruling of
+    2026-10-14, a: attempt 1's model answered ``null`` where the code needs ``none``).
+    """
+
+    label: str
+    rejected: list[Rejected] = Field(default_factory=list)
 
 
 DECISIONS: dict[str, dict[str, Any]] = {
@@ -717,9 +797,13 @@ DECISIONS: dict[str, dict[str, Any]] = {
     "design.assay": {"role": "design", "model": DesignAssay,
                      "inputs": ("request", "voi", "price_list", "units_left")},
     "verify.differential": {"role": "verification", "model": VerifyDifferential,
-                            "inputs": ("null_table", "admitted", "tables", "holdout_failed")},
+                            "inputs": ("null_table", "admitted", "tables", "holdout_failed",
+                                       "allowed_labels")},
 }  # fmt: skip
 """Every decision point: its role, its output schema and its declared inputs (§2)."""
+
+PER_CALL_ENUM: dict[str, tuple[str, str]] = {"verify.differential": ("label", "allowed_labels")}
+"""Decision points whose tool offers one field as an enum of a per-call input (ruling a)."""
 
 
 def schema_sha256(model: type[BaseModel]) -> str:
@@ -758,17 +842,44 @@ class ModelCapReached(Exception):
     """
 
 
-def decision_tool(point: str) -> dict[str, Any]:
+def decision_tool(point: str, inputs: dict[str, Any] | None = None) -> dict[str, Any]:
     """The one tool a decision request offers: its input schema is the decision's schema.
 
-    Deterministic, so the runner can freeze its digest beside the template's.
+    Deterministic, so the runner can freeze its digest beside the template's. With
+    ``inputs``, a :data:`PER_CALL_ENUM` point's field is narrowed to that call's allowed
+    values (:func:`narrow_tool`); the frozen tool is the one without ``inputs``.
     """
-    return {
+    tool = {
         "name": point.replace(".", "_"),
         "description": "Return the decision as this tool's input. Its schema is the only "
         "form accepted.",
         "input_schema": DECISIONS[point]["model"].model_json_schema(),
     }
+    return narrow_tool(tool, point, inputs) if inputs is not None else tool
+
+
+def narrow_tool(tool: dict[str, Any], point: str, inputs: dict[str, Any]) -> dict[str, Any]:
+    """``tool`` with its :data:`PER_CALL_ENUM` field offered as the enum of this call's input."""
+    if point not in PER_CALL_ENUM:
+        return tool
+    field_name, input_name = PER_CALL_ENUM[point]
+    allowed = [str(v) for v in inputs[input_name]]
+    out = json.loads(json.dumps(tool))
+    out["input_schema"]["properties"][field_name]["enum"] = allowed
+    return out
+
+
+def base_tool(tool: dict[str, Any], point: str) -> dict[str, Any]:
+    """``tool`` with a :data:`PER_CALL_ENUM` point's per-call enum removed (the frozen form).
+
+    The privileged gateway compares a request's tool with the frozen one through this:
+    the enum is the only per-call difference it accepts.
+    """
+    if point not in PER_CALL_ENUM:
+        return tool
+    out = json.loads(json.dumps(tool))
+    out["input_schema"]["properties"][PER_CALL_ENUM[point][0]].pop("enum", None)
+    return out
 
 
 class LiveResponder:
@@ -802,7 +913,7 @@ class LiveResponder:
 
     def __call__(self, point: str, template: str, inputs: dict[str, Any]) -> dict[str, Any]:
         """One attempt."""
-        tool = decision_tool(point)
+        tool = decision_tool(point, inputs)
         request = {
             "system": template,
             "messages": [{"role": "user", "content": json.dumps(_jsonable(inputs),
@@ -851,6 +962,9 @@ class Decider:
         extra = set(inputs) - set(spec["inputs"])
         if extra:
             raise DecisionError(f"{point}: undeclared inputs {sorted(extra)}")
+        if point in PER_CALL_ENUM and PER_CALL_ENUM[point][1] not in inputs:
+            # the allowed values are what the point is asked with (ruling a, 2026-10-14)
+            raise DecisionError(f"{point}: asked without {PER_CALL_ENUM[point][1]!r}")
         model: type[BaseModel] = spec["model"]
         template = self.templates[point]
         attempts = 0
@@ -917,6 +1031,11 @@ class Decider:
                 "failures": failures,
                 "fallback_used": used_fallback,
                 "llm_call_ids": take() if take is not None else [],
+                **(
+                    {"offered": {PER_CALL_ENUM[point][0]: list(inputs[PER_CALL_ENUM[point][1]])}}
+                    if point in PER_CALL_ENUM
+                    else {}
+                ),
             }
         )
 
@@ -1180,6 +1299,7 @@ class Workflow:
         # the lead's ruling of 2026-10-13: the runner's document says P2 has no limit
         self.unlimited = (cfg.get("runner") or {}).get("wall_clock_limit") is False
         self.on = dict(self.switch["roles"])
+        self.dq_refused = 0
         self.rec = Recorder()
         self.views = {role: RoleView(role, spec["tools"], self.rec)
                       for role, spec in cfg["roles"].items()}  # fmt: skip
@@ -1328,29 +1448,49 @@ class Workflow:
             if flagged.any():
                 fallback = constrain_quarantine(s.t, flagged, flagged, spikes, self.first_hrt,
                                                 self.holdout[0], trim=True)  # fmt: skip
+                refused: list[list[str]] = []
 
                 def check(
                     o: BaseModel,
                     s: Series = s,
                     flagged: np.ndarray = flagged,
                     spikes: np.ndarray = spikes,
+                    refused: list[list[str]] = refused,
                 ) -> bool:
                     sel = np.zeros(s.t.shape, dtype=bool)
                     for a, b in o.quarantine:
                         sel |= (s.t >= a) & (s.t <= b)
-                    return not constrain_quarantine(
+                    out = constrain_quarantine(
                         s.t, sel, flagged, spikes, self.first_hrt, self.holdout[0], trim=False
-                    )["refused"]
+                    )
+                    if out["refused"]:
+                        refused.append(list(out["reasons"]))
+                    return not out["refused"]
 
+                # the model is shown the calibration window only (ruling of 2026-10-14, b);
+                # the hold-out constraint above stays, as defence in depth
+                windows, shown_count = shown_to_dq_trust(s.t, s.value, flagged, self.cal[0],
+                                                         self.holdout[0])  # fmt: skip
                 choice = self.decider.decide(
                     "dq.trust",
                     {"sensor": name, "qc_findings": list(r.flags),
-                     "flagged_windows": mask_windows(s.t, flagged),
-                     "first_hrt_d": self.first_hrt, "sample_counts": int(s.count(self.cal))},
+                     "flagged_windows": windows,
+                     "first_hrt_d": self.first_hrt, "sample_counts": shown_count},
                     {"sensor": name, "quarantine": mask_windows(s.t, fallback["accepted"]),
                      "reason": "flatline" if flat.any() else "spike_run"},
                     check=check,
                 )  # fmt: skip
+                # a refused quarantine is logged and counted (design §2.2; the review of
+                # 7ef1238 found the entry promised and not written)
+                for reasons in refused:
+                    self.dq_refused += 1
+                    self.codes.append(f"dq.refused:{name}")
+                    self.rec.failures.append({
+                        "step": "data_quality.qc", "name": "p2.dq.refused", "call_index": None,
+                        "kind": "error", "message": f"{name}: {','.join(reasons)}",
+                        "fallback": "the attempt is refused; P0's trimmed quarantine if none "
+                        "is accepted",
+                    })  # fmt: skip
                 sel = np.zeros(s.t.shape, dtype=bool)
                 for a, b in choice.quarantine:
                     sel |= (s.t >= a) & (s.t <= b)
@@ -1916,16 +2056,14 @@ class Workflow:
             steps = {ch: {"step_z": r.get("step_z"), "step_day": r.get("step_day")}
                      for ch, r in self.residuals.items()}  # fmt: skip
 
-            def agrees(o: BaseModel) -> bool:
-                return o.common_step_day is None or (
-                    change["common"]
-                    and abs(o.common_step_day - change["day"])
-                    <= float(self.attr["step_day_tolerance_d"])
-                )
-
-            self.decider.decide("cal.split", {"steps": steps},
-                                {"common_step_day": change["day"], "channels": change["channels"]},
-                                check=agrees)  # fmt: skip
+            # any valid common step is accepted (ruling of 2026-10-14, c); the fallback is
+            # R4's earliest common day
+            self.decider.decide(
+                "cal.split",
+                {"steps": steps},
+                {"common_step_day": change["day"], "channels": change["channels"]},
+                check=lambda o: split_agrees(o.common_step_day, o.channels, steps, self.attr),
+            )
         inhib = inhibition(p) if p else {"available": False, "inhibited": False}
         self.signatures["change_point"] = change
         self.signatures["change_point_tied"] = tied
@@ -2151,13 +2289,17 @@ class Workflow:
         result: dict[str, Any] = {}
         for round_ in range(rounds):
             result = admit(lab, self.table, self.signatures)
+            # the allowed labels are given as data and offered as the tool's enum (ruling
+            # of 2026-10-14, a); the code's acceptance check is unchanged
+            allowed = [*result["admitted"], lab["none"]]
             choice = self.decider.decide(
                 "verify.differential",
                 {"null_table": {k: v for k, v in self.table.items() if k != "placement"},
                  "admitted": result["admitted"], "tables": {"s1": self.tables.get("s1")},
-                 "holdout_failed": holdout_failed},
+                 "holdout_failed": holdout_failed, "allowed_labels": allowed},
                 {"label": first_in_p0_order(lab, result["admitted"]),
-                 "rejected": result["rejected"]},
+                 "rejected": [{"label": r["label"], "code": design_code(r["code"])}
+                              for r in result["rejected"]]},
                 check=lambda o, adm=result["admitted"]: o.label in [*adm, lab["none"]],
             )  # fmt: skip
             # a fail is a rejected null that no admitted label explains; a signature
@@ -2368,6 +2510,7 @@ class Workflow:
             },
             "wall_clock": UNLIMITED_NOTE if self.unlimited else "the cell's allowance",
             "refusals": self.rec.refusals,
+            "dq_refused": int(self.dq_refused),
             "decisions": len(self.decider.records),
             "completed": doc["final"]["completed"],
         }

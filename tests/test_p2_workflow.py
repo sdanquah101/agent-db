@@ -129,7 +129,13 @@ def test_a_planted_claim_never_reaches_the_verifier():
     assert out.code == "insufficient"  # an extra text field is refused, the fallback stands
     out = d.decide(
         "verify.differential",
-        {"null_table": {}, "admitted": ["sensor"], "tables": {}, "holdout_failed": False},
+        {
+            "null_table": {},
+            "admitted": ["sensor"],
+            "tables": {},
+            "holdout_failed": False,
+            "allowed_labels": ["sensor", "none"],
+        },
         {"label": "sensor", "rejected": []},
         check=lambda o: o.label in ["sensor", "none"],
     )

@@ -3964,3 +3964,14 @@ commit, with no live call.**
 - **HELD for the lead:** the three design defects in the frozen decision layer (the
   `verify.differential` enum, the hold-out start for `dq.trust`, and `cal.split`'s single
   step day). Nothing is changed until a ruling is relayed.
+
+**2026-10-14, 01:03 UTC — the lead's ruling "Yes, fix all three": the decision-layer defects
+of attempt 1 fixed in one commit, with no live call.**
+- (a) `verify.differential` offers `allowed_labels` as a per-call enum, `none` included;
+  the set-aside codes are the design's enum.
+- (b) `dq.trust` is shown the calibration window only; the `p2.dq.refused` entry and
+  count are implemented.
+- (c) `cal.split` accepts any valid common step.
+- The freeze moves to `fbe88dd0…8078` (`docs/decisions.md`). Tests:
+  `tests/test_p2_decision_fixes.py`, on attempt 1's inputs.
+- **Blocked:** a new approval record (the coordinator relays its fields after review).

@@ -98,7 +98,7 @@ No decision point.
 
 | id | Inputs | Output schema | Fallback |
 |---|---|---|---|
-| `dq.trust` | QC's findings per sensor (codes, flagged windows), the first-HRT window, the record's sample counts | `{sensor, quarantine: [[t0, t1]], reason: enum{flatline, spike_run, outage}}` | P0 §3.1 |
+| `dq.trust` | QC's findings per sensor (codes, flagged windows) **on the calibration window only**, the first-HRT window, the calibration window's sample count (the ruling of 2026-10-14, b) | `{sensor, quarantine: [[t0, t1]], reason: enum{flatline, spike_run, outage}}` | P0 §3.1 |
 | `dq.assay` | the S1 table, the assay price list, the units left | `{assay: enum(price list), day, target_sensor}`, passed to the design role | no assay |
 | `dq.coupled` | the S1 table, any assay of the candidate and its coupled channels | `{sensor, code: enum{coupled_inside, coupled_outside, assay_acquits, assay_implicates, insufficient}}` | `insufficient`, so no sensor finding |
 
@@ -111,8 +111,17 @@ quarantine is refused when it:
   outage);
 - reaches into the hold-out.
 
-A refusal is logged as `p2.dq.refused` and counted. The model can narrow QC's
-quarantines; it can never widen them. **The same constraints apply to the fallback**
+A refusal is logged as `p2.dq.refused` (a `tool_failures` entry naming the sensor and
+the reasons) and counted (`dq_refused` in the report; a `dq.refused:<sensor>` code). The
+model can narrow QC's quarantines; it can never widen them.
+
+**The model is not shown the hold-out** (the ruling of 2026-10-14, b). The flagged
+windows it receives are QC's restricted to samples before the hold-out start, so a window
+inside the hold-out is dropped and one crossing the start is trimmed to its last
+calibration sample; the sample count is the calibration window's before that start. In
+attempt 1, pH's spike at day 172 of a hold-out starting at day 150 was shown, and the
+model's quarantine of it was refused by the constraint above; now it is not shown, and
+the constraint stays as defence in depth. **The same constraints apply to the fallback**
 (the re-review's N5), but the fallback is **trimmed**, not refused (the review's R2):
 the offending first-HRT spike and hold-out samples are dropped from P0's §3.1 quarantine
 and the rest of it stands, so the fallback, too, never quarantines a first-HRT spike.
@@ -225,7 +234,7 @@ and the rest of it stands, so the fallback, too, never quarantines a first-HRT s
 |---|---|---|---|
 | `cal.accept` | the fit's χ², its convergence, the reference χ², bound hits | `{accept: bool, code: enum{converged, not_converged, worse_than_reference, bound_hit}}` | accept iff χ² ≤ the reference χ² |
 | `cal.bound` | the parameter, its bounds, its estimate and Fisher sd | `{code: enum{identifiability_limit, data_limit, structure_hint}}`; the enum has no kinetic-update value | `identifiability_limit` |
-| `cal.split` | the per-channel step statistics and split days, from code | `{common_step_day: number or null, channels: [sensor]}`, accepted only where P0's R4 arithmetic agrees within 30 d | P0's R4 arithmetic |
+| `cal.split` | the per-channel step statistics and split days, from code | `{common_step_day: number or null, channels: [sensor]}`, accepted when it is a valid common step by P0's R4 arithmetic: at least R4's channel count, each named channel's own step at or above R4's threshold, their step days within R4's 30-day tolerance of one another and of the proposed day (the ruling of 2026-10-14, c; before it only R4's earliest common day was accepted) | P0's R4 arithmetic, the earliest common day |
 
 **Tools:** `fit_lsq`, `fit_de`, `fit_cmaes`, `bayes_mcmc`, `simulate`, `residual_diag`,
 `declared_background`.
@@ -281,7 +290,7 @@ claim (§10).
 
 | id | Inputs | Output schema | Fallback |
 |---|---|---|---|
-| `verify.differential` | the null table, the admitted labels with their signature tables, the hold-out flag | `{label: enum(admitted ∪ {none}), rejected: [{label, code: enum{null_not_failed, signature_absent, coupled_outside, holdout_passed, superseded}}]}` | the first admitted label in P0's order (sensor, influent, state, parameter, structural); `none` if no label is admitted |
+| `verify.differential` | the null table, the admitted labels with their signature tables, the hold-out flag, and `allowed_labels` (admitted ∪ {none}) | `{label: enum(allowed_labels), rejected: [{label, code: enum{null_not_failed, signature_absent, coupled_outside, holdout_passed, superseded}}]}`. The enum is **per call**: the request's tool offers exactly `allowed_labels`, and the template names the values, the literal `none` included (the ruling of 2026-10-14, a; attempt 1's model answered `null`). The frozen tool is the one without the enum, and the gateway accepts the enum as the only per-call difference | the first admitted label in P0's order (sensor, influent, state, parameter, structural); `none` if no label is admitted; the set-aside codes mapped onto the enum (code's finer codes stay in the verdict) |
 
 The differential can only choose **among labels code already admitted**, or `none`. It
 cannot admit one.
@@ -592,6 +601,11 @@ Each decision point's request is assembled from:
 `p2.yaml` lists every template with its version. The template's sha256 goes into every
 `DecisionRecord`, and the runner refuses a run whose templates differ from the committed
 ones (P1's frozen-record mechanism).
+
+One point, `verify.differential`, offers a field as an enum of a per-call input
+(`PER_CALL_ENUM`): the frozen tool is the form without the enum, the request's tool is
+the narrowed one, and the privileged gateway accepts that enum, a non-empty list of
+distinct strings holding the null label, as the only difference from the frozen tool.
 
 **The prompt rule, extended** (the review's item 8). No template may contain a labelling
 rule the code owns. A test scans every template and fails on any of these:

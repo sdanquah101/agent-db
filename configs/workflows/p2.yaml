@@ -136,10 +136,10 @@ runner:
 # settings. tools/p2_live.py::check_p2_frozen recomputes them before EVERY P2 run, offline
 # included, and refuses the run on any difference. A changed template is a new freeze.
 frozen:
-  date: "2026-10-10"
-  word: "Deliverable 3: freeze the twelve templates and schemas (the lead's go-ahead, 2026-10-10, relayed by the coordinator)"
+  date: "2026-10-14"
+  word: "The lead's ruling of 2026-10-14 (fix all three decision-layer defects, relayed by the coordinator): verify.differential offers its allowed labels and the rejection codes, dq.trust is shown the calibration window only, cal.split accepts any valid common step; first frozen 2026-10-10 (deliverable 3)"
   templates_sha256:
-    dq.trust: 312267663f55e074441e48e0bd831d577990c7d68bfed0902fa5e53f7169882b
+    dq.trust: fd8da7b79a7b347d9b1c7474421b8b572745741f04f0666334ca711e8e4a21e8
     dq.assay: 8398182571419c54776c872638cce0e48d32a79f737497066fd8a03b4888fd8b
     dq.coupled: bec2c4e2e31d73825f0da1a4f345d2617246ba89e97174f354063a1cb28efde5
     influent.onset: ccd4739c9cd89be8b07b1eaa880146748b112ce29f1095a390414b0cc8e51875
@@ -150,7 +150,7 @@ frozen:
     cal.bound: f088fd28a0ab7903ad355bb6871b0ae1878cf9f8656286396a850de88c21af6c
     cal.split: f28ea106116f724e3812458fd848e5ba11bb7d646a956ce9fde730730cbbdf0a
     design.assay: e3726da59ca275cb12b32d329d256c3f58b960d37d61a1c487232363225aff3e
-    verify.differential: 67511e64f10381805ecad262ca5a8cd9099267fe5617c52ed4220a58b935d670
+    verify.differential: 0ed4cac235c8e14f1c8551fd15c7e112e6966df7ff71aab47a9dfe702b435ddf
   schemas_sha256:
     dq.trust: e41288a885edb96b6298c4e72e5d2f1a177fc390e939be305fc6a8a6251d1436
     dq.assay: 32523ce0b06268f6346db56cd92623ebaed879240cbc7adf477797043d79d855
@@ -163,7 +163,7 @@ frozen:
     cal.bound: 19e2833f5f5590972745aeb8846f495e0b71bc4e054a24ccf1b56bd4646e7572
     cal.split: 235d2699272247a756bb6663495dcebae27c94267e9ec3592f79d7e38bf8f982
     design.assay: 91df494ca34e25aed755f69e12fc018bb90849c43763b0f3a750a200052b6020
-    verify.differential: 20a29bfdeaee0c250cfd08ec7a0fca286cd2c10f0af348375048ba4bcc626825
+    verify.differential: 055462fe9a13506c4c9b96cb155690f509c1e9f9d1ac25dd636c2b27821fd033
   tools_sha256:
     dq.trust: 54bca814282795e9136e9035c0f0e0535a39b69355d9dcee6c2b647dd65dee65
     dq.assay: e119ffc8fa3b93ab0ab56362e061207145da32a8cde64b0583f69a7371c67252
@@ -176,7 +176,7 @@ frozen:
     cal.bound: 514f89f63907778e80851115d6b6276422c966de169a405400670d9cf2cce176
     cal.split: 0a7eb8fffa3ed7bd1d1b49d47b4eb7dac0b5a667d8d6b8dc939a607753cca406
     design.assay: 6b618011e9ad166531be730546625ecf3d15acda7468ac9ce0d6ec7c2be66a9f
-    verify.differential: 28c1f9c5496ebf99bf05e3fd34f674b9d56ca04737dd88c738dd2f8bd4d1c09f
+    verify.differential: dc5064509da9f355f3255802e596fbabb50e1c2ed70708fda5568ba8697ba4d9
   model:                      # the whole block (B-4): a lower price would weaken the USD cap
     provider: openai
     model_id: gpt-5.6-luna
