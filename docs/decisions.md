@@ -7718,9 +7718,13 @@ P0 and P1 keep their limits.
 single agents and scripted models.
 
 **Why it came up.** In the pilot's first attempt (`reports/p2_pilot/attempt1/`), S0-01 B/B
-r1 spent the cell's 90-min allowance on calibration and identifiability. The registry
-refused `declared_background` at `step_null`, and the uncaught refusal crashed the run
-(`pending`). The attempt was stopped there.
+r1 spent the cell's 90-min allowance on calibration and identifiability.
+- The registry first refused `simulate` at the reference fit (seq 15); that step
+  caught the refusal and went on.
+- It then refused `declared_background` at `step_null` (seq 16). That refusal was
+  uncaught and crashed the run (`pending`).
+
+The attempt was stopped there.
 
 **Alternatives considered.**
 - An allowance of 2× the cell's.
@@ -7733,6 +7737,14 @@ The lead chose no limit over all three.
 - **Wall-clock becomes a cost metric for P2.** It is reported per run as a cost: the
   runner's `wall_s` in `summary.json`, and each role's `wall_clock_s` there, measured by
   the registry. The comparison with P0 and P1 shows it.
+  - P2's tables report `wall_s` as the cost.
+  - The evaluator's `wall_clock_fraction` (`eval/efficiency.py`; `eval/` stays
+    frozen) divides by the cell's nominal allowance. For P2 that allowance was never
+    enforced, so the fraction must not be read as compliance with it.
+  - In P2's own record (`report.json`, `state.json`), the per-role `wall_clock_s` is
+    reported as `null`, and an annotation says that `budget.wall_clock_min` is the
+    nominal allowance, not time left. The authoritative per-role time is
+    `summary.json`'s `by_role`.
 - **How it is implemented.**
   - `p2.yaml`'s `runner.wall_clock_limit: false` is the only value its schema accepts.
   - The runner opens a P2 run's registry with the wall clock unenforced. The registry

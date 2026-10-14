@@ -1177,6 +1177,8 @@ class Workflow:
         self.lab: dict[str, str] = dict(self.p0["labels"])
         self.attr = self.p0["attribution"]
         self.switch = cfg["ablation"]
+        # the lead's ruling of 2026-10-13: the runner's document says P2 has no limit
+        self.unlimited = (cfg.get("runner") or {}).get("wall_clock_limit") is False
         self.on = dict(self.switch["roles"])
         self.rec = Recorder()
         self.views = {role: RoleView(role, spec["tools"], self.rec)
@@ -2336,6 +2338,9 @@ class Workflow:
                 f"routing: {' > '.join(self.trace)}",
                 f"ablation: {json.dumps(self.switch, sort_keys=True)}",
                 f"codes: {sorted(set(self.codes))}",
+                # after the four fixed lines the records' readers index (nit 1 of the
+                # review of 7ef1238)
+                *([UNLIMITED_NOTE] if self.unlimited else []),
                 *self.annotations,
             ],
         }
@@ -2354,7 +2359,14 @@ class Workflow:
             "null_table": self.table,
             "signatures": json.loads(json.dumps(self.signatures, default=_jsonable)),
             "verdict": self.verdict,
-            "by_role": self.rec.by_role,
+            # with no wall-clock limit the registry consumes none of the allowance, so the
+            # jail cannot time a role: its seconds are not reported here (summary.json's
+            # by_role holds them, measured by the registry)
+            "by_role": {
+                role: {**use, "wall_clock_s": None} if self.unlimited else use
+                for role, use in self.rec.by_role.items()
+            },
+            "wall_clock": UNLIMITED_NOTE if self.unlimited else "the cell's allowance",
             "refusals": self.rec.refusals,
             "decisions": len(self.decider.records),
             "completed": doc["final"]["completed"],
@@ -2410,6 +2422,15 @@ class Workflow:
         self.step_conclude()
         self.completed = True
         self.write(completed=True)
+
+
+UNLIMITED_NOTE = (
+    "wall clock: no limit for P2 (the lead's ruling of 2026-10-13); budget.wall_clock_min "
+    "is the cell's nominal allowance, never consumed, not time left; the elapsed time and "
+    "each role's are in summary.json (wall_s, by_role), measured by the registry"
+)
+"""What a P2 record says about the wall clock it does not measure (the review of ``7ef1238``,
+nit 1)."""
 
 
 def responder_for(cfg: dict[str, Any]) -> Responder:

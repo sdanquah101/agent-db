@@ -248,3 +248,114 @@ def test_removing_the_catch_makes_the_pilots_refusal_crash(monkeypatch, cfg, tmp
     assert _run(wf, monkeypatch, cfg, Refuses("declared_background", 2)).verdict["reason"] == (
         "budget"
     )
+
+
+# ------------------------------------------------------------------ S-1: the real wiring
+
+
+@pytest.fixture(scope="module")
+def short_run(tmp_path_factory):
+    """A short generated S0-01 run (plant C, tier B) and its store."""
+    from scenarios.schema import load_scenario
+    from sim.plants import load_plant_config
+    from sim.run.harness import generate_run
+
+    s = load_scenario(REPO / "scenarios" / "S0-01.yaml").model_copy(update={"duration_days": 20.0})
+    root = tmp_path_factory.mktemp("store") / "runs"
+    run = generate_run(s, "B", plant=load_plant_config("C"), runs_root=root)
+    return run, s, root
+
+
+def test_the_real_open_registry_carries_the_ruling(short_run, monkeypatch, tmp_path):
+    """The review of ``7ef1238``, S-1: ``tools.privileged.open_registry`` itself, no fake."""
+    from tools import runner
+    from tools.privileged import open_registry
+
+    run, scenario, root = short_run
+    past = (scenario.budget.wall_clock_min + 60.0) * 60.0  # an hour past the allowance
+    clock = Clock()
+    reg = open_registry(run.run_id, runs_root=root, scenario=scenario, clock=clock,
+                        wall_clock_enforced=False)  # fmt: skip
+    assert reg.budget.wall_clock_enforced is False
+    clock.now += past
+    reg.call("describe_model", model="adm1_fitted")  # served
+    # the negative control: the same run, enforced, is refused
+    clock = Clock()
+    reg = open_registry(run.run_id, runs_root=root, scenario=scenario, clock=clock)
+    assert reg.budget.wall_clock_enforced is True
+    clock.now += past
+    with pytest.raises(BudgetExceededError, match="wall-clock"):
+        reg.call("describe_model", model="adm1_fitted")
+
+    # and through the runner: the real open_registry, only its clock injected
+    outcome: dict[str, str] = {}
+
+    def opened(*a: Any, **k: Any) -> Any:
+        outcome["clock"] = clock = Clock()  # type: ignore[assignment]
+        return open_registry(*a, clock=clock, **k)
+
+    def fake_launch(script: Any, registry: Any, **kw: Any) -> Any:
+        outcome["clock"].now += past  # type: ignore[attr-defined]
+        try:
+            registry.call("describe_model", model="adm1_fitted")
+            outcome["call"] = "served"
+        except BudgetExceededError:
+            outcome["call"] = "refused"
+        return types.SimpleNamespace(returncode=0, stderr="")
+
+    monkeypatch.setattr(runner, "open_registry", opened)
+    monkeypatch.setattr(runner, "launch", fake_launch)
+    kw = {"runs_root": root, "scenario": scenario, "sandbox_root": tmp_path / "boxes"}
+    runner.run_workflow(run.run_id, "p2", **kw)
+    assert outcome["call"] == "served"
+    runner.run_workflow(run.run_id, "p0", output_name="p0_control", **kw)  # the control
+    assert outcome["call"] == "refused"
+
+
+# ------------------------------------------------------------------ nits of 7ef1238
+
+
+def test_p2s_own_record_does_not_report_a_wall_clock_it_cannot_measure(monkeypatch, cfg):
+    """Nit 1: no 0 s per role and no unexplained 90 min left; the control is a limited run."""
+    fake = FakeTools()
+    _run(wf, monkeypatch, cfg, fake)
+    report = json.loads(fake.run.outputs[wf.REPORT_FILE])
+    doc = json.loads(fake.run.outputs[wf.STATE_FILE])
+    assert report["by_role"] and all(u["wall_clock_s"] is None for u in report["by_role"].values())
+    assert report["wall_clock"] == wf.UNLIMITED_NOTE and wf.UNLIMITED_NOTE in doc["annotations"]
+    limited = json.loads(json.dumps(cfg))
+    limited["runner"] = {"wall_clock_limit": True}
+    fake = FakeTools()
+    _run(wf, monkeypatch, limited, fake)
+    report = json.loads(fake.run.outputs[wf.REPORT_FILE])
+    assert all(isinstance(u["wall_clock_s"], float) for u in report["by_role"].values())
+    assert wf.UNLIMITED_NOTE not in json.loads(fake.run.outputs[wf.STATE_FILE])["annotations"]
+
+
+def test_the_pilot_report_copies_each_runs_records_and_reports_wall_s(tmp_path, monkeypatch):
+    """Nits 2 and 3: wall_s is the cost column; llm_calls, decisions and calls are copied."""
+    from scripts import p2_pilot
+
+    monkeypatch.setattr(p2_pilot, "REPORT_DIR", tmp_path / "reports")
+    store = tmp_path / "store"
+    out = store / "runs" / "run_a" / "workflows" / "p2"
+    out.mkdir(parents=True)
+    for name in ("llm_calls.jsonl", "decisions.jsonl"):
+        (out / name).write_text(f'{{"file": "{name}"}}\n')
+    (store / "runs" / "run_a" / "calls.jsonl").write_text('{"seq": 0}\n')
+    row = {"run_id": "run_a", "cell": "S0-01 B/B", "replicate": 0, "truth": ["none"],
+           "outcome": "none", "label": "none", "rule": "null_stands",
+           "summary": {"completed": True, "llm_cost_usd": 0.002, "llm_turns": 7,
+                       "wall_s": 5400.0}}  # fmt: skip
+    (store / "results.jsonl").write_text(json.dumps(row) + "\n")
+    got = p2_pilot.report(store, "attempt2")
+    assert got["rows"][0]["wall_min"] == 90.0
+    dest = tmp_path / "reports" / "attempt2"
+    assert sorted(p.name for p in (dest / "run_a").iterdir()) == [
+        "calls.jsonl", "decisions.jsonl", "llm_calls.jsonl"]  # fmt: skip
+    assert "a cost" in (dest / "summary.md").read_text()
+    # the control: a run whose records are absent copies nothing and still reports
+    row["run_id"] = "run_b"
+    (store / "results.jsonl").write_text(json.dumps(row) + "\n")
+    p2_pilot.report(store, "attempt3")
+    assert not (tmp_path / "reports" / "attempt3" / "run_b").exists()

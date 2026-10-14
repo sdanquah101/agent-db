@@ -3949,3 +3949,18 @@ NO wall-clock limit".**
   fields (a fresh store, ruling date 2026-10-13).
 - **Next:** the coordinator reviews commit 2; then the new record; then, on the relay,
   the pilot.
+
+**2026-10-14 — the review of `6fc58b9` + `7ef1238`: PASS; S-1 and nits 1–4 fixed in one
+commit, with no live call.**
+- **S-1:** a test now calls the real `tools/privileged.py::open_registry` with an injected
+  clock, both directly and through the runner. The mutant that drops
+  `wall_clock_enforced` now fails it.
+- **Nit 1:** P2's own record reports `null` per-role wall clock and annotates the nominal
+  allowance.
+- **Nits 2–3:** the pilot report puts `wall_s` in a cost column and copies each run's
+  `llm_calls`, `decisions` and `calls` into `reports/p2_pilot/<attempt>/`.
+- **Nit 4:** the decisions entry now says that the reference fit's `simulate` was refused
+  first and caught.
+- **HELD for the lead:** the three design defects in the frozen decision layer (the
+  `verify.differential` enum, the hold-out start for `dq.trust`, and `cal.split`'s single
+  step day). Nothing is changed until a ruling is relayed.

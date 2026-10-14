@@ -23,7 +23,7 @@ Usage::
     python -m scripts.p2_pilot plan                       # no call: cells, caps, layout
     python -m scripts.p2_pilot offline --store DIR        # the same six runs, OFFLINE
     python -m scripts.p2_pilot run --store DIR --live     # refused without the record
-    python -m scripts.p2_pilot report --store DIR         # reports/p2_pilot/
+    python -m scripts.p2_pilot report --store DIR --attempt attempt2  # reports/p2_pilot/<attempt>/
 
 ``offline`` runs the six pilot runs with the offline decider at the same commit and the
 same configuration (the review of PR #33, B-2): the baseline a live-versus-offline
@@ -39,8 +39,17 @@ difference is measured against. It writes ``DIR/results_offline.jsonl`` and
   ``messages.jsonl``, ``decisions.jsonl``), the gateway's ``llm_calls.jsonl`` and the
   runner's ``summary.json`` with ``by_role``.
 - ``DIR/results.jsonl``: one line per finished cell (summary and outcome).
-- ``reports/p2_pilot/cells.json`` and ``summary.md``: each cell and seed's outcome (keyed on
-  the verdict, never the label alone), the go/no-go check on S0-01 B/B, and the cost.
+- ``reports/p2_pilot/<attempt>/cells.json`` and ``summary.md``: each cell and seed's
+  outcome (keyed on the verdict, never the label alone), the go/no-go check on S0-01 B/B,
+  and the cost: USD, requests and the wall clock. The run's own visible records are copied
+  beside them, under ``<attempt>/<run id>/``: ``llm_calls.jsonl``, ``decisions.jsonl``
+  and the registry's ``calls.jsonl`` (the review of ``7ef1238``, nit 3).
+
+**The wall clock is a cost for P2, never a compliance figure.** P2 runs have no
+wall-clock limit (the lead's ruling of 2026-10-13), so the tables report the runner's
+``wall_s`` as what the run cost. The evaluator's ``wall_clock_fraction`` (``eval/``,
+frozen) divides by the cell's nominal allowance: for P2 it is a ratio against an
+allowance that was never enforced, not a measure of staying inside it.
 
 **Caps.** Each run has the gateway's caps (``p2.yaml`` ``caps``: 60 requests, 6 M tokens,
 USD 0.25). The pilot stops launching cells once :data:`PILOT_MAX_USD` is spent. The key
@@ -281,8 +290,20 @@ def outcome_of(line: dict[str, Any]) -> str:
     return str(line.get("outcome") or "pending")
 
 
-def report(store: Path) -> dict[str, Any]:
-    """``reports/p2_pilot/``: outcomes keyed on the verdict, the go/no-go, the cost."""
+RUN_RECORDS = (
+    ("workflows/p2/llm_calls.jsonl", "llm_calls.jsonl"),
+    ("workflows/p2/decisions.jsonl", "decisions.jsonl"),
+    ("calls.jsonl", "calls.jsonl"),
+)
+"""Each run's visible records the report copies: the gateway's, the decisions', the registry's."""
+
+
+def report(store: Path, attempt: str = "attempt2") -> dict[str, Any]:
+    """``reports/p2_pilot/<attempt>/``: outcomes keyed on the verdict, the go/no-go, the cost.
+
+    The cost is USD, requests and the wall clock (``wall_s``, a cost for P2, never a
+    compliance figure); each run's visible records are copied beside the tables.
+    """
     lines = [
         json.loads(x)
         for x in (store / "results.jsonl").read_text(encoding="utf-8").splitlines()
@@ -296,9 +317,19 @@ def report(store: Path) -> dict[str, Any]:
             "outcome": outcome_of(x),
             "usd": (x["summary"] or {}).get("llm_cost_usd"),
             "requests": (x["summary"] or {}).get("llm_turns"),
+            "wall_min": round(float((x["summary"] or {}).get("wall_s") or 0.0) / 60.0, 1),
         }
         for x in lines
     ]
+    out_dir = REPORT_DIR / attempt
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for x in lines:
+        run_id = str(x.get("run_id") or "")
+        for src, name in RUN_RECORDS if run_id else ():
+            path = store / "runs" / run_id / src
+            if path.is_file():
+                (out_dir / run_id).mkdir(exist_ok=True)
+                shutil.copy2(path, out_dir / run_id / name)
     gate = [r["outcome"] for r in rows if r["cell"] == "S0-01 B/B"]
     scored = [o for o in gate if o not in ("abstain", "pending")]
     out = {
@@ -311,15 +342,19 @@ def report(store: Path) -> dict[str, Any]:
         },
         "usd_total": round(sum(float(r["usd"] or 0.0) for r in rows), 6),
     }
-    REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    (REPORT_DIR / "cells.json").write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8")
-    md = ["# P2 live pilot", "", "| cell | seed | truth | outcome | USD |", "|---|---|---|---|---|"]
+    (out_dir / "cells.json").write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8")
+    md = [f"# P2 live pilot ({attempt})", "",
+          "| cell | seed | truth | outcome | USD | requests | wall min |",
+          "|---|---|---|---|---|---|---|"]  # fmt: skip
     md += [
-        f"| {r['cell']} | {r['replicate']} | {','.join(r['truth'])} | {r['outcome']} | {r['usd']} |"
+        f"| {r['cell']} | {r['replicate']} | {','.join(r['truth'])} | {r['outcome']} "
+        f"| {r['usd']} | {r['requests']} | {r['wall_min']} |"
         for r in rows
     ]
-    md += ["", f"Go/no-go: stop = {out['go_no_go']['stop']}; USD {out['usd_total']}."]
-    (REPORT_DIR / "summary.md").write_text("\n".join(md) + "\n", encoding="utf-8")
+    md += ["", f"Go/no-go: stop = {out['go_no_go']['stop']}; USD {out['usd_total']}.", "",
+           "Wall min is the runner's `wall_s`: a cost (P2 has no wall-clock limit, the "
+           "ruling of 2026-10-13), not compliance with the cell's allowance."]  # fmt: skip
+    (out_dir / "summary.md").write_text("\n".join(md) + "\n", encoding="utf-8")
     return out
 
 
@@ -444,6 +479,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--store", type=Path, default=None)
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--part", default="0/1", help="offline only: i/n of the runs")
+    parser.add_argument("--attempt", default="attempt2", help="report only: its directory")
     args = parser.parse_args(argv)
     if args.action == "plan":
         print(json.dumps(plan(), indent=1))
@@ -457,7 +493,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.action == "report-offline":
         report_offline(args.store)
     else:
-        report(args.store)
+        report(args.store, args.attempt)
     return 0
 
 
