@@ -118,7 +118,11 @@ model can narrow QC's quarantines; it can never widen them.
 **The model is not shown the hold-out** (the ruling of 2026-10-14, b). The flagged
 windows it receives are QC's restricted to samples before the hold-out start, so a window
 inside the hold-out is dropped and one crossing the start is trimmed to its last
-calibration sample; the sample count is the calibration window's before that start. In
+calibration sample; the sample count is the calibration window's before that start (the
+start itself is the hold-out's). The QC codes it receives are only those whose evidence
+is shown, `flatline` and `spikes` from the shown windows; QC's whole-record codes (drift,
+informative missingness, the unit, the timestamps) are not shown, and P0's fallback keeps
+the whole-record QC (the review of `f5aa41f`, B-1). In
 attempt 1, pH's spike at day 172 of a hold-out starting at day 150 was shown, and the
 model's quarantine of it was refused by the constraint above; now it is not shown, and
 the constraint stays as defence in depth. **The same constraints apply to the fallback**
@@ -234,7 +238,7 @@ and the rest of it stands, so the fallback, too, never quarantines a first-HRT s
 |---|---|---|---|
 | `cal.accept` | the fit's χ², its convergence, the reference χ², bound hits | `{accept: bool, code: enum{converged, not_converged, worse_than_reference, bound_hit}}` | accept iff χ² ≤ the reference χ² |
 | `cal.bound` | the parameter, its bounds, its estimate and Fisher sd | `{code: enum{identifiability_limit, data_limit, structure_hint}}`; the enum has no kinetic-update value | `identifiability_limit` |
-| `cal.split` | the per-channel step statistics and split days, from code | `{common_step_day: number or null, channels: [sensor]}`, accepted when it is a valid common step by P0's R4 arithmetic: at least R4's channel count, each named channel's own step at or above R4's threshold, their step days within R4's 30-day tolerance of one another and of the proposed day (the ruling of 2026-10-14, c; before it only R4's earliest common day was accepted) | P0's R4 arithmetic, the earliest common day |
+| `cal.split` | the per-channel step statistics and split days, from code | `{common_step_day: number or null, channels: [sensor]}`, accepted when it is a valid common step by P0's R4 arithmetic: at least R4's channel count, each named channel's own step at or above R4's threshold, their step days within R4's 30-day tolerance of one of their own step days (R4's form) and of the proposed day (the ruling of 2026-10-14, c; before it only R4's earliest common day was accepted) | P0's R4 arithmetic, the earliest common day |
 
 **Tools:** `fit_lsq`, `fit_de`, `fit_cmaes`, `bayes_mcmc`, `simulate`, `residual_diag`,
 `declared_background`.
@@ -605,7 +609,8 @@ ones (P1's frozen-record mechanism).
 One point, `verify.differential`, offers a field as an enum of a per-call input
 (`PER_CALL_ENUM`): the frozen tool is the form without the enum, the request's tool is
 the narrowed one, and the privileged gateway accepts that enum, a non-empty list of
-distinct strings holding the null label, as the only difference from the frozen tool.
+distinct labels of P0's vocabulary holding the null label, as the only difference from
+the frozen tool.
 
 **The prompt rule, extended** (the review's item 8). No template may contain a labelling
 rule the code owns. A test scans every template and fails on any of these:

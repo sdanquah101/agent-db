@@ -3975,3 +3975,12 @@ of attempt 1 fixed in one commit, with no live call.**
 - The freeze moves to `fbe88dd0…8078` (`docs/decisions.md`). Tests:
   `tests/test_p2_decision_fixes.py`, on attempt 1's inputs.
 - **Blocked:** a new approval record (the coordinator relays its fields after review).
+
+**2026-10-14, 10:35 UTC — the coordinator's review of `3dfce05` + `f5aa41f` (FIXES NEEDED,
+1 blocking), fixed in one commit, with no live call.**
+- **B-1:** `dq.trust` no longer learns of the hold-out through `qc_findings`: only the
+  codes with shown evidence (`flatline`, `spikes`) reach the model. The template and the
+  freeze (`fbe88dd0…`) are unchanged.
+- **S-1:** the per-call enum must be a subset of P0's label vocabulary.
+- **Nits N-1 to N-5** done; the `_jsonable` finding is held for the lead's word.
+- **Next:** the coordinator's review; then the new approval record's fields.

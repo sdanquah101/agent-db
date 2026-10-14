@@ -384,13 +384,15 @@ def split_agrees(
 ) -> bool:
     """Whether ``cal.split``'s proposal is a valid common step by P0's R4 arithmetic.
 
-    Accepted (the lead's ruling of 2026-10-14, defect c): no day with no channel; or at
-    least ``parameter_channels_min`` named channels, each with its own step at or above
-    ``parameter_step_z``, whose step days all lie within ``step_day_tolerance_d`` of one
-    another and of the proposed day. Before the ruling only R4's earliest common day was
-    accepted, so a later valid common step (attempt 1's ``tan`` and ``alkalinity`` at days
-    105 and 112) was refused. A channel below the threshold (attempt 1's ``cod_total`` at
-    z 1.43) is still refused.
+    Accepted (the lead's ruling of 2026-10-14, defect c): no day with no channel; or at least
+    ``parameter_channels_min`` named channels, each with its own step at or above
+    ``parameter_step_z`` (a missing or NaN step refuses), whose step days all lie within
+    ``step_day_tolerance_d`` of one of their own step days (R4's own form: ``sharing`` is every
+    channel within the tolerance of a step day; not pairwise, which is stricter for three or
+    more channels) and of the proposed day. Before the ruling only R4's earliest common day was
+    accepted, so a later valid common step (attempt 1's ``tan`` and ``alkalinity`` at days 105
+    and 112) was refused. A channel below the threshold (attempt 1's ``cod_total`` at z 1.43) is
+    still refused.
     """
     if day is None:
         return not channels
@@ -400,10 +402,11 @@ def split_agrees(
     days = []
     for ch in channels:
         r = steps.get(ch) or {}
-        if r.get("step_z") is None or r.get("step_day") is None or float(r["step_z"]) < z_min:
+        z, d = r.get("step_z"), r.get("step_day")
+        if z is None or d is None or not (float(z) >= z_min):  # NaN is refused
             return False
-        days.append(float(r["step_day"]))
-    if max(days) - min(days) > tol:
+        days.append(float(d))
+    if not any(all(abs(d - anchor) <= tol for d in days) for anchor in days):
         return False
     return all(abs(d - float(day)) <= tol for d in days)
 
@@ -616,20 +619,33 @@ def constrain_quarantine(
 
 
 def shown_to_dq_trust(
-    t: np.ndarray, value: np.ndarray, flagged: np.ndarray, cal_start: float, holdout_start: float
-) -> tuple[list[list[float]], int]:
-    """What ``dq.trust`` is shown: QC's flagged windows and the sample count, before the hold-out.
+    t: np.ndarray,
+    value: np.ndarray,
+    flat: np.ndarray,
+    spikes: np.ndarray,
+    cal_start: float,
+    holdout_start: float,
+) -> tuple[list[list[float]], int, list[str]]:
+    """What ``dq.trust`` is shown before the hold-out: QC's windows, the sample count, the codes.
 
     The lead's ruling of 2026-10-14 (defect b): only samples with ``t`` before the hold-out
     start are shown, so a flagged window inside the hold-out is dropped and one crossing
     the start is trimmed to its last calibration sample (attempt 1 showed the model a pH
     spike at day 172 of a hold-out starting at day 150). The count is the observed samples
-    of the calibration window before the hold-out start.
+    of the calibration window before the hold-out start: the start itself belongs to the
+    hold-out, so on a record of days 0..199 with the hold-out from day 150 it is 150. The
+    codes are only those whose evidence is shown: ``flatline`` for a shown flatline window,
+    ``spikes`` for a shown spike (the review of ``f5aa41f``, B-1: the whole-record ``spikes``
+    code had told the model of a hold-out spike with no window shown). QC's whole-record
+    codes (drift, informative missingness, the unit, the timestamps) are not shown; P0's
+    fallback keeps the whole-record QC.
     """
     before = t < float(holdout_start)
-    windows = mask_windows(t, flagged & before)
+    windows = mask_windows(t, (flat | spikes) & before)
     count = int((np.isfinite(value) & (t >= float(cal_start)) & before).sum())
-    return windows, count
+    evidence = (("flatline", flat), ("spikes", spikes))
+    codes = [code for code, mask in evidence if (mask & before).any()]
+    return windows, count, codes
 
 
 def mask_windows(t: np.ndarray, mask: np.ndarray) -> list[list[float]]:
@@ -1469,11 +1485,12 @@ class Workflow:
 
                 # the model is shown the calibration window only (ruling of 2026-10-14, b);
                 # the hold-out constraint above stays, as defence in depth
-                windows, shown_count = shown_to_dq_trust(s.t, s.value, flagged, self.cal[0],
-                                                         self.holdout[0])  # fmt: skip
+                windows, shown_count, shown_codes = shown_to_dq_trust(
+                    s.t, s.value, flat, spikes, self.cal[0], self.holdout[0]
+                )
                 choice = self.decider.decide(
                     "dq.trust",
-                    {"sensor": name, "qc_findings": list(r.flags),
+                    {"sensor": name, "qc_findings": shown_codes,
                      "flagged_windows": windows,
                      "first_hrt_d": self.first_hrt, "sample_counts": shown_count},
                     {"sensor": name, "quarantine": mask_windows(s.t, fallback["accepted"]),
