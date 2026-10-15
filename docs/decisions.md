@@ -7869,3 +7869,46 @@ templates, schemas, tools, model block and caps are untouched) and no configurat
 digest. Every request's `request_sha256` and `replay_sha256` differ from attempt 1's,
 because the user message's text differs. Attempt 1's records keep their form; the test
 fixture reads both.
+
+## 2026-10-15 — RULINGS (the lead): the hold-out bit only for `structural` (D-1), and an abstaining run's label is `abstain` (N-2b)
+
+The lead answered "Yes to all three" (relayed by the coordinator at 05:46 UTC); these are
+the two code changes of that answer, in a follow-up to PR #33.
+
+**D-1. Decision.** `verify.differential` is shown the hold-out bit (`holdout_failed`) only
+when `structural` is admitted. Design §7 governs ("used only for S6"); §2.7 is brought into
+line with it, and the template says the bit bears on the structural candidate only and
+that `holdout_passed` is a code for that candidate only.
+- **Reason.** In attempt 2 the differential, shown `holdout_failed: false` beside an
+  admitted `sensor`, set `sensor` aside as `holdout_passed` on two of three near-identical
+  runs (S0-01 r1, S8-01 r0). That is a use of the bit §7 does not allow.
+- **Alternatives.**
+  - Keep showing the bit and restrict the `holdout_passed` / `holdout_failed` codes to
+    `structural` (a schema or code check). Rejected: the model would still see the bit and
+    could still let it decide `none` over `sensor` while citing another code; withholding
+    it is the only way the bit cannot be used.
+  - Leave §2.7 as it was. Rejected by the ruling.
+- **What it does not do.** The known limitation (an S0-01 r1-style `sensor` admitted on a
+  clean run) is accepted and not tuned against in the prompt (the ruling). When
+  `structural` is admitted, the bit is necessarily `true` (admission needs a failed
+  hold-out), so showing it there adds nothing the admission did not already say.
+- **The freeze.** The template of `verify.differential` changes, so `frozen_record_sha256`
+  moves from `fbe88dd0…8078` to `17065508…46a3`. No schema and no tool changes.
+
+**N-2b. Decision.** An abstaining run writes `final.label` (and `classification.label`)
+`abstain`, not `none`, and carries no evidence item.
+- **Reason.** The frozen evaluator reads `final.label`; a `none` written by an abstention
+  would be scored as a correct `none` on a clean cell.
+- **How.** `state/task_state.py` gains `FinalLabel` (the six classes and `abstain`) for
+  the classification's and the final result's label; `LABELS` and `Label`, the six-class
+  vocabulary of evidence and secondary labels and of P0's `labels` block, are unchanged.
+  Only P2 writes `abstain`.
+- **The frozen evaluator** (`eval/`, unchanged) loads such a state as valid and scores it
+  as not correct (`attribution_exact` false, `primary_in_truth` false, also on a clean
+  cell), through the scorer, the aggregate and the tables, without crashing. Under the
+  six-class type it would have dropped the state as invalid (a launched run with no valid
+  state: a miss with no drift or abstention metrics); a test shows both.
+- **Alternatives.** Keep `none` and let P2's own counts key on `outcome` (the status quo,
+  which leaves `eval/` misreading abstentions); add `abstain` to `LABELS` itself (rejected:
+  it is P0's label vocabulary, pinned by P0's tests and configuration).
+- **The freeze.** No move from N-2b.

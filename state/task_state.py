@@ -57,7 +57,15 @@ re-exports it."""
 
 Label = Literal["sensor", "influent", "state", "parameter", "structural", "none"]
 LABELS: tuple[str, ...] = ("sensor", "influent", "state", "parameter", "structural", "none")
-"""The uncertainty classes of §6.3, the only values a final label may take."""
+"""The uncertainty classes of §6.3: the vocabulary of evidence and secondary labels."""
+
+ABSTAIN = "abstain"
+"""The final label of a run that abstained: it claims no class (the lead's ruling of
+2026-10-15, N-2b). Before it, an abstaining P2 run wrote ``none``, which the evaluator
+would have scored as a correct ``none`` on a clean cell."""
+
+FinalLabel = Literal["sensor", "influent", "state", "parameter", "structural", "none", "abstain"]
+"""What a run's classification and final label may take: the six classes or ``abstain``."""
 
 _Frac = Annotated[float, Field(ge=0.0, le=1.0)]
 
@@ -119,7 +127,7 @@ class EvidenceItem(_Model):
 class Classification(_Model):
     """The current uncertainty classification (§6.6) with its confidence."""
 
-    label: Label
+    label: FinalLabel
     secondary_labels: tuple[Label, ...] = Field(
         default=(), description="Other rules that fired, for compound rows"
     )
@@ -238,7 +246,7 @@ class PlanRecord(_Model):
 class FinalResult(_Model):
     """The final label and the final estimates (what the evaluator scores)."""
 
-    label: Label
+    label: FinalLabel
     secondary_labels: tuple[Label, ...] = ()
     confidence: _Frac
     parameters: dict[str, ParameterEstimate] = Field(default_factory=dict)

@@ -136,8 +136,8 @@ runner:
 # settings. tools/p2_live.py::check_p2_frozen recomputes them before EVERY P2 run, offline
 # included, and refuses the run on any difference. A changed template is a new freeze.
 frozen:
-  date: "2026-10-14"
-  word: "The lead's ruling of 2026-10-14 (fix all three decision-layer defects, relayed by the coordinator): verify.differential offers its allowed labels and the rejection codes, dq.trust is shown the calibration window only, cal.split accepts any valid common step; first frozen 2026-10-10 (deliverable 3)"
+  date: "2026-10-15"
+  word: "The lead's ruling of 2026-10-15 (D-1: verify.differential is shown the hold-out bit only when structural is admitted, relayed by the coordinator); before it, The lead's ruling of 2026-10-14 (fix all three decision-layer defects, relayed by the coordinator): verify.differential offers its allowed labels and the rejection codes, dq.trust is shown the calibration window only, cal.split accepts any valid common step; first frozen 2026-10-10 (deliverable 3)"
   templates_sha256:
     dq.trust: fd8da7b79a7b347d9b1c7474421b8b572745741f04f0666334ca711e8e4a21e8
     dq.assay: 8398182571419c54776c872638cce0e48d32a79f737497066fd8a03b4888fd8b
@@ -150,7 +150,7 @@ frozen:
     cal.bound: f088fd28a0ab7903ad355bb6871b0ae1878cf9f8656286396a850de88c21af6c
     cal.split: f28ea106116f724e3812458fd848e5ba11bb7d646a956ce9fde730730cbbdf0a
     design.assay: e3726da59ca275cb12b32d329d256c3f58b960d37d61a1c487232363225aff3e
-    verify.differential: 0ed4cac235c8e14f1c8551fd15c7e112e6966df7ff71aab47a9dfe702b435ddf
+    verify.differential: 9425345cfe07650c594f7e6298e64fb23a1da9577361c1954669d3f76d53165e
   schemas_sha256:
     dq.trust: e41288a885edb96b6298c4e72e5d2f1a177fc390e939be305fc6a8a6251d1436
     dq.assay: 32523ce0b06268f6346db56cd92623ebaed879240cbc7adf477797043d79d855

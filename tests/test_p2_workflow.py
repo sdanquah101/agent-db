@@ -369,7 +369,7 @@ def _power_record(fake: FakeTools, truth: list[str], *, completed: bool = True) 
 
 
 def test_a_run_without_a_null_table_abstains_and_never_reads_none(monkeypatch, cfg):
-    """The state must carry a label, so it holds the null one; no count may read it."""
+    """An abstaining run's label is ``abstain`` (N-2b, 2026-10-15), never the null one."""
     from scripts import p2_power
 
     run, fake, doc = run_fake(monkeypatch, cfg, FakeTools(evals=60))
@@ -380,9 +380,10 @@ def test_a_run_without_a_null_table_abstains_and_never_reads_none(monkeypatch, c
     assert {"kinetic_attribution", "parameter_values", "structural_adequacy"} <= set(
         doc["abstentions"]
     )
-    # what every count keys on is the outcome, and it is not none
+    # the state and the report say abstain, never none (N-2b); the counts key on outcome
     report = json.loads(fake.run.outputs[wf.REPORT_FILE])
-    assert report["outcome"] == "abstain" != report["label"]
+    assert report["outcome"] == "abstain" == report["label"] != "none"
+    assert doc["final"]["label"] == doc["classification"]["label"] == "abstain"
     out = p2_power.summarise([_power_record(fake, ["none"])])
     row = out["cells"][0]
     assert row["outcome"] == "abstain" and row["excluded"] and not row["hit"]
