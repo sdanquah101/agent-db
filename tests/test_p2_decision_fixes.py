@@ -453,7 +453,8 @@ def test_the_freeze_is_the_new_one_and_the_old_record_is_refused():
 
     assert frozen_record_sha256() == COMMITTED_FROZEN_SHA256
     frozen = check_p2_frozen(load_p2())
-    assert frozen.date == "2026-10-14" and "2026-10-14" in frozen.word
+    # the ruling of 2026-10-15 (D-1) moved it again; its word keeps the 2026-10-14 history
+    assert frozen.date == "2026-10-15" and "2026-10-14" in frozen.word and "D-1" in frozen.word
     # the old digests of the three changed items are gone
     old = {
         (

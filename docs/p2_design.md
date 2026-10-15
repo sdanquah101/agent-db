@@ -294,7 +294,7 @@ claim (§10).
 
 | id | Inputs | Output schema | Fallback |
 |---|---|---|---|
-| `verify.differential` | the null table, the admitted labels with their signature tables, the hold-out flag, and `allowed_labels` (admitted ∪ {none}) | `{label: enum(allowed_labels), rejected: [{label, code: enum{null_not_failed, signature_absent, coupled_outside, holdout_passed, superseded}}]}`. The enum is **per call**: the request's tool offers exactly `allowed_labels`, and the template names the values, the literal `none` included (the ruling of 2026-10-14, a; attempt 1's model answered `null`). The frozen tool is the one without the enum, and the gateway accepts the enum as the only per-call difference | the first admitted label in P0's order (sensor, influent, state, parameter, structural); `none` if no label is admitted; the set-aside codes mapped onto the enum (code's finer codes stay in the verdict) |
+| `verify.differential` | the null table, the admitted labels with their signature tables, and `allowed_labels` (admitted ∪ {none}); the hold-out flag **only when `structural` is admitted** (§7; the lead's ruling of 2026-10-15, D-1), and `holdout_passed` is a code for the structural candidate only | `{label: enum(allowed_labels), rejected: [{label, code: enum{null_not_failed, signature_absent, coupled_outside, holdout_passed, superseded}}]}`. The enum is **per call**: the request's tool offers exactly `allowed_labels`, and the template names the values, the literal `none` included (the ruling of 2026-10-14, a; attempt 1's model answered `null`). The frozen tool is the one without the enum, and the gateway accepts the enum as the only per-call difference | the first admitted label in P0's order (sensor, influent, state, parameter, structural); `none` if no label is admitted; the set-aside codes mapped onto the enum (code's finer codes stay in the verdict) |
 
 The differential can only choose **among labels code already admitted**, or `none`. It
 cannot admit one.
@@ -547,8 +547,10 @@ with the codes as input; codes, never text. No new reference fit is made.
 - After `pass`, the state is written and the run validated once (§7).
 - After `fail` with no round left, the label is `none` with `null_failed_unexplained`
   when the null was rejected, and plain `none` otherwise.
-- After `abstain`, the abstentions the verifier named are written, with the label it
-  gave.
+- After `abstain`, the abstentions the verifier named are written, and the final label
+  is `abstain`, never `none` (the lead's ruling of 2026-10-15, N-2b). An abstaining run
+  claims no class, so the evaluator cannot read it as a correct `none`; it carries no
+  evidence item. A run that did not complete still writes `none` and is `pending`.
 
 ## 6. Tool allow-lists, messages and templates
 
@@ -628,7 +630,11 @@ As in P1, the hold-out `[0.75 T, T]` is not a role's to read. Only the verifier 
 `validate`.
 
 - It is called once per VERIFY round. With self-correction on, that is at most twice.
-- Only the boolean `holdout_failed` leaves the verifier. It is used only for S6.
+- Only the boolean `holdout_failed` leaves the verifier. It is used only for S6: the
+  admission of `structural`, and the differential sees it only when `structural` is
+  admitted (§2.7; the lead's ruling of 2026-10-15, D-1). In attempt 2 the differential,
+  shown the bit beside an admitted `sensor`, set `sensor` aside as `holdout_passed` on two
+  runs; that use is now closed off.
 - After CONCLUDE, the concluded prediction is validated once more by the harness, as
   P1's is, and that is the score in the state.
 

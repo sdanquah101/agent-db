@@ -543,6 +543,10 @@ def admit(
     return {"admitted": admitted, "rejected": rejected}
 
 
+ABSTAIN_LABEL = "abstain"
+"""The final label an abstaining run writes (the lead's ruling of 2026-10-15, N-2b): it
+claims no class, so the evaluator cannot read it as a correct ``none``."""
+
 EXCLUDED = ("abstain", "pending")
 """The outcomes no count may read as a label (the review's F-A; ruling (c))."""
 
@@ -550,16 +554,41 @@ EXCLUDED = ("abstain", "pending")
 def outcome(verdict: dict[str, Any], completed: bool, label: str) -> str:
     """What every P2 count keys on: ``pending``, ``abstain``, or the final label.
 
-    The task state must carry a label from the closed vocabulary, so an abstaining or
-    unfinished run writes the null label there; this is the field that says it is not one.
-    A run that did not complete is ``pending`` whatever it wrote; a completed run whose
-    verdict abstained is ``abstain``.
+    An abstaining run writes ``abstain`` as its label (N-2b); an unfinished run writes the
+    null label, and this is the field that says it is not one. A run that did not complete
+    is ``pending`` whatever it wrote; a completed run whose verdict abstained is
+    ``abstain``.
     """
     if not completed:
         return "pending"
     if verdict.get("verdict") == "abstain":
         return "abstain"
     return label
+
+
+def differential_inputs(
+    lab: dict[str, str],
+    table: dict[str, Any],
+    admitted: Sequence[str],
+    s1: dict[str, Any] | None,
+    holdout_failed: bool | None,
+) -> dict[str, Any]:
+    """What ``verify.differential`` is shown (design §2.7, aligned with §7).
+
+    The hold-out bit is shown only when ``structural`` is admitted: §7 gives it to S6 alone
+    (the lead's ruling of 2026-10-15, D-1). In attempt 2 the model, shown the bit beside an
+    admitted ``sensor``, set ``sensor`` aside as ``holdout_passed`` on two runs. The allowed
+    labels are the admitted ones and the null label (ruling a of 2026-10-14).
+    """
+    out: dict[str, Any] = {
+        "null_table": {k: v for k, v in table.items() if k != "placement"},
+        "admitted": list(admitted),
+        "tables": {"s1": s1},
+        "allowed_labels": [*admitted, lab["none"]],
+    }
+    if lab["structural"] in admitted:
+        out["holdout_failed"] = holdout_failed
+    return out
 
 
 def first_in_p0_order(lab: dict[str, str], labels: Sequence[str]) -> str:
@@ -2309,13 +2338,12 @@ class Workflow:
         for round_ in range(rounds):
             result = admit(lab, self.table, self.signatures)
             # the allowed labels are given as data and offered as the tool's enum (ruling
-            # of 2026-10-14, a); the code's acceptance check is unchanged
-            allowed = [*result["admitted"], lab["none"]]
+            # of 2026-10-14, a); the hold-out bit only beside an admitted structural (D-1,
+            # 2026-10-15); the code's acceptance check is unchanged
             choice = self.decider.decide(
                 "verify.differential",
-                {"null_table": {k: v for k, v in self.table.items() if k != "placement"},
-                 "admitted": result["admitted"], "tables": {"s1": self.tables.get("s1")},
-                 "holdout_failed": holdout_failed, "allowed_labels": allowed},
+                differential_inputs(lab, self.table, result["admitted"],
+                                    self.tables.get("s1"), holdout_failed),
                 {"label": first_in_p0_order(lab, result["admitted"]),
                  "rejected": [{"label": r["label"], "code": design_code(r["code"])}
                               for r in result["rejected"]]},
@@ -2342,7 +2370,7 @@ class Workflow:
         label = v.get("label", lab["none"])
         rejected_null = bool(self.table and self.table["null_rejected"])
         if v.get("verdict") == "abstain":
-            label, conf, rule = lab["none"], 0.0, f"abstain:{v['reason']}"
+            label, conf, rule = ABSTAIN_LABEL, 0.0, f"abstain:{v['reason']}"
             self.abstentions += ["kinetic_attribution", "parameter_values", "structural_adequacy"]
         elif v.get("verdict") == "fail" or (label == lab["none"] and rejected_null):
             label, conf, rule = lab["none"], float(attr["confidence"]["multiple"]), \
@@ -2376,7 +2404,7 @@ class Workflow:
             self.abstentions += ["parameter_values"] + [
                 f"{self.residuals[c]['channel']}_budget" for c in self.signatures["r3_channels"]
             ]
-        if label != lab["none"]:
+        if label not in (lab["none"], ABSTAIN_LABEL):  # an abstention claims nothing
             self.evidence.append({
                 "rule": rule, "label": label,
                 "statement": f"{rule}: the null case failed and the signature holds",

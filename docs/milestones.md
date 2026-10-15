@@ -3990,3 +3990,10 @@ inputs are sent as JSON.** One small commit after the review fixes: `json.dumps(
 sort_keys=True, default=_jsonable)`; no freeze or configuration digest moves; every
 `request_sha256` differs from attempt 1's. **Next:** the coordinator's review of both
 commits, then the approval record's fields.
+
+**2026-10-15 — PR #33 merged (`f9d9b1e`); the follow-up for the lead's rulings D-1 and N-2b
+opened as a draft on `claude/p2-holdout-abstain`, with no live call.**
+- D-1: the differential sees the hold-out bit only beside an admitted `structural`; the
+  freeze moves to `17065508…46a3` (the template).
+- N-2b: an abstaining run writes `abstain`; the frozen evaluator scores it as not correct.
+- **Next:** review; no new run until the lead approves one.
