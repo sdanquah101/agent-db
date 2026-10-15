@@ -88,7 +88,7 @@ them. `cells_before_rulings.json` keeps the first run's table.
 
 | cell | truth | before | after | why (after) |
 |---|---|---|---|---|
-| S0-01 B/C | none | `parameter` (wrong) | `none` | The admitting steps were gas (day 15) and pH (day 23), both inside the first HRT and neither failed. Of the failed TS and VS, only TS has a step (day 70), so no two failed channels share one: `change_point_not_on_failed_channels_after_hrt`. R3 was on gas and TAN, not on the failed channels: `r3_not_on_failed_channels`. The null failed on NM and is unexplained. |
+| S0-01 B/C | none | `parameter` (wrong) | `none` | The admitting steps were gas (day 15) and pH (day 23), both inside the first HRT and neither failed. Of the failed TS and VS, only TS has a step of z ≥ 3 (day 70), so no two failed channels share one: `change_point_not_on_failed_channels_after_hrt`. R3 was on gas and TAN, not on the failed channels: `r3_not_on_failed_channels`. The null failed on NM and is unexplained. |
 | S1-01 B/B | none | `none` | `none` | Unchanged. NB failed and gas failed alone. No candidate onset. |
 | S2-01 B/B | sensor | `parameter` (wrong) | `none` | Failed channels: gas and pH. pH's step was inside the first HRT, and no two failed channels share a later step. The null failed on NM and is unexplained. Still a miss, but no longer a false kinetic update. |
 | S3-01 C/B | influent | `parameter` (wrong) | `parameter` (**still wrong**) | Gas and VFA, both failed, share a step after the first HRT, so the tied change point holds. R3 holds on four failed channels with a failed hold-out, so `structural` is also admitted. This is reported, not adjusted for. |

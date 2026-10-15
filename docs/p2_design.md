@@ -98,7 +98,7 @@ No decision point.
 
 | id | Inputs | Output schema | Fallback |
 |---|---|---|---|
-| `dq.trust` | QC's findings per sensor (codes, flagged windows), the first-HRT window, the record's sample counts | `{sensor, quarantine: [[t0, t1]], reason: enum{flatline, spike_run, outage}}` | P0 §3.1 |
+| `dq.trust` | QC's findings per sensor (codes, flagged windows) **on the calibration window only**, the first-HRT window, the calibration window's sample count (the ruling of 2026-10-14, b) | `{sensor, quarantine: [[t0, t1]], reason: enum{flatline, spike_run, outage}}` | P0 §3.1 |
 | `dq.assay` | the S1 table, the assay price list, the units left | `{assay: enum(price list), day, target_sensor}`, passed to the design role | no assay |
 | `dq.coupled` | the S1 table, any assay of the candidate and its coupled channels | `{sensor, code: enum{coupled_inside, coupled_outside, assay_acquits, assay_implicates, insufficient}}` | `insufficient`, so no sensor finding |
 
@@ -111,8 +111,21 @@ quarantine is refused when it:
   outage);
 - reaches into the hold-out.
 
-A refusal is logged as `p2.dq.refused` and counted. The model can narrow QC's
-quarantines; it can never widen them. **The same constraints apply to the fallback**
+A refusal is logged as `p2.dq.refused` (a `tool_failures` entry naming the sensor and
+the reasons) and counted (`dq_refused` in the report; a `dq.refused:<sensor>` code). The
+model can narrow QC's quarantines; it can never widen them.
+
+**The model is not shown the hold-out** (the ruling of 2026-10-14, b). The flagged
+windows it receives are QC's restricted to samples before the hold-out start, so a window
+inside the hold-out is dropped and one crossing the start is trimmed to its last
+calibration sample; the sample count is the calibration window's before that start (the
+start itself is the hold-out's). The QC codes it receives are only those whose evidence
+is shown, `flatline` and `spikes` from the shown windows; QC's whole-record codes (drift,
+informative missingness, the unit, the timestamps) are not shown, and P0's fallback keeps
+the whole-record QC (the review of `f5aa41f`, B-1). In
+attempt 1, pH's spike at day 172 of a hold-out starting at day 150 was shown, and the
+model's quarantine of it was refused by the constraint above; now it is not shown, and
+the constraint stays as defence in depth. **The same constraints apply to the fallback**
 (the re-review's N5), but the fallback is **trimmed**, not refused (the review's R2):
 the offending first-HRT spike and hold-out samples are dropped from P0's §3.1 quarantine
 and the rest of it stands, so the fallback, too, never quarantines a first-HRT spike.
@@ -225,7 +238,7 @@ and the rest of it stands, so the fallback, too, never quarantines a first-HRT s
 |---|---|---|---|
 | `cal.accept` | the fit's χ², its convergence, the reference χ², bound hits | `{accept: bool, code: enum{converged, not_converged, worse_than_reference, bound_hit}}` | accept iff χ² ≤ the reference χ² |
 | `cal.bound` | the parameter, its bounds, its estimate and Fisher sd | `{code: enum{identifiability_limit, data_limit, structure_hint}}`; the enum has no kinetic-update value | `identifiability_limit` |
-| `cal.split` | the per-channel step statistics and split days, from code | `{common_step_day: number or null, channels: [sensor]}`, accepted only where P0's R4 arithmetic agrees within 30 d | P0's R4 arithmetic |
+| `cal.split` | the per-channel step statistics and split days, from code | `{common_step_day: number or null, channels: [sensor]}`, accepted when it is a valid common step by P0's R4 arithmetic: at least R4's channel count, each named channel's own step at or above R4's threshold, their step days within R4's 30-day tolerance of one of their own step days (R4's form) and of the proposed day (the ruling of 2026-10-14, c; before it only R4's earliest common day was accepted) | P0's R4 arithmetic, the earliest common day |
 
 **Tools:** `fit_lsq`, `fit_de`, `fit_cmaes`, `bayes_mcmc`, `simulate`, `residual_diag`,
 `declared_background`.
@@ -281,7 +294,7 @@ claim (§10).
 
 | id | Inputs | Output schema | Fallback |
 |---|---|---|---|
-| `verify.differential` | the null table, the admitted labels with their signature tables, the hold-out flag | `{label: enum(admitted ∪ {none}), rejected: [{label, code: enum{null_not_failed, signature_absent, coupled_outside, holdout_passed, superseded}}]}` | the first admitted label in P0's order (sensor, influent, state, parameter, structural); `none` if no label is admitted |
+| `verify.differential` | the null table, the admitted labels with their signature tables, the hold-out flag, and `allowed_labels` (admitted ∪ {none}) | `{label: enum(allowed_labels), rejected: [{label, code: enum{null_not_failed, signature_absent, coupled_outside, holdout_passed, superseded}}]}`. The enum is **per call**: the request's tool offers exactly `allowed_labels`, and the template names the values, the literal `none` included (the ruling of 2026-10-14, a; attempt 1's model answered `null`). The frozen tool is the one without the enum, and the gateway accepts the enum as the only per-call difference | the first admitted label in P0's order (sensor, influent, state, parameter, structural); `none` if no label is admitted; the set-aside codes mapped onto the enum (code's finer codes stay in the verdict) |
 
 The differential can only choose **among labels code already admitted**, or `none`. It
 cannot admit one.
@@ -587,11 +600,19 @@ Every exchange between roles is a typed message (Pydantic), appended to
 
 Each decision point's request is assembled from:
 - its template, `configs/workflows/p2_prompts/<point>.md`;
-- its declared inputs, as data.
+- its declared inputs, as data: one JSON object in the single user message (the lead's
+  ruling of 2026-10-14; until then the jail sent `str(inputs)`, a Python literal inside a
+  JSON string).
 
 `p2.yaml` lists every template with its version. The template's sha256 goes into every
 `DecisionRecord`, and the runner refuses a run whose templates differ from the committed
 ones (P1's frozen-record mechanism).
+
+One point, `verify.differential`, offers a field as an enum of a per-call input
+(`PER_CALL_ENUM`): the frozen tool is the form without the enum, the request's tool is
+the narrowed one, and the privileged gateway accepts that enum, a non-empty list of
+distinct labels of P0's vocabulary holding the null label, as the only difference from
+the frozen tool.
 
 **The prompt rule, extended** (the review's item 8). No template may contain a labelling
 rule the code owns. A test scans every template and fails on any of these:
@@ -889,10 +910,7 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
     integration segment, so its numbering is offset by the number of parameter-fault
     onsets. A join would leak that number into `summary.json` (the review's N-1).
   - A call that no action names is counted as `unattributed`; it is the registry's own
-    open record. It attributes
-  each call to a role by the `role.step` of the workflow's action with the same `seq`.
-  A logged call that no action names is counted as `unattributed`. Tokens and requests
-  are zero until deliverable 3.
+    open record. Tokens and requests are zero until deliverable 3.
 - **Deferred to deliverable 5 (the ablations), recorded rather than claimed** (the
   review's F-F and F-G):
   - `dq.assay` is declared and validated, but no step calls it yet. In deliverable 2 the
@@ -913,3 +931,98 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
   `abstain` and `pending` rows are taken out and reported separately. Otherwise an
   abstaining or unfinished run would be scored as `none`, which ruling (c) forbids. The
   evaluator itself is frozen and unchanged; the filter belongs to the P2 tables.
+
+## 15. The live wiring (deliverable 3): implementation notes
+
+None of this has made a live call. No call is made until the coordinator has reviewed
+deliverable 3 and the lead approves the pilot.
+
+- **The signatures come from the reference fit, on the raw record** (the review's F-B).
+  The sensors in the objective are also chosen by the raw record's sample count (N-5b),
+  so a quarantine a decision chose cannot change which channels the signatures see.
+  - The early/late test, the feed covariate, the change point, R3, the biomass pair and
+    the hold-out bit are computed against the reference fit: its prediction, its
+    optimum and its bounds. They use the raw record and the served weights.
+  - They never use a subset fit a decision chose, nor a record a decision quarantined.
+  - A test scripts `ident.subset`: the chosen subset's prediction moves, and no
+    signature does.
+- **The model is the frozen P1's.** `p2.yaml`'s `model` block equals `p1.yaml`'s, field
+  for field, and a test pins them: `gpt-5.6-luna`, reasoning `high`, no temperature,
+  P1's retry and prices.
+- **The caps** (`p2.yaml` `caps`) are enforced in the privileged gateway
+  (`tools/p2_live.py::P2Gateway`), never in the workflow.
+  - The limits: 60 requests and 6 M tokens per run (P1's), and USD 0.25 per run.
+  - **Every attempt** is projected before it is sent, retries included (the review of
+    PR #33, B-1): its input at 2 characters per token (conservative), plus the full
+    `max_tokens` of output. Every attempt counts against the request cap.
+  - A failed attempt is booked at its projected worst case. That covers a retryable
+    error, and a reply that arrived but could not be read, which may have been billed.
+  - An attempt that would take the run past any cap is refused unsent and logged as a
+    refusal (`refused: cap`). The workflow then stops asking and abstains
+    (`abstain:model_cap`), so a live run is never a silent mixture of model and code
+    decisions.
+  - The interrupted decision is still recorded. Every log line, refusals included, is
+    cited by a decision record's `llm_call_ids`.
+  - Twelve points × two attempts project to about USD 0.46, so the USD 0.25 cap can
+    bind on a legitimate run, by design.
+- **The gateway is P1's** (`ModelGateway`, its retry, meter and `llm_calls.jsonl`). P2's
+  subclass accepts only a request the frozen decision layer produces:
+  - one of the twelve frozen templates as the system prompt;
+  - that decision's frozen tool;
+  - one user message, holding the declared inputs as JSON.
+  Every log line names the point and the role, both derived from the matched template,
+  never from the jail. `summary.json`'s `by_role` gains each role's tokens and requests.
+- **One tool, auto choice, not a forced call** (a deviation from §11's "forced tool").
+  - P1's clients refuse any `tool_choice` but auto (`check_responses_request`), and
+    P1's freeze relies on that check, so the shared clients are left unchanged.
+  - Each request offers exactly one tool. A reply without that tool's call is a failed
+    attempt: one retry, then the coded fallback, recorded with its reason.
+  - Forcing the call would mean changing the shared client, which is a question for
+    the coordinator.
+- **The template freeze** (`p2.yaml` `frozen`, checked by
+  `tools/p2_live.py::check_p2_frozen`):
+  - every template's text, every decision's output schema and the tool its request
+    offers, by sha256, and the **whole** model block and caps (B-4);
+  - a configuration's `frozen` record must be the committed one, so a copied
+    configuration with edited hashes is refused. The model block is checked against the
+    frozen P1's on the configuration the run uses;
+  - the runner checks it before **every** P2 run, offline included, and refuses a run
+    on any difference;
+  - a changed template is a new freeze, which needs the lead's word.
+- **Live mode is an explicit flag, OFF by default**: `run_workflow(..., live=True)`, or
+  `--live` on the command line. `p2.yaml` cannot select it. **Either path also requires
+  the lead's committed approval record** (B-3). The record is
+  `configs/workflows/p2_live_approval.yaml`. It is checked by digest on a clean tree,
+  and it names the caps, the committed freeze and the exact run list, matched against
+  the run's truth manifest. It is committed only on the lead's word, and a record that
+  no longer matches the configuration refuses every live run.
+  - Without the flag, the jail gets `decider: offline` and no gateway is built. A model
+    client passed without the flag is refused.
+  - A test shows that the default reaches no model: an offline run never calls
+    `tools.llm`, and the runner launches without a gateway.
+- **The pilot is prepared, not run** (`scripts/p2_pilot.py`).
+  - It is the three-role minimum (influent, identifiability and design off) on
+    S0-01 B/B, S2-01 B/B and S8-01 B/B. The two seeds per cell are replicates 0 and 1:
+    six runs, about USD 0.3.
+  - The pilot stops launching cells at USD 0.6.
+  - `run` refuses without the approval record, before any client is built. The runner
+    checks the record again for each run.
+  - `offline` runs the same six runs with the offline decider, at the same commit and
+    configuration. That is the baseline a live-versus-offline difference is measured
+    against (B-2; `reports/p2_pilot/offline.md`).
+  - `plan` prints the cells, the caps and the command, and makes no call.
+- **Expectations, stated before any result** (the lead's request).
+  - A model can change only the outcomes of the twelve decision points. Every label is
+    still admitted by coded signatures over the frozen null rule.
+  - Before B-2, the realistic gain on the development cells was put at about **one
+    cell**: S8-01 B/B.
+  - **Updated after the offline re-run of the six pilot runs** (B-2; the outcomes
+    moved, so this says so). Offline, all six are `none`. On three, the null fails on
+    one channel (NS), the S1 table holds, and only the offline reading blocks `sensor`.
+    A live `coupled_inside` reading would give:
+    - `sensor` on S8-01 B/B r0, which is **correct**;
+    - `sensor` on S2-01 B/B r1, which is **correct**;
+    - `sensor` on the clean S0-01 B/B r1, which is **wrong**.
+  - So the pilot can show at most two gains and one false alarm. S0-01 B/B r0's null
+    stands, so the go/no-go cannot stop on these records (`reports/p2_pilot/offline.md`).
+  - S3-01, S5-01 and S6-02 are decided by coded rules and the frozen null rule.

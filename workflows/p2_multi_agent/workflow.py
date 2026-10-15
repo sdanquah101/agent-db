@@ -9,9 +9,12 @@ routine through ``tools.call``, each through the calling role's allow-listed vie
 
 The design in one paragraph. Coordination is code: a fixed state machine (§5) over the
 §6.6 task state. The roles are procedures. A model is consulted only at twelve declared
-decision points (§2), each with a fixed output schema and a declared fallback; this
-deliverable runs **offline** (``decider: offline``), so every decision point takes its
-fallback and no model is called. Every test that sets a label's evidence is code. The
+decision points (§2), each with a fixed output schema and a declared fallback. By
+default the decider is **offline** (``decider: offline``): every decision point takes its
+fallback and no model is called. Only the runner's explicit live flag hands the jail
+``decider: live``, and then each decision is one request through the privileged
+gateway (``tools.llm``), with its frozen template and its one tool (deliverable 3). Every
+test that sets a label's evidence is code, in either mode. The
 first calibration is the **reference fit**, the declared background's own procedure,
 so its statistics are placed against the published band like for like (§3); the
 **null rule** (§4, frozen 2026-10-07) reads the placement, and a label is admitted only
@@ -373,6 +376,41 @@ def common_change_point(
     return {"common": False, "day": None, "channels": []}
 
 
+def split_agrees(
+    day: float | None,
+    channels: Sequence[str],
+    steps: dict[str, dict[str, Any]],
+    attr: dict[str, Any],
+) -> bool:
+    """Whether ``cal.split``'s proposal is a valid common step by P0's R4 arithmetic.
+
+    Accepted (the lead's ruling of 2026-10-14, defect c): no day with no channel; or at least
+    ``parameter_channels_min`` named channels, each with its own step at or above
+    ``parameter_step_z`` (a missing or NaN step refuses), whose step days all lie within
+    ``step_day_tolerance_d`` of one of their own step days (R4's own form: ``sharing`` is every
+    channel within the tolerance of a step day; not pairwise, which is stricter for three or
+    more channels) and of the proposed day. Before the ruling only R4's earliest common day was
+    accepted, so a later valid common step (attempt 1's ``tan`` and ``alkalinity`` at days 105
+    and 112) was refused. A channel below the threshold (attempt 1's ``cod_total`` at z 1.43) is
+    still refused.
+    """
+    if day is None:
+        return not channels
+    if len(channels) < int(attr["parameter_channels_min"]) or len(set(channels)) != len(channels):
+        return False
+    z_min, tol = float(attr["parameter_step_z"]), float(attr["step_day_tolerance_d"])
+    days = []
+    for ch in channels:
+        r = steps.get(ch) or {}
+        z, d = r.get("step_z"), r.get("step_day")
+        if z is None or d is None or not (float(z) >= z_min):  # NaN is refused
+            return False
+        days.append(float(d))
+    if not any(all(abs(d - anchor) <= tol for d in days) for anchor in days):
+        return False
+    return all(abs(d - float(day)) <= tol for d in days)
+
+
 def tied_change_point(
     residuals: dict[str, dict[str, Any]],
     failed: Sequence[str],
@@ -580,6 +618,36 @@ def constrain_quarantine(
     }
 
 
+def shown_to_dq_trust(
+    t: np.ndarray,
+    value: np.ndarray,
+    flat: np.ndarray,
+    spikes: np.ndarray,
+    cal_start: float,
+    holdout_start: float,
+) -> tuple[list[list[float]], int, list[str]]:
+    """What ``dq.trust`` is shown before the hold-out: QC's windows, the sample count, the codes.
+
+    The lead's ruling of 2026-10-14 (defect b): only samples with ``t`` before the hold-out
+    start are shown, so a flagged window inside the hold-out is dropped and one crossing
+    the start is trimmed to its last calibration sample (attempt 1 showed the model a pH
+    spike at day 172 of a hold-out starting at day 150). The count is the observed samples
+    of the calibration window before the hold-out start: the start itself belongs to the
+    hold-out, so on a record of days 0..199 with the hold-out from day 150 it is 150. The
+    codes are only those whose evidence is shown: ``flatline`` for a shown flatline window,
+    ``spikes`` for a shown spike (the review of ``f5aa41f``, B-1: the whole-record ``spikes``
+    code had told the model of a hold-out spike with no window shown). QC's whole-record
+    codes (drift, informative missingness, the unit, the timestamps) are not shown; P0's
+    fallback keeps the whole-record QC.
+    """
+    before = t < float(holdout_start)
+    windows = mask_windows(t, (flat | spikes) & before)
+    count = int((np.isfinite(value) & (t >= float(cal_start)) & before).sum())
+    evidence = (("flatline", flat), ("spikes", spikes))
+    codes = [code for code, mask in evidence if (mask & before).any()]
+    return windows, count, codes
+
+
 def mask_windows(t: np.ndarray, mask: np.ndarray) -> list[list[float]]:
     """A sample mask as the contiguous windows it covers, [first, last] sample days."""
     out: list[list[float]] = []
@@ -682,11 +750,42 @@ class DesignAssay(_Out):
     prediction: str | None
 
 
-class VerifyDifferential(_Out):
-    """``verify.differential``: one admitted label or the null label; codes for the rest."""
+REJECTION_CODES = (
+    "null_not_failed", "signature_absent", "coupled_outside", "holdout_passed", "superseded",
+)  # fmt: skip
+"""The codes a set-aside candidate may carry (design §2.7; the ruling of 2026-10-14, a)."""
+
+
+def design_code(code: str) -> str:
+    """Code's finer rejection code as one of :data:`REJECTION_CODES`, for the fallback.
+
+    The verdict keeps code's own codes (the 2026-10-08 rulings' ``..._not_on_failed_
+    channels`` and ``holdout_unavailable`` among them); the decision's fallback, which the
+    output schema validates, carries the design's code. A signature not on the failed
+    channels, or a hold-out that could not be checked, is a signature absent.
+    """
+    return code if code in REJECTION_CODES else "signature_absent"
+
+
+class Rejected(_Out):
+    """One candidate set aside: its label and the design's code."""
 
     label: str
-    rejected: list[dict[str, str]] = Field(default_factory=list)
+    code: Literal[
+        "null_not_failed", "signature_absent", "coupled_outside", "holdout_passed", "superseded"
+    ]
+
+
+class VerifyDifferential(_Out):
+    """``verify.differential``: one admitted label or the null label; codes for the rest.
+
+    ``label``'s allowed values are per call: the admitted labels and the null label, given
+    as the ``allowed_labels`` input and offered as the tool's enum (the ruling of
+    2026-10-14, a: attempt 1's model answered ``null`` where the code needs ``none``).
+    """
+
+    label: str
+    rejected: list[Rejected] = Field(default_factory=list)
 
 
 DECISIONS: dict[str, dict[str, Any]] = {
@@ -714,9 +813,13 @@ DECISIONS: dict[str, dict[str, Any]] = {
     "design.assay": {"role": "design", "model": DesignAssay,
                      "inputs": ("request", "voi", "price_list", "units_left")},
     "verify.differential": {"role": "verification", "model": VerifyDifferential,
-                            "inputs": ("null_table", "admitted", "tables", "holdout_failed")},
+                            "inputs": ("null_table", "admitted", "tables", "holdout_failed",
+                                       "allowed_labels")},
 }  # fmt: skip
 """Every decision point: its role, its output schema and its declared inputs (§2)."""
+
+PER_CALL_ENUM: dict[str, tuple[str, str]] = {"verify.differential": ("label", "allowed_labels")}
+"""Decision points whose tool offers one field as an enum of a per-call input (ruling a)."""
 
 
 def schema_sha256(model: type[BaseModel]) -> str:
@@ -741,6 +844,114 @@ def offline_responder(point: str, template: str, inputs: dict[str, Any]) -> None
 
 class DecisionError(Exception):
     """A decision point asked with inputs it does not declare."""
+
+
+class AttemptFailed(Exception):
+    """One attempt at a decision failed (no decision call in the reply, a model error)."""
+
+
+class ModelCapReached(Exception):
+    """The gateway refused a request: a request, token or USD cap would be exceeded.
+
+    The run stops asking and abstains (deliverable 3, F-E): it does not fall back to code
+    for the rest of the run, so no live run is ever a silent mixture of the two.
+    """
+
+
+def decision_tool(point: str, inputs: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The one tool a decision request offers: its input schema is the decision's schema.
+
+    Deterministic, so the runner can freeze its digest beside the template's. With
+    ``inputs``, a :data:`PER_CALL_ENUM` point's field is narrowed to that call's allowed
+    values (:func:`narrow_tool`); the frozen tool is the one without ``inputs``.
+    """
+    tool = {
+        "name": point.replace(".", "_"),
+        "description": "Return the decision as this tool's input. Its schema is the only "
+        "form accepted.",
+        "input_schema": DECISIONS[point]["model"].model_json_schema(),
+    }
+    return narrow_tool(tool, point, inputs) if inputs is not None else tool
+
+
+def narrow_tool(tool: dict[str, Any], point: str, inputs: dict[str, Any]) -> dict[str, Any]:
+    """``tool`` with its :data:`PER_CALL_ENUM` field offered as the enum of this call's input."""
+    if point not in PER_CALL_ENUM:
+        return tool
+    field_name, input_name = PER_CALL_ENUM[point]
+    allowed = [str(v) for v in inputs[input_name]]
+    out = json.loads(json.dumps(tool))
+    out["input_schema"]["properties"][field_name]["enum"] = allowed
+    return out
+
+
+def base_tool(tool: dict[str, Any], point: str) -> dict[str, Any]:
+    """``tool`` with a :data:`PER_CALL_ENUM` point's per-call enum removed (the frozen form).
+
+    The privileged gateway compares a request's tool with the frozen one through this:
+    the enum is the only per-call difference it accepts.
+    """
+    if point not in PER_CALL_ENUM:
+        return tool
+    out = json.loads(json.dumps(tool))
+    out["input_schema"]["properties"][PER_CALL_ENUM[point][0]].pop("enum", None)
+    return out
+
+
+class LiveResponder:
+    """The live decider (deliverable 3): one request per attempt through the gateway.
+
+    The request is the template as the system prompt, the declared inputs as one user
+    message (JSON), and the decision's single tool. Nothing else reaches the model. A
+    reply without the decision's tool call, or a model error, is a failed attempt; a cap
+    refusal stops the run (:class:`ModelCapReached`).
+    """
+
+    def __init__(self) -> None:
+        """Start with no call ids pending."""
+        self.pending: list[int] = []
+
+    def take_call_ids(self) -> list[int]:
+        """The ``llm_calls.jsonl`` line numbers of every attempt since the last take.
+
+        Failed and refused attempts included: the gateway names its lines in a reply's
+        status and in an error's message, so every logged attempt is cited by the
+        decision record that caused it (the review of PR #33, N-2a).
+        """
+        out, self.pending = list(self.pending), []
+        return out
+
+    def _cite(self, message: str) -> None:
+        tag = "[llm_lines="
+        if tag in message:
+            ids = message.rsplit(tag, 1)[1].split("]", 1)[0]
+            self.pending += [int(i) for i in ids.split(",") if i.strip().isdigit()]
+
+    def __call__(self, point: str, template: str, inputs: dict[str, Any]) -> dict[str, Any]:
+        """One attempt."""
+        tool = decision_tool(point, inputs)
+        request = {
+            "system": template,
+            # the inputs as one JSON object (design §6.3; the lead's ruling of 2026-10-14:
+            # until then the jail sent str(inputs), a Python literal inside a JSON string)
+            "messages": [{"role": "user", "content": json.dumps(inputs, sort_keys=True,
+                                                                default=_jsonable)}],
+            "tools": [tool],
+        }  # fmt: skip
+        try:
+            reply = tools.llm(request)
+        except tools.BudgetExceededError as exc:
+            self._cite(str(exc))
+            raise ModelCapReached(str(exc)) from exc
+        except tools.ToolError as exc:
+            self._cite(str(exc))
+            raise AttemptFailed(f"model: {str(exc)[:200]}") from exc
+        status = reply.get("status") or {}
+        self.pending += [int(i) for i in status.get("llm_lines") or []]
+        for block in (reply.get("response") or {}).get("content") or []:
+            if block.get("type") == "tool_use" and block.get("name") == tool["name"]:
+                return dict(block.get("input") or {})
+        raise AttemptFailed("no decision call in the reply")
 
 
 class Decider:
@@ -769,13 +980,28 @@ class Decider:
         extra = set(inputs) - set(spec["inputs"])
         if extra:
             raise DecisionError(f"{point}: undeclared inputs {sorted(extra)}")
+        if point in PER_CALL_ENUM and PER_CALL_ENUM[point][1] not in inputs:
+            # the allowed values are what the point is asked with (ruling a, 2026-10-14)
+            raise DecisionError(f"{point}: asked without {PER_CALL_ENUM[point][1]!r}")
         model: type[BaseModel] = spec["model"]
         template = self.templates[point]
         attempts = 0
         failures: list[str] = []
         output: BaseModel | None = None
         for _ in range(2):
-            raw = self.respond(point, template["text"], inputs)
+            try:
+                raw = self.respond(point, template["text"], inputs)
+            except AttemptFailed as exc:
+                attempts += 1
+                failures.append(str(exc))
+                continue
+            except ModelCapReached:
+                # the decision is interrupted, not lost: its record cites every attempt
+                # the gateway logged for it, then the run stops asking (N-2a)
+                # no decision was taken and none is applied: the run abstains (N-new-4)
+                self._record(spec, point, template, inputs, None, attempts,
+                             [*failures, "model_cap"], False, "aborted_model_cap")  # fmt: skip
+                raise
             if raw is None:
                 break
             attempts += 1
@@ -792,21 +1018,44 @@ class Decider:
         used_fallback = output is None
         if output is None:
             output = model.model_validate(fallback)
+        status = "fallback" if used_fallback else "decided"
+        self._record(spec, point, template, inputs, output, attempts, failures, used_fallback,
+                     status)  # fmt: skip
+        return output
+
+    def _record(
+        self,
+        spec: dict[str, Any],
+        point: str,
+        template: dict[str, str],
+        inputs: dict[str, Any],
+        output: BaseModel | None,
+        attempts: int,
+        failures: list[str],
+        used_fallback: bool,
+        status: str,
+    ) -> None:
+        take = getattr(self.respond, "take_call_ids", None)
         self.records.append(
             {
                 "role": spec["role"],
                 "point": point,
                 "template_sha256": template["sha256"],
-                "schema_sha256": schema_sha256(model),
+                "schema_sha256": schema_sha256(spec["model"]),
                 "inputs_digest": _digest(inputs),
-                "output": output.model_dump(mode="json"),
+                "output": None if output is None else output.model_dump(mode="json"),
+                "status": status,
                 "attempts": attempts,
                 "failures": failures,
                 "fallback_used": used_fallback,
-                "llm_call_ids": [],
+                "llm_call_ids": take() if take is not None else [],
+                **(
+                    {"offered": {PER_CALL_ENUM[point][0]: list(inputs[PER_CALL_ENUM[point][1]])}}
+                    if point in PER_CALL_ENUM
+                    else {}
+                ),
             }
         )
-        return output
 
 
 # ------------------------------------------------------------------ messages (§6.2)
@@ -1046,9 +1295,10 @@ class Series:
             "unit": self.unit,
         }
 
-    def count(self, window: tuple[float, float]) -> int:
-        """Observed samples inside ``window``."""
-        return int((np.isfinite(self.value) & (self.t >= window[0]) & (self.t <= window[1])).sum())
+    def count(self, window: tuple[float, float], *, raw: bool = False) -> int:
+        """Observed samples inside ``window`` (of the raw record with ``raw``)."""
+        v = self.raw if raw else self.value
+        return int((np.isfinite(v) & (self.t >= window[0]) & (self.t <= window[1])).sum())
 
 
 # ------------------------------------------------------------------ the workflow
@@ -1064,7 +1314,10 @@ class Workflow:
         self.lab: dict[str, str] = dict(self.p0["labels"])
         self.attr = self.p0["attribution"]
         self.switch = cfg["ablation"]
+        # the lead's ruling of 2026-10-13: the runner's document says P2 has no limit
+        self.unlimited = (cfg.get("runner") or {}).get("wall_clock_limit") is False
         self.on = dict(self.switch["roles"])
+        self.dq_refused = 0
         self.rec = Recorder()
         self.views = {role: RoleView(role, spec["tools"], self.rec)
                       for role, spec in cfg["roles"].items()}  # fmt: skip
@@ -1086,6 +1339,8 @@ class Workflow:
         self.evidence: list[dict[str, Any]] = []
         self.reference: dict[str, Any] | None = None
         self.reference_prediction: Any = None
+        self.reference_fit: Any = None
+        self.reference_optimum: dict[str, float] = {}
         self.balance_index: int | None = None
         self.reference_sd: dict[str, np.ndarray] = {}
         self.band: dict[str, Any] | None = None
@@ -1211,29 +1466,50 @@ class Workflow:
             if flagged.any():
                 fallback = constrain_quarantine(s.t, flagged, flagged, spikes, self.first_hrt,
                                                 self.holdout[0], trim=True)  # fmt: skip
+                refused: list[list[str]] = []
 
                 def check(
                     o: BaseModel,
                     s: Series = s,
                     flagged: np.ndarray = flagged,
                     spikes: np.ndarray = spikes,
+                    refused: list[list[str]] = refused,
                 ) -> bool:
                     sel = np.zeros(s.t.shape, dtype=bool)
                     for a, b in o.quarantine:
                         sel |= (s.t >= a) & (s.t <= b)
-                    return not constrain_quarantine(
+                    out = constrain_quarantine(
                         s.t, sel, flagged, spikes, self.first_hrt, self.holdout[0], trim=False
-                    )["refused"]
+                    )
+                    if out["refused"]:
+                        refused.append(list(out["reasons"]))
+                    return not out["refused"]
 
+                # the model is shown the calibration window only (ruling of 2026-10-14, b);
+                # the hold-out constraint above stays, as defence in depth
+                windows, shown_count, shown_codes = shown_to_dq_trust(
+                    s.t, s.value, flat, spikes, self.cal[0], self.holdout[0]
+                )
                 choice = self.decider.decide(
                     "dq.trust",
-                    {"sensor": name, "qc_findings": list(r.flags),
-                     "flagged_windows": mask_windows(s.t, flagged),
-                     "first_hrt_d": self.first_hrt, "sample_counts": int(s.count(self.cal))},
+                    {"sensor": name, "qc_findings": shown_codes,
+                     "flagged_windows": windows,
+                     "first_hrt_d": self.first_hrt, "sample_counts": shown_count},
                     {"sensor": name, "quarantine": mask_windows(s.t, fallback["accepted"]),
                      "reason": "flatline" if flat.any() else "spike_run"},
                     check=check,
                 )  # fmt: skip
+                # a refused quarantine is logged and counted (design §2.2; the review of
+                # 7ef1238 found the entry promised and not written)
+                for reasons in refused:
+                    self.dq_refused += 1
+                    self.codes.append(f"dq.refused:{name}")
+                    self.rec.failures.append({
+                        "step": "data_quality.qc", "name": "p2.dq.refused", "call_index": None,
+                        "kind": "error", "message": f"{name}: {','.join(reasons)}",
+                        "fallback": "the attempt is refused; P0's trimmed quarantine if none "
+                        "is accepted",
+                    })  # fmt: skip
                 sel = np.zeros(s.t.shape, dtype=bool)
                 for a, b in choice.quarantine:
                     sel |= (s.t >= a) & (s.t <= b)
@@ -1256,7 +1532,9 @@ class Workflow:
                     s.flags.append("drift_within_declared_bound")
             if r.informative_missingness:
                 self.abstentions.append("missing_transient")
-            if s.count(self.cal) < int(qc["min_samples"]):
+            # counted on the raw record: a quarantine a decision chose cannot drop a
+            # sensor from the objective, and so from the signatures (N-5b)
+            if s.count(self.cal, raw=True) < int(qc["min_samples"]):
                 s.in_objective = False
                 if s.status == "ok":
                     s.status = "excluded"
@@ -1407,6 +1685,7 @@ class Workflow:
         fitted = self.call("calibration", "reference", "simulate", model=MODEL, parameters=optimum)
         self.prediction, self.prediction_index = fitted, self.rec.last_index
         self.reference_prediction = fitted
+        self.reference_fit, self.reference_optimum = fit, dict(optimum)
         self.fit, self.optimum, self.approved = fit, optimum, list(approved)
         self.screening = {
             "declared": params,
@@ -1624,26 +1903,33 @@ class Workflow:
         return cov
 
     def step_residuals(self) -> None:
-        """Residual structure of every objective channel against the current prediction."""
-        if self.prediction is None:
+        """Residual structure of every objective channel against the **reference** fit.
+
+        The signatures read these residuals (the early/late test, the feed covariate,
+        the change point, R3), so they are taken on the raw record against the reference
+        prediction with the served weights, never against a subset fit a decision chose
+        nor on a record a decision quarantined (the review's F-B).
+        """
+        pred = self.reference_prediction
+        if pred is None:
             return
         role = "calibration" if self.on["calibration"] else "identifiability"
         covariates = self.covariates()
         transient = self.cal[0] + float(self.attr["transient_d"])
         self.residuals = {}
         for s in self.series.values():
-            if not s.in_objective or s.channel not in self.prediction.outputs:
+            if not s.in_objective or s.channel not in pred.outputs:
                 continue
-            m = np.isfinite(s.value) & (s.t >= self.cal[0]) & (s.t <= self.cal[1])
+            m = np.isfinite(s.raw) & (s.t >= self.cal[0]) & (s.t <= self.cal[1])
             t = s.t[m]
-            r = s.value[m] - np.interp(
+            r = s.raw[m] - np.interp(
                 t,
-                np.asarray(self.prediction.t, dtype=float),
-                np.asarray(self.prediction.outputs[s.channel], dtype=float),
+                np.asarray(pred.t, dtype=float),
+                np.asarray(pred.outputs[s.channel], dtype=float),
             )
             if r.size < 4:
                 continue
-            z = r / s.sd[m]
+            z = r / self.reference_sd.get(s.name, s.sd)[m]
             n = int(z.size)
             se = (
                 float(z.std(ddof=1) / math.sqrt(n))
@@ -1696,25 +1982,28 @@ class Workflow:
         firing = early_late(self.residuals, self.attr)
         improves = False
         pair: dict[str, Any] = {}
-        if firing and self.on["calibration"] and self.prediction is not None:
+        if firing and self.on["calibration"] and self.reference_prediction is not None:
             early = (self.cal[0], self.cal[0] + float(self.attr["transient_d"]))
 
             def early_rms(sim: Any) -> float:
                 vals = []
                 for name in firing:
                     s = self.series[name]
-                    summ = z_summary(s.t, s.value, s.sd, sim.t, sim.outputs[s.channel], early)
+                    sd = self.reference_sd.get(name, s.sd)
+                    summ = z_summary(s.t, s.raw, sd, sim.t, sim.outputs[s.channel], early)
                     if summ is not None:
                         vals.append(float(summ["rms_z"]))
                 return float(np.mean(vals)) if vals else float("inf")
 
-            reference = early_rms(self.prediction)
+            # the reference fit's prediction and optimum, never a subset fit's (F-B)
+            reference = early_rms(self.reference_prediction)
             for scale in self.cfg["biomass_scales"]:
                 if not self.plan.fits("biomass_pair", 1):
                     self.plan.skipped["biomass_pair"] = "the plan does not allow it"
                     break
                 sim = self.call("calibration", "state_test", "simulate", model=MODEL,
-                                parameters=self.optimum, biomass_scale=float(scale))  # fmt: skip
+                                parameters=self.reference_optimum,
+                                biomass_scale=float(scale))  # fmt: skip
                 pair[str(scale)] = early_rms(sim)
             improves = any(v < reference for v in pair.values())
             pair["reference"] = reference
@@ -1786,16 +2075,14 @@ class Workflow:
             steps = {ch: {"step_z": r.get("step_z"), "step_day": r.get("step_day")}
                      for ch, r in self.residuals.items()}  # fmt: skip
 
-            def agrees(o: BaseModel) -> bool:
-                return o.common_step_day is None or (
-                    change["common"]
-                    and abs(o.common_step_day - change["day"])
-                    <= float(self.attr["step_day_tolerance_d"])
-                )
-
-            self.decider.decide("cal.split", {"steps": steps},
-                                {"common_step_day": change["day"], "channels": change["channels"]},
-                                check=agrees)  # fmt: skip
+            # any valid common step is accepted (ruling of 2026-10-14, c); the fallback is
+            # R4's earliest common day
+            self.decider.decide(
+                "cal.split",
+                {"steps": steps},
+                {"common_step_day": change["day"], "channels": change["channels"]},
+                check=lambda o: split_agrees(o.common_step_day, o.channels, steps, self.attr),
+            )
         inhib = inhibition(p) if p else {"available": False, "inhibited": False}
         self.signatures["change_point"] = change
         self.signatures["change_point_tied"] = tied
@@ -1810,7 +2097,8 @@ class Workflow:
             self.signatures.get("biomass_improves")
         )
         self.signatures["initial_state_proposed"] = bool(firing)
-        at_bound = bool(self.fit is not None and list(self.fit.at_bound))
+        ref_fit = self.reference_fit
+        at_bound = bool(ref_fit is not None and list(ref_fit.at_bound))
         r3_all = structured_channels(self.residuals, self.attr, at_bound)
         r3 = [c for c in r3_all if c in set(failed)]  # R3 on failed channels (2026-10-08)
         need = int(self.attr["structural_channels_min"])
@@ -2020,13 +2308,17 @@ class Workflow:
         result: dict[str, Any] = {}
         for round_ in range(rounds):
             result = admit(lab, self.table, self.signatures)
+            # the allowed labels are given as data and offered as the tool's enum (ruling
+            # of 2026-10-14, a); the code's acceptance check is unchanged
+            allowed = [*result["admitted"], lab["none"]]
             choice = self.decider.decide(
                 "verify.differential",
                 {"null_table": {k: v for k, v in self.table.items() if k != "placement"},
                  "admitted": result["admitted"], "tables": {"s1": self.tables.get("s1")},
-                 "holdout_failed": holdout_failed},
+                 "holdout_failed": holdout_failed, "allowed_labels": allowed},
                 {"label": first_in_p0_order(lab, result["admitted"]),
-                 "rejected": result["rejected"]},
+                 "rejected": [{"label": r["label"], "code": design_code(r["code"])}
+                              for r in result["rejected"]]},
                 check=lambda o, adm=result["admitted"]: o.label in [*adm, lab["none"]],
             )  # fmt: skip
             # a fail is a rejected null that no admitted label explains; a signature
@@ -2100,7 +2392,9 @@ class Workflow:
             "evidence": self.evidence, "flag_sensor": flag, "scale_factor": scale,
             "revise_influent_mapping": label == lab["influent"],
             "recommend_structural_review": label == lab["structural"],
-            "kinetic_update": label in (lab["parameter"], lab["none"]),
+            # an abstaining run claims nothing, a kinetic update included (N-2b)
+            "kinetic_update": label in (lab["parameter"], lab["none"])
+            and v.get("verdict") != "abstain",
         }  # fmt: skip
         self.validation = self.validate("harness", "final")
         self.checkpoint("conclude")
@@ -2205,6 +2499,9 @@ class Workflow:
                 f"routing: {' > '.join(self.trace)}",
                 f"ablation: {json.dumps(self.switch, sort_keys=True)}",
                 f"codes: {sorted(set(self.codes))}",
+                # after the four fixed lines the records' readers index (nit 1 of the
+                # review of 7ef1238)
+                *([UNLIMITED_NOTE] if self.unlimited else []),
                 *self.annotations,
             ],
         }
@@ -2223,38 +2520,95 @@ class Workflow:
             "null_table": self.table,
             "signatures": json.loads(json.dumps(self.signatures, default=_jsonable)),
             "verdict": self.verdict,
-            "by_role": self.rec.by_role,
+            # with no wall-clock limit the registry consumes none of the allowance, so the
+            # jail cannot time a role: its seconds are not reported here (summary.json's
+            # by_role holds them, measured by the registry)
+            "by_role": {
+                role: {**use, "wall_clock_s": None} if self.unlimited else use
+                for role, use in self.rec.by_role.items()
+            },
+            "wall_clock": UNLIMITED_NOTE if self.unlimited else "the cell's allowance",
             "refusals": self.rec.refusals,
+            "dq_refused": int(self.dq_refused),
             "decisions": len(self.decider.records),
             "completed": doc["final"]["completed"],
         }
 
     # -- the run -------------------------------------------------------------------------
     def run(self) -> None:
-        """The state machine of §5, in its fixed order."""
-        self.step_read()
-        self.step_qc()
-        self.step_reference()
-        self.step_null()
-        if self.reference is not None and self.placement:
-            self.step_screen()
-            self.intervals_from_fit()
-            self.step_mcmc()
-            self.step_residuals()
-            self.step_state_test()
-            self.step_profile()
-            self.step_assays()
-        self.step_verify()
+        """The state machine of §5, in its fixed order.
+
+        A model cap reached at any decision point stops the run's decisions: it abstains
+        (``abstain:model_cap``), and the record says where (deliverable 3, F-E). A registry
+        budget refusal (evaluations, assay units) that no step's own fallback handles ends
+        the run the same way, as ``abstain:budget``: never a crash, never ``pending`` (the
+        lead's ruling of 2026-10-13, after the pilot's first attempt crashed at
+        ``step_null``).
+        """
+        try:
+            self.step_read()
+            self.step_qc()
+            self.step_reference()
+            self.step_null()
+            if self.reference is not None and self.placement:
+                self.step_screen()
+                self.intervals_from_fit()
+                self.step_mcmc()
+                self.step_residuals()
+                self.step_state_test()
+                self.step_profile()
+                self.step_assays()
+            self.step_verify()
+        except ModelCapReached as exc:
+            self.codes.append("model_cap")
+            self.annotations.append(f"model cap reached after {self.trace}: {str(exc)[:200]}")
+            self.verdict = {
+                "verdict": "abstain",
+                "label": self.lab["none"],
+                "admitted": [],
+                "rejected": [],
+                "holdout_failed": None,
+                "reason": "model_cap",
+            }
+        except tools.BudgetExceededError as exc:
+            self.codes.append("budget")
+            self.annotations.append(f"budget refused after {self.trace}: {str(exc)[:200]}")
+            self.verdict = {
+                "verdict": "abstain",
+                "label": self.lab["none"],
+                "admitted": [],
+                "rejected": [],
+                "holdout_failed": None,
+                "reason": "budget",
+            }
         self.step_conclude()
         self.completed = True
         self.write(completed=True)
+
+
+UNLIMITED_NOTE = (
+    "wall clock: no limit for P2 (the lead's ruling of 2026-10-13); budget.wall_clock_min "
+    "is the cell's nominal allowance, never consumed, not time left; the elapsed time and "
+    "each role's are in summary.json (wall_s, by_role), measured by the registry"
+)
+"""What a P2 record says about the wall clock it does not measure (the review of ``7ef1238``,
+nit 1)."""
+
+
+def responder_for(cfg: dict[str, Any]) -> Responder:
+    """The decider the jail document names: live only if it says ``live``.
+
+    The runner writes ``live`` only on its explicit flag; anything else, the default
+    included, is the offline decider, which never calls ``tools.llm``.
+    """
+    return LiveResponder() if cfg.get("decider") == "live" else offline_responder
 
 
 def main() -> int:
     """Run P2 on the run the registry serves."""
     with open(CONFIG_FILE, encoding="utf-8") as fh:
         cfg = json.load(fh)
-    workflow = Workflow(cfg)
+    workflow = Workflow(cfg, responder_for(cfg))
     try:
         workflow.run()
     except Exception as exc:

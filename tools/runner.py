@@ -64,6 +64,7 @@ from tools.sandbox import REPO_ROOT, SandboxError, launch
 from tools.server import OUTPUTS_DIR
 from tools.workflow_config import (
     P1Config,
+    P2Config,
     check_brief_hash,
     check_frozen,
     check_prompt_hash,
@@ -132,6 +133,9 @@ class WorkflowResult:
     prompt_sha256: str | None = None
     brief_sha256: str | None = None
     tools_sha256: str | None = None
+    templates_sha256: str | None = None
+    schemas_sha256: str | None = None
+    decider: str | None = None
     git_commit: str | None = None
     secondary_labels: list[str] = field(default_factory=list)
     confidence: float | None = None
@@ -253,6 +257,7 @@ def run_workflow(
     config_path: Path | None = None,
     model_client: ModelClient | None = None,
     output_name: str | None = None,
+    live: bool = False,
 ) -> WorkflowResult:
     """Run one workflow on one generated run.
 
@@ -264,7 +269,8 @@ def run_workflow(
         sandbox_root: Where to make the sandbox directory (default: the host's temporary
             directory). Must lie outside the repository and the run store's parent.
         timeout_s: Kill the jail after this long (default: the cell's wall-clock allowance
-            plus ``runner.timeout_margin_min``).
+            plus ``runner.timeout_margin_min``; for P2, which has no wall-clock limit, no
+            timeout unless the caller passes one).
         scenario: The run's scenario, if the caller holds it (else the truth-side index).
         keep_sandbox: Leave the sandbox directory behind for inspection.
         config_path: A different workflow configuration (tests).
@@ -273,6 +279,10 @@ def run_workflow(
         output_name: The directory under ``runs/<id>/workflows/`` the outputs go to
             (default: the workflow's name). A replay writes to its own
             (``p1_replay``), never over the transcript it replays.
+        live: P2 only, and OFF by default: build P2's gateway and tell the jail
+            ``decider: live``. Without it P2 runs offline and no model is reachable (the
+            jail gets no gateway). P2's decision layer is checked against its freeze
+            before every run, offline included (:func:`tools.p2_live.check_p2_frozen`).
 
     Returns:
         The result; ``summary.json`` is written beside the workflow's outputs.
@@ -288,15 +298,49 @@ def run_workflow(
     config = load_workflow_config(workflow, config_path)
     out_name = output_name or workflow
     provenance: dict[str, str] = {}
+    if live and not isinstance(config, P2Config):
+        raise ValueError("the live flag is P2's: P1 always calls its model, P0 never does")
+    if isinstance(config, P2Config) and model_client is not None and not live:
+        raise ValueError("a model client for P2 without the live flag: offline reaches no model")
     if isinstance(config, P1Config):
         provenance = p1_provenance(config)  # refuses a post-freeze prompt change
-    registry = open_registry(run_id, runs_root=runs_root, truth_store=store, scenario=scenario)
-    if timeout_s is None:
+    elif isinstance(config, P2Config):
+        from tools.p2_live import cell_of, p2_provenance, require_live_approval
+
+        # refuses a changed template, schema, tool, model block or cap
+        provenance = p2_provenance(config, live=live)
+        if live:  # the lead's committed approval, naming this very run (B-3)
+            require_live_approval(config, runs_root=runs_root)  # the record itself first
+            require_live_approval(config, cell_of(paths.truth_manifest), runs_root=runs_root)
+            # an approval is for one execution of each run: a run whose live record
+            # exists is never re-run silently, nor its record truncated (N-B3b)
+            previous = paths.root / OUTPUTS_DIR / out_name / "llm_calls.jsonl"
+            if previous.is_file() and previous.stat().st_size > 0:
+                raise ValueError(
+                    f"{run_id} already has a live record ({previous.name}): an approved "
+                    "run runs once"
+                )
+    # P2 has no wall-clock limit (the lead's ruling of 2026-10-13): the registry never
+    # refuses on the clock and the jail gets no timeout; P0 and P1 keep both
+    unlimited = isinstance(config, P2Config) and not config.runner.wall_clock_limit
+    registry = open_registry(
+        run_id,
+        runs_root=runs_root,
+        truth_store=store,
+        scenario=scenario,
+        wall_clock_enforced=not unlimited,
+    )
+    if timeout_s is None and not unlimited:
         timeout_s = (registry.budget.wall_clock_min + config.runner.timeout_margin_min) * 60.0
     box = _fresh_sandbox(sandbox_root, workflow)
     (box / "cwd").mkdir(exist_ok=True)
     (box / "cwd" / f"{workflow}_config.json").write_text(
-        json.dumps(sandbox_config(config), indent=1, sort_keys=True), encoding="utf-8"
+        json.dumps(
+            sandbox_config(config, live=live) if live else sandbox_config(config),
+            indent=1,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
     )
     gateway: ModelGateway | None = None
     if isinstance(config, P1Config):
@@ -309,6 +353,14 @@ def run_workflow(
             system_sha256=provenance["system_sha256"],
             tools_sha256=provenance["tools_sha256"],
             provenance=provenance,
+        )
+    elif isinstance(config, P2Config) and live:
+        from tools.p2_live import P2Gateway, p2_live_client
+
+        gateway = P2Gateway.for_config(
+            config,
+            client=model_client if model_client is not None else p2_live_client(config),
+            log_dir=paths.root / OUTPUTS_DIR / out_name,
         )
     started = time.perf_counter()
     returncode: int | None = None
@@ -356,7 +408,9 @@ def run_workflow(
         summary.tokens_cache_write = meter.cache_write
         summary.tokens_cache_read = meter.cache_read
         summary.llm_turns = meter.requests
-        summary.llm_attempts = meter.attempts
+        # P2 reports the attempts actually sent; P1's meter also counts a refused one
+        # (N-new-3)
+        summary.llm_attempts = int(getattr(gateway, "attempts_sent", meter.attempts))
         cost = gateway.cost_usd()
         summary.llm_cost_usd = None if cost is None else round(cost, 6)
         summary.provider = gateway.settings.provider
@@ -364,6 +418,25 @@ def run_workflow(
         summary.model_client = gateway.client.name
         for key, value in provenance.items():
             setattr(summary, key, value)
+        if summary.by_role is not None and hasattr(gateway, "by_role"):
+            for role, used in gateway.by_role.items():
+                row = summary.by_role.setdefault(
+                    role,
+                    {"calls": 0, "evaluations": 0, "wall_clock_s": 0.0, "assay_units": 0,
+                     "tokens": 0, "requests": 0},
+                )  # fmt: skip
+                row["tokens"] += int(used["tokens"])
+                row["requests"] += int(used["requests"])
+                # the worst case booked for failed attempts, apart from the metered
+                # tokens (N-new-2)
+                row["reserved_tokens"] = row.get("reserved_tokens", 0) + int(
+                    used.get("reserved_tokens", 0)
+                )
+    if isinstance(config, P2Config):
+        summary.decider = "live" if live else "offline"
+        if gateway is None:
+            for key, value in provenance.items():
+                setattr(summary, key, value)
     out_dir = paths.root / OUTPUTS_DIR / out_name
     out_dir.mkdir(parents=True, exist_ok=True)
     summary.run_failed = not summary.completed
@@ -693,11 +766,13 @@ def batch(
     keep_sandbox: bool = False,
     model_client_factory: Any = None,
     output_name: str | None = None,
+    live: bool = False,
 ) -> list[dict[str, Any]]:
     """Run the workflow on every cell, writing the table after each.
 
     A stopped batch keeps the rows it wrote. ``model_client_factory(run_id)``, for an LLM
     workflow, gives each cell its model client (default: the provider's live client).
+    ``live`` is P2's flag (default OFF), passed to every cell.
     """
     rows = []
     for cell in cells:
@@ -718,6 +793,7 @@ def batch(
                 keep_sandbox=keep_sandbox,
                 model_client=None if model_client_factory is None else model_client_factory(run_id),
                 output_name=output_name,
+                live=live,
             )
         except SandboxError as exc:
             print(f"  SANDBOX ERROR: {exc}", flush=True)
@@ -761,7 +837,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="an LLM workflow's llm_calls.jsonl to replay instead of calling the model "
         "(one --run only)",
     )
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="P2 only: the live decider through its gateway (default OFF: P2 runs offline "
+        "and reaches no model). Never without the lead's approval of the run",
+    )
     args = parser.parse_args(argv)
+    if args.live and args.workflow != "p2":
+        parser.error("--live is P2's flag")
+    if args.live:
+        from tools.p2_live import require_live_approval
+        from tools.workflow_config import load_p2
+
+        require_live_approval(load_p2())  # before any cell is selected or run (B-3)
     if args.replay is not None and (not args.run or len(args.run) != 1):
         parser.error("--replay replays one run: give exactly one --run")
 
@@ -805,6 +894,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             None if args.replay is None else (lambda _run_id: RecordedClient(args.replay))
         ),
         output_name=None if args.replay is None else f"{args.workflow}_replay",
+        live=args.live,
     )
     done = sum(1 for r in rows if r["completed"])
     print(f"{done}/{len(rows)} cells completed; table at {table}")

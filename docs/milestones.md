@@ -3821,7 +3821,172 @@ power re-run (PR #32, draft).**
   evaluator's metrics are pooled.
 - **Item 8:** the runner no longer reads any log for `by_role`, so a malformed log line
   cannot affect a P0 or P1 launch.
-- **N-7** (the strict reading of ruling 1) is with the lead; nothing changes unless the
-  lead rules.
 - **Next:** the lead's merge word on deliverable 2. Deliverable 3 (the live wiring)
   does not start before the coordinator relays the lead's go-ahead. No live call.
+
+**2026-10-10 — P2 deliverable 3 (the live wiring) on `claude/p2-live`, cut from `main` at
+`2b18433` (PR #32 merged). No live call.**
+- **The review nits** are in the first commit, `74185e0`:
+  - the N-7 alternative names both S0-01 B/C and S2-01, checked against `cells.json`;
+  - "z ≥ 3" in the findings;
+  - the stale N-7 line is removed;
+  - the old `by_role` text is removed.
+- **F-B:** the signatures come from the reference fit on the raw record. A test scripts
+  `ident.subset`.
+- **F-E:**
+  - the model block is the frozen P1's, pinned by a test;
+  - caps on requests, tokens and USD, projected before sending, enforced in
+    `tools/p2_live.py::P2Gateway`; a cap makes the run abstain;
+  - P1's gateway and its `llm_calls.jsonl`, with the point and role on each line;
+  - the template, schema and tool freeze, checked before every P2 run;
+  - live mode is an explicit runner flag, OFF by default, and a test shows the default
+    reaches no model.
+- **The pilot is prepared** (`scripts/p2_pilot.py`, `APPROVED = False`): S0-01 B/B,
+  S2-01 B/B and S8-01 B/B × 2 replicates, the three-role minimum, about USD 0.3.
+- **Four implementation choices** are proposed for ruling in `docs/decisions.md`:
+  - the USD cap, 0.25 per run;
+  - one tool with auto choice, not a forced call;
+  - the freeze is checked offline too;
+  - replicates as the pilot's seeds.
+- **Next:**
+  1. the coordinator's review of deliverable 3;
+  2. the lead's approval of the pilot;
+  3. only then a live call.
+
+**2026-10-11 — PR #33: the coordinator's review at `0a8e1cd` (FIXES NEEDED), fixed at
+`42c6862`. No live call.**
+- **B-1:** caps per attempt.
+  - Every attempt counts against the request cap, retries included, and is projected
+    against the token and USD caps before it is sent.
+  - A failed or unreadable attempt is booked at its worst case.
+  - Each refusal is logged.
+  - `tools/llm.py` is untouched.
+- **B-3:** a live run needs the lead's committed approval record, on every path. **None
+  exists.**
+- **B-4:** the whole model block and the caps are frozen. A copied configuration must
+  carry the committed freeze. The P1 check runs on the configuration actually used.
+- **Test gaps** are closed, and the reviewer's surviving mutations are now killed.
+- **Nits:** N-1a, N-2a, N-2b, N-2c, N-5b, N-10b, N-11f and N-11g.
+  - N-2b also needs a lead ruling: the evaluator reads `final.label`, so it would score
+    an abstain on a `none`-truth cell as correct. `eval/` is not changed.
+- **B-2:** the six pilot runs offline at `42c6862`, in `reports/p2_pilot/offline.md`.
+  - All six are `none`.
+  - On three, NS with the S1 table holding: a live reading could give two correct
+    `sensor` labels (S8-01 r0, S2-01 r1) and one false one (S0-01 r1).
+  - The go/no-go cannot stop on these records.
+  - The §15 expectation is updated to match.
+- **Next:** the coordinator's re-review, then the lead's approval and only then the
+  approval record.
+
+**2026-10-11, later — PR #33: the coordinator's re-review at `80de6cc`.**
+- **No blocking finding.** The pilot is not approved, and **L-1** is with the lead: the
+  go/no-go cannot fire, because S0-01 B/B r0's null stands.
+- **The nits, fixed in one push:**
+  - **The approval record** must be pushed, with its blob at `HEAD`. It binds the exact
+    configuration, and each run executes once (N-B3a to N-B3c). Tests run the real git
+    checks and the runner's per-run check against a real record (N-B3d).
+  - **N-B4a:** a test now names which frozen-block check fired.
+  - **N-B2a, N-B2b:** the offline report carries each run's S1 table, and its reading
+    is generated, with NB stated.
+  - **N-new-1 to N-new-5:**
+    - any client failure is logged and booked;
+    - reserved tokens are reported apart;
+    - attempts sent are reported;
+    - an aborted decision is recorded as such;
+    - the pilot's total is checked with one run's cap ahead.
+  - **N-11f':** an unreadable report is pending.
+- No live call, no approval record.
+
+**2026-10-11, about 11:00 UTC — the lead's ruling on L-1** (`docs/decisions.md`).
+- The P2 pilot is approved in principle, as a cost-and-wiring check: the same six runs
+  and caps.
+- The go/no-go is recorded as unable to fire on these records.
+- A `sensor` on the clean S0-01 r1 would be a known design limitation.
+- **Next:**
+  1. the coordinator re-reviews this head;
+  2. on the coordinator's relay, the approval record is committed;
+  3. the coordinator verifies it;
+  4. on the coordinator's relay, the pilot runs.
+
+  Until then, no approval record and no live call.
+
+**2026-10-11, about 13:30 UTC — PR #33: the review of `b6c3e01` (FIXES NEEDED, 4
+blocking), fixed. Still no approval record, no live call.**
+- **Item 1:** the pilot's pre-check and the runner's per-run check now read the same
+  configuration and run store. A test shows the pilot passing both, end to end, with a
+  pushed record.
+- **Item 2:** the checked-out commit must be pushed and confirmed by the remote.
+- **Item 3:** the lead's L-1 ruling is recorded (`ada583d`), and the L-1 line is marked
+  resolved.
+- **Item 4:** the configuration digest is pinned by tests.
+- **Nits:**
+  - the remote is verified with `ls-remote`;
+  - the record names its run store;
+  - the pilot's total is persisted;
+  - the reserved-token and attempts reporting and the offline report generator are
+    tested;
+  - the pilot is the only live path for the record.
+
+
+**2026-10-13 — the live pilot's first attempt, stopped, and the lead's ruling "P2 runs have
+NO wall-clock limit".**
+- **The attempt.** The pilot was launched once at `679f327`, at 14:24:47 UTC.
+  - S0-01 B/B r0 concluded `none` (USD 0.0021).
+  - S0-01 B/B r1 spent the 90-min allowance; the registry refused `declared_background`
+    at `step_null`, and the uncaught refusal crashed the run (`pending`).
+  - It was stopped at 18:28:37 UTC (SIGTERM), mid S2-01 r0.
+  - The record is in `reports/p2_pilot/attempt1/`.
+- **The ruling** (relayed 19:03 UTC) is recorded in `docs/decisions.md`.
+  - **Implemented:** `p2.yaml`'s `runner.wall_clock_limit: false`. The runner opens a P2
+    run's registry with the wall clock unenforced and gives the jail no timeout. P0 and
+    P1 are unchanged.
+  - **The crash fix:** a budget refusal that escapes a step ends a P2 run as
+    `abstain:budget`.
+  - **Tests:** `tests/test_p2_wall_clock.py`.
+  - **Also done:** MG4, MR2 and nits 1–2.
+- **Blocked:** the approval record of 2026-10-11 no longer matches the configuration, so
+  every live run is refused until a new record exists. The coordinator will relay its
+  fields (a fresh store, ruling date 2026-10-13).
+- **Next:** the coordinator reviews commit 2; then the new record; then, on the relay,
+  the pilot.
+
+**2026-10-14 — the review of `6fc58b9` + `7ef1238`: PASS; S-1 and nits 1–4 fixed in one
+commit, with no live call.**
+- **S-1:** a test now calls the real `tools/privileged.py::open_registry` with an injected
+  clock, both directly and through the runner. The mutant that drops
+  `wall_clock_enforced` now fails it.
+- **Nit 1:** P2's own record reports `null` per-role wall clock and annotates the nominal
+  allowance.
+- **Nits 2–3:** the pilot report puts `wall_s` in a cost column and copies each run's
+  `llm_calls`, `decisions` and `calls` into `reports/p2_pilot/<attempt>/`.
+- **Nit 4:** the decisions entry now says that the reference fit's `simulate` was refused
+  first and caught.
+- **HELD for the lead:** the three design defects in the frozen decision layer (the
+  `verify.differential` enum, the hold-out start for `dq.trust`, and `cal.split`'s single
+  step day). Nothing is changed until a ruling is relayed.
+
+**2026-10-14, 01:03 UTC — the lead's ruling "Yes, fix all three": the decision-layer defects
+of attempt 1 fixed in one commit, with no live call.**
+- (a) `verify.differential` offers `allowed_labels` as a per-call enum, `none` included;
+  the set-aside codes are the design's enum.
+- (b) `dq.trust` is shown the calibration window only; the `p2.dq.refused` entry and
+  count are implemented.
+- (c) `cal.split` accepts any valid common step.
+- The freeze moves to `fbe88dd0…8078` (`docs/decisions.md`). Tests:
+  `tests/test_p2_decision_fixes.py`, on attempt 1's inputs.
+- **Blocked:** a new approval record (the coordinator relays its fields after review).
+
+**2026-10-14, 10:35 UTC — the coordinator's review of `3dfce05` + `f5aa41f` (FIXES NEEDED,
+1 blocking), fixed in one commit, with no live call.**
+- **B-1:** `dq.trust` no longer learns of the hold-out through `qc_findings`: only the
+  codes with shown evidence (`flatline`, `spikes`) reach the model. The template and the
+  freeze (`fbe88dd0…`) are unchanged.
+- **S-1:** the per-call enum must be a subset of P0's label vocabulary.
+- **Nits N-1 to N-5** done; the `_jsonable` finding is held for the lead's word.
+- **Next:** the coordinator's review; then the new approval record's fields.
+
+**2026-10-14, 10:42 UTC — the lead's ruling "Yes, fix it before the re-run": the decision
+inputs are sent as JSON.** One small commit after the review fixes: `json.dumps(inputs,
+sort_keys=True, default=_jsonable)`; no freeze or configuration digest moves; every
+`request_sha256` differs from attempt 1's. **Next:** the coordinator's review of both
+commits, then the approval record's fields.

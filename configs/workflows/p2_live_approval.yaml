@@ -1,0 +1,39 @@
+ruling_date: '2026-10-14'
+word: The lead approved the P2 pilot as a cost-and-wiring check (option 1) on 2026-10-11,
+  ruled on 2026-10-13 that P2 runs have no wall-clock limit, and on 2026-10-14 approved the
+  three decision-layer fixes (a)-(c) and the JSON-input fix; relayed by the coordinator session_01Cu6G2kQjP2QSzvtkyP8cPr
+  at 12:58 UTC.
+runs:
+- scenario: S0-01
+  plant: B
+  tier: B
+  replicate: 0
+- scenario: S0-01
+  plant: B
+  tier: B
+  replicate: 1
+- scenario: S2-01
+  plant: B
+  tier: B
+  replicate: 0
+- scenario: S2-01
+  plant: B
+  tier: B
+  replicate: 1
+- scenario: S8-01
+  plant: B
+  tier: B
+  replicate: 0
+- scenario: S8-01
+  plant: B
+  tier: B
+  replicate: 1
+caps:
+  max_requests: 60
+  max_total_tokens: 6000000
+  max_usd: 0.25
+  input_chars_per_token: 2.0
+frozen_sha256: fbe88dd0abb9b52fc8449727eb0a63eac6aa0458e89b1b471122f319247b8078
+config_sha256: 72369f251e3600a9651aa5827d15386f5f5a50decdda52111302ee699cb012fc
+runs_root: /home/user/p2_pilot_store_2/runs
+digest: adf47dee7fc6bbe69e133e4ffd56d5f46f63c724dad5958cf0a0dbac27a9ab04
