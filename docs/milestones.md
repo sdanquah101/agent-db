@@ -3991,6 +3991,38 @@ sort_keys=True, default=_jsonable)`; no freeze or configuration digest moves; ev
 `request_sha256` differs from attempt 1's. **Next:** the coordinator's review of both
 commits, then the approval record's fields.
 
+**2026-10-14, 13:18 UTC — the approval record of 2026-10-14 committed (`8be6f55`, digest
+`adf47dee…`, a fresh store `/home/user/p2_pilot_store_2`), after the review of `d134867`
+(PASS) and the JSON-input fix (`bdbb0c8`).**
+
+**2026-10-14/15 — the live pilot, attempt 2: COMPLETE (`26c6f35`, wording corrected in
+`818a267`).**
+- **The run.** Launched once at 20:48 UTC from `8be6f55` on the coordinator's relay; all six
+  runs completed by 03:34 UTC. No transport, gateway, cap or budget refusal; none abstained.
+  USD 0.0123 in all (36 requests, 11 759 tokens in, 8 260 out).
+- **Code refused seven model proposals and three decisions fell back to code.** These were
+  `cal.split` on S0-01 r0 and S2-01 r1, and `dq.trust` on `gas_flow` S2-01 r1 (a first-HRT
+  spike).
+- **Outcomes.** Five runs `none`, as offline. One changed: S2-01 B/B r1 → `sensor`,
+  correct.
+- **The three `dq.coupled` runs.** Each read `coupled_inside`, so code admitted `sensor`;
+  the differential accepted it once and set it aside twice as `holdout_passed`. On these
+  near-identical inputs the live model and the coded fallback each get two of three right,
+  so the changed outcome is not evidence that the differential discriminates.
+- **The go/no-go of ruling (b).** UNABLE TO FIRE.
+- **The review of `26c6f35`** asked for wording fixes only (`818a267`, README only): the true
+  `dq.trust` fallback, the refusals counted, the overstatement removed. It held D-1, D-2,
+  D-3 and the inert or empty calls for the lead.
+
+**2026-10-15, 05:46 UTC — the lead's rulings, "Yes to all three".**
+1. PR #33 is finished with the wording commit only.
+2. A follow-up PR, after the merge: D-1 (the hold-out bit for `structural` only) and N-2b
+   (an abstaining run writes `abstain`).
+3. No live call: the record of 2026-10-14 is spent.
+
+**2026-10-15, 08:03 UTC — PR #33 merged by the coordinator** at the reviewed head `818a267`,
+as `f9d9b1e` on `main`.
+
 **2026-10-15 — PR #33 merged (`f9d9b1e`); the follow-up for the lead's rulings D-1 and N-2b
 opened as a draft on `claude/p2-holdout-abstain`, with no live call.**
 - D-1: the differential sees the hold-out bit only beside an admitted `structural`; the
