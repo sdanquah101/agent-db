@@ -1,0 +1,79 @@
+{
+ "rows": [
+  {
+   "cell": "S0-01 B/B",
+   "replicate": 0,
+   "truth": [
+    "none"
+   ],
+   "outcome": "none",
+   "usd": 0.001344,
+   "requests": 5,
+   "wall_min": 65.7
+  },
+  {
+   "cell": "S0-01 B/B",
+   "replicate": 1,
+   "truth": [
+    "none"
+   ],
+   "outcome": "none",
+   "usd": 0.002025,
+   "requests": 5,
+   "wall_min": 70.2
+  },
+  {
+   "cell": "S2-01 B/B",
+   "replicate": 0,
+   "truth": [
+    "sensor"
+   ],
+   "outcome": "none",
+   "usd": 0.001205,
+   "requests": 5,
+   "wall_min": 78.7
+  },
+  {
+   "cell": "S2-01 B/B",
+   "replicate": 1,
+   "truth": [
+    "sensor"
+   ],
+   "outcome": "sensor",
+   "usd": 0.00251,
+   "requests": 8,
+   "wall_min": 63.9
+  },
+  {
+   "cell": "S8-01 B/B",
+   "replicate": 0,
+   "truth": [
+    "sensor"
+   ],
+   "outcome": "none",
+   "usd": 0.001631,
+   "requests": 6,
+   "wall_min": 49.8
+  },
+  {
+   "cell": "S8-01 B/B",
+   "replicate": 1,
+   "truth": [
+    "sensor"
+   ],
+   "outcome": "none",
+   "usd": 0.003548,
+   "requests": 7,
+   "wall_min": 75.6
+  }
+ ],
+ "go_no_go": {
+  "S0-01 B/B": [
+   "none",
+   "none"
+  ],
+  "stop": false,
+  "rule": "stop only if both seeds of S0-01 B/B label something other than none; an abstaining or unfinished seed is excluded, never counted as none"
+ },
+ "usd_total": 0.012263
+}
