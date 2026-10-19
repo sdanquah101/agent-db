@@ -308,6 +308,7 @@ def test_a_live_run_records_every_attempt_and_a_cap_makes_it_abstain(monkeypatch
     run, fake, doc = run_fake(monkeypatch, live_cfg, fake, wf.LiveResponder())
     assert run.verdict["verdict"] == "abstain" and run.verdict["reason"] == "model_cap"
     assert doc["classification"]["rule"] == "abstain:model_cap"
+    assert doc["final"]["label"] == doc["classification"]["label"] == "abstain"  # N-2b
     assert json.loads(fake.run.outputs[wf.REPORT_FILE])["outcome"] == "abstain"
     assert fake.gateway.attempts_sent == 3
     # an abstaining run claims no kinetic update (N-2b)

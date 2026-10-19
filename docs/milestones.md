@@ -4020,11 +4020,10 @@ commits, then the approval record's fields.
    (an abstaining run writes `abstain`).
 3. No live call: the record of 2026-10-14 is spent.
 
-**2026-10-15, 08:03 UTC — PR #33 merged by the coordinator** at the reviewed head `818a267`,
-as `f9d9b1e` on `main`.
-
-**2026-10-15 — PR #33 merged (`f9d9b1e`); the follow-up for the lead's rulings D-1 and N-2b
-opened as a draft on `claude/p2-holdout-abstain`, with no live call.**
+**2026-10-15 — PR #33 merged at 07:56:05 UTC** (GitHub `merged_at`; the coordinator relayed
+it at 08:03) at the reviewed head `818a267`, as `f9d9b1e` on `main`. **The follow-up for the
+lead's rulings D-1 and N-2b opened as a draft on `claude/p2-holdout-abstain` (PR #34), with
+no live call.**
 - D-1: the differential sees the hold-out bit only beside an admitted `structural`; the
   freeze moves to `17065508…46a3` (the template).
 - N-2b: an abstaining run writes `abstain`; the frozen evaluator scores it as not correct.

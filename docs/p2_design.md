@@ -890,8 +890,8 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
   The power run reports every candidate onset day that would pass, for each cell where
   NB fails (the review's R1).
 - **Every P2 count keys on the outcome, never the label alone** (the review's F-A,
-  ruling (c)). The task state must carry a label from the closed vocabulary, so an
-  abstaining or unfinished run writes `none` there. `report.json` therefore carries
+  ruling (c)). An abstaining run writes `abstain` (N-2b, 2026-10-15); an unfinished run
+  writes `none`. `report.json` therefore carries
   `outcome`: `pending` for a run that did not complete, `abstain` for one whose verdict
   abstained, and the final label otherwise. The power report, the development tables
   and the go/no-go of §11 count on `outcome`. `abstain` and `pending` are reported in
@@ -935,7 +935,8 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
 - **The frozen evaluator reads `final.label`** (the review's N-8). Before any P2 rows are
   pooled into the evaluator's metrics, they are filtered on `outcome` from `report.json`:
   `abstain` and `pending` rows are taken out and reported separately. Otherwise an
-  abstaining or unfinished run would be scored as `none`, which ruling (c) forbids. The
+  unfinished run would be scored as `none` (an abstaining one, since N-2b, is scored not
+  correct), which ruling (c) forbids. The
   evaluator itself is frozen and unchanged; the filter belongs to the P2 tables.
 
 ## 15. The live wiring (deliverable 3): implementation notes
