@@ -82,7 +82,7 @@ def outcome_of(record: dict[str, Any]) -> str:
 def run(store: Path, part: str = "0/1") -> None:
     """Generate and run every cell of this part that has no result yet."""
     from scenarios.schema import load_scenario
-    from scripts.p2_rerun import InFlight, run_counted, set_aside
+    from scripts.p2_rerun import InFlight, run_counted, set_aside, write_synced
     from sim.plants import load_plant_config
     from sim.run.harness import generate_run
     from sim.run.matrix import at_plant_horizon
@@ -171,14 +171,13 @@ def run(store: Path, part: str = "0/1") -> None:
             if run_ids:  # nothing unfinished stays at workflows/p2 (N-7)
                 set_aside(root / run_ids[-1], len(done_cell.attempts))
             failure = {"cell": key(cell), **done_cell.failure()}
-            (unfinished / name).write_text(json.dumps(failure, indent=1, sort_keys=True) + "\n",
-                                           encoding="utf-8")  # fmt: skip
+            write_synced(unfinished / name, json.dumps(failure, indent=1, sort_keys=True) + "\n")
             print(f"STOP: {key(cell)} is unfinished after one rerun; nothing is scored "
                   f"for it. Report it to the coordinator: {failure['attempts']}",
                   flush=True)  # fmt: skip
             return
         record = done_cell.record
-        dest.write_text(json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+        write_synced(dest, json.dumps(record, indent=1, sort_keys=True) + "\n")
         print(f"DONE {key(cell)}: {record['label']} ({record['rule']}) in "
               f"{record['wall_s']:.0f} s", flush=True)  # fmt: skip
 

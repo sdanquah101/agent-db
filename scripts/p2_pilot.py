@@ -213,7 +213,7 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
     if store == REPO or REPO in store.parents:
         raise SystemExit("the store must be outside the repository")
     from scenarios.schema import load_scenario
-    from scripts.p2_rerun import InFlight, run_counted, set_aside
+    from scripts.p2_rerun import InFlight, append_synced, run_counted, set_aside
     from sim.plants import load_plant_config
     from sim.run.harness import generate_run
     from sim.run.matrix import at_plant_horizon
@@ -316,15 +316,13 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
             if not live and run_ids:  # nothing unfinished stays at workflows/p2 (N-7)
                 set_aside(store / "runs" / run_ids[-1], len(done_cell.attempts))
             failure = {"cell": cell, "replicate": rep, **done_cell.failure()}
-            with unfinished.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(failure, sort_keys=True, default=str) + "\n")
+            append_synced(unfinished, json.dumps(failure, sort_keys=True, default=str) + "\n")
             print(f"STOP: {cell} r{rep} is unfinished ({done_cell.status}); nothing is "
                   f"scored for it. Report it to the coordinator: {failure['attempts']}",
                   flush=True)  # fmt: skip
             return
         line = done_cell.record
-        with results.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(line, sort_keys=True, default=str) + "\n")
+        append_synced(results, json.dumps(line, sort_keys=True, default=str) + "\n")
         rerun = " (after one rerun)" if line["attempt"] > 1 else ""
         print(f"{cell} r{rep}: {outcome_of(line)}{rerun} (USD {spent:.3f} so far)", flush=True)
 
@@ -358,22 +356,23 @@ def record_stopped_live(store: Path) -> bool:
     run left by a stopped pilot is recorded unfinished (``driver_stopped``) and never
     rerun without the lead's approval. A file write, no call.
     """
-    from scripts.p2_rerun import InFlight
+    from scripts.p2_rerun import InFlight, append_synced
 
     if not (store / "in_flight.jsonl").is_file():
         return False
     orphans = InFlight(store / "in_flight.jsonl").orphans(settled(store, live=True))
-    with (store / "unfinished.jsonl").open("a", encoding="utf-8") as fh:
-        for (cell, rep), prior in orphans.items():
-            failure = {"cell": cell, "replicate": rep, "status": "unfinished_live",
-                       "attempts": [{"run_id": p["run_id"], "completed": False,
-                                     "error": p["summary"]["error"],
-                                     "failure_reason": p["summary"]["failure_reason"],
-                                     "rule": None} for p in prior]}  # fmt: skip
-            fh.write(json.dumps(failure, sort_keys=True) + "\n")
-            print(f"STOP: {cell} r{rep} was left unfinished by a stopped pilot; it is "
-                  "recorded unfinished and not rerun: a live rerun needs the lead's "
-                  "approval relayed by the coordinator", flush=True)  # fmt: skip
+    # written only when there is something to record: a refused start with nothing
+    # stopped leaves no empty unfinished.jsonl behind (B4, N-e)
+    for (cell, rep), prior in orphans.items():
+        failure = {"cell": cell, "replicate": rep, "status": "unfinished_live",
+                   "attempts": [{"run_id": p["run_id"], "completed": False,
+                                 "error": p["summary"]["error"],
+                                 "failure_reason": p["summary"]["failure_reason"],
+                                 "rule": None} for p in prior]}  # fmt: skip
+        append_synced(store / "unfinished.jsonl", json.dumps(failure, sort_keys=True) + "\n")
+        print(f"STOP: {cell} r{rep} was left unfinished by a stopped pilot; it is "
+              "recorded unfinished and not rerun: a live rerun needs the lead's "
+              "approval relayed by the coordinator", flush=True)  # fmt: skip
     return bool(orphans)
 
 

@@ -989,3 +989,147 @@ def test_the_power_run_stops_on_a_torn_line_that_names_no_cell(tmp_path, monkeyp
     monkeypatch.setattr(p2_rerun.InFlight, "_torn", staticmethod(lambda raw: dict(elsewhere)))
     p2_power.run(tmp_path)
     assert len(driver.launched) == len(p2_power.CELLS)
+
+
+# ------------------------------------------------------------------ B4 (2026-10-19)
+
+
+def test_a_torn_return_line_is_not_an_extra_attempt(tmp_path, monkeypatch):
+    """N-b: attempt 1 failed and its return line is torn; the cell still gets its rerun."""
+    from scripts import p2_pilot
+
+    first = "run_S0-01_0"
+    store = tmp_path / "store"
+
+    def torn_return(store: Path) -> None:
+        FailsThenStops({}).install(monkeypatch)  # attempt 1 fails, attempt 2 is stopped
+        with pytest.raises(KeyboardInterrupt):
+            p2_pilot._runs(store, live=False)
+        journal = store / "in_flight_offline.0.jsonl"
+        lines = [x for x in journal.read_text().splitlines() if '"run_S0-01_0"' in x
+                 or '"S0-01 B/B", "replicate": 0' in x]  # fmt: skip
+        start1, returned1 = lines[0], lines[1]
+        assert '"event": "returned"' in returned1
+        # the journal as a crash inside attempt 1's return line leaves it, torn before its
+        # attempt number: one start, the fragment, and nothing of attempt 2
+        journal.write_text(start1 + "\n" + returned1[: returned1.index('"event"') + 5])
+
+    torn_return(store)
+    orphans = p2_rerun.InFlight(store / "in_flight_offline.0.jsonl").orphans(set())
+    assert [a["attempt"] for a in orphans[("S0-01 B/B", 0)]] == [1]  # one attempt, not two
+    driver = StopsDriver({})
+    driver.install(monkeypatch)
+    p2_pilot._runs(store, live=False)
+    assert driver.launched.count(first) == 1  # its one rerun
+    rows = _lines(store / "results_offline.0.jsonl")
+    assert [r["attempt"] for r in rows if r["run_id"] == first] == [2]
+    # the control (fail-safe kept): a torn line after a RETURNED attempt is a new attempt
+    # in flight, so an offline cell with it gets no further launch
+    journal = tmp_path / "j.jsonl"
+    j = p2_rerun.InFlight(journal)
+    j.start("S0-01 B/B", 0, 1, first)
+    j.finish("S0-01 B/B", 0, 1, first, {"completed": False, "error": "e", "failure_reason": "x"})
+    with journal.open("a") as fh:
+        fh.write('{"cell": "S0-01 B/B", "replicate": 0, "ev')
+    assert [a["attempt"] for a in j.orphans(set())[("S0-01 B/B", 0)]] == [1, 2]
+    # and live is unchanged: any journalled attempt is recorded and the pilot stops
+    live = tmp_path / "live"
+    live.mkdir()
+    (live / "in_flight.jsonl").write_text(
+        '{"cell": "S0-01 B/B", "replicate": 0, "event": "start", "attempt": 1, '
+        '"run_id": "run_S0-01_0"}\n{"cell": "S0-01 B/B", "replicate": 0, "ev'
+    )
+    driver = FakeDriver({})
+    driver.install(monkeypatch)
+    p2_pilot._runs(live, live=True)
+    assert driver.launched == [] and _lines(live / "unfinished.jsonl")
+    # the mutation: the pre-B4 reading counts the torn return line as attempt 2, and the
+    # cell loses its rerun
+    original = p2_rerun.InFlight.orphans
+
+    def counts_every_torn_line(self: Any, settled: Any) -> Any:
+        out = original(self, settled)
+        for path in self.paths:
+            text = path.read_text() if path.is_file() else ""
+            if text and not text.endswith("\n"):
+                for k, v in out.items():
+                    if k[0] in text.rsplit("\n", 1)[-1]:
+                        v.append({**v[-1], "attempt": v[-1]["attempt"] + 1})
+        return out
+
+    store = tmp_path / "mutant"
+    torn_return(store)
+    monkeypatch.setattr(p2_rerun.InFlight, "orphans", counts_every_torn_line)
+    driver = StopsDriver({})
+    driver.install(monkeypatch)
+    p2_pilot._runs(store, live=False)
+    assert first not in driver.launched  # no rerun: what B4 fixes
+
+
+def test_a_refused_live_start_leaves_no_empty_unfinished_file(tmp_path, monkeypatch):
+    """N-e: nothing stopped, nothing written."""
+    from scripts import p2_pilot
+
+    def refuse(*a: Any, **kw: Any) -> None:
+        raise ValueError("no approval for this store")
+
+    monkeypatch.setattr("tools.p2_live.require_live_approval", refuse)
+    for store, journal in ((tmp_path / "fresh", None),
+                           (tmp_path / "settled", "a finished cell's journal")):  # fmt: skip
+        store.mkdir()
+        if journal:
+            j = p2_rerun.InFlight(store / "in_flight.jsonl")
+            j.start("S0-01 B/B", 0, 1, "run_S0-01_0")
+            (store / "results.jsonl").write_text(
+                json.dumps({"cell": "S0-01 B/B", "replicate": 0}) + "\n"
+            )
+        with pytest.raises(SystemExit, match="not approved"):
+            p2_pilot.run(store, live=True)
+        assert not (store / "unfinished.jsonl").exists(), store.name
+    # the control: a stopped run is still recorded (SF-1 of the review of 0b9f210)
+    StopsDriver({"run_S0-01_0": 1}).install(monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        p2_pilot._runs(tmp_path / "stopped", live=True)
+    with pytest.raises(SystemExit):
+        p2_pilot.run(tmp_path / "stopped", live=True)
+    assert len(_lines(tmp_path / "stopped" / "unfinished.jsonl")) == 1
+
+
+def test_results_and_unfinished_records_are_synced_like_the_journal(tmp_path, monkeypatch):
+    """B4: every result and unfinished record is flushed and synced as it is written."""
+    from scripts import p2_pilot, p2_power
+
+    synced: list[int] = []
+    real = p2_rerun.os.fsync
+    real_append = p2_rerun.append_synced
+    monkeypatch.setattr(p2_rerun.os, "fsync", lambda fd: (synced.append(fd), real(fd)))
+    FakeDriver({"run_S0-01_0": 2}).install(monkeypatch)
+    p2_pilot._runs(tmp_path / "pilot", live=False)  # stops after S0-01 r0 fails twice
+    journal = len((tmp_path / "pilot" / "in_flight_offline.0.jsonl").read_text().splitlines())
+    assert len(synced) == journal + 1  # the journal's lines and the one unfinished record
+    synced.clear()
+    FakeDriver({}).install(monkeypatch)
+    p2_pilot._runs(tmp_path / "pilot", live=False)  # the other five, each a result
+    assert len(synced) == 5 * 2 + 5  # a start and a return line, and a result, each
+    synced.clear()
+    FakeDriver({}).install(monkeypatch)
+    p2_power.run(tmp_path / "power")
+    assert len(synced) == 3 * len(p2_power.CELLS)
+    assert not list((tmp_path / "power" / "results").glob("*.tmp"))
+    # the mutation: the drivers' records appended plainly, as before B4; only the
+    # journal's lines are synced then
+
+    def plain(path: Path, text: str) -> None:
+        with Path(path).open("a", encoding="utf-8") as fh:
+            fh.write(text)
+
+    monkeypatch.setattr(p2_rerun, "append_synced", plain)
+
+    def journal_synced(self: Any, line: dict[str, Any]) -> None:
+        real_append(self.path, json.dumps(line) + "\n")
+
+    monkeypatch.setattr(p2_rerun.InFlight, "_write", journal_synced)
+    synced.clear()
+    FakeDriver({}).install(monkeypatch)
+    p2_pilot._runs(tmp_path / "mutant", live=False)
+    assert len(synced) == 6 * 2  # the six results were not synced

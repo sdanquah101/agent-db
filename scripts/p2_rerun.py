@@ -54,6 +54,37 @@ from typing import Any, Literal
 Status = Literal["counted", "unfinished_live", "unfinished_twice", "driver_stopped"]
 
 
+def append_synced(path: Path, text: str) -> None:
+    """Append ``text`` to ``path``, flushed and synced before returning.
+
+    Never glued onto a torn last line, which would lose it or merge it into another
+    record (the review of ``024da41``, SF-1): a newline is written first if the file does
+    not end in one. The journal, the results and the unfinished records all append this
+    way (B4, 2026-10-19), so a stop between two writes loses at most the one being made.
+    """
+    path = Path(path)
+    torn = False
+    if path.is_file() and path.stat().st_size > 0:
+        with path.open("rb") as fh:
+            fh.seek(-1, os.SEEK_END)
+            torn = fh.read(1) != b"\n"
+    with path.open("a", encoding="utf-8") as fh:
+        fh.write(("\n" if torn else "") + text)
+        fh.flush()
+        os.fsync(fh.fileno())
+
+
+def write_synced(path: Path, text: str) -> None:
+    """Write ``text`` to ``path`` whole, through a synced temporary file and a rename."""
+    path = Path(path)
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("w", encoding="utf-8") as fh:
+        fh.write(text)
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp, path)
+
+
 def read_unfinished(paths: Sequence[Path]) -> list[dict[str, Any]]:
     """Every unfinished record in ``paths`` (JSON-lines files or single JSON files)."""
     out: list[dict[str, Any]] = []
@@ -155,43 +186,38 @@ class InFlight:
         self.paths = sorted({self.path, *map(Path, others)})
 
     def _write(self, line: dict[str, Any]) -> None:
-        # the cell and seed first, so a torn line still names them (N-2); and never glued
-        # onto a torn last line, which would lose this line or charge it to another cell
-        # (the review of 024da41, SF-1)
-        torn = False
-        if self.path.is_file() and self.path.stat().st_size > 0:
-            with self.path.open("rb") as fh:
-                fh.seek(-1, os.SEEK_END)
-                torn = fh.read(1) != b"\n"
-        with self.path.open("a", encoding="utf-8") as fh:
-            fh.write(("\n" if torn else "") + json.dumps(line, default=str) + "\n")
-            fh.flush()
-            os.fsync(fh.fileno())
+        # the cell and seed first, so a torn line still names them (N-2)
+        append_synced(self.path, json.dumps(line, default=str) + "\n")
 
     def start(self, cell: str, replicate: int, attempt: int, run_id: str) -> None:
         """Record that attempt ``attempt`` of ``(cell, replicate)`` is about to run."""
-        self._write({"cell": cell, "replicate": replicate, "attempt": attempt,
-                     "run_id": run_id, "event": "start",
+        self._write({"cell": cell, "replicate": replicate, "event": "start",
+                     "attempt": attempt, "run_id": run_id,
                      "started": datetime.now(UTC).isoformat(timespec="seconds")})  # fmt: skip
 
     def finish(self, cell: str, replicate: int, attempt: int, run_id: str,
                summary: dict[str, Any]) -> None:  # fmt: skip
         """Record that the attempt returned, with the runner's completion and error (N-1)."""
-        self._write({"cell": cell, "replicate": replicate, "attempt": attempt,
-                     "run_id": run_id, "event": "returned",
+        self._write({"cell": cell, "replicate": replicate, "event": "returned",
+                     "attempt": attempt, "run_id": run_id,
                      "completed": bool(summary.get("completed")),
                      "error": summary.get("error", ""),
                      "failure_reason": summary.get("failure_reason", "")})  # fmt: skip
 
     @staticmethod
     def _torn(raw: str) -> dict[str, Any]:
-        """What a torn line still names: the cell and seed if written, else nothing."""
+        """What a torn line still names: the cell and seed if written, else nothing.
+
+        Its ``event`` is ``None`` when the line was torn before it: a start or a return.
+        """
         cell = re.search(r'"cell": "((?:[^"\\]|\\.)*)"', raw)
         rep = re.search(r'"replicate": (\d+)', raw)
+        event = re.search(r'"event": "(start|returned)"', raw)
         attempt = re.search(r'"attempt": (\d+)', raw)
         run_id = re.search(r'"run_id": "([^"]*)"', raw)
         key = (cell.group(1), int(rep.group(1))) if cell and rep else InFlight.TORN
-        return {"cell": key[0], "replicate": key[1], "event": "start",
+        return {"cell": key[0], "replicate": key[1],
+                "event": event.group(1) if event else None,
                 "attempt": int(attempt.group(1)) if attempt else None,
                 "run_id": run_id.group(1) if run_id else None, "torn": raw}  # fmt: skip
 
@@ -205,6 +231,7 @@ class InFlight:
         :data:`TORN`, which a driver must stop on (N-2).
         """
         by_cell: dict[tuple[str, int], dict[int, dict]] = {}
+        returned: dict[tuple[str, int], set[int]] = {}
         for path in self.paths:
             if not path.is_file():
                 continue
@@ -220,9 +247,20 @@ class InFlight:
                 if key in settled:
                     continue
                 attempts = by_cell.setdefault(key, {})
+                done = returned.setdefault(key, set())
                 n = x.get("attempt")
-                n = int(n) if n is not None else max(attempts, default=0) + 1
+                latest = max(attempts, default=0)
+                if n is None and "torn" in x and latest and latest not in done \
+                        and x.get("event") != "start":  # fmt: skip
+                    # a cell's attempts are sequential: a line after a start that has not
+                    # returned is that attempt's return line, torn, not a new attempt (B4,
+                    # N-b); the attempt stays one that never returned
+                    continue
+                n = int(n) if n is not None else latest + 1
                 if x.get("event") == "returned":
+                    done.add(n)
+                    if "torn" in x:  # a torn return line: its completion is unknown
+                        continue
                     if n in attempts and not attempts[n]["summary"]["completed"]:
                         attempts[n]["summary"].update(
                             {"error": x.get("error") or self.STOPPED,
