@@ -898,10 +898,14 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
   stop, score nothing for that cell and seed, and report it. Live, they never rerun
   automatically: they stop, mark the run unfinished and report it, and a rerun needs the
   lead's approval relayed by the coordinator (`scripts/p2_rerun.py`).
-  - **A stopped driver.** Each attempt is journalled (`in_flight*.jsonl`) before its
-    workflow starts. At start-up, an attempt with no result and no unfinished record is
-    an unfinished one: live, it is recorded and the pilot stops; offline, it counts as
-    that attempt, so at most one rerun follows.
+  - **A stopped driver.** Each attempt is journalled (`in_flight*.jsonl`, flushed and
+    synced) before its workflow starts, and again when it returns, with its completion and
+    error. At start-up, an attempt with no result and no unfinished record is an
+    unfinished one: live, it is recorded and the pilot stops; offline, it counts as that
+    attempt, so at most one rerun follows. The drivers read every part's journal and
+    records, so a resume under another part count still counts it. The live `run` records
+    it before the approval and key checks. A torn last line is an in-flight attempt; one
+    that names no cell stops every driver.
   - **What is kept.** A failed attempt's outputs are set aside in
     `workflows/p2.unfinished-N/` (never overwriting an earlier one). An offline cell
     unfinished twice has its last attempt set aside too, so nothing unfinished stays at
@@ -910,8 +914,11 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
     store would score it, as not correct (the backstop).
   - **The reports.** All three P2 reports (the power run, the pilot's offline and live
     reports) list unfinished cells as "Unfinished (not scored, reported to the
-    coordinator)" and cells counted after one rerun as "Rerun once, completed". An
-    unfinished cell is in no row, count or excluded tally.
+    coordinator)" and cells counted after one rerun as "Rerun once, completed". Each also
+    reads the journal, so a stopped driver's cell is listed (`driver_stopped`, "stopped
+    or still running") before any resume. An unfinished cell is in no row, count or
+    excluded tally. The live report gives the ledger's total and the unfinished runs'
+    metered cost beside the finished rows' USD.
   - **An approved live rerun** is not built. It would need a fresh store, because the
     runner refuses a run whose live record exists and an approval record binds its store,
     and a new approval record naming the cell, both relayed by the coordinator on the

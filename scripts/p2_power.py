@@ -95,15 +95,16 @@ def run(store: Path, part: str = "0/1") -> None:
     # reported, never pooled or scored
     unfinished = store / "unfinished"
     unfinished.mkdir(parents=True, exist_ok=True)
-    # a stopped driver's attempt counts as an unfinished one (the review of b837c64, S-2)
-    journal = InFlight(store / f"in_flight.{i}.jsonl")
-    settled = {
-        (key(c), 0)
-        for c in CELLS
-        if (results / f"{c[0]}-{c[1]}-{c[2]}.json").is_file()
-        or (unfinished / f"{c[0]}-{c[1]}-{c[2]}.json").is_file()
-    }
-    orphans = journal.orphans(settled)
+    # a stopped driver's attempt counts as an unfinished one (the review of b837c64, S-2),
+    # found in every part's journal, so a resume under another part count still counts it
+    # (the review of 0b9f210, SF-2); a part consults only its own cells
+    journal = InFlight(store / f"in_flight.{i}.jsonl", sorted(store.glob("in_flight.*.jsonl")))
+    orphans = journal.orphans(settled(store))
+    if InFlight.TORN in orphans:
+        print("STOP: an in-flight journal line is torn and names no cell; one attempt's "
+              "cell is unknown, so no cell is run. Report it to the coordinator.",
+              flush=True)  # fmt: skip
+        return
     for j, cell in enumerate(CELLS):
         if j % n != i:
             continue
@@ -135,6 +136,10 @@ def run(store: Path, part: str = "0/1") -> None:
             print(f"START {key(cell)} ({art.run_id}, attempt {k})", flush=True)
             started = time.perf_counter()
             result = run_workflow(art.run_id, "p2", runs_root=root, scenario=scenario)
+            journal.finish(key(cell), 0, k, art.run_id, {
+                "completed": result.completed, "error": result.error,
+                "failure_reason": getattr(result, "failure_reason", "")
+                or ("" if result.completed else "run_failed")})  # fmt: skip
             out = root / art.run_id / "workflows" / "p2"
             report = _json_or_empty(out / "report.json")
             state = _json_or_empty(out / "state.json")
@@ -176,6 +181,16 @@ def run(store: Path, part: str = "0/1") -> None:
         dest.write_text(json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8")
         print(f"DONE {key(cell)}: {record['label']} ({record['rule']}) in "
               f"{record['wall_s']:.0f} s", flush=True)  # fmt: skip
+
+
+def settled(store: Path) -> set[tuple[str, int]]:
+    """The cells with a result or an unfinished record (every part's: one directory each)."""
+    return {
+        (key(c), 0)
+        for c in CELLS
+        if (store / "results" / f"{c[0]}-{c[1]}-{c[2]}.json").is_file()
+        or (store / "unfinished" / f"{c[0]}-{c[1]}-{c[2]}.json").is_file()
+    }
 
 
 def _json_or_empty(path: Path) -> dict[str, Any]:
@@ -291,7 +306,7 @@ def report(store: Path, before: Path | None = None) -> dict[str, Any]:
     With ``before`` (an earlier ``cells.json``), each cell's earlier outcome is shown
     beside the new one.
     """
-    from scripts.p2_rerun import read_unfinished
+    from scripts.p2_rerun import InFlight, read_unfinished, stopped
 
     records = [json.loads(p.read_text(encoding="utf-8"))
                for p in sorted((store / "results").glob("*.json"))]  # fmt: skip
@@ -300,6 +315,10 @@ def report(store: Path, before: Path | None = None) -> dict[str, Any]:
     out = summarise(records)
     # unfinished cells are reported, never scored or counted (the review of b837c64, S-1)
     out["unfinished"] = read_unfinished(list((store / "unfinished").glob("*.json")))
+    # and a stopped driver's cell, before any resume (the review of 0b9f210, SF-1)
+    paths = sorted(store.glob("in_flight.*.jsonl"))
+    if paths:
+        out["unfinished"] += stopped(InFlight(paths[0], paths).orphans(settled(store)))
     out["reruns"] = [{"cell": r["cell"], "run_id": r.get("run_id")}
                      for r in records if int(r.get("attempt", 1)) > 1]  # fmt: skip
     if before is not None:
@@ -319,11 +338,14 @@ def report(store: Path, before: Path | None = None) -> dict[str, Any]:
         f"Faulted cells hit: {out['hits_faulted']}; excluded: "
         f"{', '.join(f'{k} {v}' for k, v in out['excluded_faulted'].items())}; null rejected "
         f"on faulted cells: {out['null_rejected_faulted']}.",
+        # a blank line before each group, so neither runs into the sentence above (N-5)
+        *([""] if out["unfinished"] else []),
         *[
             f"Unfinished (not scored, reported to the coordinator): {u['cell']}, "
-            f"{u['status']}: {u['attempts']}"
+            f"{u['status']}{' (' + u['note'] + ')' if u.get('note') else ''}: {u['attempts']}"
             for u in out["unfinished"]
         ],
+        *([""] if out["reruns"] else []),
         *[f"Rerun once, completed: {x['cell']} ({x['run_id']})" for x in out["reruns"]],
         "",
         "| cell | truth | outcome | excluded | NB | NM | NS | partial | failed channels "

@@ -25,11 +25,24 @@ in-flight file before its workflow starts. At start-up, a cell with an in-flight
 but no result and no unfinished record **is** an unfinished attempt: live, it is recorded
 unfinished and the driver stops (no rerun without approval); offline, it counts as that
 attempt, so at most one rerun follows in all.
+
+The journal (the review of ``0b9f210``):
+
+- every report reads it, so a stopped cell is listed (``driver_stopped``, "stopped or
+  still running") even when no driver has started since (SF-1);
+- it is read across every part's file, so a resume under another part count still finds
+  the stopped attempt (SF-2);
+- each attempt that returns adds a line with its completion and error, so an earlier
+  attempt's real error survives when a later one is the attempt stopped (N-1);
+- a start line is flushed and synced before the workflow starts, and a torn last line is
+  read as an in-flight attempt, never skipped (N-2).
 """
 
 from __future__ import annotations
 
 import json
+import os
+import re
 import shutil
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -37,7 +50,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-Status = Literal["counted", "unfinished_live", "unfinished_twice"]
+Status = Literal["counted", "unfinished_live", "unfinished_twice", "driver_stopped"]
 
 
 def read_unfinished(paths: Sequence[Path]) -> list[dict[str, Any]]:
@@ -124,44 +137,113 @@ def run_counted(
 
 
 class InFlight:
-    """The in-flight journal: one line per attempt, written before its workflow starts."""
+    """The in-flight journal: a line per attempt before its workflow starts, one as it returns.
+
+    Written to ``path``; read from ``path`` and every file in ``others`` (the other parts'
+    journals), so a cell's attempts are found whichever part count journalled them.
+    """
 
     STOPPED = "the driver stopped during this attempt: no result was recorded"
+    STILL = "stopped or still running"
+    TORN = ("<torn journal line>", -1)
+    """The key of a torn line naming no cell: an in-flight attempt of an unknown cell."""
 
-    def __init__(self, path: Path) -> None:
-        """Journal into ``path`` (a JSON-lines file in the store)."""
+    def __init__(self, path: Path, others: Sequence[Path] = ()) -> None:
+        """Journal into ``path``; read it and ``others``."""
         self.path = Path(path)
+        self.paths = sorted({self.path, *map(Path, others)})
+
+    def _write(self, line: dict[str, Any]) -> None:
+        # the cell and seed first, so a torn line still names them (N-2)
+        with self.path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(line, default=str) + "\n")
+            fh.flush()
+            os.fsync(fh.fileno())
 
     def start(self, cell: str, replicate: int, attempt: int, run_id: str) -> None:
         """Record that attempt ``attempt`` of ``(cell, replicate)`` is about to run."""
-        line = {"cell": cell, "replicate": replicate, "attempt": attempt, "run_id": run_id,
-                "started": datetime.now(UTC).isoformat(timespec="seconds")}  # fmt: skip
-        with self.path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(line, sort_keys=True) + "\n")
+        self._write({"cell": cell, "replicate": replicate, "attempt": attempt,
+                     "run_id": run_id, "event": "start",
+                     "started": datetime.now(UTC).isoformat(timespec="seconds")})  # fmt: skip
+
+    def finish(self, cell: str, replicate: int, attempt: int, run_id: str,
+               summary: dict[str, Any]) -> None:  # fmt: skip
+        """Record that the attempt returned, with the runner's completion and error (N-1)."""
+        self._write({"cell": cell, "replicate": replicate, "attempt": attempt,
+                     "run_id": run_id, "event": "returned",
+                     "completed": bool(summary.get("completed")),
+                     "error": summary.get("error", ""),
+                     "failure_reason": summary.get("failure_reason", "")})  # fmt: skip
+
+    @staticmethod
+    def _torn(raw: str) -> dict[str, Any]:
+        """What a torn line still names: the cell and seed if written, else nothing."""
+        cell = re.search(r'"cell": "((?:[^"\\]|\\.)*)"', raw)
+        rep = re.search(r'"replicate": (\d+)', raw)
+        attempt = re.search(r'"attempt": (\d+)', raw)
+        run_id = re.search(r'"run_id": "([^"]*)"', raw)
+        key = (cell.group(1), int(rep.group(1))) if cell and rep else InFlight.TORN
+        return {"cell": key[0], "replicate": key[1], "event": "start",
+                "attempt": int(attempt.group(1)) if attempt else None,
+                "run_id": run_id.group(1) if run_id else None, "torn": raw}  # fmt: skip
 
     def orphans(self, settled: set[tuple[str, int]]) -> dict[tuple[str, int], list[dict]]:
         """Each unsettled cell's journalled attempts, as unfinished records, oldest first.
 
         ``settled`` holds the cells with a result or an unfinished record; any other cell
-        in the journal was left by a stopped driver.
+        in the journal was left by a stopped driver (or is running now). An attempt that
+        returned keeps its own error; one that never returned is ``driver_stopped``. A torn
+        line is an in-flight attempt: of its cell if it names one, else under
+        :data:`TORN`, which a driver must stop on (N-2).
         """
-        if not self.path.is_file():
-            return {}
         by_cell: dict[tuple[str, int], dict[int, dict]] = {}
-        for raw in self.path.read_text(encoding="utf-8").splitlines():
-            if not raw.strip():
+        for path in self.paths:
+            if not path.is_file():
                 continue
-            x = json.loads(raw)
-            key = (str(x["cell"]), int(x["replicate"]))
-            if key in settled:
-                continue
-            by_cell.setdefault(key, {})[int(x["attempt"])] = {
-                "cell": key[0], "replicate": key[1], "attempt": int(x["attempt"]),
-                "run_id": x["run_id"], "outcome": "pending", "rule": None,
-                "summary": {"completed": False, "error": self.STOPPED,
-                            "failure_reason": "driver_stopped"},
-            }  # fmt: skip
-        return {k: [v[n] for n in sorted(v)] for k, v in by_cell.items()}
+            for raw in path.read_text(encoding="utf-8").splitlines():
+                if not raw.strip():
+                    continue
+                try:
+                    x = json.loads(raw)
+                    key = (str(x["cell"]), int(x["replicate"]))
+                except (ValueError, KeyError, TypeError):
+                    x = self._torn(raw)
+                    key = (x["cell"], x["replicate"])
+                if key in settled:
+                    continue
+                attempts = by_cell.setdefault(key, {})
+                n = x.get("attempt")
+                n = int(n) if n is not None else max(attempts, default=0) + 1
+                if x.get("event") == "returned":
+                    if n in attempts and not attempts[n]["summary"]["completed"]:
+                        attempts[n]["summary"].update(
+                            {"error": x.get("error") or self.STOPPED,
+                             "failure_reason": x.get("failure_reason") or "run_failed"}
+                            if not x.get("completed") else
+                            {"error": f"{self.STOPPED} (the run returned completed)"})  # fmt: skip
+                    continue
+                attempts[n] = {
+                    "cell": key[0], "replicate": key[1], "attempt": n,
+                    "run_id": x.get("run_id"), "outcome": "pending", "rule": None,
+                    "summary": {"completed": False, "error": self.STOPPED,
+                                "failure_reason": "driver_stopped"},
+                }  # fmt: skip
+                if "torn" in x:
+                    attempts[n]["summary"]["error"] = f"{self.STOPPED} (a torn journal line)"
+        return {k: [v[n] for n in sorted(v)] for k, v in by_cell.items() if v}
+
+
+def stopped(orphans: dict[tuple[str, int], list[dict]]) -> list[dict[str, Any]]:
+    """The report's entries for a journal's orphans: unfinished, stopped or still running.
+
+    Every report adds these to its unfinished cells (the review of ``0b9f210``, SF-1), so a
+    stopped cell is listed whether or not a driver has started since.
+    """
+    return [
+        {"cell": cell, "replicate": rep, "note": InFlight.STILL,
+         **Attempted("driver_stopped", list(prior)).failure()}
+        for (cell, rep), prior in sorted(orphans.items(), key=lambda kv: (kv[0][0], kv[0][1]))
+    ]  # fmt: skip
 
 
 def set_aside(run_root: Path, attempt: int) -> Path | None:

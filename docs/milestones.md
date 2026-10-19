@@ -4043,4 +4043,15 @@ no live call.**
     pilot stops; offline, one rerun at most;
   - set-asides never overwrite;
   - §5 is corrected;
-  - nits N-1 to N-5 and N-7 are done.
+  - nits N-1 to N-5 and N-7 (the PR's numbering) are done.
+- **The review of `0b9f210` (FIXES NEEDED), fixed in one commit:**
+  - SF-1: every P2 report reads the in-flight journal and lists a stopped driver's cell
+    (`driver_stopped`) with no resume; the live `run` records it before the approval and
+    key checks;
+  - SF-2: both drivers read every part's journal (and the pilot every part's records), so
+    a resume under another part count gets exactly one more launch;
+  - nits N-1 to N-6 (the review's numbering): a journal line when an attempt returns; the
+    start line synced and a torn line read as in flight; two N-7 assertions; the ledger
+    and unfinished cost in the live report; blank lines in the power summary; this label;
+  - L-1's two stop boundaries are held unchanged, as the coordinator asked.
+- **Next:** the coordinator checks the head. No live call, no merge from this session.

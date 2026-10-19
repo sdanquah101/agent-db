@@ -186,6 +186,9 @@ def run(store: Path, *, live: bool) -> None:
     from tools.workflow_config import load_p2
 
     store = store.resolve()
+    # a stopped pilot's run is recorded unfinished before any check that could refuse this
+    # start (the review of 0b9f210, SF-1): a file write, no call
+    record_stopped_live(store)
     try:
         # against the configuration the pilot actually runs (the three-role copy) and
         # its run store: the very checks the runner repeats for every run
@@ -222,28 +225,20 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
     # unfinished runs are never results (the lead's rulings of 2026-10-19): they are kept
     # apart, reported, and never pooled, scored or counted as abstentions
     unfinished = store / ("unfinished.jsonl" if live else f"unfinished_offline.{i_part}.jsonl")
-    done = set()
-    for path in (results, unfinished):
-        if path.is_file():
-            done |= {(x["cell"], x["replicate"])
-                     for x in map(json.loads, path.read_text().splitlines())}  # fmt: skip
+    if live and record_stopped_live(store):
+        return
+    # every part's files, so a resume under another part count still sees each cell's
+    # result, unfinished record and stopped attempt (the review of 0b9f210, SF-2)
+    done = settled(store, live=live)
+    journal = InFlight(store / ("in_flight.jsonl" if live else f"in_flight_offline.{i_part}.jsonl"),
+                       journals(store, live=live))  # fmt: skip
     # a stopped driver's attempt (journalled, no result, no record) is an unfinished one
-    # (the review of b837c64, S-2): live it is recorded and the pilot stops; offline it
-    # counts, so at most one rerun follows
-    journal = InFlight(store / ("in_flight.jsonl" if live else f"in_flight_offline.{i_part}.jsonl"))
+    # (the review of b837c64, S-2): offline it counts, so at most one rerun follows
     orphans = journal.orphans(done)
-    if live and orphans:
-        with unfinished.open("a", encoding="utf-8") as fh:
-            for (cell, rep), prior in orphans.items():
-                failure = {"cell": cell, "replicate": rep, "status": "unfinished_live",
-                           "attempts": [{"run_id": p["run_id"], "completed": False,
-                                         "error": InFlight.STOPPED,
-                                         "failure_reason": "driver_stopped", "rule": None}
-                                        for p in prior]}  # fmt: skip
-                fh.write(json.dumps(failure, sort_keys=True) + "\n")
-                print(f"STOP: {cell} r{rep} was left unfinished by a stopped pilot; it is "
-                      "recorded unfinished and not rerun: a live rerun needs the lead's "
-                      "approval relayed by the coordinator", flush=True)  # fmt: skip
+    if not live and InFlight.TORN in orphans:
+        print("STOP: an in-flight journal line is torn and names no cell; one attempt's "
+              "cell is unknown, so no cell is run. Report it to the coordinator.",
+              flush=True)  # fmt: skip
         return
     if live and unfinished.is_file() and unfinished.read_text().strip():
         # a live rerun is a new live call: only the lead's approval, relayed, starts one
@@ -295,6 +290,7 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
                 config_path=config_path,
                 live=live,
             )
+            journal.finish(cell, rep, n, art.run_id, result.as_dict())
             spent += float(result.llm_cost_usd or 0.0)
             ledger.write_text(json.dumps({"usd": spent}), encoding="utf-8")
             out = store / "runs" / art.run_id / "workflows" / "p2"
@@ -333,6 +329,54 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
         print(f"{cell} r{rep}: {outcome_of(line)}{rerun} (USD {spent:.3f} so far)", flush=True)
 
 
+def _cells_in(paths: list[Path]) -> set[tuple[str, int]]:
+    return {
+        (x["cell"], int(x["replicate"]))
+        for path in paths
+        if path.is_file()
+        for x in map(json.loads, filter(str.strip, path.read_text(encoding="utf-8").splitlines()))
+    }
+
+
+def settled(store: Path, *, live: bool) -> set[tuple[str, int]]:
+    """The cells with a result or an unfinished record, read from every part's files."""
+    if live:
+        return _cells_in([store / "results.jsonl", store / "unfinished.jsonl"])
+    return _cells_in(sorted(store.glob("results_offline.*.jsonl"))
+                     + sorted(store.glob("unfinished_offline.*.jsonl")))  # fmt: skip
+
+
+def journals(store: Path, *, live: bool) -> list[Path]:
+    """Every in-flight journal of the live pilot, or of every offline part."""
+    return [store / "in_flight.jsonl"] if live else sorted(store.glob("in_flight_offline.*.jsonl"))
+
+
+def record_stopped_live(store: Path) -> bool:
+    """Record a stopped live pilot's runs unfinished; whether any was found.
+
+    Called first by ``run``, before the approval and key checks, and by the driver: a live
+    run left by a stopped pilot is recorded unfinished (``driver_stopped``) and never
+    rerun without the lead's approval. A file write, no call.
+    """
+    from scripts.p2_rerun import InFlight
+
+    if not (store / "in_flight.jsonl").is_file():
+        return False
+    orphans = InFlight(store / "in_flight.jsonl").orphans(settled(store, live=True))
+    with (store / "unfinished.jsonl").open("a", encoding="utf-8") as fh:
+        for (cell, rep), prior in orphans.items():
+            failure = {"cell": cell, "replicate": rep, "status": "unfinished_live",
+                       "attempts": [{"run_id": p["run_id"], "completed": False,
+                                     "error": p["summary"]["error"],
+                                     "failure_reason": p["summary"]["failure_reason"],
+                                     "rule": None} for p in prior]}  # fmt: skip
+            fh.write(json.dumps(failure, sort_keys=True) + "\n")
+            print(f"STOP: {cell} r{rep} was left unfinished by a stopped pilot; it is "
+                  "recorded unfinished and not rerun: a live rerun needs the lead's "
+                  "approval relayed by the coordinator", flush=True)  # fmt: skip
+    return bool(orphans)
+
+
 def read_report(path: Path) -> dict[str, Any]:
     """A run's ``report.json``, or ``{}`` when it is missing, truncated or unreadable."""
     try:
@@ -363,11 +407,9 @@ def report(store: Path, attempt: str = "attempt2") -> dict[str, Any]:
     The cost is USD, requests and the wall clock (``wall_s``, a cost for P2, never a
     compliance figure); each run's visible records are copied beside the tables.
     """
-    lines = [
-        json.loads(x)
-        for x in (store / "results.jsonl").read_text(encoding="utf-8").splitlines()
-        if x.strip()
-    ]
+    from scripts.p2_rerun import read_unfinished
+
+    lines = read_unfinished([p for p in [store / "results.jsonl"] if p.is_file()])
     rows = [
         {
             "cell": x["cell"],
@@ -380,9 +422,11 @@ def report(store: Path, attempt: str = "attempt2") -> dict[str, Any]:
         }
         for x in lines
     ]
-    from scripts.p2_rerun import read_unfinished
-
-    unfinished = read_unfinished(list(store.glob("unfinished.jsonl")))
+    # a stopped pilot's run is listed even before any driver has started since (the
+    # review of 0b9f210, SF-1)
+    unfinished = read_unfinished(list(store.glob("unfinished.jsonl"))) + stopped_in(
+        store, live=True
+    )
     out_dir = REPORT_DIR / attempt
     out_dir.mkdir(parents=True, exist_ok=True)
     for x in lines:
@@ -403,6 +447,9 @@ def report(store: Path, attempt: str = "attempt2") -> dict[str, Any]:
             "an abstaining or unfinished seed is excluded, never counted as none",
         },
         "usd_total": round(sum(float(r["usd"] or 0.0) for r in rows), 6),
+        # what was spent in all (N-4): the ledger, and the unfinished runs' own metered cost
+        "usd_ledger": _ledger(store / "spent_usd.json"),
+        "usd_unfinished": unfinished_cost(store, unfinished),
         # unfinished runs are reported, never scored (the lead's rulings of 2026-10-19)
         "unfinished": unfinished,
     }
@@ -416,7 +463,9 @@ def report(store: Path, attempt: str = "attempt2") -> dict[str, Any]:
         for r in rows
     ]
     md += unfinished_lines(unfinished) + rerun_lines(lines)
-    md += ["", f"Go/no-go: stop = {out['go_no_go']['stop']}; USD {out['usd_total']}.", "",
+    md += ["", f"Go/no-go: stop = {out['go_no_go']['stop']}; USD {out['usd_total']} on the "
+           f"finished runs; USD {out['usd_ledger']} spent in all (the pilot's ledger), of "
+           f"which USD {out['usd_unfinished']} metered on unfinished runs.", "",
            "Wall min is the runner's `wall_s`: a cost (P2 has no wall-clock limit, the "
            "ruling of 2026-10-13), not compliance with the cell's allowance."]  # fmt: skip
     (out_dir / "summary.md").write_text("\n".join(md) + "\n", encoding="utf-8")
@@ -464,8 +513,11 @@ def report_offline(store: Path) -> dict[str, Any]:
         })  # fmt: skip
     from scripts.p2_rerun import read_unfinished
 
-    # unfinished cells are reported, never scored (the review of b837c64, S-1)
-    unfinished = read_unfinished(list(store.glob("unfinished_offline.*.jsonl")))
+    # unfinished cells are reported, never scored (the review of b837c64, S-1), and so is a
+    # stopped driver's cell, before any resume (the review of 0b9f210, SF-1)
+    unfinished = read_unfinished(list(store.glob("unfinished_offline.*.jsonl"))) + stopped_in(
+        store, live=False
+    )
     gate = [r["outcome"] for r in rows if r["cell"] == "S0-01 B/B"]
     out = {
         "what": "the six pilot runs, offline (no model), three-role minimum, at one commit",
@@ -501,13 +553,58 @@ def report_offline(store: Path) -> dict[str, Any]:
     return out
 
 
+def stopped_in(store: Path, *, live: bool) -> list[dict[str, Any]]:
+    """The journal's stopped (or still running) cells: neither a result nor a record yet."""
+    from scripts.p2_rerun import InFlight, stopped
+
+    paths = journals(store, live=live)
+    if not paths:
+        return []
+    return stopped(InFlight(paths[0], paths).orphans(settled(store, live=live)))
+
+
+def _ledger(path: Path) -> float | None:
+    return round(float(json.loads(path.read_text())["usd"]), 6) if path.is_file() else None
+
+
+def unfinished_cost(store: Path, unfinished: list[dict[str, Any]]) -> float | None:
+    """The unfinished runs' metered cost, from each one's ``llm_calls.jsonl`` (N-4).
+
+    Each response's usage at the pilot configuration's prices: what the gateway metered.
+    A failed request's worst case, which the gateway books but never logs as usage, is in
+    the ledger only. ``None`` with no declared price.
+    """
+    from tools.llm import TokenMeter
+    from tools.workflow_config import load_p2
+
+    config = store / "config" / "p2.yaml"
+    price = load_p2(config).model.pricing_usd_per_mtok if config.is_file() else None
+    if price is None:
+        return None
+    meter = TokenMeter()
+    run_ids = {a.get("run_id") for u in unfinished for a in u.get("attempts", [])}
+    for run_id in sorted(r for r in run_ids if r):
+        for log in sorted((store / "runs" / run_id / "workflows").glob("p2*/llm_calls.jsonl")):
+            for raw in log.read_text(encoding="utf-8").splitlines():
+                if raw.strip():
+                    meter.add(dict(json.loads(raw).get("usage") or {}))
+    usd = (
+        meter.input * price.input
+        + meter.output * price.output
+        + meter.cache_write * price.cache_write
+        + meter.cache_read * price.cache_read
+    ) / 1e6
+    return round(usd, 6)  # fmt: skip
+
+
 def unfinished_lines(unfinished: list[dict[str, Any]]) -> list[str]:
     """The report's lines for unfinished cells: listed, never scored (a blank line first)."""
     if not unfinished:
         return []
     return [""] + [
         f"Unfinished (not scored, reported to the coordinator): {u['cell']} "
-        f"r{u.get('replicate', 0)}, {u['status']}: {u['attempts']}"
+        f"r{u.get('replicate', 0)}, {u['status']}"
+        f"{' (' + u['note'] + ')' if u.get('note') else ''}: {u['attempts']}"
         for u in unfinished
     ]
 

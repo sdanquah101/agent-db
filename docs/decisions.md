@@ -7959,16 +7959,42 @@ pilot's configuration digest `9443306b…a29c`: no template, schema, tool or con
 changed. `eval/` and the frozen trees are untouched.
 
 **2026-10-19, addendum: the coordinator's review of `b837c64` (no new ruling).** Two parts
-of the rulings above are now met in full:
+of the rulings above were addressed, but not in full (see the next addendum):
 - **"Reported" (c).** All three P2 reports read the unfinished records and list them, kept
-  out of every row and count.
+  out of every row and count. They did not read the in-flight journal, so a stopped
+  driver's cell was listed only after a later driver start had recorded it.
 - **A stopped driver.** Each attempt is journalled before its workflow starts, so a driver
   stopped mid-attempt can no longer lead a resume to relaunch the run as attempt 1. Live,
   that would have been a rerun without approval. Offline, it would have given two more
-  attempts instead of one.
+  attempts instead of one. A resume under a different part count did not read the other
+  parts' journals, so the stopped attempt could still be lost.
 
 A set-aside never overwrites an earlier one. An offline cell unfinished twice has its
 last attempt set aside, so nothing unfinished stays at `workflows/p2`.
 
 How an approved live rerun would happen is not built. It would need a fresh store and a
 new approval record naming the cell, relayed by the coordinator on the lead's word.
+
+**2026-10-19, addendum: the coordinator's review of `0b9f210` (no new ruling).** The two
+gaps above are closed:
+- **Every report reads the journal (SF-1).** The live pilot's report, its offline report
+  and the power report each list a journalled cell with no result and no record as
+  unfinished, `driver_stopped` ("stopped or still running"), with no driver started since.
+  The live `run` also records a stopped pilot's run unfinished **before** the approval and
+  key checks (a file write, no call), so a refused restart no longer leaves it unrecorded.
+- **Every part's files are read (SF-2).** The power run reads every `in_flight.*.jsonl`;
+  the offline pilot reads every part's `results_offline.*`, `unfinished_offline.*` and
+  `in_flight_offline.*`. Each part still runs only its own cells. A cell stopped under one
+  part count and resumed under another gets exactly one more launch.
+- **The journal itself.** Each attempt that returns adds a line with its completion and
+  error, so an earlier attempt's real error survives a later stop (N-1). A start line is
+  flushed and synced before the workflow starts, and a torn last line is read as an
+  in-flight attempt: of its cell if it names one; otherwise of an unknown cell, on which
+  the offline drivers stop and the live pilot records it and stops (N-2).
+- The live report gives the ledger's total and the unfinished runs' metered cost beside the
+  finished rows' USD (N-4).
+
+**Held, unchanged (the coordinator's L-1 note).** A live stop inside `generate_run` comes
+before the journal line (no workflow started, no model request), and is relaunched on
+resume. A stop after the journal line but before the first model request is recorded
+unfinished and needs approval to rerun.
