@@ -32,7 +32,7 @@ from tools.workflow_config import DECISION_POINTS, load_p1, load_p2, sandbox_con
 from workflows.p2_multi_agent import workflow as wf
 
 REPO = Path(__file__).resolve().parents[1]
-COMMITTED_FROZEN_SHA256 = "1706550869d43dc7e96d3fac0d3668eab2ce05b7f195e9dabe1202cf959b46a3"
+COMMITTED_FROZEN_SHA256 = "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
 """The digest of the committed ``p2.yaml`` ``frozen`` record (B-4): a new freeze edits it."""
 
 
