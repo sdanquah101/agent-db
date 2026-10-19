@@ -4053,5 +4053,6 @@ no live call.**
   - nits N-1 to N-6 (the review's numbering): a journal line when an attempt returns; the
     start line synced and a torn line read as in flight; two N-7 assertions; the ledger
     and unfinished cost in the live report; blank lines in the power summary; this label;
-  - L-1's two stop boundaries are held unchanged, as the coordinator asked.
+  - L-1's two stop boundaries are kept: the lead's ruling "Yes, keep both" (09:43 UTC),
+    recorded in `docs/decisions.md` and §14 and pinned by a test with a mutation each.
 - **Next:** the coordinator checks the head. No live call, no merge from this session.

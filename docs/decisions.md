@@ -7994,7 +7994,16 @@ gaps above are closed:
 - The live report gives the ledger's total and the unfinished runs' metered cost beside the
   finished rows' USD (N-4).
 
-**Held, unchanged (the coordinator's L-1 note).** A live stop inside `generate_run` comes
-before the journal line (no workflow started, no model request), and is relaunched on
-resume. A stop after the journal line but before the first model request is recorded
-unfinished and needs approval to rerun.
+**2026-10-19 — RULING (the lead): both live-stop boundaries are kept ("Yes, keep both",
+relayed by the coordinator at 09:43 UTC).**
+- **(1)** A live stop **before** a run's in-flight journal line (inside `generate_run`: no
+  workflow started, no model request) is not a run. A resume starts it afresh.
+- **(2)** A live stop **after** the journal line but before the first model request is
+  recorded unfinished and needs the lead's approval to rerun, even though nothing was
+  spent.
+
+**Reason.** The journal line is the one boundary the driver can record before the workflow
+starts. Treating a zero-spend stop after it as no run would need the driver to read the
+run's model log to decide, and a log written after the stop could make that wrong.
+**Alternative:** exempt a stop with no model request from (2). Not taken, by the ruling.
+Pinned by `test_a_live_stop_before_the_journal_line_is_no_run_and_one_after_it_is`.

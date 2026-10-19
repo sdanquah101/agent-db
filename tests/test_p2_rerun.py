@@ -800,3 +800,78 @@ def test_the_live_report_gives_the_ledger_and_the_unfinished_runs_cost(tmp_path,
     assert out["usd_unfinished"] == pytest.approx(price.input + 0.1 * price.output)
     text = (tmp_path / "reports" / "a" / "summary.md").read_text()
     assert "USD 0.4 spent in all" in text
+
+
+class StopsInGenerate(FakeDriver):
+    """A driver stopped inside ``generate_run``, before the run's journal line."""
+
+    def __init__(self, journal_first: Path | None = None) -> None:
+        """With ``journal_first``, the mutation: a journal line written before the stop."""
+        super().__init__({})
+        self.journal_first = journal_first
+
+    def generate(self, scenario: Any, tier: Any, *, replicate: int = 0, runs_root: Path,
+                 **kw: Any) -> Any:  # fmt: skip
+        if self.journal_first is not None:
+            p2_rerun.InFlight(self.journal_first).start(
+                "S0-01 B/B", replicate, 1, f"run_{scenario.id}_{replicate}"
+            )
+        raise KeyboardInterrupt
+
+
+def test_a_live_stop_before_the_journal_line_is_no_run_and_one_after_it_is(tmp_path, monkeypatch):
+    """The lead's ruling of 2026-10-19, "Yes, keep both", pinned on each side."""
+    from scripts import p2_pilot
+
+    # (1) stopped inside generate_run: no journal line, nothing recorded; a resume runs it
+    StopsInGenerate().install(monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        p2_pilot._runs(tmp_path / "one", live=True)
+    assert not _lines(tmp_path / "one" / "in_flight.jsonl")
+    driver = FakeDriver({})
+    driver.install(monkeypatch)
+    p2_pilot._runs(tmp_path / "one", live=True)
+    assert driver.launched[0] == "run_S0-01_0" and len(driver.launched) == 6
+    assert not _lines(tmp_path / "one" / "unfinished.jsonl")
+    # its mutation: a journal line written before generate_run makes that stop a run,
+    # recorded unfinished, and the resume launches nothing
+    store = tmp_path / "one_mutant"
+    store.mkdir()
+    StopsInGenerate(journal_first=store / "in_flight.jsonl").install(monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        p2_pilot._runs(store, live=True)
+    driver = FakeDriver({})
+    driver.install(monkeypatch)
+    p2_pilot._runs(store, live=True)
+    assert driver.launched == [] and _lines(store / "unfinished.jsonl")
+
+    # (2) stopped after the journal line, before any model request (nothing spent):
+    # recorded unfinished, and no resume launches it without approval
+    def stop_after_journal(store: Path) -> None:
+        StopsDriver({"run_S0-01_0": 1}).install(monkeypatch)
+        with pytest.raises(KeyboardInterrupt):
+            p2_pilot._runs(store, live=True)
+        assert not (store / "runs" / "run_S0-01_0" / "workflows" / "p2" / "llm_calls.jsonl"
+                    ).exists()  # fmt: skip
+
+    stop_after_journal(tmp_path / "two")
+    driver = StopsDriver({})
+    driver.install(monkeypatch)
+    p2_pilot._runs(tmp_path / "two", live=True)
+    assert driver.launched == []
+    (failure,) = _lines(tmp_path / "two" / "unfinished.jsonl")
+    assert failure["attempts"][0]["failure_reason"] == "driver_stopped"
+    # its mutation: exempting a stop with no model request relaunches the run unapproved
+    stop_after_journal(tmp_path / "two_mutant")
+    orphans = p2_rerun.InFlight.orphans
+
+    def spent_only(self: Any, settled: Any) -> dict:
+        return {k: v for k, v in orphans(self, settled).items()
+                if any((self.path.parent / "runs" / str(a["run_id"]) / "workflows" / "p2"
+                        / "llm_calls.jsonl").is_file() for a in v)}  # fmt: skip
+
+    monkeypatch.setattr(p2_rerun.InFlight, "orphans", spent_only)
+    driver = StopsDriver({})
+    driver.install(monkeypatch)
+    p2_pilot._runs(tmp_path / "two_mutant", live=True)
+    assert "run_S0-01_0" in driver.launched

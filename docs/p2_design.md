@@ -906,6 +906,11 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
     records, so a resume under another part count still counts it. The live `run` records
     it before the approval and key checks. A torn last line is an in-flight attempt; one
     that names no cell stops every driver.
+  - **Where a live stop becomes a run** (the lead's ruling of 2026-10-19, "Yes, keep
+    both"). A stop before the journal line (inside `generate_run`: no workflow started,
+    no model request) is not a run, and a resume starts it afresh. A stop after the
+    journal line, even before the first model request, is recorded unfinished and needs
+    the lead's approval to rerun, though nothing was spent.
   - **What is kept.** A failed attempt's outputs are set aside in
     `workflows/p2.unfinished-N/` (never overwriting an earlier one). An offline cell
     unfinished twice has its last attempt set aside too, so nothing unfinished stays at
