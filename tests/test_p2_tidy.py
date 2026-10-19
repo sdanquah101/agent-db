@@ -388,3 +388,39 @@ def test_jsonable_writes_nan_as_null_and_refuses_what_has_no_json_form():
     assert "NaN" in json.dumps({"x": float("nan")}, default=_pre_b3)
     with pytest.raises(TypeError):
         json.dumps({"g": np.array([[1.0, 2.0]])}, default=_pre_b3)
+
+
+# ------------------------------------------------------------------ the six pilot cells
+
+
+def test_the_six_pilot_cells_re_run_offline_at_the_tidy_up_give_the_same_outcomes():
+    """A3 and B1 change no offline outcome: the six pilot runs, re-run at the tidy-up's head.
+
+    ``reports/p2_pilot/offline.json`` is the six runs offline before the tidy-up (attempt
+    2's commit); ``reports/p2_pilot/tidy/`` the same six, offline, at the tidy-up (its
+    code commit, ``8d7a9b9``, and ``e01d419``, which changed the docs only). Every run's
+    decision records are copied beside it.
+    """
+    before = json.loads((REPO / "reports" / "p2_pilot" / "offline.json").read_text())
+    after = json.loads((REPO / "reports" / "p2_pilot" / "tidy" / "offline.json").read_text())
+    assert after["unfinished"] == [] and after["reruns"] == []
+
+    def rows(doc: dict[str, Any]) -> dict[tuple[str, int], tuple[Any, ...]]:
+        return {(r["cell"], r["replicate"]): (r["outcome"], r["rule"], r["null"],
+                                              r["failed_channels"], r["admitted"])
+                for r in doc["rows"]}  # fmt: skip
+
+    assert len(rows(before)) == len(rows(after)) == 6
+    assert rows(after) == rows(before)
+    assert {r["commit"][:7] for r in after["rows"]} <= {"8d7a9b9", "e01d419"}
+    # and in every run the unused points were not asked; dq.trust was where it was shown
+    # something, and not where it was shown nothing
+    status: dict[str, set[tuple[str, str | None]]] = {}
+    for path in (REPO / "reports" / "p2_pilot" / "tidy").glob("run_*/decisions.jsonl"):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            r = json.loads(line)
+            status.setdefault(r["point"], set()).add((r["status"], r.get("reason")))
+    assert status["cal.split"] == {("not_asked", wf.UNUSED_REASON)}
+    assert status["cal.bound"] == {("not_asked", wf.UNUSED_REASON)}
+    assert status["dq.trust"] == {("fallback", None), ("not_asked", wf.NOTHING_SHOWN_REASON)}
+    assert status["verify.differential"] == {("fallback", None)}

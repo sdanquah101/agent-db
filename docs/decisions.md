@@ -8073,8 +8073,8 @@ gaps the reviews listed.
 
 **What moves.**
 - `frozen_record_sha256`: `1706550869d43dc7e96d3fac0d3668eab2ce05b7f195e9dabe1202cf959b46a3`
-  → `FROZEN_NEW`.
+  → `c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0`.
 - The pilot's configuration digest:
-  `9443306b76f43029ff5a39962ec9b4845a231c31f788bc5fb2494bab772ba29c` → `PILOT_NEW`.
+  `9443306b76f43029ff5a39962ec9b4845a231c31f788bc5fb2494bab772ba29c` → `cf59bcbb555aab376dd53a0a3ce7d8d91e3b453df8165879c39f9163dcc2f404`.
 - The approval record of 2026-10-14, already spent, refuses all the more. `eval/`, `sim/`,
   `scenarios/`, `tools/impl/`, `tools/llm.py`, P0 and P1 are untouched.
