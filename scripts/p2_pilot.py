@@ -210,6 +210,7 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
     if store == REPO or REPO in store.parents:
         raise SystemExit("the store must be outside the repository")
     from scenarios.schema import load_scenario
+    from scripts.p2_rerun import run_counted, set_aside
     from sim.plants import load_plant_config
     from sim.run.harness import generate_run
     from sim.run.matrix import at_plant_horizon
@@ -218,11 +219,19 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
     config_path = write_config(store)
     i_part, n_part = (int(x) for x in part.split("/"))
     results = store / ("results.jsonl" if live else f"results_offline.{i_part}.jsonl")
+    # unfinished runs are never results (the lead's rulings of 2026-10-19): they are kept
+    # apart, reported, and never pooled, scored or counted as abstentions
+    unfinished = store / ("unfinished.jsonl" if live else f"unfinished_offline.{i_part}.jsonl")
     done = set()
-    if results.is_file():
-        done = {
-            (x["cell"], x["replicate"]) for x in map(json.loads, results.read_text().splitlines())
-        }
+    for path in (results, unfinished):
+        if path.is_file():
+            done |= {(x["cell"], x["replicate"])
+                     for x in map(json.loads, path.read_text().splitlines())}  # fmt: skip
+    if live and unfinished.is_file() and unfinished.read_text().strip():
+        # a live rerun is a new live call: only the lead's approval, relayed, starts one
+        print(f"STOP: {unfinished.name} records an unfinished live run; a rerun or any "
+              "further live run needs the lead's approval relayed by the coordinator")  # fmt: skip
+        return
     from tools.workflow_config import load_p2
 
     per_run = float(load_p2(config_path).caps.max_usd)
@@ -241,37 +250,65 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
             return
         plant = load_plant_config(plant_id)
         scenario = at_plant_horizon(load_scenario(REPO / "scenarios" / f"{sid}.yaml"), plant)
-        art = generate_run(scenario, tier, plant=plant, replicate=rep, runs_root=store / "runs")
-        result = run_workflow(
-            art.run_id,
-            "p2",
-            runs_root=store / "runs",
-            scenario=scenario,
-            config_path=config_path,
-            live=live,
-        )
-        spent += float(result.llm_cost_usd or 0.0)
-        ledger.write_text(json.dumps({"usd": spent}), encoding="utf-8")
-        out = store / "runs" / art.run_id / "workflows" / "p2"
-        path = out / "report.json"
-        # a run that died wrote no report, or a partial or unreadable one: it is pending
-        # (N-11f, N-11f')
-        report = read_report(path)
-        line = {
-            "cell": cell,
-            "replicate": rep,
-            "run_id": art.run_id,
-            "truth": list(scenario.truth_label),
-            "summary": result.as_dict(),
-            "outcome": report.get("outcome", "pending"),
-            "label": report.get("label"),
-            "rule": report.get("rule"),
-            "null_table": report.get("null_table"),
-            "verdict": report.get("verdict"),
-        }
+        run_ids: list[str] = []
+
+        def attempt(
+            n: int,
+            scenario: Any = scenario,
+            plant: Any = plant,
+            tier: str = tier,
+            rep: int = rep,
+            cell: str = cell,
+            run_ids: list[str] = run_ids,
+        ) -> dict:
+            nonlocal spent
+            if n > 1:  # the same cell and seed, regenerated; the failed attempt kept aside
+                set_aside(store / "runs" / run_ids[-1], n - 1)
+            art = generate_run(scenario, tier, plant=plant, replicate=rep,
+                               runs_root=store / "runs")  # fmt: skip
+            run_ids.append(art.run_id)
+            result = run_workflow(
+                art.run_id,
+                "p2",
+                runs_root=store / "runs",
+                scenario=scenario,
+                config_path=config_path,
+                live=live,
+            )
+            spent += float(result.llm_cost_usd or 0.0)
+            ledger.write_text(json.dumps({"usd": spent}), encoding="utf-8")
+            out = store / "runs" / art.run_id / "workflows" / "p2"
+            # a run that died wrote no report, or a partial or unreadable one: it is
+            # unfinished (N-11f, N-11f')
+            report = read_report(out / "report.json")
+            return {
+                "cell": cell,
+                "replicate": rep,
+                "run_id": art.run_id,
+                "attempt": n,
+                "truth": list(scenario.truth_label),
+                "summary": result.as_dict(),
+                "outcome": report.get("outcome", "pending"),
+                "label": report.get("label"),
+                "rule": report.get("rule"),
+                "null_table": report.get("null_table"),
+                "verdict": report.get("verdict"),
+            }
+
+        done_cell = run_counted(attempt, live=live)
+        if done_cell.record is None:
+            failure = {"cell": cell, "replicate": rep, **done_cell.failure()}
+            with unfinished.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(failure, sort_keys=True, default=str) + "\n")
+            print(f"STOP: {cell} r{rep} is unfinished ({done_cell.status}); nothing is "
+                  f"scored for it. Report it to the coordinator: {failure['attempts']}",
+                  flush=True)  # fmt: skip
+            return
+        line = done_cell.record
         with results.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(line, sort_keys=True, default=str) + "\n")
-        print(f"{cell} r{rep}: {outcome_of(line)} (USD {spent:.3f} so far)", flush=True)
+        rerun = " (after one rerun)" if line["attempt"] > 1 else ""
+        print(f"{cell} r{rep}: {outcome_of(line)}{rerun} (USD {spent:.3f} so far)", flush=True)
 
 
 def read_report(path: Path) -> dict[str, Any]:
@@ -321,6 +358,9 @@ def report(store: Path, attempt: str = "attempt2") -> dict[str, Any]:
         }
         for x in lines
     ]
+    unfinished_path = store / "unfinished.jsonl"
+    unfinished = [json.loads(x) for x in unfinished_path.read_text(encoding="utf-8").splitlines()
+                  if x.strip()] if unfinished_path.is_file() else []  # fmt: skip
     out_dir = REPORT_DIR / attempt
     out_dir.mkdir(parents=True, exist_ok=True)
     for x in lines:
@@ -341,6 +381,8 @@ def report(store: Path, attempt: str = "attempt2") -> dict[str, Any]:
             "an abstaining or unfinished seed is excluded, never counted as none",
         },
         "usd_total": round(sum(float(r["usd"] or 0.0) for r in rows), 6),
+        # unfinished runs are reported, never scored (the lead's rulings of 2026-10-19)
+        "unfinished": unfinished,
     }
     (out_dir / "cells.json").write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8")
     md = [f"# P2 live pilot ({attempt})", "",
@@ -351,6 +393,8 @@ def report(store: Path, attempt: str = "attempt2") -> dict[str, Any]:
         f"| {r['usd']} | {r['requests']} | {r['wall_min']} |"
         for r in rows
     ]
+    md += [f"Unfinished (not scored, reported to the coordinator): {u['cell']} r{u['replicate']}, "
+           f"{u['status']}: {u['attempts']}" for u in unfinished]  # fmt: skip
     md += ["", f"Go/no-go: stop = {out['go_no_go']['stop']}; USD {out['usd_total']}.", "",
            "Wall min is the runner's `wall_s`: a cost (P2 has no wall-clock limit, the "
            "ruling of 2026-10-13), not compliance with the cell's allowance."]  # fmt: skip

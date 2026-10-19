@@ -554,10 +554,10 @@ EXCLUDED = ("abstain", "pending")
 def outcome(verdict: dict[str, Any], completed: bool, label: str) -> str:
     """What every P2 count keys on: ``pending``, ``abstain``, or the final label.
 
-    An abstaining run writes ``abstain`` as its label (N-2b); an unfinished run writes the
-    null label, and this is the field that says it is not one. A run that did not complete
-    is ``pending`` whatever it wrote; a completed run whose verdict abstained is
-    ``abstain``.
+    An abstaining run writes ``abstain`` as its label (N-2b), and so does an unfinished one,
+    as a backstop (L-1, 2026-10-19): an unfinished run is rerun, never scored. A run that
+    did not complete is ``pending`` whatever it wrote; a completed run whose verdict
+    abstained is ``abstain``.
     """
     if not completed:
         return "pending"
@@ -2445,8 +2445,11 @@ class Workflow:
     def build_state(self, completed: bool) -> dict[str, Any]:
         """The shared task state (§6.6) with ``workflow`` = p2."""
         rem = tools.remaining()
+        # an unfinished run (stopped, crashed, killed: rule pending) is not a result and is
+        # rerun (the lead's ruling of 2026-10-19); its label is abstain only as a backstop,
+        # so that one reaching the evaluator can never be scored a correct none (L-1)
         cls = self.classification or {
-            "label": self.lab["none"], "secondary_labels": [], "confidence": 0.0,
+            "label": ABSTAIN_LABEL, "secondary_labels": [], "confidence": 0.0,
             "rule": "pending", "evidence": [], "flag_sensor": None, "scale_factor": {},
             "revise_influent_mapping": False, "recommend_structural_review": False,
             "kinetic_update": False,

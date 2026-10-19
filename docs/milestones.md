@@ -4028,3 +4028,12 @@ no live call.**
   freeze moves to `17065508…46a3` (the template).
 - N-2b: an abstaining run writes `abstain`; the frozen evaluator scores it as not correct.
 - **Next:** review; no new run until the lead approves one.
+
+**2026-10-19 — the review of PR #34 at `62cb699` (PASS WITH NITS) and the lead's rulings
+(L-1 and its amendment: an unfinished run is rerun, never scored).**
+- S-1, N-1 and N-2 are fixed (`8aef00b`).
+- L-1: an unfinished run writes `abstain` as a backstop. The P2 drivers rerun an
+  unfinished offline run once with the same cell and seed, and stop and report if it
+  fails again. They never rerun a live run automatically.
+- Nothing frozen moves.
+- **Next:** the coordinator checks the head, then merges on the lead's word.

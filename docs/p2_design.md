@@ -890,8 +890,13 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
   The power run reports every candidate onset day that would pass, for each cell where
   NB fails (the review's R1).
 - **Every P2 count keys on the outcome, never the label alone** (the review's F-A,
-  ruling (c)). An abstaining run writes `abstain` (N-2b, 2026-10-15); an unfinished run
-  writes `none`. `report.json` therefore carries
+  ruling (c)). An abstaining run writes `abstain` (N-2b, 2026-10-15), and so does an
+  unfinished one, but only as a backstop: **an unfinished run is not a result; it is
+  rerun, and only a completed run counts** (the lead's rulings of 2026-10-19). Offline, the
+  drivers rerun it once with the same cell and seed; if the rerun also fails to finish they
+  stop, score nothing for that cell and seed, and report it. Live, they never rerun
+  automatically: they stop, mark the run unfinished and report it, and a rerun needs the
+  lead's approval relayed by the coordinator (`scripts/p2_rerun.py`). `report.json` carries
   `outcome`: `pending` for a run that did not complete, `abstain` for one whose verdict
   abstained, and the final label otherwise. The power report, the development tables
   and the go/no-go of §11 count on `outcome`. `abstain` and `pending` are reported in
@@ -934,9 +939,10 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
   The `cal.split` decision still sees every channel's step; only admission is tied.
 - **The frozen evaluator reads `final.label`** (the review's N-8). Before any P2 rows are
   pooled into the evaluator's metrics, they are filtered on `outcome` from `report.json`:
-  `abstain` and `pending` rows are taken out and reported separately. Otherwise an
-  unfinished run would be scored as `none` (an abstaining one, since N-2b, is scored not
-  correct), which ruling (c) forbids. The
+  `abstain` rows are taken out and reported separately; an unfinished (`pending`) run never
+  reaches the tables at all, because the drivers rerun it or stop (2026-10-19). Both write
+  `abstain`, so one that did reach the evaluator would be scored not correct, never a
+  correct `none`, which ruling (c) forbids. The
   evaluator itself is frozen and unchanged; the filter belongs to the P2 tables.
 
 ## 15. The live wiring (deliverable 3): implementation notes

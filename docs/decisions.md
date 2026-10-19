@@ -7912,3 +7912,48 @@ that `holdout_passed` is a code for that candidate only.
   which leaves `eval/` misreading abstentions); add `abstain` to `LABELS` itself (rejected:
   it is P0's label vocabulary, pinned by P0's tests and configuration).
 - **The freeze.** No move from N-2b.
+
+## 2026-10-19 — RULINGS (the lead): an unfinished run is not a result; it is rerun (L-1)
+
+**The lead's words** (relayed by the coordinator at 00:16 and 00:19 UTC): "Yes to both"
+(L-1, and merging PR #34 once the coordinator has checked its head); then, amending L-1, "A
+run that crashes or is stopped should not be recorded as no fault. It must be rerun."; then
+"Yes to both" to the two rerun bounds, which are therefore the lead's ruling, not a
+proposal.
+
+**Decisions.**
+- **(a) The backstop label.** An unfinished P2 run (a crash, a kill, an unexpected
+  exception; `completed` false, rule `pending`) writes `final.label` and
+  `classification.label` `abstain`, never `none` (`build_state`'s default). It is a
+  backstop only: such a run is not a result.
+- **(b) Unfinished runs are rerun; only completed runs count.** The P2 drivers
+  (`scripts/p2_power.py`, `scripts/p2_pilot.py`, through `scripts/p2_rerun.py`) detect a
+  run whose runner did not see it complete, or whose report is `pending` or missing, before
+  anything is scored or summarised. It is never pooled, scored, or counted as an
+  abstention.
+- **(c) Offline: one automatic rerun.** With the same cell and seed: the cell is
+  regenerated into the same store, which starts its logs over. If the rerun also fails to
+  finish, the driver stops, nothing is scored for that cell and seed, and it is reported
+  (`unfinished/` or `unfinished_offline.<part>.jsonl`, naming each attempt's run id and
+  error). A resumed driver does not retry it: no silent retry loops.
+- **(d) Live: never an automatic rerun.** A rerun is a new live call and needs the lead's
+  approval relayed by the coordinator. The driver stops, marks the run unfinished
+  (`unfinished.jsonl`) and reports it, and it refuses to start again while that record
+  stands.
+- The first attempt's outputs and visible log are kept aside
+  (`workflows/p2.unfinished-1/`) before a rerun, so the report can name what failed.
+
+**Reason.** An unfinished run wrote `none` before L-1, and the frozen evaluator would have
+scored it a correct `none` on a clean cell: a crash recorded as no fault.
+
+**Alternatives.**
+- Score an unfinished run as `abstain` (L-1 as first approved). Superseded by the
+  amendment: an unfinished run is no result at all.
+- Rerun until it finishes. Rejected by the ruling: one rerun, then stop and report.
+- Rerun live runs automatically. Rejected: every live call needs the lead's approval.
+- Change the evaluator to drop unfinished runs. Rejected: `eval/` is frozen; the drivers
+  are where runs are collected.
+
+**What moves.** Nothing frozen. `frozen_record_sha256` stays `17065508…46a3` and the
+pilot's configuration digest `9443306b…a29c`: no template, schema, tool or configuration
+changed. `eval/` and the frozen trees are untouched.
