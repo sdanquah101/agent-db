@@ -82,6 +82,7 @@ def outcome_of(record: dict[str, Any]) -> str:
 def run(store: Path, part: str = "0/1") -> None:
     """Generate and run every cell of this part that has no result yet."""
     from scenarios.schema import load_scenario
+    from scripts.p2_rerun import InFlight, run_counted, set_aside
     from sim.plants import load_plant_config
     from sim.run.harness import generate_run
     from sim.run.matrix import at_plant_horizon
@@ -90,45 +91,115 @@ def run(store: Path, part: str = "0/1") -> None:
     i, n = (int(x) for x in part.split("/"))
     results = store / "results"
     results.mkdir(parents=True, exist_ok=True)
+    # unfinished runs are never results (the lead's rulings of 2026-10-19): kept apart,
+    # reported, never pooled or scored
+    unfinished = store / "unfinished"
+    unfinished.mkdir(parents=True, exist_ok=True)
+    # a stopped driver's attempt counts as an unfinished one (the review of b837c64, S-2),
+    # found in every part's journal, so a resume under another part count still counts it
+    # (the review of 0b9f210, SF-2); a part consults only its own cells
+    journal = InFlight(store / f"in_flight.{i}.jsonl", sorted(store.glob("in_flight.*.jsonl")))
+    orphans = journal.orphans(settled(store))
+    if InFlight.TORN in orphans:
+        print("STOP: an in-flight journal line is torn and names no cell; one attempt's "
+              "cell is unknown, so no cell is run. Report it to the coordinator.",
+              flush=True)  # fmt: skip
+        return
     for j, cell in enumerate(CELLS):
         if j % n != i:
             continue
-        dest = results / f"{cell[0]}-{cell[1]}-{cell[2]}.json"
-        if dest.is_file():
+        name = f"{cell[0]}-{cell[1]}-{cell[2]}.json"
+        dest = results / name
+        if dest.is_file() or (unfinished / name).is_file():
             continue
         sid, plant_id, tier = cell
         plant = load_plant_config(plant_id)
         scenario = at_plant_horizon(load_scenario(REPO / "scenarios" / f"{sid}.yaml"), plant)
         root = store / "runs"
-        art = generate_run(scenario, tier, plant=plant, runs_root=root)
-        print(f"START {key(cell)} ({art.run_id})", flush=True)
-        started = time.perf_counter()
-        result = run_workflow(art.run_id, "p2", runs_root=root, scenario=scenario)
-        out = root / art.run_id / "workflows" / "p2"
-        report = json.loads((out / "report.json").read_text(encoding="utf-8"))
-        state = json.loads((out / "state.json").read_text(encoding="utf-8"))
-        record = {
-            "cell": key(cell),
-            "truth": list(scenario.truth_label),
-            "run_id": art.run_id,
-            "wall_s": round(time.perf_counter() - started, 1),
-            "completed": bool(result.completed),
-            "error": result.error,
-            "evaluations_used": result.simulator_evals_used,
-            "evaluations_total": result.simulator_evals_total,
-            "label": report["label"],
-            "outcome": report.get("outcome"),
-            "rule": report["rule"],
-            "verdict": report["verdict"],
-            "null_table": report["null_table"],
-            "signatures": report["signatures"],
-            "by_role": report["by_role"],
-            "abstentions": state["abstentions"],
-            "codes": state["annotations"],
-        }
+        prior = orphans.get((key(cell), 0), [])
+        run_ids: list[str] = [str(p["run_id"]) for p in prior]
+
+        def attempt(
+            k: int,
+            cell: Any = cell,
+            scenario: Any = scenario,
+            plant: Any = plant,
+            tier: str = tier,
+            root: Path = root,
+            run_ids: list[str] = run_ids,
+        ) -> dict:
+            if k > 1:  # the same cell and seed, regenerated; the failed attempt kept aside
+                set_aside(root / run_ids[-1], k - 1)
+            art = generate_run(scenario, tier, plant=plant, runs_root=root)
+            run_ids.append(art.run_id)
+            journal.start(key(cell), 0, k, art.run_id)
+            print(f"START {key(cell)} ({art.run_id}, attempt {k})", flush=True)
+            started = time.perf_counter()
+            result = run_workflow(art.run_id, "p2", runs_root=root, scenario=scenario)
+            journal.finish(key(cell), 0, k, art.run_id, {
+                "completed": result.completed, "error": result.error,
+                "failure_reason": getattr(result, "failure_reason", "")
+                or ("" if result.completed else "run_failed")})  # fmt: skip
+            out = root / art.run_id / "workflows" / "p2"
+            report = _json_or_empty(out / "report.json")
+            state = _json_or_empty(out / "state.json")
+            return {
+                "cell": key(cell),
+                "truth": list(scenario.truth_label),
+                "run_id": art.run_id,
+                "attempt": k,
+                "wall_s": round(time.perf_counter() - started, 1),
+                "completed": bool(result.completed),
+                "error": result.error,
+                "failure_reason": getattr(result, "failure_reason", "")
+                or ("" if result.completed else "run_failed"),
+                "evaluations_used": result.simulator_evals_used,
+                "evaluations_total": result.simulator_evals_total,
+                "label": report.get("label"),
+                "outcome": report.get("outcome", "pending"),
+                "rule": report.get("rule"),
+                "verdict": report.get("verdict"),
+                "null_table": report.get("null_table"),
+                "signatures": report.get("signatures"),
+                "by_role": report.get("by_role"),
+                "abstentions": state.get("abstentions"),
+                "codes": state.get("annotations"),
+            }
+
+        done_cell = run_counted(attempt, live=False, prior=prior)
+        if done_cell.record is None:
+            if run_ids:  # nothing unfinished stays at workflows/p2 (N-7)
+                set_aside(root / run_ids[-1], len(done_cell.attempts))
+            failure = {"cell": key(cell), **done_cell.failure()}
+            (unfinished / name).write_text(json.dumps(failure, indent=1, sort_keys=True) + "\n",
+                                           encoding="utf-8")  # fmt: skip
+            print(f"STOP: {key(cell)} is unfinished after one rerun; nothing is scored "
+                  f"for it. Report it to the coordinator: {failure['attempts']}",
+                  flush=True)  # fmt: skip
+            return
+        record = done_cell.record
         dest.write_text(json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8")
         print(f"DONE {key(cell)}: {record['label']} ({record['rule']}) in "
               f"{record['wall_s']:.0f} s", flush=True)  # fmt: skip
+
+
+def settled(store: Path) -> set[tuple[str, int]]:
+    """The cells with a result or an unfinished record (every part's: one directory each)."""
+    return {
+        (key(c), 0)
+        for c in CELLS
+        if (store / "results" / f"{c[0]}-{c[1]}-{c[2]}.json").is_file()
+        or (store / "unfinished" / f"{c[0]}-{c[1]}-{c[2]}.json").is_file()
+    }
+
+
+def _json_or_empty(path: Path) -> dict[str, Any]:
+    """A JSON object from ``path``, or ``{}`` when it is missing or unreadable."""
+    try:
+        out = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return out if isinstance(out, dict) else {}
 
 
 def steps_of(store: Path, record: dict[str, Any]) -> dict[str, Any] | None:
@@ -235,11 +306,21 @@ def report(store: Path, before: Path | None = None) -> dict[str, Any]:
     With ``before`` (an earlier ``cells.json``), each cell's earlier outcome is shown
     beside the new one.
     """
+    from scripts.p2_rerun import InFlight, read_unfinished, stopped
+
     records = [json.loads(p.read_text(encoding="utf-8"))
                for p in sorted((store / "results").glob("*.json"))]  # fmt: skip
     for r in records:
         r["steps"] = steps_of(store, r)
     out = summarise(records)
+    # unfinished cells are reported, never scored or counted (the review of b837c64, S-1)
+    out["unfinished"] = read_unfinished(list((store / "unfinished").glob("*.json")))
+    # and a stopped driver's cell, before any resume (the review of 0b9f210, SF-1)
+    paths = sorted(store.glob("in_flight.*.jsonl"))
+    if paths:
+        out["unfinished"] += stopped(InFlight(paths[0], paths).orphans(settled(store)))
+    out["reruns"] = [{"cell": r["cell"], "run_id": r.get("run_id")}
+                     for r in records if int(r.get("attempt", 1)) > 1]  # fmt: skip
     if before is not None:
         earlier = json.loads(before.read_text(encoding="utf-8"))
         was = {c["cell"]: c.get("outcome", c["label"]) for c in earlier["cells"]}
@@ -257,6 +338,15 @@ def report(store: Path, before: Path | None = None) -> dict[str, Any]:
         f"Faulted cells hit: {out['hits_faulted']}; excluded: "
         f"{', '.join(f'{k} {v}' for k, v in out['excluded_faulted'].items())}; null rejected "
         f"on faulted cells: {out['null_rejected_faulted']}.",
+        # a blank line before each group, so neither runs into the sentence above (N-5)
+        *([""] if out["unfinished"] else []),
+        *[
+            f"Unfinished (not scored, reported to the coordinator): {u['cell']}, "
+            f"{u['status']}{' (' + u['note'] + ')' if u.get('note') else ''}: {u['attempts']}"
+            for u in out["unfinished"]
+        ],
+        *([""] if out["reruns"] else []),
+        *[f"Rerun once, completed: {x['cell']} ({x['run_id']})" for x in out["reruns"]],
         "",
         "| cell | truth | outcome | excluded | NB | NM | NS | partial | failed channels "
         "| admitted |",

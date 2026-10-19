@@ -3990,3 +3990,74 @@ inputs are sent as JSON.** One small commit after the review fixes: `json.dumps(
 sort_keys=True, default=_jsonable)`; no freeze or configuration digest moves; every
 `request_sha256` differs from attempt 1's. **Next:** the coordinator's review of both
 commits, then the approval record's fields.
+
+**2026-10-14, 13:18 UTC — the approval record of 2026-10-14 committed (`8be6f55`, digest
+`adf47dee…`, a fresh store `/home/user/p2_pilot_store_2`), after the review of `d134867`
+(PASS) and the JSON-input fix (`bdbb0c8`).**
+
+**2026-10-14/15 — the live pilot, attempt 2: COMPLETE (`26c6f35`, wording corrected in
+`818a267`).**
+- **The run.** Launched once at 20:48 UTC from `8be6f55` on the coordinator's relay; all six
+  runs completed by 03:34 UTC. No transport, gateway, cap or budget refusal; none abstained.
+  USD 0.0123 in all (36 requests, 11 759 tokens in, 8 260 out).
+- **Code refused seven model proposals and three decisions fell back to code.** These were
+  `cal.split` on S0-01 r0 and S2-01 r1, and `dq.trust` on `gas_flow` S2-01 r1 (a first-HRT
+  spike).
+- **Outcomes.** Five runs `none`, as offline. One changed: S2-01 B/B r1 → `sensor`,
+  correct.
+- **The three `dq.coupled` runs.** Each read `coupled_inside`, so code admitted `sensor`;
+  the differential accepted it once and set it aside twice as `holdout_passed`. On these
+  near-identical inputs the live model and the coded fallback each get two of three right,
+  so the changed outcome is not evidence that the differential discriminates.
+- **The go/no-go of ruling (b).** UNABLE TO FIRE.
+- **The review of `26c6f35`** asked for wording fixes only (`818a267`, README only): the true
+  `dq.trust` fallback, the refusals counted, the overstatement removed. It held D-1, D-2,
+  D-3 and the inert or empty calls for the lead.
+
+**2026-10-15, 05:46 UTC — the lead's rulings, "Yes to all three".**
+1. PR #33 is finished with the wording commit only.
+2. A follow-up PR, after the merge: D-1 (the hold-out bit for `structural` only) and N-2b
+   (an abstaining run writes `abstain`).
+3. No live call: the record of 2026-10-14 is spent.
+
+**2026-10-15 — PR #33 merged at 07:56:05 UTC** (GitHub `merged_at`; the coordinator relayed
+it at 08:03) at the reviewed head `818a267`, as `f9d9b1e` on `main`. **The follow-up for the
+lead's rulings D-1 and N-2b opened as a draft on `claude/p2-holdout-abstain` (PR #34), with
+no live call.**
+- D-1: the differential sees the hold-out bit only beside an admitted `structural`; the
+  freeze moves to `17065508…46a3` (the template).
+- N-2b: an abstaining run writes `abstain`; the frozen evaluator scores it as not correct.
+- **Next:** review; no new run until the lead approves one.
+
+**2026-10-19 — the review of PR #34 at `62cb699` (PASS WITH NITS) and the lead's rulings
+(L-1 and its amendment: an unfinished run is rerun, never scored).**
+- S-1, N-1 and N-2 are fixed (`8aef00b`).
+- L-1: an unfinished run writes `abstain` as a backstop. The P2 drivers rerun an
+  unfinished offline run once with the same cell and seed, and stop and report if it
+  fails again. They never rerun a live run automatically.
+- Nothing frozen moves.
+- **Next:** the coordinator checks the head, then merges on the lead's word.
+- **The review of `b837c64` (FIXES NEEDED), fixed in one commit:**
+  - the power and offline pilot reports list unfinished cells;
+  - a stopped driver's attempt is journalled and counted: live, it is recorded and the
+    pilot stops; offline, one rerun at most;
+  - set-asides never overwrite;
+  - §5 is corrected;
+  - nits N-1 to N-5 and N-7 (the PR's numbering) are done.
+- **The review of `0b9f210` (FIXES NEEDED), fixed in one commit:**
+  - SF-1: every P2 report reads the in-flight journal and lists a stopped driver's cell
+    (`driver_stopped`) with no resume; the live `run` records it before the approval and
+    key checks;
+  - SF-2: both drivers read every part's journal (and the pilot every part's records), so
+    a resume under another part count gets exactly one more launch;
+  - nits N-1 to N-6 (the review's numbering): a journal line when an attempt returns; the
+    start line synced and a torn line read as in flight; two N-7 assertions; the ledger
+    and unfinished cost in the live report; blank lines in the power summary; this label;
+  - L-1's two stop boundaries are kept: the lead's ruling "Yes, keep both" (09:43 UTC),
+    recorded in `docs/decisions.md` and §14 and pinned by a test with a mutation each.
+- **The review of `024da41` (FIXES NEEDED, one item), fixed in one commit:** a line written
+  after a torn journal line starts on a new line, so a resume no longer loses an attempt or
+  charges it to another cell; pinned for the pilot, the power run and a part change, with a
+  mutation. The nits are done too: a test that the pilot reads every part's results, and
+  one that the power run stops on a torn line that names no cell.
+- **Next:** the coordinator checks the head. No live call, no merge from this session.

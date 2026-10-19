@@ -7869,3 +7869,151 @@ templates, schemas, tools, model block and caps are untouched) and no configurat
 digest. Every request's `request_sha256` and `replay_sha256` differ from attempt 1's,
 because the user message's text differs. Attempt 1's records keep their form; the test
 fixture reads both.
+
+## 2026-10-15 — RULINGS (the lead): the hold-out bit only for `structural` (D-1), and an abstaining run's label is `abstain` (N-2b)
+
+The lead answered "Yes to all three" (relayed by the coordinator at 05:46 UTC); these are
+the two code changes of that answer, in a follow-up to PR #33.
+
+**D-1. Decision.** `verify.differential` is shown the hold-out bit (`holdout_failed`) only
+when `structural` is admitted. Design §7 governs ("used only for S6"); §2.7 is brought into
+line with it, and the template says the bit bears on the structural candidate only and
+that `holdout_passed` is a code for that candidate only.
+- **Reason.** In attempt 2 the differential, shown `holdout_failed: false` beside an
+  admitted `sensor`, set `sensor` aside as `holdout_passed` on two of three near-identical
+  runs (S0-01 r1, S8-01 r0). That is a use of the bit §7 does not allow.
+- **Alternatives.**
+  - Keep showing the bit and restrict the `holdout_passed` / `holdout_failed` codes to
+    `structural` (a schema or code check). Rejected: the model would still see the bit and
+    could still let it decide `none` over `sensor` while citing another code; withholding
+    it is the only way the bit cannot be used.
+  - Leave §2.7 as it was. Rejected by the ruling.
+- **What it does not do.** The known limitation (an S0-01 r1-style `sensor` admitted on a
+  clean run) is accepted and not tuned against in the prompt (the ruling). When
+  `structural` is admitted, the bit is necessarily `true` (admission needs a failed
+  hold-out), so showing it there adds nothing the admission did not already say.
+- **The freeze.** The template of `verify.differential` changes, so `frozen_record_sha256`
+  moves from `fbe88dd0…8078` to `17065508…46a3`. No schema and no tool changes.
+
+**N-2b. Decision.** An abstaining run writes `final.label` (and `classification.label`)
+`abstain`, not `none`, and carries no evidence item.
+- **Reason.** The frozen evaluator reads `final.label`; a `none` written by an abstention
+  would be scored as a correct `none` on a clean cell.
+- **How.** `state/task_state.py` gains `FinalLabel` (the six classes and `abstain`) for
+  the classification's and the final result's label; `LABELS` and `Label`, the six-class
+  vocabulary of evidence and secondary labels and of P0's `labels` block, are unchanged.
+  Only P2 writes `abstain`.
+- **The frozen evaluator** (`eval/`, unchanged) loads such a state as valid and scores it
+  as not correct (`attribution_exact` false, `primary_in_truth` false, also on a clean
+  cell), through the scorer, the aggregate and the tables, without crashing. Under the
+  six-class type it would have dropped the state as invalid (a launched run with no valid
+  state: a miss with no drift or abstention metrics); a test shows both.
+- **Alternatives.** Keep `none` and let P2's own counts key on `outcome` (the status quo,
+  which leaves `eval/` misreading abstentions); add `abstain` to `LABELS` itself (rejected:
+  it is P0's label vocabulary, pinned by P0's tests and configuration).
+- **The freeze.** No move from N-2b.
+
+## 2026-10-19 — RULINGS (the lead): an unfinished run is not a result; it is rerun (L-1)
+
+**The lead's words** (relayed by the coordinator at 00:16 and 00:19 UTC): "Yes to both"
+(L-1, and merging PR #34 once the coordinator has checked its head); then, amending L-1, "A
+run that crashes or is stopped should not be recorded as no fault. It must be rerun."; then
+"Yes to both" to the two rerun bounds, which are therefore the lead's ruling, not a
+proposal.
+
+**Decisions.**
+- **(a) The backstop label.** An unfinished P2 run (a crash, a kill, an unexpected
+  exception; `completed` false, rule `pending`) writes `final.label` and
+  `classification.label` `abstain`, never `none` (`build_state`'s default). It is a
+  backstop only: such a run is not a result.
+- **(b) Unfinished runs are rerun; only completed runs count.** The P2 drivers
+  (`scripts/p2_power.py`, `scripts/p2_pilot.py`, through `scripts/p2_rerun.py`) detect a
+  run whose runner did not see it complete, or whose report is `pending` or missing, before
+  anything is scored or summarised. It is never pooled, scored, or counted as an
+  abstention.
+- **(c) Offline: one automatic rerun.** With the same cell and seed: the cell is
+  regenerated into the same store, which starts its logs over. If the rerun also fails to
+  finish, the driver stops, nothing is scored for that cell and seed, and it is reported
+  (`unfinished/` or `unfinished_offline.<part>.jsonl`, naming each attempt's run id and
+  error). A resumed driver does not retry it: no silent retry loops.
+- **(d) Live: never an automatic rerun.** A rerun is a new live call and needs the lead's
+  approval relayed by the coordinator. The driver stops, marks the run unfinished
+  (`unfinished.jsonl`) and reports it, and it refuses to start again while that record
+  stands.
+- The first attempt's outputs and visible log are kept aside
+  (`workflows/p2.unfinished-1/`) before a rerun, so the report can name what failed.
+
+**Reason.** An unfinished run wrote `none` before L-1, and the frozen evaluator would have
+scored it a correct `none` on a clean cell: a crash recorded as no fault.
+
+**Alternatives.**
+- Score an unfinished run as `abstain` (L-1 as first approved). Superseded by the
+  amendment: an unfinished run is no result at all.
+- Rerun until it finishes. Rejected by the ruling: one rerun, then stop and report.
+- Rerun live runs automatically. Rejected: every live call needs the lead's approval.
+- Change the evaluator to drop unfinished runs. Rejected: `eval/` is frozen; the drivers
+  are where runs are collected.
+
+**What moves.** Nothing frozen. `frozen_record_sha256` stays `17065508…46a3` and the
+pilot's configuration digest `9443306b…a29c`: no template, schema, tool or configuration
+changed. `eval/` and the frozen trees are untouched.
+
+**2026-10-19, addendum: the coordinator's review of `b837c64` (no new ruling).** Two parts
+of the rulings above were addressed, but not in full (see the next addendum):
+- **"Reported" (c).** All three P2 reports read the unfinished records and list them, kept
+  out of every row and count. They did not read the in-flight journal, so a stopped
+  driver's cell was listed only after a later driver start had recorded it.
+- **A stopped driver.** Each attempt is journalled before its workflow starts, so a driver
+  stopped mid-attempt can no longer lead a resume to relaunch the run as attempt 1. Live,
+  that would have been a rerun without approval. Offline, it would have given two more
+  attempts instead of one. A resume under a different part count did not read the other
+  parts' journals, so the stopped attempt could still be lost.
+
+A set-aside never overwrites an earlier one. An offline cell unfinished twice has its
+last attempt set aside, so nothing unfinished stays at `workflows/p2`.
+
+How an approved live rerun would happen is not built. It would need a fresh store and a
+new approval record naming the cell, relayed by the coordinator on the lead's word.
+
+**2026-10-19, addendum: the coordinator's review of `0b9f210` (no new ruling).** The two
+gaps above are closed:
+- **Every report reads the journal (SF-1).** The live pilot's report, its offline report
+  and the power report each list a journalled cell with no result and no record as
+  unfinished, `driver_stopped` ("stopped or still running"), with no driver started since.
+  The live `run` also records a stopped pilot's run unfinished **before** the approval and
+  key checks (a file write, no call), so a refused restart no longer leaves it unrecorded.
+- **Every part's files are read (SF-2).** The power run reads every `in_flight.*.jsonl`;
+  the offline pilot reads every part's `results_offline.*`, `unfinished_offline.*` and
+  `in_flight_offline.*`. Each part still runs only its own cells. A cell stopped under one
+  part count and resumed under another gets exactly one more launch.
+- **The journal itself.** Each attempt that returns adds a line with its completion and
+  error, so an earlier attempt's real error survives a later stop (N-1). A start line is
+  flushed and synced before the workflow starts, and a torn last line is read as an
+  in-flight attempt: of its cell if it names one; otherwise of an unknown cell, on which
+  the offline drivers stop and the live pilot records it and stops (N-2). (As first
+  pushed, the next line was appended straight onto a torn one; see the next addendum.)
+- The live report gives the ledger's total and the unfinished runs' metered cost beside the
+  finished rows' USD (N-4).
+
+**2026-10-19, addendum: the coordinator's review of `024da41` (no new ruling).** A torn
+journal line followed by a resume corrupted the journal: the next line was appended onto
+the fragment, and reading the glued line took the fragment's cell. The new attempt was then
+lost, or charged to another cell. An offline cell could get a third attempt and be scored,
+against ruling (c). The journal writer now starts a new line first whenever the file does
+not end in one. At `0b9f210` a torn line crashed the resume; the corruption came with
+`024da41`, which made a torn line readable. The live pilot was not affected, since it
+records and stops without writing again.
+
+**2026-10-19 — RULING (the lead): both live-stop boundaries are kept ("Yes, keep both",
+relayed by the coordinator at 09:43 UTC).**
+- **(1)** A live stop **before** a run's in-flight journal line (inside `generate_run`: no
+  workflow started, no model request) is not a run. A resume starts it afresh.
+- **(2)** A live stop **after** the journal line but before the first model request is
+  recorded unfinished and needs the lead's approval to rerun, even though nothing was
+  spent.
+
+**Reason.** The journal line is the one boundary the driver can record before the workflow
+starts. Treating a zero-spend stop after it as no run would need the driver to read the
+run's model log to decide, and a log written after the stop could make that wrong.
+**Alternative:** exempt a stop with no model request from (2). Not taken, by the ruling.
+Pinned by `test_a_live_stop_before_the_journal_line_is_no_run_and_one_after_it_is`.

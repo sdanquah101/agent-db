@@ -32,7 +32,7 @@ from tools.workflow_config import DECISION_POINTS, load_p1, load_p2, sandbox_con
 from workflows.p2_multi_agent import workflow as wf
 
 REPO = Path(__file__).resolve().parents[1]
-COMMITTED_FROZEN_SHA256 = "fbe88dd0abb9b52fc8449727eb0a63eac6aa0458e89b1b471122f319247b8078"
+COMMITTED_FROZEN_SHA256 = "1706550869d43dc7e96d3fac0d3668eab2ce05b7f195e9dabe1202cf959b46a3"
 """The digest of the committed ``p2.yaml`` ``frozen`` record (B-4): a new freeze edits it."""
 
 
@@ -308,6 +308,7 @@ def test_a_live_run_records_every_attempt_and_a_cap_makes_it_abstain(monkeypatch
     run, fake, doc = run_fake(monkeypatch, live_cfg, fake, wf.LiveResponder())
     assert run.verdict["verdict"] == "abstain" and run.verdict["reason"] == "model_cap"
     assert doc["classification"]["rule"] == "abstain:model_cap"
+    assert doc["final"]["label"] == doc["classification"]["label"] == "abstain"  # N-2b
     assert json.loads(fake.run.outputs[wf.REPORT_FILE])["outcome"] == "abstain"
     assert fake.gateway.attempts_sent == 3
     # an abstaining run claims no kinetic update (N-2b)
@@ -935,7 +936,11 @@ def test_the_runner_checks_this_run_against_a_real_record_and_runs_it_once(tmp_p
 
 
 def test_the_pilot_stops_before_a_run_that_could_pass_its_total(tmp_path, monkeypatch):
-    """Running total plus one run's cap (N-new-5); an unreadable report is pending (N-11f')."""
+    """Running total plus one run's cap (N-new-5), on finished runs.
+
+    (An unfinished run stops a live pilot before the total matters: the lead's rulings of
+    2026-10-19, ``tests/test_p2_rerun.py``.)
+    """
     from scripts import p2_pilot
 
     launched: list[str] = []
@@ -944,12 +949,12 @@ def test_the_pilot_stops_before_a_run_that_could_pass_its_total(tmp_path, monkey
         rid = f"run_{scenario.id}_{replicate}"
         out = kw["runs_root"] / rid / "workflows" / "p2"
         out.mkdir(parents=True, exist_ok=True)
-        (out / "report.json").write_text('{"outcome": "no')  # truncated by a killed run
+        (out / "report.json").write_text('{"outcome": "none", "rule": "null_stands"}')
         return types.SimpleNamespace(run_id=rid)
 
     def run_workflow(run_id: str, *a: Any, **kw: Any) -> Any:
         launched.append(run_id)
-        return types.SimpleNamespace(llm_cost_usd=0.2, as_dict=lambda: {"completed": False})
+        return types.SimpleNamespace(llm_cost_usd=0.2, as_dict=lambda: {"completed": True})
 
     monkeypatch.setattr("sim.run.harness.generate_run", generate)
     monkeypatch.setattr("tools.runner.run_workflow", run_workflow)
@@ -957,8 +962,10 @@ def test_the_pilot_stops_before_a_run_that_could_pass_its_total(tmp_path, monkey
     # 0 + 0.25 and 0.2 + 0.25 fit 0.6; 0.4 + 0.25 does not: two runs, then a stop
     assert len(launched) == 2
     rows = [json.loads(x) for x in (tmp_path / "results.jsonl").read_text().splitlines()]
-    assert [p2_pilot.outcome_of(r) for r in rows] == ["pending", "pending"]
+    assert [p2_pilot.outcome_of(r) for r in rows] == ["none", "none"]
     assert p2_pilot.read_report(tmp_path / "nowhere.json") == {}
+    (tmp_path / "bad.json").write_text('{"outcome": "no')  # truncated by a killed run
+    assert p2_pilot.read_report(tmp_path / "bad.json") == {}
 
 
 # ------------------------------------------------------------------ the re-review of b6c3e01
@@ -1035,10 +1042,18 @@ def test_the_pilot_runs_end_to_end_past_both_checks_with_a_pushed_record(tmp_pat
 
     def fake_launch(script: Any, registry: Any, **kw: Any) -> Any:
         gateways.append(kw.get("model_gateway"))
+        # a finished run's record, so the pilot counts it (an unfinished live run stops it:
+        # the lead's rulings of 2026-10-19)
+        out = kw["run_dir"] / "workflows" / "p2"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "state.json").write_text(json.dumps(minimal_state(kw["run_dir"].name)))
+        (out / "report.json").write_text('{"outcome": "none", "rule": "null_stands"}')
         return types.SimpleNamespace(returncode=0, stderr="")
 
     def registry(*a: Any, **k: Any) -> Any:
         return make_registry(budget=Budget(10, 5.0, 0), seed=1)
+
+    from tests.eval_support import minimal_state
 
     monkeypatch.setattr("sim.run.harness.generate_run", generate)
     monkeypatch.setattr(runner, "launch", fake_launch)

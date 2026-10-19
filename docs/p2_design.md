@@ -294,7 +294,7 @@ claim (§10).
 
 | id | Inputs | Output schema | Fallback |
 |---|---|---|---|
-| `verify.differential` | the null table, the admitted labels with their signature tables, the hold-out flag, and `allowed_labels` (admitted ∪ {none}) | `{label: enum(allowed_labels), rejected: [{label, code: enum{null_not_failed, signature_absent, coupled_outside, holdout_passed, superseded}}]}`. The enum is **per call**: the request's tool offers exactly `allowed_labels`, and the template names the values, the literal `none` included (the ruling of 2026-10-14, a; attempt 1's model answered `null`). The frozen tool is the one without the enum, and the gateway accepts the enum as the only per-call difference | the first admitted label in P0's order (sensor, influent, state, parameter, structural); `none` if no label is admitted; the set-aside codes mapped onto the enum (code's finer codes stay in the verdict) |
+| `verify.differential` | the null table, the admitted labels with their signature tables, and `allowed_labels` (admitted ∪ {none}); the hold-out flag **only when `structural` is admitted** (§7; the lead's ruling of 2026-10-15, D-1), and `holdout_passed` is a code for the structural candidate only | `{label: enum(allowed_labels), rejected: [{label, code: enum{null_not_failed, signature_absent, coupled_outside, holdout_passed, superseded}}]}`. The enum is **per call**: the request's tool offers exactly `allowed_labels`, and the template names the values, the literal `none` included (the ruling of 2026-10-14, a; attempt 1's model answered `null`). The frozen tool is the one without the enum, and the gateway accepts the enum as the only per-call difference | the first admitted label in P0's order (sensor, influent, state, parameter, structural); `none` if no label is admitted; the set-aside codes mapped onto the enum (code's finer codes stay in the verdict) |
 
 The differential can only choose **among labels code already admitted**, or `none`. It
 cannot admit one.
@@ -547,8 +547,11 @@ with the codes as input; codes, never text. No new reference fit is made.
 - After `pass`, the state is written and the run validated once (§7).
 - After `fail` with no round left, the label is `none` with `null_failed_unexplained`
   when the null was rejected, and plain `none` otherwise.
-- After `abstain`, the abstentions the verifier named are written, with the label it
-  gave.
+- After `abstain`, the abstentions the verifier named are written, and the final label
+  is `abstain`, never `none` (the lead's ruling of 2026-10-15, N-2b). An abstaining run
+  claims no class, so the evaluator cannot read it as a correct `none`; it carries no
+  evidence item. A run that did not complete writes `abstain` as a backstop and is
+  `pending`; it is not a result and is rerun (the lead's rulings of 2026-10-19).
 
 ## 6. Tool allow-lists, messages and templates
 
@@ -628,7 +631,11 @@ As in P1, the hold-out `[0.75 T, T]` is not a role's to read. Only the verifier 
 `validate`.
 
 - It is called once per VERIFY round. With self-correction on, that is at most twice.
-- Only the boolean `holdout_failed` leaves the verifier. It is used only for S6.
+- Only the boolean `holdout_failed` leaves the verifier. It is used only for S6: the
+  admission of `structural`, and the differential sees it only when `structural` is
+  admitted (§2.7; the lead's ruling of 2026-10-15, D-1). In attempt 2 the differential,
+  shown the bit beside an admitted `sensor`, set `sensor` aside as `holdout_passed` on two
+  runs; that use is now closed off.
 - After CONCLUDE, the concluded prediction is validated once more by the harness, as
   P1's is, and that is the score in the state.
 
@@ -884,12 +891,49 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
   The power run reports every candidate onset day that would pass, for each cell where
   NB fails (the review's R1).
 - **Every P2 count keys on the outcome, never the label alone** (the review's F-A,
-  ruling (c)). The task state must carry a label from the closed vocabulary, so an
-  abstaining or unfinished run writes `none` there. `report.json` therefore carries
-  `outcome`: `pending` for a run that did not complete, `abstain` for one whose verdict
-  abstained, and the final label otherwise. The power report, the development tables
-  and the go/no-go of §11 count on `outcome`. `abstain` and `pending` are reported in
-  their own column and are never read as `none`, as a hit, or as a miss.
+  ruling (c)). An abstaining run writes `abstain` (N-2b, 2026-10-15), and so does an
+  unfinished one, but only as a backstop: **an unfinished run is not a result; it is
+  rerun, and only a completed run counts** (the lead's rulings of 2026-10-19). Offline, the
+  drivers rerun it once with the same cell and seed; if the rerun also fails to finish they
+  stop, score nothing for that cell and seed, and report it. Live, they never rerun
+  automatically: they stop, mark the run unfinished and report it, and a rerun needs the
+  lead's approval relayed by the coordinator (`scripts/p2_rerun.py`).
+  - **A stopped driver.** Each attempt is journalled (`in_flight*.jsonl`, flushed and
+    synced) before its workflow starts, and again when it returns, with its completion and
+    error. At start-up, an attempt with no result and no unfinished record is an
+    unfinished one: live, it is recorded and the pilot stops; offline, it counts as that
+    attempt, so at most one rerun follows. The drivers read every part's journal and
+    records, so a resume under another part count still counts it. The live `run` records
+    it before the approval and key checks. A torn last line is an in-flight attempt; one
+    that names no cell stops every driver. A line written after a torn one starts on a
+    new line, never glued onto the fragment.
+  - **Where a live stop becomes a run** (the lead's ruling of 2026-10-19, "Yes, keep
+    both"). A stop before the journal line (inside `generate_run`: no workflow started,
+    no model request) is not a run, and a resume starts it afresh. A stop after the
+    journal line, even before the first model request, is recorded unfinished and needs
+    the lead's approval to rerun, though nothing was spent.
+  - **What is kept.** A failed attempt's outputs are set aside in
+    `workflows/p2.unfinished-N/` (never overwriting an earlier one). An offline cell
+    unfinished twice has its last attempt set aside too, so nothing unfinished stays at
+    `workflows/p2`. A live unfinished run stays at `workflows/p2`, where its
+    `llm_calls.jsonl` keeps the runner's "runs once" guard; an evaluator pass over that
+    store would score it, as not correct (the backstop).
+  - **The reports.** All three P2 reports (the power run, the pilot's offline and live
+    reports) list unfinished cells as "Unfinished (not scored, reported to the
+    coordinator)" and cells counted after one rerun as "Rerun once, completed". Each also
+    reads the journal, so a stopped driver's cell is listed (`driver_stopped`, "stopped
+    or still running") before any resume. An unfinished cell is in no row, count or
+    excluded tally. The live report gives the ledger's total and the unfinished runs'
+    metered cost beside the finished rows' USD.
+  - **An approved live rerun** is not built. It would need a fresh store, because the
+    runner refuses a run whose live record exists and an approval record binds its store,
+    and a new approval record naming the cell, both relayed by the coordinator on the
+    lead's word.
+
+  `report.json` carries `outcome`: `pending` for a run that did not complete, `abstain` for
+  one whose verdict abstained, and the final label otherwise. The power report, the
+  development tables and the go/no-go of §11 count on `outcome`; an `abstain` row is
+  reported in its own column and never read as `none`, as a hit, or as a miss.
 - **A run that places no statistic abstains** (`abstain:no_statistics_placed`), as one
   without a reference does. An empty placement is no null table, not a null that stands
   (the review's F-H).
@@ -928,8 +972,10 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
   The `cal.split` decision still sees every channel's step; only admission is tied.
 - **The frozen evaluator reads `final.label`** (the review's N-8). Before any P2 rows are
   pooled into the evaluator's metrics, they are filtered on `outcome` from `report.json`:
-  `abstain` and `pending` rows are taken out and reported separately. Otherwise an
-  abstaining or unfinished run would be scored as `none`, which ruling (c) forbids. The
+  `abstain` rows are taken out and reported separately; an unfinished (`pending`) run never
+  reaches the tables at all, because the drivers rerun it or stop (2026-10-19). Both write
+  `abstain`, so one that did reach the evaluator would be scored not correct, never a
+  correct `none`, which ruling (c) forbids. The
   evaluator itself is frozen and unchanged; the filter belongs to the P2 tables.
 
 ## 15. The live wiring (deliverable 3): implementation notes

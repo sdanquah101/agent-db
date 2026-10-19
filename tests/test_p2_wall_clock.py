@@ -209,6 +209,7 @@ def test_a_budget_refusal_at_any_step_abstains(monkeypatch, cfg, tool, nth, step
     report = json.loads(fake.run.outputs[wf.REPORT_FILE])
     assert run.completed and doc["final"]["completed"]
     assert report["outcome"] == "abstain" and doc["classification"]["rule"] == "abstain:budget"
+    assert doc["final"]["label"] == doc["classification"]["label"] == "abstain"  # N-2b
     assert run.verdict["reason"] == "budget" and "budget" in doc["plan"]["fallbacks"]
     assert any(a.startswith("budget refused after") for a in doc["annotations"])
     refused = [a for a in doc["actions"] if a["outcome"] == "budget_exceeded"]
