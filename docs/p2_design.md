@@ -905,7 +905,8 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
     attempt, so at most one rerun follows. The drivers read every part's journal and
     records, so a resume under another part count still counts it. The live `run` records
     it before the approval and key checks. A torn last line is an in-flight attempt; one
-    that names no cell stops every driver.
+    that names no cell stops every driver. A line written after a torn one starts on a
+    new line, never glued onto the fragment.
   - **Where a live stop becomes a run** (the lead's ruling of 2026-10-19, "Yes, keep
     both"). A stop before the journal line (inside `generate_run`: no workflow started,
     no model request) is not a run, and a resume starts it afresh. A stop after the

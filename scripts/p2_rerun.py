@@ -35,7 +35,8 @@ The journal (the review of ``0b9f210``):
 - each attempt that returns adds a line with its completion and error, so an earlier
   attempt's real error survives when a later one is the attempt stopped (N-1);
 - a start line is flushed and synced before the workflow starts, and a torn last line is
-  read as an in-flight attempt, never skipped (N-2).
+  read as an in-flight attempt, never skipped (N-2); a line written after a torn one
+  starts on a new line, never glued onto the fragment (the review of ``024da41``, SF-1).
 """
 
 from __future__ import annotations
@@ -154,9 +155,16 @@ class InFlight:
         self.paths = sorted({self.path, *map(Path, others)})
 
     def _write(self, line: dict[str, Any]) -> None:
-        # the cell and seed first, so a torn line still names them (N-2)
+        # the cell and seed first, so a torn line still names them (N-2); and never glued
+        # onto a torn last line, which would lose this line or charge it to another cell
+        # (the review of 024da41, SF-1)
+        torn = False
+        if self.path.is_file() and self.path.stat().st_size > 0:
+            with self.path.open("rb") as fh:
+                fh.seek(-1, os.SEEK_END)
+                torn = fh.read(1) != b"\n"
         with self.path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(line, default=str) + "\n")
+            fh.write(("\n" if torn else "") + json.dumps(line, default=str) + "\n")
             fh.flush()
             os.fsync(fh.fileno())
 

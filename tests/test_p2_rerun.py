@@ -875,3 +875,117 @@ def test_a_live_stop_before_the_journal_line_is_no_run_and_one_after_it_is(tmp_p
     driver.install(monkeypatch)
     p2_pilot._runs(tmp_path / "two_mutant", live=True)
     assert "run_S0-01_0" in driver.launched
+
+
+# ------------------------------------------------------------------ the review of 024da41
+
+
+def _tear(journal: Path) -> None:
+    """Cut the journal's last line short, after its cell and seed (a write torn by a crash)."""
+    lines = journal.read_text().splitlines()
+    last = lines[-1]
+    journal.write_text("\n".join([*lines[:-1], last[: last.index('"attempt"') + 5]]))
+
+
+def _unguarded_write(self: Any, line: dict[str, Any]) -> None:
+    """The mutation: the journal writer as at 024da41, appending onto a torn line."""
+    with self.path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(line, default=str) + "\n")
+
+
+def test_a_line_after_a_torn_one_is_never_glued_onto_it(tmp_path, monkeypatch):
+    """SF-1: torn line, resume (attempt 2 stopped), resume: no launch, ``unfinished_twice``."""
+    from scripts import p2_pilot, p2_power
+
+    def torn_then_twice(store: Path, go: Any, first: str, journal: str) -> list[str]:
+        for _ in range(2):  # attempt 1 stopped, torn; attempt 2 stopped
+            StopsDriver({first: 1}).install(monkeypatch)
+            with pytest.raises(KeyboardInterrupt):
+                go(store)
+            if _ == 0:
+                _tear(store / journal)
+        driver = StopsDriver({})
+        driver.install(monkeypatch)
+        go(store)
+        return driver.launched
+
+    pilot = lambda store: p2_pilot._runs(store, live=False)  # noqa: E731
+    launched = torn_then_twice(tmp_path / "pilot", pilot, "run_S0-01_0",
+                               "in_flight_offline.0.jsonl")  # fmt: skip
+    assert "run_S0-01_0" not in launched
+    (failure,) = _lines(tmp_path / "pilot" / "unfinished_offline.0.jsonl")
+    assert failure["status"] == "unfinished_twice" and failure["cell"] == "S0-01 B/B"
+    rows = _lines(tmp_path / "pilot" / "results_offline.0.jsonl")
+    assert ("S0-01 B/B", 0) not in [(r["cell"], r["replicate"]) for r in rows]  # not scored
+    launched = torn_then_twice(tmp_path / "power", p2_power.run, "run_S2-01_0", "in_flight.0.jsonl")
+    assert "run_S2-01_0" not in launched
+    failure = json.loads((tmp_path / "power" / "unfinished" / "S2-01-B-B.json").read_text())
+    assert failure["status"] == "unfinished_twice"
+    assert not (tmp_path / "power" / "results" / "S2-01-B-B.json").exists()
+
+    # across a part change: S4-01 torn under 0/2; S3-01's start, under 0/1, must not glue
+    store = tmp_path / "parts"
+
+    def parts(mutant: bool = False) -> FakeDriver:
+        StopsDriver({"run_S4-01_0": 1}).install(monkeypatch)
+        with pytest.raises(KeyboardInterrupt):
+            p2_power.run(store, "0/2")  # S2-01 finishes, S4-01 is stopped
+        _tear(store / "in_flight.0.jsonl")
+        if mutant:
+            monkeypatch.setattr(p2_rerun.InFlight, "_write", _unguarded_write)
+        StopsDriver({"run_S3-01_0": 1}).install(monkeypatch)
+        with pytest.raises(KeyboardInterrupt):
+            p2_power.run(store, "0/1")  # S3-01, attempt 1, is stopped
+        driver = StopsDriver({})
+        driver.install(monkeypatch)
+        p2_power.run(store, "0/1")
+        return driver
+
+    driver = parts()
+    assert driver.launched.count("run_S3-01_0") == 1  # its rerun only
+    assert driver.launched.count("run_S4-01_0") == 1
+    for name in ("S3-01-C-B.json", "S4-01-B-B.json"):
+        assert json.loads((store / "results" / name).read_text())["attempt"] == 2, name
+
+    # the mutation: the unguarded writer glues S3-01's line onto S4-01's fragment, so S3-01
+    # is relaunched as attempt 1, its stopped attempt lost
+    store = tmp_path / "parts_mutant"
+    parts(mutant=True)
+    assert json.loads((store / "results" / "S3-01-C-B.json").read_text())["attempt"] == 1
+    store = tmp_path / "pilot_mutant"
+    launched = torn_then_twice(store, pilot, "run_S0-01_0", "in_flight_offline.0.jsonl")
+    assert "run_S0-01_0" in launched  # a third attempt: what the guard prevents
+
+
+def test_the_pilot_reads_every_parts_results(tmp_path, monkeypatch):
+    """Nit: runs finished under 0/2 and 1/2 are not run again under 0/1."""
+    from scripts import p2_pilot
+
+    for part in ("0/2", "1/2"):
+        FakeDriver({}).install(monkeypatch)
+        p2_pilot._runs(tmp_path, live=False, part=part)
+    driver = FakeDriver({})
+    driver.install(monkeypatch)
+    p2_pilot._runs(tmp_path, live=False, part="0/1")
+    assert driver.launched == []
+    # the mutation: reading only the part's own files reruns part 1/2's three runs
+    monkeypatch.setattr(p2_pilot, "settled", lambda store, live: p2_pilot._cells_in(
+        [store / "results_offline.0.jsonl", store / "unfinished_offline.0.jsonl"]))  # fmt: skip
+    p2_pilot._runs(tmp_path, live=False, part="0/1")
+    assert len(driver.launched) == 3
+
+
+def test_the_power_run_stops_on_a_torn_line_that_names_no_cell(tmp_path, monkeypatch):
+    """Nit: an unknown cell's in-flight attempt stops the power run; no cell is run."""
+    from scripts import p2_power
+
+    tmp_path.joinpath("in_flight.1.jsonl").write_text('{"ce')
+    driver = FakeDriver({})
+    driver.install(monkeypatch)
+    p2_power.run(tmp_path)
+    assert driver.launched == []
+    # the mutation: a torn line read as some other, named cell lets the run go ahead
+    elsewhere = {"cell": "<elsewhere>", "replicate": 0, "attempt": 1, "run_id": None}
+    monkeypatch.setattr(p2_rerun.InFlight, "_torn", staticmethod(lambda raw: dict(elsewhere)))
+    p2_power.run(tmp_path)
+    assert len(driver.launched) == len(p2_power.CELLS)

@@ -7990,9 +7990,19 @@ gaps above are closed:
   error, so an earlier attempt's real error survives a later stop (N-1). A start line is
   flushed and synced before the workflow starts, and a torn last line is read as an
   in-flight attempt: of its cell if it names one; otherwise of an unknown cell, on which
-  the offline drivers stop and the live pilot records it and stops (N-2).
+  the offline drivers stop and the live pilot records it and stops (N-2). (As first
+  pushed, the next line was appended straight onto a torn one; see the next addendum.)
 - The live report gives the ledger's total and the unfinished runs' metered cost beside the
   finished rows' USD (N-4).
+
+**2026-10-19, addendum: the coordinator's review of `024da41` (no new ruling).** A torn
+journal line followed by a resume corrupted the journal: the next line was appended onto
+the fragment, and reading the glued line took the fragment's cell. The new attempt was then
+lost, or charged to another cell. An offline cell could get a third attempt and be scored,
+against ruling (c). The journal writer now starts a new line first whenever the file does
+not end in one. At `0b9f210` a torn line crashed the resume; the corruption came with
+`024da41`, which made a torn line readable. The live pilot was not affected, since it
+records and stops without writing again.
 
 **2026-10-19 — RULING (the lead): both live-stop boundaries are kept ("Yes, keep both",
 relayed by the coordinator at 09:43 UTC).**

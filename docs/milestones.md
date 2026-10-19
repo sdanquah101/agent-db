@@ -4055,4 +4055,9 @@ no live call.**
     and unfinished cost in the live report; blank lines in the power summary; this label;
   - L-1's two stop boundaries are kept: the lead's ruling "Yes, keep both" (09:43 UTC),
     recorded in `docs/decisions.md` and §14 and pinned by a test with a mutation each.
+- **The review of `024da41` (FIXES NEEDED, one item), fixed in one commit:** a line written
+  after a torn journal line starts on a new line, so a resume no longer loses an attempt or
+  charges it to another cell; pinned for the pilot, the power run and a part change, with a
+  mutation. The nits are done too: a test that the pilot reads every part's results, and
+  one that the power run stops on a torn line that names no cell.
 - **Next:** the coordinator checks the head. No live call, no merge from this session.
