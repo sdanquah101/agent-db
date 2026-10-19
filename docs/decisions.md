@@ -7957,3 +7957,18 @@ scored it a correct `none` on a clean cell: a crash recorded as no fault.
 **What moves.** Nothing frozen. `frozen_record_sha256` stays `17065508…46a3` and the
 pilot's configuration digest `9443306b…a29c`: no template, schema, tool or configuration
 changed. `eval/` and the frozen trees are untouched.
+
+**2026-10-19, addendum: the coordinator's review of `b837c64` (no new ruling).** Two parts
+of the rulings above are now met in full:
+- **"Reported" (c).** All three P2 reports read the unfinished records and list them, kept
+  out of every row and count.
+- **A stopped driver.** Each attempt is journalled before its workflow starts, so a driver
+  stopped mid-attempt can no longer lead a resume to relaunch the run as attempt 1. Live,
+  that would have been a rerun without approval. Offline, it would have given two more
+  attempts instead of one.
+
+A set-aside never overwrites an earlier one. An offline cell unfinished twice has its
+last attempt set aside, so nothing unfinished stays at `workflows/p2`.
+
+How an approved live rerun would happen is not built. It would need a fresh store and a
+new approval record naming the cell, relayed by the coordinator on the lead's word.

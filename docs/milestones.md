@@ -4037,3 +4037,10 @@ no live call.**
   fails again. They never rerun a live run automatically.
 - Nothing frozen moves.
 - **Next:** the coordinator checks the head, then merges on the lead's word.
+- **The review of `b837c64` (FIXES NEEDED), fixed in one commit:**
+  - the power and offline pilot reports list unfinished cells;
+  - a stopped driver's attempt is journalled and counted: live, it is recorded and the
+    pilot stops; offline, one rerun at most;
+  - set-asides never overwrite;
+  - §5 is corrected;
+  - nits N-1 to N-5 and N-7 are done.

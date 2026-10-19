@@ -82,7 +82,7 @@ def outcome_of(record: dict[str, Any]) -> str:
 def run(store: Path, part: str = "0/1") -> None:
     """Generate and run every cell of this part that has no result yet."""
     from scenarios.schema import load_scenario
-    from scripts.p2_rerun import run_counted, set_aside
+    from scripts.p2_rerun import InFlight, run_counted, set_aside
     from sim.plants import load_plant_config
     from sim.run.harness import generate_run
     from sim.run.matrix import at_plant_horizon
@@ -95,6 +95,15 @@ def run(store: Path, part: str = "0/1") -> None:
     # reported, never pooled or scored
     unfinished = store / "unfinished"
     unfinished.mkdir(parents=True, exist_ok=True)
+    # a stopped driver's attempt counts as an unfinished one (the review of b837c64, S-2)
+    journal = InFlight(store / f"in_flight.{i}.jsonl")
+    settled = {
+        (key(c), 0)
+        for c in CELLS
+        if (results / f"{c[0]}-{c[1]}-{c[2]}.json").is_file()
+        or (unfinished / f"{c[0]}-{c[1]}-{c[2]}.json").is_file()
+    }
+    orphans = journal.orphans(settled)
     for j, cell in enumerate(CELLS):
         if j % n != i:
             continue
@@ -106,7 +115,8 @@ def run(store: Path, part: str = "0/1") -> None:
         plant = load_plant_config(plant_id)
         scenario = at_plant_horizon(load_scenario(REPO / "scenarios" / f"{sid}.yaml"), plant)
         root = store / "runs"
-        run_ids: list[str] = []
+        prior = orphans.get((key(cell), 0), [])
+        run_ids: list[str] = [str(p["run_id"]) for p in prior]
 
         def attempt(
             k: int,
@@ -121,6 +131,7 @@ def run(store: Path, part: str = "0/1") -> None:
                 set_aside(root / run_ids[-1], k - 1)
             art = generate_run(scenario, tier, plant=plant, runs_root=root)
             run_ids.append(art.run_id)
+            journal.start(key(cell), 0, k, art.run_id)
             print(f"START {key(cell)} ({art.run_id}, attempt {k})", flush=True)
             started = time.perf_counter()
             result = run_workflow(art.run_id, "p2", runs_root=root, scenario=scenario)
@@ -135,6 +146,8 @@ def run(store: Path, part: str = "0/1") -> None:
                 "wall_s": round(time.perf_counter() - started, 1),
                 "completed": bool(result.completed),
                 "error": result.error,
+                "failure_reason": getattr(result, "failure_reason", "")
+                or ("" if result.completed else "run_failed"),
                 "evaluations_used": result.simulator_evals_used,
                 "evaluations_total": result.simulator_evals_total,
                 "label": report.get("label"),
@@ -148,8 +161,10 @@ def run(store: Path, part: str = "0/1") -> None:
                 "codes": state.get("annotations"),
             }
 
-        done_cell = run_counted(attempt, live=False)
+        done_cell = run_counted(attempt, live=False, prior=prior)
         if done_cell.record is None:
+            if run_ids:  # nothing unfinished stays at workflows/p2 (N-7)
+                set_aside(root / run_ids[-1], len(done_cell.attempts))
             failure = {"cell": key(cell), **done_cell.failure()}
             (unfinished / name).write_text(json.dumps(failure, indent=1, sort_keys=True) + "\n",
                                            encoding="utf-8")  # fmt: skip
@@ -276,11 +291,17 @@ def report(store: Path, before: Path | None = None) -> dict[str, Any]:
     With ``before`` (an earlier ``cells.json``), each cell's earlier outcome is shown
     beside the new one.
     """
+    from scripts.p2_rerun import read_unfinished
+
     records = [json.loads(p.read_text(encoding="utf-8"))
                for p in sorted((store / "results").glob("*.json"))]  # fmt: skip
     for r in records:
         r["steps"] = steps_of(store, r)
     out = summarise(records)
+    # unfinished cells are reported, never scored or counted (the review of b837c64, S-1)
+    out["unfinished"] = read_unfinished(list((store / "unfinished").glob("*.json")))
+    out["reruns"] = [{"cell": r["cell"], "run_id": r.get("run_id")}
+                     for r in records if int(r.get("attempt", 1)) > 1]  # fmt: skip
     if before is not None:
         earlier = json.loads(before.read_text(encoding="utf-8"))
         was = {c["cell"]: c.get("outcome", c["label"]) for c in earlier["cells"]}
@@ -298,6 +319,12 @@ def report(store: Path, before: Path | None = None) -> dict[str, Any]:
         f"Faulted cells hit: {out['hits_faulted']}; excluded: "
         f"{', '.join(f'{k} {v}' for k, v in out['excluded_faulted'].items())}; null rejected "
         f"on faulted cells: {out['null_rejected_faulted']}.",
+        *[
+            f"Unfinished (not scored, reported to the coordinator): {u['cell']}, "
+            f"{u['status']}: {u['attempts']}"
+            for u in out["unfinished"]
+        ],
+        *[f"Rerun once, completed: {x['cell']} ({x['run_id']})" for x in out["reruns"]],
         "",
         "| cell | truth | outcome | excluded | NB | NM | NS | partial | failed channels "
         "| admitted |",

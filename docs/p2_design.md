@@ -550,7 +550,8 @@ with the codes as input; codes, never text. No new reference fit is made.
 - After `abstain`, the abstentions the verifier named are written, and the final label
   is `abstain`, never `none` (the lead's ruling of 2026-10-15, N-2b). An abstaining run
   claims no class, so the evaluator cannot read it as a correct `none`; it carries no
-  evidence item. A run that did not complete still writes `none` and is `pending`.
+  evidence item. A run that did not complete writes `abstain` as a backstop and is
+  `pending`; it is not a result and is rerun (the lead's rulings of 2026-10-19).
 
 ## 6. Tool allow-lists, messages and templates
 
@@ -896,11 +897,30 @@ What `workflows/p2_multi_agent/workflow.py` does where the text above leaves a c
   drivers rerun it once with the same cell and seed; if the rerun also fails to finish they
   stop, score nothing for that cell and seed, and report it. Live, they never rerun
   automatically: they stop, mark the run unfinished and report it, and a rerun needs the
-  lead's approval relayed by the coordinator (`scripts/p2_rerun.py`). `report.json` carries
-  `outcome`: `pending` for a run that did not complete, `abstain` for one whose verdict
-  abstained, and the final label otherwise. The power report, the development tables
-  and the go/no-go of §11 count on `outcome`. `abstain` and `pending` are reported in
-  their own column and are never read as `none`, as a hit, or as a miss.
+  lead's approval relayed by the coordinator (`scripts/p2_rerun.py`).
+  - **A stopped driver.** Each attempt is journalled (`in_flight*.jsonl`) before its
+    workflow starts. At start-up, an attempt with no result and no unfinished record is
+    an unfinished one: live, it is recorded and the pilot stops; offline, it counts as
+    that attempt, so at most one rerun follows.
+  - **What is kept.** A failed attempt's outputs are set aside in
+    `workflows/p2.unfinished-N/` (never overwriting an earlier one). An offline cell
+    unfinished twice has its last attempt set aside too, so nothing unfinished stays at
+    `workflows/p2`. A live unfinished run stays at `workflows/p2`, where its
+    `llm_calls.jsonl` keeps the runner's "runs once" guard; an evaluator pass over that
+    store would score it, as not correct (the backstop).
+  - **The reports.** All three P2 reports (the power run, the pilot's offline and live
+    reports) list unfinished cells as "Unfinished (not scored, reported to the
+    coordinator)" and cells counted after one rerun as "Rerun once, completed". An
+    unfinished cell is in no row, count or excluded tally.
+  - **An approved live rerun** is not built. It would need a fresh store, because the
+    runner refuses a run whose live record exists and an approval record binds its store,
+    and a new approval record naming the cell, both relayed by the coordinator on the
+    lead's word.
+
+  `report.json` carries `outcome`: `pending` for a run that did not complete, `abstain` for
+  one whose verdict abstained, and the final label otherwise. The power report, the
+  development tables and the go/no-go of §11 count on `outcome`; an `abstain` row is
+  reported in its own column and never read as `none`, as a hit, or as a miss.
 - **A run that places no statistic abstains** (`abstain:no_statistics_placed`), as one
   without a reference does. An empty placement is no null table, not a null that stands
   (the review's F-H).

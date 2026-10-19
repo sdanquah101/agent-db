@@ -210,7 +210,7 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
     if store == REPO or REPO in store.parents:
         raise SystemExit("the store must be outside the repository")
     from scenarios.schema import load_scenario
-    from scripts.p2_rerun import run_counted, set_aside
+    from scripts.p2_rerun import InFlight, run_counted, set_aside
     from sim.plants import load_plant_config
     from sim.run.harness import generate_run
     from sim.run.matrix import at_plant_horizon
@@ -227,6 +227,24 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
         if path.is_file():
             done |= {(x["cell"], x["replicate"])
                      for x in map(json.loads, path.read_text().splitlines())}  # fmt: skip
+    # a stopped driver's attempt (journalled, no result, no record) is an unfinished one
+    # (the review of b837c64, S-2): live it is recorded and the pilot stops; offline it
+    # counts, so at most one rerun follows
+    journal = InFlight(store / ("in_flight.jsonl" if live else f"in_flight_offline.{i_part}.jsonl"))
+    orphans = journal.orphans(done)
+    if live and orphans:
+        with unfinished.open("a", encoding="utf-8") as fh:
+            for (cell, rep), prior in orphans.items():
+                failure = {"cell": cell, "replicate": rep, "status": "unfinished_live",
+                           "attempts": [{"run_id": p["run_id"], "completed": False,
+                                         "error": InFlight.STOPPED,
+                                         "failure_reason": "driver_stopped", "rule": None}
+                                        for p in prior]}  # fmt: skip
+                fh.write(json.dumps(failure, sort_keys=True) + "\n")
+                print(f"STOP: {cell} r{rep} was left unfinished by a stopped pilot; it is "
+                      "recorded unfinished and not rerun: a live rerun needs the lead's "
+                      "approval relayed by the coordinator", flush=True)  # fmt: skip
+        return
     if live and unfinished.is_file() and unfinished.read_text().strip():
         # a live rerun is a new live call: only the lead's approval, relayed, starts one
         print(f"STOP: {unfinished.name} records an unfinished live run; a rerun or any "
@@ -250,7 +268,8 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
             return
         plant = load_plant_config(plant_id)
         scenario = at_plant_horizon(load_scenario(REPO / "scenarios" / f"{sid}.yaml"), plant)
-        run_ids: list[str] = []
+        prior = orphans.get((cell, rep), [])
+        run_ids: list[str] = [str(p["run_id"]) for p in prior]
 
         def attempt(
             n: int,
@@ -267,6 +286,7 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
             art = generate_run(scenario, tier, plant=plant, replicate=rep,
                                runs_root=store / "runs")  # fmt: skip
             run_ids.append(art.run_id)
+            journal.start(cell, rep, n, art.run_id)
             result = run_workflow(
                 art.run_id,
                 "p2",
@@ -295,8 +315,10 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
                 "verdict": report.get("verdict"),
             }
 
-        done_cell = run_counted(attempt, live=live)
+        done_cell = run_counted(attempt, live=live, prior=prior)
         if done_cell.record is None:
+            if not live and run_ids:  # nothing unfinished stays at workflows/p2 (N-7)
+                set_aside(store / "runs" / run_ids[-1], len(done_cell.attempts))
             failure = {"cell": cell, "replicate": rep, **done_cell.failure()}
             with unfinished.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(failure, sort_keys=True, default=str) + "\n")
@@ -358,9 +380,9 @@ def report(store: Path, attempt: str = "attempt2") -> dict[str, Any]:
         }
         for x in lines
     ]
-    unfinished_path = store / "unfinished.jsonl"
-    unfinished = [json.loads(x) for x in unfinished_path.read_text(encoding="utf-8").splitlines()
-                  if x.strip()] if unfinished_path.is_file() else []  # fmt: skip
+    from scripts.p2_rerun import read_unfinished
+
+    unfinished = read_unfinished(list(store.glob("unfinished.jsonl")))
     out_dir = REPORT_DIR / attempt
     out_dir.mkdir(parents=True, exist_ok=True)
     for x in lines:
@@ -393,8 +415,7 @@ def report(store: Path, attempt: str = "attempt2") -> dict[str, Any]:
         f"| {r['usd']} | {r['requests']} | {r['wall_min']} |"
         for r in rows
     ]
-    md += [f"Unfinished (not scored, reported to the coordinator): {u['cell']} r{u['replicate']}, "
-           f"{u['status']}: {u['attempts']}" for u in unfinished]  # fmt: skip
+    md += unfinished_lines(unfinished) + rerun_lines(lines)
     md += ["", f"Go/no-go: stop = {out['go_no_go']['stop']}; USD {out['usd_total']}.", "",
            "Wall min is the runner's `wall_s`: a cost (P2 has no wall-clock limit, the "
            "ruling of 2026-10-13), not compliance with the cell's allowance."]  # fmt: skip
@@ -441,11 +462,21 @@ def report_offline(store: Path) -> dict[str, Any]:
             "wall_min": round(float((x["summary"] or {}).get("wall_s") or 0.0) / 60.0, 1),
             "commit": (x["summary"] or {}).get("git_commit"),
         })  # fmt: skip
+    from scripts.p2_rerun import read_unfinished
+
+    # unfinished cells are reported, never scored (the review of b837c64, S-1)
+    unfinished = read_unfinished(list(store.glob("unfinished_offline.*.jsonl")))
     gate = [r["outcome"] for r in rows if r["cell"] == "S0-01 B/B"]
     out = {
         "what": "the six pilot runs, offline (no model), three-role minimum, at one commit",
         "rows": rows,
         "go_no_go_offline": {"S0-01 B/B": gate},
+        "unfinished": unfinished,
+        "reruns": [
+            {"cell": x["cell"], "replicate": x["replicate"], "run_id": x.get("run_id")}
+            for x in lines
+            if int(x.get("attempt", 1)) > 1
+        ],
     }
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     (REPORT_DIR / "offline.json").write_text(json.dumps(out, indent=1) + "\n", encoding="utf-8")
@@ -464,9 +495,32 @@ def report_offline(store: Path) -> dict[str, Any]:
         f"{r['rule']} | {r['failed_channels']} | {r['power_run_outcome'] or '—'} |"
         for r in rows
     ]
+    md += unfinished_lines(unfinished) + rerun_lines(lines)
     md += reading(rows)
     (REPORT_DIR / "offline.md").write_text("\n".join(md) + "\n", encoding="utf-8")
     return out
+
+
+def unfinished_lines(unfinished: list[dict[str, Any]]) -> list[str]:
+    """The report's lines for unfinished cells: listed, never scored (a blank line first)."""
+    if not unfinished:
+        return []
+    return [""] + [
+        f"Unfinished (not scored, reported to the coordinator): {u['cell']} "
+        f"r{u.get('replicate', 0)}, {u['status']}: {u['attempts']}"
+        for u in unfinished
+    ]
+
+
+def rerun_lines(lines: list[dict[str, Any]]) -> list[str]:
+    """The report's lines for cells counted after one rerun (the review's N-5)."""
+    reruns = [x for x in lines if int(x.get("attempt", 1)) > 1]
+    if not reruns:
+        return []
+    return [""] + [
+        f"Rerun once, completed: {x['cell']} r{x.get('replicate', 0)} ({x.get('run_id')})"
+        for x in reruns
+    ]
 
 
 def reading(rows: list[dict[str, Any]]) -> list[str]:

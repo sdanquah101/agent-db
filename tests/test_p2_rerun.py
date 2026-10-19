@@ -337,3 +337,220 @@ def test_the_power_run_reruns_once_and_never_scores_an_unfinished_cell(tmp_path,
     driver.install(monkeypatch)
     p2_power.run(tmp_path / "clean")
     assert len(driver.launched) == len(p2_power.CELLS)
+
+
+# ------------------------------------------------------------------ the review of b837c64
+
+
+class StopsDriver(FakeDriver):
+    """A driver whose ``run_workflow`` is interrupted (a stopped driver) on given run ids."""
+
+    def __init__(self, stop: dict[str, int], fail: dict[str, int] | None = None) -> None:
+        """``stop`` maps a run id to how many of its launches raise ``KeyboardInterrupt``."""
+        super().__init__(fail or {})
+        self.stop = dict(stop)
+
+    def run_workflow(self, run_id: str, *a: Any, runs_root: Path, **kw: Any) -> Any:
+        if self.stop.get(run_id, 0) > 0:
+            self.stop[run_id] -= 1
+            self.launched.append(run_id)
+            raise KeyboardInterrupt
+        return super().run_workflow(run_id, *a, runs_root=runs_root, **kw)
+
+
+def test_finished_needs_both_the_runners_completion_and_a_non_pending_report():
+    """N-1: each half of the check pinned on its own."""
+    done = {"summary": {"completed": True}, "outcome": "none", "rule": "null_stands"}
+    assert p2_rerun.finished(done)  # the negative control
+    assert not p2_rerun.finished({**done, "summary": {"completed": False}})  # the runner half
+    assert not p2_rerun.finished({**done, "outcome": "pending"})  # the report half
+    assert not p2_rerun.finished({**done, "rule": "pending"})
+
+
+def test_a_set_aside_never_overwrites_an_earlier_one(tmp_path):
+    run = tmp_path / "run_x"
+    (run / "workflows" / "p2.unfinished-1").mkdir(parents=True)
+    (run / "workflows" / "p2.unfinished-1" / "keep").write_text("first")
+    (run / "workflows" / "p2").mkdir()
+    (run / "workflows" / "p2" / "state.json").write_text("{}")
+    dest = p2_rerun.set_aside(run, 1)
+    assert dest == run / "workflows" / "p2.unfinished-2"
+    assert (run / "workflows" / "p2.unfinished-1" / "keep").read_text() == "first"
+    assert (dest / "state.json").is_file() and not (run / "workflows" / "p2").exists()
+
+
+def test_a_stopped_live_pilot_is_recorded_unfinished_and_never_relaunched(tmp_path, monkeypatch):
+    """S-2 (d): the stop leaves an in-flight line; the resume records it and stops."""
+    from scripts import p2_pilot
+
+    first = "run_S0-01_0"
+    driver = StopsDriver({first: 1})
+    driver.install(monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        p2_pilot._runs(tmp_path, live=True)
+    assert driver.launched == [first] and not _lines(tmp_path / "unfinished.jsonl")
+    (journal,) = _lines(tmp_path / "in_flight.jsonl")
+    assert journal["run_id"] == first and journal["attempt"] == 1
+    # the resume: no launch at all, the run recorded unfinished, reported
+    driver = StopsDriver({})
+    driver.install(monkeypatch)
+    p2_pilot._runs(tmp_path, live=True)
+    assert driver.launched == []
+    (failure,) = _lines(tmp_path / "unfinished.jsonl")
+    assert failure["status"] == "unfinished_live"
+    assert failure["attempts"][0]["failure_reason"] == "driver_stopped"
+    # and every later resume refuses too
+    p2_pilot._runs(tmp_path, live=True)
+    assert driver.launched == []
+    # the mutation: a driver that ignores the journal relaunches the live run unapproved
+    store = tmp_path / "mutant"
+    driver = StopsDriver({first: 1})
+    driver.install(monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        p2_pilot._runs(store, live=True)
+    monkeypatch.setattr(p2_rerun.InFlight, "orphans", lambda self, settled: {})
+    driver = StopsDriver({})
+    driver.install(monkeypatch)
+    p2_pilot._runs(store, live=True)
+    assert first in driver.launched  # what the journal prevents
+
+
+def test_a_stopped_offline_attempt_counts_so_only_one_rerun_follows(tmp_path, monkeypatch):
+    """S-2 (c): the stop is attempt 1; the resume runs attempt 2 only, then counts it."""
+    from scripts import p2_pilot
+
+    first = "run_S0-01_0"
+    driver = StopsDriver({first: 1})
+    driver.install(monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        p2_pilot._runs(tmp_path / "once", live=False)
+    driver = StopsDriver({})
+    driver.install(monkeypatch)
+    p2_pilot._runs(tmp_path / "once", live=False)
+    assert driver.launched.count(first) == 1  # the rerun only, not two more attempts
+    rows = _lines(tmp_path / "once" / "results_offline.0.jsonl")
+    assert rows[0]["run_id"] == first and rows[0]["attempt"] == 2 and len(rows) == 6
+    # stopped, then the rerun unfinished too: stop and report, no third attempt
+    driver = StopsDriver({first: 1})
+    driver.install(monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        p2_pilot._runs(tmp_path / "twice", live=False)
+    driver = StopsDriver({}, fail={first: 1})
+    driver.install(monkeypatch)
+    p2_pilot._runs(tmp_path / "twice", live=False)
+    assert driver.launched == [first]
+    (failure,) = _lines(tmp_path / "twice" / "unfinished_offline.0.jsonl")
+    assert failure["status"] == "unfinished_twice"
+    assert failure["attempts"][0]["failure_reason"] == "driver_stopped"
+    assert not (tmp_path / "twice" / "runs" / first / "workflows" / "p2").exists()  # N-7
+    # N-2: a resumed pilot skips the twice-failed cell; the other five run once each
+    driver = StopsDriver({})
+    driver.install(monkeypatch)
+    p2_pilot._runs(tmp_path / "twice", live=False)
+    assert first not in driver.launched and len(driver.launched) == 5
+    # the negative control: a completed cell is not rerun on resume
+    driver = StopsDriver({})
+    driver.install(monkeypatch)
+    p2_pilot._runs(tmp_path / "twice", live=False)
+    assert driver.launched == []
+    # the mutation: ignoring the journal gives the stopped cell two more attempts
+    store = tmp_path / "mutant"
+    driver = StopsDriver({first: 1})
+    driver.install(monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        p2_pilot._runs(store, live=False)
+    monkeypatch.setattr(p2_rerun.InFlight, "orphans", lambda self, settled: {})
+    driver = StopsDriver({}, fail={first: 1})
+    driver.install(monkeypatch)
+    p2_pilot._runs(store, live=False)
+    assert driver.launched.count(first) == 2  # what the journal prevents
+
+
+def test_a_stopped_power_run_counts_the_stopped_attempt(tmp_path, monkeypatch):
+    from scripts import p2_power
+
+    first = "run_S2-01_0"
+    driver = StopsDriver({first: 1})
+    driver.install(monkeypatch)
+    with pytest.raises(KeyboardInterrupt):
+        p2_power.run(tmp_path)
+    driver = StopsDriver({}, fail={first: 1})
+    driver.install(monkeypatch)
+    p2_power.run(tmp_path)
+    assert driver.launched == [first]  # one rerun only, then stop
+    failure = json.loads((tmp_path / "unfinished" / "S2-01-B-B.json").read_text())
+    assert failure["status"] == "unfinished_twice"
+    assert failure["attempts"][0]["failure_reason"] == "driver_stopped"
+    assert failure["attempts"][1]["failure_reason"] == "run_failed"  # N-4
+
+
+def test_the_power_report_lists_unfinished_cells_and_reruns_and_scores_neither(
+    tmp_path, monkeypatch
+):
+    """S-1 for the power run, and N-5: reported, kept out of the cells and the counts."""
+    from scripts import p2_power
+
+    store = tmp_path / "store"
+    driver = FakeDriver({"run_S2-01_0": 2, "run_S3-01_0": 1})
+    driver.install(monkeypatch)
+    for _ in range(3):  # S2-01 stops the driver; each resume gets further
+        p2_power.run(store)
+    assert (store / "unfinished" / "S2-01-B-B.json").is_file()
+    monkeypatch.setattr(p2_power, "REPORT_DIR", tmp_path / "reports")
+    monkeypatch.setattr(p2_power, "steps_of", lambda store, record: None)
+    monkeypatch.setattr(p2_power, "summarise", lambda records: {
+        "cells": [{"cell": r["cell"], "truth": r["truth"], "outcome": r["outcome"],
+                   "excluded": False, "null": {}, "failed_channels": [], "admitted": []}
+                  for r in records], "hits_faulted": f"{len(records)}",
+        "excluded_faulted": {}, "null_rejected_faulted": 0})  # fmt: skip
+    out = p2_power.report(store)
+    assert [u["cell"] for u in out["unfinished"]] == ["S2-01 B/B"]
+    assert "S2-01 B/B" not in [c["cell"] for c in out["cells"]]
+    assert [x["cell"] for x in out["reruns"]] == ["S3-01 C/B"]
+    text = (tmp_path / "reports" / "summary.md").read_text()
+    assert "Unfinished (not scored, reported to the coordinator): S2-01 B/B" in text
+    assert "Rerun once, completed: S3-01 C/B" in text
+    # the mutation: a report that does not read the unfinished records drops the cell
+    monkeypatch.setattr(p2_rerun, "read_unfinished", lambda paths: [])
+    out = p2_power.report(store)
+    assert (
+        out["unfinished"] == []
+        and "Unfinished" not in (tmp_path / "reports" / "summary.md").read_text()
+    )
+
+
+def test_the_offline_pilot_report_lists_unfinished_cells_and_reruns(tmp_path, monkeypatch):
+    """S-1 for the pilot's offline report, and N-5."""
+    from scripts import p2_pilot
+
+    store = tmp_path / "store"
+    driver = FakeDriver({"run_S0-01_0": 2, "run_S2-01_1": 1})
+    driver.install(monkeypatch)
+    for _ in range(2):
+        p2_pilot._runs(store, live=False)
+    monkeypatch.setattr(p2_pilot, "REPORT_DIR", tmp_path / "reports")
+    out = p2_pilot.report_offline(store)
+    assert [(u["cell"], u["replicate"]) for u in out["unfinished"]] == [("S0-01 B/B", 0)]
+    assert ("S0-01 B/B", 0) not in [(r["cell"], r["replicate"]) for r in out["rows"]]
+    assert [(x["cell"], x["replicate"]) for x in out["reruns"]] == [("S2-01 B/B", 1)]
+    text = (tmp_path / "reports" / "offline.md").read_text()
+    assert "Unfinished (not scored, reported to the coordinator): S0-01 B/B r0" in text
+    assert "Rerun once, completed: S2-01 B/B r1" in text
+    # the mutation: without the read, the cell vanishes from the report
+    monkeypatch.setattr(p2_rerun, "read_unfinished", lambda paths: [])
+    assert p2_pilot.report_offline(store)["unfinished"] == []
+
+
+def test_the_live_reports_unfinished_lines_are_not_table_rows(tmp_path, monkeypatch):
+    """N-3: a blank line between the table and the unfinished lines."""
+    from scripts import p2_pilot
+
+    driver = FakeDriver({"run_S0-01_0": 1})
+    driver.install(monkeypatch)
+    p2_pilot._runs(tmp_path, live=True)
+    (tmp_path / "results.jsonl").write_text("")
+    monkeypatch.setattr(p2_pilot, "REPORT_DIR", tmp_path / "reports")
+    p2_pilot.report(tmp_path, "a")
+    lines = (tmp_path / "reports" / "a" / "summary.md").read_text().splitlines()
+    i = next(k for k, x in enumerate(lines) if x.startswith("Unfinished"))
+    assert lines[i - 1] == "" and lines[i - 2].startswith("|")
