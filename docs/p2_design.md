@@ -80,7 +80,9 @@ No decision point.
 3. **Brief decision 4, in code.** First-HRT excursions that QC flags as spikes are not
    quarantined. They go to the early/late test (§2.4, step 4). The first HRT is the
    declared liquid volume over the mean declared daily feed volume of the calibration
-   window, computed by code.
+   window before the hold-out start (the start day is the hold-out's, as `dq.trust`'s
+   sample count counts it; B1 of 2026-10-19), computed by code. `dq.trust`'s template
+   states this rule (D-2, 2026-10-19).
 4. **The S1 table**, mandatory before any `sensor` finding. It shows the candidate
    channel's after-fit `mean_z` and `rms_z` beside the same statistics of its physically
    coupled channels, read from `p2.yaml` `coupled_channels`:
@@ -98,7 +100,7 @@ No decision point.
 
 | id | Inputs | Output schema | Fallback |
 |---|---|---|---|
-| `dq.trust` | QC's findings per sensor (codes, flagged windows) **on the calibration window only**, the first-HRT window, the calibration window's sample count (the ruling of 2026-10-14, b) | `{sensor, quarantine: [[t0, t1]], reason: enum{flatline, spike_run, outage}}` | P0 §3.1 |
+| `dq.trust` | QC's findings per sensor (codes, flagged windows) **on the calibration window only**, the first-HRT window, the calibration window's sample count (the ruling of 2026-10-14, b); **not asked when nothing is shown** (§16) | `{sensor, quarantine: [[t0, t1]], reason: enum{flatline, spike_run, outage}}` | P0 §3.1 |
 | `dq.assay` | the S1 table, the assay price list, the units left | `{assay: enum(price list), day, target_sensor}`, passed to the design role | no assay |
 | `dq.coupled` | the S1 table, any assay of the candidate and its coupled channels | `{sensor, code: enum{coupled_inside, coupled_outside, assay_acquits, assay_implicates, insufficient}}` | `insufficient`, so no sensor finding |
 
@@ -237,8 +239,8 @@ and the rest of it stands, so the fallback, too, never quarantines a first-HRT s
 | id | Inputs | Output schema | Fallback |
 |---|---|---|---|
 | `cal.accept` | the fit's χ², its convergence, the reference χ², bound hits | `{accept: bool, code: enum{converged, not_converged, worse_than_reference, bound_hit}}` | accept iff χ² ≤ the reference χ² |
-| `cal.bound` | the parameter, its bounds, its estimate and Fisher sd | `{code: enum{identifiability_limit, data_limit, structure_hint}}`; the enum has no kinetic-update value | `identifiability_limit` |
-| `cal.split` | the per-channel step statistics and split days, from code | `{common_step_day: number or null, channels: [sensor]}`, accepted when it is a valid common step by P0's R4 arithmetic: at least R4's channel count, each named channel's own step at or above R4's threshold, their step days within R4's 30-day tolerance of one of their own step days (R4's form) and of the proposed day (the ruling of 2026-10-14, c; before it only R4's earliest common day was accepted) | P0's R4 arithmetic, the earliest common day |
+| `cal.bound` (**not asked in deliverable 3**: its answer is unused; §16) | the parameter, its bounds, its estimate and Fisher sd | `{code: enum{identifiability_limit, data_limit, structure_hint}}`; the enum has no kinetic-update value | `identifiability_limit` |
+| `cal.split` (**not asked in deliverable 3**: its answer is unused; §16) | the per-channel step statistics and split days, from code | `{common_step_day: number or null, channels: [sensor]}`, accepted when it is a valid common step by P0's R4 arithmetic: at least R4's channel count, each named channel's own step at or above R4's threshold, their step days within R4's 30-day tolerance of one of their own step days (R4's form) and of the proposed day (the ruling of 2026-10-14, c; before it only R4's earliest common day was accepted) | P0's R4 arithmetic, the earliest common day |
 
 **Tools:** `fit_lsq`, `fit_de`, `fit_cmaes`, `bayes_mcmc`, `simulate`, `residual_diag`,
 `declared_background`.
@@ -294,7 +296,7 @@ claim (§10).
 
 | id | Inputs | Output schema | Fallback |
 |---|---|---|---|
-| `verify.differential` | the null table, the admitted labels with their signature tables, and `allowed_labels` (admitted ∪ {none}); the hold-out flag **only when `structural` is admitted** (§7; the lead's ruling of 2026-10-15, D-1), and `holdout_passed` is a code for the structural candidate only | `{label: enum(allowed_labels), rejected: [{label, code: enum{null_not_failed, signature_absent, coupled_outside, holdout_passed, superseded}}]}`. The enum is **per call**: the request's tool offers exactly `allowed_labels`, and the template names the values, the literal `none` included (the ruling of 2026-10-14, a; attempt 1's model answered `null`). The frozen tool is the one without the enum, and the gateway accepts the enum as the only per-call difference | the first admitted label in P0's order (sensor, influent, state, parameter, structural); `none` if no label is admitted; the set-aside codes mapped onto the enum (code's finer codes stay in the verdict) |
+| `verify.differential` | the null table, the admitted labels with their signature tables, and `allowed_labels` (admitted ∪ {none}); the hold-out flag **only when `structural` is admitted** (§7; the lead's ruling of 2026-10-15, D-1), and `holdout_passed` is a code for the structural candidate only | `{label: enum(allowed_labels), rejected: [{label: one of the five classes (never `none`), code: enum{null_not_failed, signature_absent, coupled_outside, holdout_passed, superseded}}]}`, `holdout_passed` with `structural` only (D-3, 2026-10-19; §16). The enum is **per call**: the request's tool offers exactly `allowed_labels`, and the template names the values, the literal `none` included (the ruling of 2026-10-14, a; attempt 1's model answered `null`). The frozen tool is the one without the enum, and the gateway accepts the enum as the only per-call difference | the first admitted label in P0's order (sensor, influent, state, parameter, structural); `none` if no label is admitted; the set-aside codes mapped onto the enum (code's finer codes stay in the verdict) |
 
 The differential can only choose **among labels code already admitted**, or `none`. It
 cannot admit one.
@@ -1072,3 +1074,50 @@ deliverable 3 and the lead approves the pilot.
   - So the pilot can show at most two gains and one false alarm. S0-01 B/B r0's null
     stands, so the go/no-go cannot stop on these records (`reports/p2_pilot/offline.md`).
   - S3-01, S5-01 and S6-02 are decided by coded rules and the frozen null rule.
+
+## 16. The tidy-up (2026-10-19): the lead's word "Implement your recommendations"
+
+No live call. One freeze move for all of it (`dq.trust`'s template; `verify.differential`'s
+schema and tool).
+
+- **`dq.trust` states the first-HRT spike rule (D-2).** The template now says that a spike
+  inside the first HRT (on or before `first_hrt_d`) is not quarantinable and that the code
+  refuses a window that includes one. The model is told the constraint it is refused
+  under; the code's refusal is unchanged.
+- **`verify.differential`'s set-aside labels are the vocabulary (D-3).** `rejected[].label`
+  is one of the five classes, never `none` and never a free string, and `holdout_passed`
+  is allowed with `structural` only. Attempt 2's model set aside `s1` (no label) and
+  `sensor` as `holdout_passed`; both are refused now, and a refused answer is a failed
+  attempt like any other. The constraint is an anchored pattern, not an enum: rule 1's
+  scanner refuses the bare string of a forbidden module's name in workflow code, and the
+  initial-state label is spelled as one. The tool's schema shows the pattern.
+- **No request whose answer cannot change the outcome (A3).**
+  - `cal.split` and `cal.bound`: their answers are discarded in this deliverable
+    (`step_profile`, `intervals_from_fit`), yet were about half the pilot's cost. They
+    take their fallback with no request, recorded as status `not_asked`, reason "not
+    asked: answer unused in deliverable 3". The points stay defined; one switch
+    (`NOT_ASKED_UNUSED`) asks them again in deliverable 4.
+  - `dq.trust` with nothing shown (no flagged window, no code before the hold-out): the
+    fallback, no request, reason "not asked: nothing shown". A request's existence had
+    told the model that QC flagged the hold-out.
+  - Not asking is the offline decider's outcome exactly: the offline decider takes every
+    fallback too. The six pilot cells re-run offline at this head give the same final
+    labels (`reports/p2_pilot/tidy/`).
+- **The first-HRT boundary (B1).** The first HRT's mean feed and `dq.trust`'s sample count
+  now read the same window: the calibration window before the hold-out start. The start
+  day belongs to the hold-out (the ruling of 2026-10-14, b).
+- **JSON (B3).** `_jsonable` converts containers and arrays of any shape; a non-finite float
+  is `null` (JSON has no NaN; `null` is what the records already write through `_f`);
+  anything with no JSON form raises `TypeError` instead of being written as its `str()`.
+  Requests, messages and the report's signatures are written with `allow_nan` off.
+- **The rerun leftovers (B4).** A torn return line is not an extra attempt: a cell's
+  attempts are sequential, so a torn line after a start that has not returned is that
+  attempt's return line, and the cell keeps its one rerun. A torn line after a returned
+  attempt is still a new attempt in flight, and live still records any journalled
+  attempt and stops. A refused live start with nothing stopped writes no empty
+  `unfinished.jsonl`. The results and unfinished records are flushed and synced as they
+  are written, like the journal (appends never glued onto a torn line; whole files
+  written through a synced temporary file).
+- **No store lock** (the lead's word): a second live `run` while one runs would still mark
+  the running run unfinished, which is the safe direction.
+
