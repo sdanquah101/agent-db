@@ -1,8 +1,11 @@
-ruling_date: '2026-10-14'
-word: The lead approved the P2 pilot as a cost-and-wiring check (option 1) on 2026-10-11,
-  ruled on 2026-10-13 that P2 runs have no wall-clock limit, and on 2026-10-14 approved the
-  three decision-layer fixes (a)-(c) and the JSON-input fix; relayed by the coordinator session_01Cu6G2kQjP2QSzvtkyP8cPr
-  at 12:58 UTC.
+ruling_date: '2026-10-20'
+word: 'The lead approved the P2 pilot as a cost-and-wiring check (option 1) on 2026-10-11,
+  ruled on 2026-10-13 that P2 runs have no wall-clock limit, on 2026-10-15 and 2026-10-19
+  approved the decision-layer and rerun rulings, on 2026-10-19 said "Implement your
+  recommendations" (the tidy-up, merged as PR #35), and on 2026-10-20 said "Yes to
+  both" to this third pilot on a fresh store with the same six runs and caps and to
+  keeping the stricter D-3 rule; relayed by the coordinator session_01Cu6G2kQjP2QSzvtkyP8cPr
+  at 21:05 UTC.'
 runs:
 - scenario: S0-01
   plant: B
@@ -33,7 +36,7 @@ caps:
   max_total_tokens: 6000000
   max_usd: 0.25
   input_chars_per_token: 2.0
-frozen_sha256: fbe88dd0abb9b52fc8449727eb0a63eac6aa0458e89b1b471122f319247b8078
-config_sha256: 72369f251e3600a9651aa5827d15386f5f5a50decdda52111302ee699cb012fc
-runs_root: /home/user/p2_pilot_store_2/runs
-digest: adf47dee7fc6bbe69e133e4ffd56d5f46f63c724dad5958cf0a0dbac27a9ab04
+frozen_sha256: c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0
+config_sha256: cf59bcbb555aab376dd53a0a3ce7d8d91e3b453df8165879c39f9163dcc2f404
+runs_root: /home/user/p2_pilot_store_3/runs
+digest: ea14d0eef9cdbab2decaaf796e8d39881944b19513e5aa8ca498ce36d3874d14
