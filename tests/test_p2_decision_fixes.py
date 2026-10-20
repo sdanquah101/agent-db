@@ -290,16 +290,23 @@ def test_dq_trust_is_shown_the_calibration_window_only():
 
 
 class SpikeAt(FakeTools):
-    """QC flags one pH spike at ``day``."""
+    """QC flags pH spikes at ``days`` (one, at ``day``, unless set)."""
 
     day = 172.0
+    days: tuple[float, ...] | None = None
 
     def _data_qc(self, series: Any, event_windows: Any, **kw: Any) -> Any:
         out = super()._data_qc(series, event_windows, **kw)
         for r in out.results:
             if r.name == "ph":
-                r.flags, r.spikes = ["spikes"], [self.day]
+                r.flags, r.spikes = ["spikes"], list(self.days or (self.day,))
         return out
+
+
+def doc_quarantined(fake: FakeTools, sensor: str) -> list[list[float]]:
+    """A run's quarantined windows for ``sensor``, from its state."""
+    doc = json.loads(fake.run.outputs[wf.STATE_FILE])
+    return doc["data_quality"][sensor]["quarantined_windows"]
 
 
 def test_a_hold_out_spike_is_not_shown_and_a_hold_out_quarantine_is_refused_and_counted(
@@ -309,12 +316,25 @@ def test_a_hold_out_spike_is_not_shown_and_a_hold_out_quarantine_is_refused_and_
     fake = SpikeAt()
     script = ScriptedPoint("dq.trust", [quarantine_172] * 2, sensor="ph")
     _run(monkeypatch, cfg, fake, script)
-    shown = [s for s in script.seen if s["sensor"] == "ph"]
-    assert shown and shown[0]["flagged_windows"] == [] and shown[0]["sample_counts"] <= 150
-    assert shown[0]["qc_findings"] == []  # B-1: no code tells of the hold-out spike
+    # nothing is shown for pH, so it is not asked at all (A3 of 2026-10-19): a request
+    # would itself say that QC flagged the hold-out
+    assert not [s for s in script.seen if s["sensor"] == "ph"]
+    rec = [r for r in _records(fake, "dq.trust") if r["output"]["sensor"] == "ph"][-1]
+    assert rec["status"] == "not_asked" and rec["reason"] == wf.NOTHING_SHOWN_REASON
+    assert doc_quarantined(fake, "ph") == []
     assert all(b < 150.0 for s in script.seen for _, b in s["flagged_windows"])
     assert all(set(s["qc_findings"]) <= {"flatline", "spikes"} for s in script.seen)
-    # defence in depth: the quarantine over the hold-out is refused, logged and counted
+    # defence in depth, where pH is asked: a calibration spike (day 44) is shown, the
+    # hold-out's (day 172) is not, and a quarantine reaching the hold-out is refused,
+    # logged and counted
+    fake = SpikeAt()
+    fake.days = (44.0, 172.0)
+    both = {"sensor": "ph", "quarantine": [[44.0, 44.0], [172.0, 172.0]], "reason": "spike_run"}
+    script = ScriptedPoint("dq.trust", [both] * 2, sensor="ph")
+    _run(monkeypatch, cfg, fake, script)
+    shown = [s for s in script.seen if s["sensor"] == "ph"]
+    assert shown and shown[0]["flagged_windows"] == [[44.0, 44.0]]
+    assert shown[0]["qc_findings"] == ["spikes"] and shown[0]["sample_counts"] <= 150
     rec = [r for r in _records(fake, "dq.trust") if r["output"]["sensor"] == "ph"][-1]
     assert rec["fallback_used"] and rec["failures"] == ["refused by the code constraint"] * 2
     doc = json.loads(fake.run.outputs[wf.STATE_FILE])
@@ -322,7 +342,8 @@ def test_a_hold_out_spike_is_not_shown_and_a_hold_out_quarantine_is_refused_and_
     assert len(logged) == 2 and all("holdout" in f["message"] for f in logged)
     assert json.loads(fake.run.outputs[wf.REPORT_FILE])["dq_refused"] == 2
     assert doc["plan"]["fallbacks"].count("dq.refused:ph") == 2
-    assert doc["data_quality"]["ph"]["quarantined_windows"] == []
+    # the fallback (P0's, trimmed) quarantines the calibration spike only
+    assert doc["data_quality"]["ph"]["quarantined_windows"] == [[44.0, 44.0]]
     # the negative control: a calibration-window spike is shown, and its quarantine
     # accepted, logged as nothing
     fake = SpikeAt()
@@ -394,6 +415,9 @@ def test_the_split_decision_accepts_tan_and_alkalinity_and_refuses_cod_total(
     monkeypatch, cfg, attempt1
 ):
     steps = attempt1["cal.split"]["steps"]
+    # cal.split is not asked in deliverable 3 (its answer is unused; A3 of 2026-10-19): the
+    # point is asked here as deliverable 4 will ask it, with the switch emptied
+    monkeypatch.setattr(wf, "NOT_ASKED_UNUSED", frozenset())
     # the workflow's residual table is patched to attempt 1's steps, so the decision sees
     # exactly what the model saw
     original = wf.Workflow.step_residuals
@@ -453,8 +477,10 @@ def test_the_freeze_is_the_new_one_and_the_old_record_is_refused():
 
     assert frozen_record_sha256() == COMMITTED_FROZEN_SHA256
     frozen = check_p2_frozen(load_p2())
-    # the ruling of 2026-10-15 (D-1) moved it again; its word keeps the 2026-10-14 history
-    assert frozen.date == "2026-10-15" and "2026-10-14" in frozen.word and "D-1" in frozen.word
+    # the ruling of 2026-10-15 (D-1) moved it again, and the lead's word of 2026-10-19
+    # ("Implement your recommendations": D-2, D-3) once more; the word keeps the history
+    assert frozen.date == "2026-10-19" and "Implement your recommendations" in frozen.word
+    assert "2026-10-14" in frozen.word and "D-1" in frozen.word
     # the old digests of the three changed items are gone
     old = {
         (
@@ -473,6 +499,19 @@ def test_the_freeze_is_the_new_one_and_the_old_record_is_refused():
             "tools",
             "verify.differential",
         ): "28c1f9c5496ebf99bf05e3fd34f674b9d56ca04737dd88c738dd2f8bd4d1c09f",
+    }
+    # and the three the 2026-10-19 move replaced (the 2026-10-15 record's)
+    old |= {
+        (
+            "templates",
+            "dq.trust",
+        ): "fd8da7b79a7b347d9b1c7474421b8b572745741f04f0666334ca711e8e4a21e8",
+        ("schemas", "verify.differential"): (
+            "055462fe9a13506c4c9b96cb155690f509c1e9f9d1ac25dd636c2b27821fd033"
+        ),
+        ("tools", "verify.differential"): (
+            "dc5064509da9f355f3255802e596fbabb50e1c2ed70708fda5568ba8697ba4d9"
+        ),
     }
     for (kind, point), digest in old.items():
         assert getattr(frozen, f"{kind}_sha256")[point] != digest

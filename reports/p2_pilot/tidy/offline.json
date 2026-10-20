@@ -1,0 +1,200 @@
+{
+ "what": "the six pilot runs, offline (no model), three-role minimum, at one commit",
+ "rows": [
+  {
+   "s1": {
+    "channel": null,
+    "coupled_present": null,
+    "coupled_inside": null,
+    "reading": null
+   },
+   "cell": "S0-01 B/B",
+   "replicate": 0,
+   "truth": [
+    "none"
+   ],
+   "outcome": "none",
+   "rule": "null_stands",
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "admitted": [],
+   "power_run_outcome": null,
+   "evaluations": 217,
+   "wall_min": 52.9,
+   "commit": "8d7a9b99f683216cd0a9f4b814c221cc0f64922a"
+  },
+  {
+   "s1": {
+    "channel": "ph",
+    "coupled_present": [
+     "alkalinity",
+     "vfa_total",
+     "tan"
+    ],
+    "coupled_inside": true,
+    "reading": "insufficient"
+   },
+   "cell": "S0-01 B/B",
+   "replicate": 1,
+   "truth": [
+    "none"
+   ],
+   "outcome": "none",
+   "rule": "null_failed_unexplained",
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": true,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "ph"
+   ],
+   "admitted": [],
+   "power_run_outcome": null,
+   "evaluations": 236,
+   "wall_min": 55.9,
+   "commit": "8d7a9b99f683216cd0a9f4b814c221cc0f64922a"
+  },
+  {
+   "s1": {
+    "channel": null,
+    "coupled_present": null,
+    "coupled_inside": null,
+    "reading": null
+   },
+   "cell": "S2-01 B/B",
+   "replicate": 0,
+   "truth": [
+    "sensor"
+   ],
+   "outcome": "none",
+   "rule": "null_failed_unexplained",
+   "null": {
+    "NB": false,
+    "NM": true,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "gas_flow",
+    "ph"
+   ],
+   "admitted": [],
+   "power_run_outcome": "none",
+   "evaluations": 267,
+   "wall_min": 63.3,
+   "commit": "8d7a9b99f683216cd0a9f4b814c221cc0f64922a"
+  },
+  {
+   "s1": {
+    "channel": "ph",
+    "coupled_present": [
+     "alkalinity",
+     "vfa_total",
+     "tan"
+    ],
+    "coupled_inside": true,
+    "reading": "insufficient"
+   },
+   "cell": "S2-01 B/B",
+   "replicate": 1,
+   "truth": [
+    "sensor"
+   ],
+   "outcome": "none",
+   "rule": "null_failed_unexplained",
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": true,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "ph"
+   ],
+   "admitted": [],
+   "power_run_outcome": null,
+   "evaluations": 216,
+   "wall_min": 52.0,
+   "commit": "e01d41914aa4f80988393469536a91ab617612ff"
+  },
+  {
+   "s1": {
+    "channel": "gas_flow",
+    "coupled_present": [
+     "ch4_fraction"
+    ],
+    "coupled_inside": true,
+    "reading": "insufficient"
+   },
+   "cell": "S8-01 B/B",
+   "replicate": 0,
+   "truth": [
+    "sensor"
+   ],
+   "outcome": "none",
+   "rule": "null_failed_unexplained",
+   "null": {
+    "NB": true,
+    "NM": false,
+    "NS": true,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "gas_flow"
+   ],
+   "admitted": [],
+   "power_run_outcome": "none",
+   "evaluations": 165,
+   "wall_min": 39.5,
+   "commit": "e01d41914aa4f80988393469536a91ab617612ff"
+  },
+  {
+   "s1": {
+    "channel": null,
+    "coupled_present": null,
+    "coupled_inside": null,
+    "reading": null
+   },
+   "cell": "S8-01 B/B",
+   "replicate": 1,
+   "truth": [
+    "sensor"
+   ],
+   "outcome": "none",
+   "rule": "null_stands",
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "admitted": [],
+   "power_run_outcome": null,
+   "evaluations": 251,
+   "wall_min": 59.6,
+   "commit": "e01d41914aa4f80988393469536a91ab617612ff"
+  }
+ ],
+ "go_no_go_offline": {
+  "S0-01 B/B": [
+   "none",
+   "none"
+  ]
+ },
+ "unfinished": [],
+ "reruns": []
+}

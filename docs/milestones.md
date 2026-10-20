@@ -4061,3 +4061,23 @@ no live call.**
   mutation. The nits are done too: a test that the pilot reads every part's results, and
   one that the power run stops on a torn line that names no cell.
 - **Next:** the coordinator checks the head. No live call, no merge from this session.
+
+**2026-10-19 — PR #34 merged (`fd6cef7`); the tidy-up PR (the lead's word "Implement your
+recommendations").**
+- Branch `claude/p2-tidy` from `fd6cef7`. One freeze move.
+- Decision layer:
+  - D-2: `dq.trust` states the first-HRT spike rule;
+  - D-3: set-aside labels are the vocabulary, and `holdout_passed` goes with
+    `structural` only;
+  - A3: no request for `cal.split`, `cal.bound` or a `dq.trust` shown nothing.
+- Small fixes:
+  - B1: the first-HRT boundary;
+  - B2: whole-record QC codes are never shown, now pinned by a test;
+  - B3: `_jsonable` refuses what has no JSON form and writes NaN as `null`;
+  - B4: a torn return line is not an extra attempt; no empty `unfinished.jsonl`;
+    synced results.
+- The six pilot cells re-run offline at the head: `reports/p2_pilot/tidy/`.
+- **Blocked:** nothing.
+- **Next:** the coordinator reviews; after merge, a new live pilot on a fresh store, on
+  the runs and caps the coordinator relays. No live call before that.
+

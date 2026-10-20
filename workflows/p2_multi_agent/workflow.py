@@ -34,7 +34,7 @@ from collections.abc import Callable, Sequence
 from typing import Any, Literal
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 import tools
 
@@ -796,13 +796,31 @@ def design_code(code: str) -> str:
     return code if code in REJECTION_CODES else "signature_absent"
 
 
-class Rejected(_Out):
-    """One candidate set aside: its label and the design's code."""
+CANDIDATE_PATTERN = r"^(sensor|influent|state|parameter|structural)$"
+"""The labels a set-aside candidate can carry: the five classes of ``p2.yaml``'s ``labels``,
+never the null label (pinned against the configuration by a test). A pattern rather than
+an enum: rule 1's scanner refuses the bare string of a forbidden module's name in workflow
+code, and the initial-state label is spelled as one; the scanner is not loosened for it."""
 
-    label: str
+
+class Rejected(_Out):
+    """One candidate set aside: its label (one of the five classes) and the design's code.
+
+    The label is the vocabulary, not a free string, and ``holdout_passed`` is allowed with
+    ``structural`` only (the lead's word of 2026-10-19, "Implement your recommendations";
+    D-3): the hold-out bears on the structural candidate alone (§7, D-1).
+    """
+
+    label: str = Field(pattern=CANDIDATE_PATTERN)
     code: Literal[
         "null_not_failed", "signature_absent", "coupled_outside", "holdout_passed", "superseded"
     ]
+
+    @model_validator(mode="after")
+    def _holdout_code_is_structural(self) -> Rejected:
+        if self.code == "holdout_passed" and self.label != "structural":
+            raise ValueError("holdout_passed applies to the structural candidate only")
+        return self
 
 
 class VerifyDifferential(_Out):
@@ -846,6 +864,16 @@ DECISIONS: dict[str, dict[str, Any]] = {
                                        "allowed_labels")},
 }  # fmt: skip
 """Every decision point: its role, its output schema and its declared inputs (§2)."""
+
+NOT_ASKED_UNUSED: frozenset[str] = frozenset({"cal.split", "cal.bound"})
+"""The one switch for decision points whose answer this deliverable discards (the lead's
+word of 2026-10-19, "Implement your recommendations"; A3): ``cal.split``'s step day and
+``cal.bound``'s reading change nothing downstream (``step_profile``, ``intervals_from_fit``),
+yet were about half the pilot's cost. They stay defined, so deliverable 4 can ask them
+again by emptying this set; until then they take their fallback without a request."""
+
+UNUSED_REASON = "not asked: answer unused in deliverable 3"
+NOTHING_SHOWN_REASON = "not asked: nothing shown"
 
 PER_CALL_ENUM: dict[str, tuple[str, str]] = {"verify.differential": ("label", "allowed_labels")}
 """Decision points whose tool offers one field as an enum of a per-call input (ruling a)."""
@@ -963,8 +991,7 @@ class LiveResponder:
             "system": template,
             # the inputs as one JSON object (design §6.3; the lead's ruling of 2026-10-14:
             # until then the jail sent str(inputs), a Python literal inside a JSON string)
-            "messages": [{"role": "user", "content": json.dumps(inputs, sort_keys=True,
-                                                                default=_jsonable)}],
+            "messages": [{"role": "user", "content": to_json(inputs, sort_keys=True)}],
             "tools": [tool],
         }  # fmt: skip
         try:
@@ -999,11 +1026,17 @@ class Decider:
         fallback: dict[str, Any],
         *,
         check: Callable[[BaseModel], bool] | None = None,
+        not_asked: str | None = None,
     ) -> BaseModel:
         """The validated output of ``point``, or its fallback (recorded either way).
 
         ``check`` is a code constraint on a validated output (for example ``dq.trust``'s
         quarantine rule): an output it refuses counts as an invalid attempt.
+
+        ``not_asked`` (a reason), or a point in :data:`NOT_ASKED_UNUSED`, takes the fallback
+        with no request: an answer that cannot change the outcome is not paid for (A3). The
+        record says so (status ``not_asked``, its reason) and is the offline decider's
+        outcome exactly.
         """
         spec = DECISIONS[point]
         extra = set(inputs) - set(spec["inputs"])
@@ -1014,6 +1047,12 @@ class Decider:
             raise DecisionError(f"{point}: asked without {PER_CALL_ENUM[point][1]!r}")
         model: type[BaseModel] = spec["model"]
         template = self.templates[point]
+        reason = not_asked or (UNUSED_REASON if point in NOT_ASKED_UNUSED else None)
+        if reason is not None:
+            output = model.model_validate(fallback)
+            self._record(spec, point, template, inputs, output, 0, [], True, "not_asked",
+                         reason=reason)  # fmt: skip
+            return output
         attempts = 0
         failures: list[str] = []
         output: BaseModel | None = None
@@ -1063,6 +1102,7 @@ class Decider:
         failures: list[str],
         used_fallback: bool,
         status: str,
+        reason: str | None = None,
     ) -> None:
         take = getattr(self.respond, "take_call_ids", None)
         self.records.append(
@@ -1078,6 +1118,7 @@ class Decider:
                 "failures": failures,
                 "fallback_used": used_fallback,
                 "llm_call_ids": take() if take is not None else [],
+                **({"reason": reason} if reason is not None else {}),
                 **(
                     {"offered": {PER_CALL_ENUM[point][0]: list(inputs[PER_CALL_ENUM[point][1]])}}
                     if point in PER_CALL_ENUM
@@ -1120,7 +1161,7 @@ class MessageLog:
             from_role=from_role,
             to_role=to_role,
             step=step,
-            body=json.loads(json.dumps(body, default=_jsonable)),
+            body=json.loads(to_json(body)),
         )
         self.messages.append(msg)
         return msg
@@ -1131,15 +1172,36 @@ class MessageLog:
 
 
 def _jsonable(x: Any) -> Any:
-    if isinstance(x, np.ndarray):
-        return [_f(v) for v in x.tolist()]
-    if isinstance(x, np.integer):
-        return int(x)
-    if isinstance(x, np.floating):
-        return _f(x)
+    """``x`` as plain JSON values: a non-finite float is ``null``; anything else is refused.
+
+    Containers and arrays of any shape are converted all the way down, so a NaN inside a
+    list or a 2-D array is ``null`` too, never JSON's invalid ``NaN`` (B3). A value with no
+    JSON form raises ``TypeError``: nothing is silently written as its ``str()``.
+
+    Raises:
+        TypeError: For a value that is not a JSON value, a NumPy scalar or array, or a
+            container of them.
+    """
+    if x is None or isinstance(x, (str, bool)):
+        return x
     if isinstance(x, np.bool_):
         return bool(x)
-    return str(x)
+    if isinstance(x, (int, np.integer)):
+        return int(x)
+    if isinstance(x, (float, np.floating)):
+        return _f(x)
+    if isinstance(x, np.ndarray):
+        return _jsonable(x.tolist())
+    if isinstance(x, dict):
+        return {str(k): _jsonable(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [_jsonable(v) for v in x]
+    raise TypeError(f"no JSON form for {type(x).__name__}")
+
+
+def to_json(x: Any, **kw: Any) -> str:
+    """``json.dumps`` of :func:`_jsonable` ``(x)``, refusing a NaN that slipped past it."""
+    return json.dumps(_jsonable(x), allow_nan=False, **kw)
 
 
 # ------------------------------------------------------------------ roles (§6.1)
@@ -1450,7 +1512,9 @@ class Workflow:
         self.baseline_index = self.rec.last_index
         t = np.asarray(self.loads.t, dtype=float)
         q = np.asarray(self.loads.q_m3_d, dtype=float)
-        inside = (t >= self.cal[0]) & (t <= self.cal[1]) & np.isfinite(q)
+        # the calibration window before the hold-out start, as ``sample_counts`` counts it:
+        # the start day is the hold-out's (B1; the ruling of 2026-10-14, b)
+        inside = (t >= self.cal[0]) & (t < self.holdout[0]) & np.isfinite(q)
         geometry = self.cfg["plant_geometry"][self.plant]
         q_mean = float(q[inside].mean()) if inside.any() else float("nan")
         self.first_hrt = (
@@ -1527,6 +1591,9 @@ class Workflow:
                     {"sensor": name, "quarantine": mask_windows(s.t, fallback["accepted"]),
                      "reason": "flatline" if flat.any() else "spike_run"},
                     check=check,
+                    # nothing shown, nothing to choose: a request would only say that QC
+                    # flagged the hold-out (A3, the review's leak)
+                    not_asked=NOTHING_SHOWN_REASON if not windows and not shown_codes else None,
                 )  # fmt: skip
                 # a refused quarantine is logged and counted (design §2.2; the review of
                 # 7ef1238 found the entry promised and not written)
@@ -2549,7 +2616,7 @@ class Workflow:
             "rule": cls["rule"],
             "abstentions": doc["abstentions"],
             "null_table": self.table,
-            "signatures": json.loads(json.dumps(self.signatures, default=_jsonable)),
+            "signatures": json.loads(to_json(self.signatures)),
             "verdict": self.verdict,
             # with no wall-clock limit the registry consumes none of the allowance, so the
             # jail cannot time a role: its seconds are not reported here (summary.json's

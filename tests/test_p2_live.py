@@ -32,7 +32,7 @@ from tools.workflow_config import DECISION_POINTS, load_p1, load_p2, sandbox_con
 from workflows.p2_multi_agent import workflow as wf
 
 REPO = Path(__file__).resolve().parents[1]
-COMMITTED_FROZEN_SHA256 = "1706550869d43dc7e96d3fac0d3668eab2ce05b7f195e9dabe1202cf959b46a3"
+COMMITTED_FROZEN_SHA256 = "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
 """The digest of the committed ``p2.yaml`` ``frozen`` record (B-4): a new freeze edits it."""
 
 
@@ -291,12 +291,22 @@ def test_a_live_run_records_every_attempt_and_a_cap_makes_it_abstain(monkeypatch
     fake.gateway = _gateway(tmp_path, policy)
     run, fake, doc = run_fake(monkeypatch, live_cfg, fake, wf.LiveResponder())
     records = [json.loads(x) for x in fake.run.outputs[wf.DECISIONS_FILE].splitlines()]
-    asked = [r for r in records if r["point"] != "cal.bound"]
+    # a point whose answer is unused, or that is shown nothing, is not asked (A3 of
+    # 2026-10-19): no request, its fallback, its reason; cal.bound and cal.split never asked
+    skipped = [r for r in records if r["status"] == "not_asked"]
+    assert {r["point"] for r in skipped} >= {"cal.split"}
+    assert all(r["attempts"] == 0 and r["llm_call_ids"] == [] and r["fallback_used"]
+               and r["reason"] in (wf.UNUSED_REASON, wf.NOTHING_SHOWN_REASON)
+               for r in skipped)  # fmt: skip
+    logged = [json.loads(x) for x in (tmp_path / "llm_calls.jsonl").read_text().splitlines()]
+    assert not {"cal.split", "cal.bound"} & {x["provenance"]["point"] for x in logged}
+    made = [r for r in records if r["status"] != "not_asked"]
+    asked = [r for r in made if r["point"] != "cal.bound"]
     assert asked and all(r["attempts"] == 2 and r["fallback_used"] for r in asked)
     assert all(r["failures"] == ["no decision call in the reply"] * 2 for r in asked)
-    assert all(len(r["llm_call_ids"]) == 2 for r in records)
-    assert {r["status"] for r in records} <= {"decided", "fallback"}
-    assert all(r["status"] == ("fallback" if r["fallback_used"] else "decided") for r in records)
+    assert all(len(r["llm_call_ids"]) == 2 for r in made)
+    assert {r["status"] for r in records} <= {"decided", "fallback", "not_asked"}
+    assert all(r["status"] == ("fallback" if r["fallback_used"] else "decided") for r in made)
     n_log = len((tmp_path / "llm_calls.jsonl").read_text().splitlines())
     assert n_log == sum(len(r["llm_call_ids"]) for r in records)
     cited = sorted(i for r in records for i in r["llm_call_ids"])

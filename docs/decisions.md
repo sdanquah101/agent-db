@@ -8017,3 +8017,64 @@ starts. Treating a zero-spend stop after it as no run would need the driver to r
 run's model log to decide, and a log written after the stop could make that wrong.
 **Alternative:** exempt a stop with no model request from (2). Not taken, by the ruling.
 Pinned by `test_a_live_stop_before_the_journal_line_is_no_run_and_one_after_it_is`.
+
+## 2026-10-19 — RULING (the lead): "Implement your recommendations" (the P2 tidy-up)
+
+**The lead's words** (relayed by the coordinator at 17:55 UTC): "Implement your
+recommendations". So: no store lock for now; a tidy-up PR first, with no live call; a new
+live pilot on a fresh store after it merges, on runs and caps the coordinator relays.
+
+**Decisions (one freeze move for the whole PR).**
+- **D-2.** `dq.trust`'s template states the first-HRT spike rule the code enforces: a spike
+  on or before `first_hrt_d` is not quarantinable, and the code refuses a window that
+  includes one. The refusal itself is unchanged.
+- **D-3.** `verify.differential`'s `rejected[].label` is one of the five classes (never
+  `none`, never a free string), and `holdout_passed` is allowed with `structural` only.
+  - *How:* an anchored pattern on the field, shown in the tool's schema, plus a validator
+    for the code. *Why not an enum:* rule 1's scanner (`tests/test_truth_isolation.py`)
+    refuses the bare string `"state"` in workflow code, since it is a forbidden module's
+    name, and the initial-state label is spelled that way. The scanner is not loosened;
+    the coordinator may prefer another form.
+  - *Alternative:* a per-call enum of the admitted labels, like `label`'s. Not taken: the
+    fallback carries code's own set-aside candidates, which are not among the inputs.
+- **A3.** A request whose answer cannot change the outcome is not made, and its record
+  says so (status `not_asked` and a reason):
+  - `cal.split` and `cal.bound`: their answers are discarded in deliverable 3 and were
+    about half the pilot's cost. One switch, `NOT_ASKED_UNUSED`, asks them again in
+    deliverable 4.
+  - `dq.trust` shown nothing: a request's existence told the model that QC flagged the
+    hold-out.
+  - Not asking is the offline decider's outcome exactly. It is pinned in process, against
+    the same runs with everything asked, and by the six pilot cells re-run offline.
+- **B1.** The first HRT's mean feed reads the calibration window before the hold-out start
+  (`t < holdout_start`), as `dq.trust`'s sample count does. Before, it included the start
+  day (`t <= cal_end`, the same day). The start day is the hold-out's (ruling b of
+  2026-10-14).
+- **B2.** A test pins that QC's whole-record codes (drift, informative missingness) never
+  reach `dq.trust`, at helper level and in a run.
+- **B3.** `_jsonable` refuses what has no JSON form (`TypeError`), converts arrays of any
+  shape, and writes a non-finite float as `null`. Refusing NaN would stop a run over a
+  missing statistic, and `null` is what `_f` already writes everywhere else.
+- **B4.**
+  - A torn return line is not an extra attempt: a cell's attempts are sequential, so a
+    torn line after an unreturned start is that start's return line. A torn line after
+    a returned attempt is still a new attempt, and live is unchanged.
+  - No empty `unfinished.jsonl` after a refused start.
+  - Result and unfinished records are synced like the journal.
+
+**Reason.** The coordinator's recommendations after PR #34, approved by the lead: tell the
+model the rules it is held to, stop paying for answers nobody reads, and close the small
+gaps the reviews listed.
+
+**Alternatives.**
+- A store lock (N-c). Not now, by the lead's word.
+- Asking `cal.split` and `cal.bound` and recording the answers anyway. Rejected: cost
+  with no effect on any outcome in this deliverable.
+
+**What moves.**
+- `frozen_record_sha256`: `1706550869d43dc7e96d3fac0d3668eab2ce05b7f195e9dabe1202cf959b46a3`
+  → `c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0`.
+- The pilot's configuration digest:
+  `9443306b76f43029ff5a39962ec9b4845a231c31f788bc5fb2494bab772ba29c` → `cf59bcbb555aab376dd53a0a3ce7d8d91e3b453df8165879c39f9163dcc2f404`.
+- The approval record of 2026-10-14, already spent, refuses all the more. `eval/`, `sim/`,
+  `scenarios/`, `tools/impl/`, `tools/llm.py`, P0 and P1 are untouched.
