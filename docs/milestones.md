@@ -4081,3 +4081,22 @@ recommendations").**
 - **Next:** the coordinator reviews; after merge, a new live pilot on a fresh store, on
   the runs and caps the coordinator relays. No live call before that.
 
+**2026-10-21 — P2 live pilot attempt 3: COMPLETE (cost-and-wiring check;
+`reports/p2_pilot/attempt3/`).**
+- **Launch.** Launched once from `e1d6bcd` under the approval record of 2026-10-20 (digest
+  `ea14d0ee…`), into the fresh store `/home/user/p2_pilot_store_3`.
+- **Runs.** All six completed, with no abstention, error, refusal, cap or unfinished run.
+- **Requests and cost.** 19 requests, every one valid on its first attempt. USD 0.004146,
+  reconciled to the token against the ledger. Attempt 2 made 36 requests for USD 0.012263.
+- **The tidy-up held.**
+  - `cal.split` and `cal.bound` were never asked, nor a `dq.trust` shown nothing.
+  - No D-3 fallback fired.
+- **Outcomes.** 3 of 6 correct, as in attempt 2 but on other runs:
+  - S8-01 r0 is gained;
+  - S0-01 r1 (clean) is a false alarm, `sensor`. That is the admission rule's known
+    limitation (accepted with D-1), now reaching the outcome: the differential took the
+    admitted label, as its coded fallback would have.
+- **Where the model mattered.** The only answers that differed from code were the three
+  `dq.coupled` readings. Six runs are not evidence of skill.
+- **Next:** the coordinator's review of the report. No live call before a new word.
+
