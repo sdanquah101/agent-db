@@ -4125,7 +4125,9 @@ go").**
     frozen null rule, recorded in `docs/decisions.md`; `p2_design.md` §4.4 is marked
     superseded on this point.
   - S7-02 is at A/C.
-- **Open:** Q14, R3 on a standing NM. Without it, Q13's route cannot admit `structural`.
+- **Q14 decided, 2026-10-25 ("Yes"):** when NM stands, `structural` needs both a failed
+  hold-out and R3 over all channels. This amends the 2026-10-08 ruling for that case.
+- **Nothing in §9 is open.**
 - **Next:** the coordinator's check of this revision, then the lead's approval of the note,
   then the build.
 

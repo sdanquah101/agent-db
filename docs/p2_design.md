@@ -451,11 +451,11 @@ have stopped both P1 arms.
 | `structural` | NM | P0's R3 criterion **on two or more failed channels** (ruling of 2026-10-08) and a failed hold-out (verifier, S6) |
 | `none` | none failed, **or** a failure that no label's signature explains | — |
 
-> **Superseded on one point for the agent P2** (the lead's ruling of 2026-10-25, Q13 of
-> `docs/p2_agents_design.md`; `docs/decisions.md`): for `structural`, a **failed hold-out when
-> NM stands** is also an admitting case. The signature (R3 as frozen, and a failed hold-out) is
-> unchanged; R3 on a standing NM is an open question (Q14). The table above stays as the
-> procedural P2's rule, under which attempts 1–3 ran.
+> **Superseded on one point for the agent P2** (the lead's rulings of 2026-10-25, Q13 and Q14
+> of `docs/p2_agents_design.md`; `docs/decisions.md`). For `structural` when NM **stands**:
+> admitted only by **both** a failed hold-out **and** P0's R3 criterion counted over **all**
+> channels. When NM fails, the row above holds, as frozen. The table stays as the procedural
+> P2's rule, under which attempts 1–3 ran.
 
 **The lead's rulings of 2026-10-08 (DEVELOPMENT-INFORMED; `docs/decisions.md`).**
 - An admitting signature must lie on the channels whose null case failed. For

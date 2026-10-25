@@ -8190,7 +8190,8 @@ The lead ruled on the question as the coordinator put it: "a failed hold-out cou
 admitting case for structural when the background comparison stands". Nothing else about the
 frozen admission rule was ruled; R3's definition and channel count are unchanged. On a standing
 NM no channel has failed, so R3 as frozen cannot hold there. Counting it over all channels is a
-further change, asked of the lead as Q14 of the design note (open).
+further change, asked of the lead as Q14 of the design note and decided in the next entry
+("Yes").
 
 The verifier's `Verdict` with alternative `structural` is admissible on either case.
 `p2_design.md` §4.4 is marked superseded on this point and kept as the procedural P2's rule.
@@ -8212,4 +8213,28 @@ A/A of the earlier text.
 
 **What moves.** Docs only now. The null-rule change enters the agent P2's frozen record when it
 is built. The procedural P2 and its records keep the 2026-10-07 rule.
+
+## 2026-10-25 — RULING (the lead): R3 is counted over all channels when NM stands (amends the 2026-10-08 ruling for that case)
+
+**The lead's words** (relayed by the coordinator at 22:15 UTC), on Q14 of the design note:
+"Yes".
+
+**Decision.** For the agent P2, when NM **stands**, `structural` is admitted only by **both** a
+failed hold-out **and** P0's R3 criterion counted over **all** channels: two independent pieces
+of evidence.
+- This **amends the ruling of 2026-10-08** ("R3 counted over the failed channels only"), for
+  the standing-NM case only.
+- When NM fails, R3 stays on the failed channels, as frozen.
+- With the Q13 entry above, the admission rule for `structural` has two branches: NM failed (as
+  frozen), or NM stands (a failed hold-out and R3 over all channels).
+- `p2_design.md` §4.4 carries the superseded note. The code change will carry this entry's
+  reference.
+
+**Reason.** With no failed channel, the frozen count is vacuous: R3 could never hold on a
+standing NM, so the route the Q13 ruling opened could never admit `structural`.
+
+**Alternatives.**
+- The hold-out alone. Not taken: a chance hold-out failure on a clean cell would be a
+  structural false alarm on one piece of evidence.
+- R3 as frozen. Then Q13 has no effect.
 
