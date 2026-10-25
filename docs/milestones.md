@@ -4120,8 +4120,12 @@ go").**
   - Q1: all seven roles are built as agents from the start.
   - Q2–Q12: as recommended, except that the coordinator is code (as recommended) and the
     verifier has its own budget, outside the run's caps.
-- **Open:** Q13, a failed hold-out admitting `structural` over a standing NM, and S7-02's
-  tier (A/C, pending the lead's confirmation).
+- **Also decided, 2026-10-25 ("Yes to both"):**
+  - Q13: a failed hold-out admits `structural` over a standing NM. This is a change to the
+    frozen null rule, recorded in `docs/decisions.md`; `p2_design.md` §4.4 is marked
+    superseded on this point.
+  - S7-02 is at A/C.
+- **Nothing in §9 is open.**
 - **Next:** the coordinator's check of this revision, then the lead's approval of the note,
   then the build.
 

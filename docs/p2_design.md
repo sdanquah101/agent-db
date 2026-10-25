@@ -449,6 +449,12 @@ have stopped both P1 arms.
 | `state` | NS or NM | the early/late test fires on a failed channel, and the `biomass_scale` pair improves the early window |
 | `parameter` | NM, with NB not failed | a common change point on two or more **failed** channels within 30 d, **after the first HRT** (rulings of 2026-10-08), **or** `inhibited` (§2.5); and no feed covariate |
 | `structural` | NM | P0's R3 criterion **on two or more failed channels** (ruling of 2026-10-08) and a failed hold-out (verifier, S6) |
+
+> **Superseded on this point for the agent P2** (the lead's ruling of 2026-10-25, Q13 of
+> `docs/p2_agents_design.md`; `docs/decisions.md`): `structural` is also admitted over a
+> **standing** NM when the hold-out fails, with R3 counted over all channels. The table above
+> stays as the procedural P2's rule, under which attempts 1–3 ran.
+
 | `none` | none failed, **or** a failure that no label's signature explains | — |
 
 **The lead's rulings of 2026-10-08 (DEVELOPMENT-INFORMED; `docs/decisions.md`).**

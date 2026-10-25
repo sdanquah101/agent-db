@@ -8173,3 +8173,37 @@ coordinator should be code. Let the verifier get its own budget outside of what 
 
 **Alternatives.** As listed under each question in the note.
 
+## 2026-10-25 — RULING (the lead): a failed hold-out admits `structural` over a standing NM (a change to the null rule), and S7-02 is at A/C
+
+**The lead's words** (relayed by the coordinator at 20:55 UTC), on Q13 of the design note and
+on S7-02's tier: "Yes to both".
+
+**Decision (a): a change to the null rule frozen on 2026-10-07 (a).** For the agent P2,
+`structural` is admitted:
+- over a **failed** NM, as before (P0's R3 on two or more failed channels, and a failed
+  hold-out); **or**
+- over a **standing** NM when the **hold-out fails**, with R3 counted over all channels, since
+  no channel has failed. Counting R3 over all channels is my reading of how R3 applies on a
+  standing null, and is flagged for the coordinator's check.
+
+The verifier's `Verdict` with alternative `structural` is admissible on either case.
+`p2_design.md` §4.4 is marked superseded on this point and kept as the procedural P2's rule.
+The code change, when it comes, carries this entry's reference.
+
+**Reason.** Without it, the verifier's hold-out test on a standing null could never conclude
+`structural`. A hidden structural fault on a quiet plant (S6-02 at tier B, decision 3 of
+2026-09-30) would always end `none`.
+
+**Alternatives.**
+- Leave the rule. A hidden structural fault on a quiet plant then ends `none`, and S6-02 at
+  tier B stays admissible-`none`. This was the design note's recommendation; the lead chose
+  the change.
+- **The risk accepted:** a chance hold-out failure on a clean cell becomes a structural false
+  alarm. It is measured from the verifier's recorded hold-out results on standing-null runs.
+
+**Decision (b).** S7-02, as a new H4 development cell, is at its defined tier **A/C**, not the
+A/A of the earlier text.
+
+**What moves.** Docs only now. The null-rule change enters the agent P2's frozen record when it
+is built. The procedural P2 and its records keep the 2026-10-07 rule.
+
