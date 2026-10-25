@@ -4103,3 +4103,18 @@ recommendations").**
   evidence of skill.
 - **Next:** the coordinator's review of the report. No live call before a new word.
 
+**2026-10-25 — PR #36 merged (`85c66b4`); the lead's ruling to rebuild P2 as agents ("Let's
+go").**
+- Step 1 is the design note `docs/p2_agents_design.md` (draft PR, docs only). It covers:
+  - what changes and why (attempts 2–3);
+  - what is kept as code;
+  - the seven roles as agents;
+  - the adversarial verifier loop;
+  - the guard rails, with D-1 revisited;
+  - the freeze;
+  - RQ3/H4 and the ablations;
+  - cost and time;
+  - seven open questions with recommendations.
+- **Blocked:** no code until the coordinator reviews the note and the lead approves it.
+- **Next:** the review; then, on approval, the three-role build first (the note's Q1).
+

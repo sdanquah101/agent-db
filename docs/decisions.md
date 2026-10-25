@@ -8078,3 +8078,43 @@ gaps the reviews listed.
   `9443306b76f43029ff5a39962ec9b4845a231c31f788bc5fb2494bab772ba29c` → `cf59bcbb555aab376dd53a0a3ce7d8d91e3b453df8165879c39f9163dcc2f404`.
 - The approval record of 2026-10-14, already spent, refuses all the more. `eval/`, `sim/`,
   `scenarios/`, `tools/impl/`, `tools/llm.py`, P0 and P1 are untouched.
+
+## 2026-10-25 — RULING (the lead): P2 is rebuilt as agents, on top of what exists ("Let's go")
+
+**The lead's words** (relayed by the coordinator at 14:55 UTC). After reading pilot attempt 3:
+
+> "I think the design is the problem. I thought we will have multiple AI agents looking at
+> the data, making expert assessments, with multiple adversarial contemplations to come up
+> with the answer?"
+
+The coordinator recommended rebuilding P2's top layer as proposal §6.5 intends, on top of
+what exists, starting with a design note. The lead answered: "Let's go."
+
+**Decision.**
+- **What is superseded.** The 2026-09-30 reading "P2 should not be agents with prompts"
+  (`docs/p2_launch_brief.md`, draft 2) is superseded. That reading produced the procedural
+  P2: seven coded procedures, and a model asked only at twelve typed decision points.
+- **What replaces it.** P2's top layer is redesigned as role agents with an adversarial
+  verifier. The registry, budgets, logs, truth isolation, QC gate, null rule, rerun machinery
+  and approval record are kept.
+- **Step 1 is a design note only:** `docs/p2_agents_design.md`. It has no code and no live
+  call. The coordinator reviews it, and the lead approves it before any code is written.
+
+**Reason.** Pilot attempt 3 showed that the procedural P2 adds no judgement:
+- every applied model answer equalled the coded fallback, or restated a field code had
+  computed and shown the model;
+- its outcomes equal a pure-code rule;
+- attempts 2 and 3 both score 3 of 6, against 2 of 6 offline.
+
+A P2 in which no model can choose what to examine, request a test, weigh causes or be
+challenged cannot answer RQ3.
+
+**Alternatives.**
+- Keep the procedural P2 and tune its decision points. Rejected by the ruling: the design,
+  not the tuning, is the limit.
+- Replace P2 wholesale. Not taken: the kept layers are reviewed, frozen where they must be,
+  and shared with P0 and P1.
+
+**What moves.** Nothing yet: this PR is docs only.
+- `eval/`, `sim/`, `scenarios/`, `tools/impl/`, `tools/llm.py`, P0 and P1 are untouched.
+- The procedural P2's records (attempts 1–3, the offline power run) stand as its record.
