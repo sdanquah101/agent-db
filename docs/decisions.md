@@ -8173,6 +8173,8 @@ coordinator should be code. Let the verifier get its own budget outside of what 
 
 **Alternatives.** As listed under each question in the note.
 
+**See also** the next entry: Q13 and S7-02's tier, decided the same day ("Yes to both").
+
 ## 2026-10-25 — RULING (the lead): a failed hold-out admits `structural` over a standing NM (a change to the null rule), and S7-02 is at A/C
 
 **The lead's words** (relayed by the coordinator at 20:55 UTC), on Q13 of the design note and
@@ -8182,9 +8184,13 @@ on S7-02's tier: "Yes to both".
 `structural` is admitted:
 - over a **failed** NM, as before (P0's R3 on two or more failed channels, and a failed
   hold-out); **or**
-- over a **standing** NM when the **hold-out fails**, with R3 counted over all channels, since
-  no channel has failed. Counting R3 over all channels is my reading of how R3 applies on a
-  standing null, and is flagged for the coordinator's check.
+- over a **standing** NM when the **hold-out fails**.
+
+The lead ruled on the question as the coordinator put it: "a failed hold-out counts as an
+admitting case for structural when the background comparison stands". Nothing else about the
+frozen admission rule was ruled; R3's definition and channel count are unchanged. On a standing
+NM no channel has failed, so R3 as frozen cannot hold there. Counting it over all channels is a
+further change, asked of the lead as Q14 of the design note (open).
 
 The verifier's `Verdict` with alternative `structural` is admissible on either case.
 `p2_design.md` §4.4 is marked superseded on this point and kept as the procedural P2's rule.

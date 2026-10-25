@@ -4125,7 +4125,7 @@ go").**
     frozen null rule, recorded in `docs/decisions.md`; `p2_design.md` §4.4 is marked
     superseded on this point.
   - S7-02 is at A/C.
-- **Nothing in §9 is open.**
+- **Open:** Q14, R3 on a standing NM. Without it, Q13's route cannot admit `structural`.
 - **Next:** the coordinator's check of this revision, then the lead's approval of the note,
   then the build.
 

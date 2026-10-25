@@ -4,14 +4,14 @@ Status: **DRAFT for the coordinator's review and the lead's approval. No code an
 until it is approved.** Written by the P2 component session after the lead's ruling of
 2026-10-25 (`docs/decisions.md`). That ruling supersedes the 2026-09-30 reading "P2 should not
 be agents with prompts", which produced the procedural design of `docs/p2_launch_brief.md`
-(draft 2) and `docs/p2_design.md`. Revised after the coordinator's review of `447f4c2` and the check of `588187b`. The lead decided every question of §9 on 2026-10-25, Q13 and S7-02's tier included; none is open.
+(draft 2) and `docs/p2_design.md`. Revised after the coordinator's review of `447f4c2` and the check of `588187b`. The lead decided Q1–Q13 of §9 on 2026-10-25, S7-02's tier included. Q14 is open.
 
 The aim is the P2 the proposal describes. Several specialist agents look at the same logged
 evidence, write expert assessments and argue for a label. Then an independent verifier argues
 against it before anything is concluded. It is built **on top of** what exists: the registry,
 the budgets, the null rule, the logs and the rerun machinery stay.
 
-**§9 is the single list of the lead's decisions, all taken on 2026-10-25.**
+**§9 is the single list of the lead's decisions: Q1–Q13 taken on 2026-10-25, Q14 open.**
 
 ---
 
@@ -59,7 +59,7 @@ top layer is kept** (§2).
 | Logging and provenance | `calls.jsonl` and the model log, written on the privileged side | `tools/runner.py`, `tools/llm.py` (frozen, used as is) |
 | Truth isolation and the jail | workflows run in the jail and see `runs/<id>/` only; the truth-isolation scanner applies to the new code | `tools/sandbox.py`, `tests/test_truth_isolation.py` |
 | The QC gate | `data_qc` runs first. A QC-flagged sensor never enters an objective: the `set_sensor_status` view refuses putting one back (no QC bypass). P0's §3.1 exclusions apply. | the existing P2 step, run as code before the agents |
-| The declared background and the null rule | **Evidence shown to every agent:** the null table (NB, NM, NS, the failed channels, the placement against the band). The hard rule stays: **a label other than `none` needs a failed null case of the kind the label requires** (admission, §4.4). Code refuses a finding that breaks it. **One change, by the lead's ruling of 2026-10-25 (Q13):** `structural` is admitted over a failed NM, as before, **or over a standing NM when the hold-out fails** (with R3 counted over all channels, since none has failed). This is a change to the null rule frozen on 2026-10-07 (a), recorded in `docs/decisions.md`; `p2_design.md` §4.4 is marked superseded on this point. The null table no longer pre-decides the label; how `none` is reached over a failed null is §4 and Q3. | `tools/impl/` (`declared_background`); the null-table and signature functions of `workflows/p2_multi_agent/workflow.py`, moved to an evidence module |
+| The declared background and the null rule | **Evidence shown to every agent:** the null table (NB, NM, NS, the failed channels, the placement against the band). The hard rule stays: **a label other than `none` needs a failed null case of the kind the label requires** (admission, §4.4). Code refuses a finding that breaks it. **The amended admission rule for `structural` (the lead's ruling of 2026-10-25, Q13), stated once here:** the admitting case is a **failed NM**, as before, **or a failed hold-out when NM stands**. The signature is unchanged: P0's R3 criterion as frozen, on two or more failed channels, and a failed hold-out. This is a change to the null rule frozen on 2026-10-07 (a), recorded in `docs/decisions.md`; `p2_design.md` §4.4 is marked superseded on this point. On a standing NM no channel has failed, so R3 as frozen cannot hold there; whether it is then counted over all channels is **open (Q14)**. The null table no longer pre-decides the label; how `none` is reached over a failed null is §4 and Q3. | `tools/impl/` (`declared_background`); the null-table and signature functions of `workflows/p2_multi_agent/workflow.py`, moved to an evidence module |
 | The code signatures (S1 table, onset test, early/late, change point, R3, inhibition) | evidence: numbers with their thresholds, never verdicts | the same functions, moved with the null table |
 | The rerun rule, the in-flight journal, the approval record, the freeze check | unchanged | `scripts/p2_rerun.py`, `scripts/p2_pilot.py`, `scripts/p2_power.py`, `tools/p2_live.py` |
 | The task state and the evaluator | the eval reads only `calls`, `values` and `rule` from evidence items, plus the typed labels and parameters (§5) | `state/task_state.py`, `eval/` (frozen) |
@@ -120,7 +120,7 @@ Three settled points:
 | **Data quality** | QC output, the raw records on the calibration window, the S1 table, the coupled channels' after-fit statistics, the band | each sensor's status; whether a `sensor` cause explains a failed NS; a refutation of `sensor`; that the failed case is background (`none`, §4) | `SensorFinding` | 12 turns |
 | **Influent** | the feed log and operator notes (as data), `mass_balance` windows, the COD band, the onset test, the feed covariate | whether an `influent` cause explains NB, and its onset; the mechanism, as a report only | `InfluentFinding` | 12 turns |
 | **Identifiability** | Morris, Sobol, Fisher and profile outputs; the CRLB table | the identifiable subset here; a no-go for kinetic updates when nothing is identifiable | `IdentFinding` | 8 turns |
-| **Calibration** | the reference fit, residuals, change point, inhibition, the early/late split, the biomass pair | whether `parameter` or `state` explains NM or NS; fitted values only on an identified subset | `CalFinding` | 14 turns |
+| **Calibration** | the reference fit, residuals, change point, inhibition, the early/late split, the biomass pair; in round 2, the verifier's typed `Verdict` | whether `parameter` or `state` explains NM or NS; in round 2, whether `structural` does; fitted values only on an identified subset | `CalFinding` | 14 turns |
 | **Experimental design** | the open disagreement, the price list, the assay budget left | which assay separates two named causes, with the predicted outcome under each | `AssayPlan` | 6 turns |
 | **Verification** | §4 | `pass`, `fail` or `abstain` | `Verdict` | 14 turns per round |
 | **Coordination** | the typed state and the typed findings | whom to route to next and which grants to make; never a label | routing entries | (code) |
@@ -143,14 +143,14 @@ it reads `calls`, `values` and `rule`, plus the typed labels and parameters
 | `SensorFinding` | `role`; `statuses: {sensor: ok\|quarantined\|excluded\|flagged}`; `quarantines: {sensor: [[t0, t1]]}`; `claim: sensor\|none\|refute_sensor\|no_claim`; `channel`; `confidence: low\|medium\|high`; `evidence: [item]` |
 | `InfluentFinding` | `role`; `claim: influent\|none\|refute_influent\|no_claim`; `onset_day`; `feed_id`; `mechanism: fractionation\|moisture\|unrecorded_delivery\|mislabel\|none` (as `influent.mechanism`, `p2_design.md` §2.3; report only); `confidence`; `evidence` |
 | `IdentFinding` | `role`; `subset: [parameter]`; `kinetic_update_allowed: bool`; `evidence` |
-| `CalFinding` | `role`; `claim: parameter\|state\|none\|refute_parameter\|refute_state\|no_claim`; `parameters: {name: {estimate, lower, upper, unit, method}}`; `bounds_narrowed: {name: [lo, hi]}` (its justification kept out of the verifier's view); `confidence`; `evidence` |
+| `CalFinding` | `role`; `claim: parameter\|state\|structural\|none\|refute_parameter\|refute_state\|refute_structural\|no_claim` (`structural` in round 2 only, citing the verifier's `holdout` field, below); `parameters: {name: {estimate, lower, upper, unit, method}}`; `bounds_narrowed: {name: [lo, hi]}` (its justification kept out of the verifier's view); `confidence`; `evidence` |
 | `AssayPlan` | `role`; `assay`; `day`; `separates: [label, label]`; `predicted: {label: number}`; `evidence` |
-| `Verdict` | `round`; `verdict: pass\|fail\|abstain`; `alternative: an admissible label or none` (checked by code: it must be admitted by the null rule as amended (Q13): `structural` by a failed NM or by a failed hold-out; or `none`); `separating_test: {tool, args}` or null (`args` validated against the tool's schema with the redacted free-text fields excluded, so no prose passes through a named test); `evidence` |
+| `Verdict` | `round`; `verdict: pass\|fail\|abstain`; `holdout: {failed: bool, call: validate call index}` (typed; set on every round in which the verifier ran `validate`); `alternative: an admissible label or none` (checked by code: it must be admitted by the admission rule as amended, §2; or `none`); `separating_test: {tool, args}` or null (`args` validated against the tool's schema with the redacted free-text fields excluded, so no prose passes through a named test); `evidence` |
 | routing entry (coordinator only) | `round`; `to: role`; `grant: {evaluations, assays}`; `reason: an enum` |
 
 The coordinator is the only writer of routing entries in `messages.jsonl`.
 
-**Coordination: recommended as code** (Q7). It routes on the typed state:
+**Coordination: decided as code** (Q7). It routes on the typed state:
 1. QC first;
 2. the specialists whose null case failed, or all of them when the null stands;
 3. the design role when two findings conflict;
@@ -192,7 +192,8 @@ and "remove coordinator" becomes a cleanly defined fixed route.
    - `fail`: with the alternative and the evidence for it.
    - `abstain`: the data cannot separate the two.
 5. **Round semantics.**
-   - At most **2 rounds**, each with its own verifier turn budget, all inside the run's caps.
+   - At most **2 rounds**, each with its own verifier turn budget, on the verifier's own budget
+     (Q9).
    - An `abstain` in round 1 ends the loop: the run abstains.
    - A named test outside every allow-list, or beyond the verifier's budget, counts as `abstain`,
      and is logged.
@@ -215,17 +216,22 @@ and "remove coordinator" becomes a cleanly defined fixed route.
    ("the failed case is the plant's background: …"). The verifier challenges it like any
    label.
 8. **When the null stands, the verifier still runs** (Q3). It challenges `none` by testing the
-   hold-out and the structural signature, and the hold-out result is recorded.
-   - **By the lead's ruling on Q13** (2026-10-25), a **failed hold-out** is an admitting case
-     for `structural` when NM stands, with R3 counted over all channels. So a `Verdict` whose
-     alternative is `structural` is admissible on a standing null when the hold-out fails.
-   - That alternative goes to the calibration role for round 2. If calibration claims
-     `structural` with cited evidence, the verifier challenges it as usual; if not, the run
-     abstains (step 6).
-   - So S6-02 at tier B, whose null stands, can now be concluded `structural`. Decision 3 of
-     2026-09-30 promised it the hold-out test, and the test can now admit.
-   - Reachable outcomes on a standing null: `pass` (`none`), `structural` (through round 2),
-     or `abstain`.
+   hold-out and the structural signature, and records the hold-out result in its `Verdict`'s
+   typed `holdout` field.
+   - **By the lead's ruling on Q13** (2026-10-25), a failed hold-out is an admitting case for
+     `structural` when NM stands (the amended rule, §2).
+   - **How the hold-out reaches calibration without breaking Q4.** The hold-out data stays
+     visible to the verifier only. What travels is the verifier's typed `Verdict`: its
+     `holdout.failed` flag and the index of the `validate` call. In round 2, calibration
+     cites that `Verdict`, not the hold-out itself, as the evidence for a `structural` claim.
+     The `validate` output remains outside every proposer's view.
+   - That alternative goes to calibration for round 2. If calibration claims `structural` with
+     cited evidence, the verifier challenges it as usual; if not, the run abstains (step 6).
+   - **The signature still needs R3 as frozen**: on two or more failed channels. A standing NM
+     has no failed channel, so until Q14 is decided `structural` cannot be admitted there in
+     practice. Reachable outcomes on a standing null, until then: `pass` (`none`) or
+     `abstain`. With Q14 as recommended, `structural` becomes reachable through round 2, and
+     S6-02 at tier B can be concluded `structural`.
 
 **Default visibility of shared state before the verifier.** Every role sees:
 - the typed state, including the other roles' typed findings as they arrive;
@@ -347,7 +353,9 @@ every decision at its fallback. Any agent result is read against it.
     | simulator evaluations (its `simulate`, `validate` and the named test) | 40 | 80 |
     | assay units (a named test that is an assay) | 1 | 1 |
 
-    Its expected 2.8 M tokens (about USD 0.14–0.18 cached, 0.56 uncached) fit inside them.
+    Its expected 2.8 M tokens fit inside them **cached** (about USD 0.14–0.18). **Uncached** (USD
+    0.56 a run, 0.28 a round) the USD caps bind: the verifier's turn ends, the round counts as
+    `abstain`, and the run abstains.
   - **What is reported.** A run's total cost is the proposers' spend plus the verifier's. The
     two are logged separately (`calls.jsonl` attributes each call to its role, and the report
     gives both and their sum).
@@ -453,9 +461,8 @@ role's grant (§3.1).
 13. **DECIDED (the lead: "Yes to both", 2026-10-25): a failed hold-out is an admitting case for
     `structural` when NM stands.** This **changes the null rule frozen on 2026-10-07 (a)**:
     before, `structural` was admitted only over a failed NM, with R3 and a failed hold-out.
-    - **Now:** over a failed NM as before (R3 on the failed channels), **or** over a standing
-      NM when the hold-out fails, with R3 counted over all channels, since no channel has
-      failed.
+    - **Now:** the admitting case is a failed NM, as before, **or a failed hold-out when NM
+      stands** (§2). R3 is unchanged, as frozen. The lead ruled only on the admitting case.
     - **Reason:** without it, the verifier's hold-out test on a standing null could never
       conclude `structural`, so a hidden structural fault on a quiet plant (S6-02 at tier B)
       would always end `none`.
@@ -465,3 +472,17 @@ role's grant (§3.1).
     - My recommendation was to keep the rule for the first build. The lead chose the change.
     - The code change will carry this decision's reference, and `p2_design.md` §4.4 is marked
       superseded on this point, not silently edited.
+14. **OPEN: R3 on a standing NM.** R3 as frozen (the ruling of 2026-10-08) is counted on two
+    or more **failed** channels. A standing NM has none, so R3 can never hold there, and the
+    route Q13 opened cannot admit `structural`.
+    - *Option (i), leave R3 as frozen.* Q13's route stays closed in practice. On a standing
+      null the verifier can conclude only `none` or `abstain`, and S6-02 at tier B stays
+      admissible-`none`.
+    - *Option (ii), count R3 over all channels when NM stands.* Code already computes this:
+      `r3_channels_all`. When NM fails, R3 stays on the failed channels, as frozen. This makes
+      Q13's route reachable.
+
+    *Recommend (ii)*: Q13's decision has an effect only with it. The risk is the one accepted
+    with Q13, a structural false alarm on a clean cell, now requiring both a failed hold-out
+    and structure on two channels. That makes it rarer than with the hold-out alone. This is a
+    further change to the frozen admission rule, so it needs the lead's word.
