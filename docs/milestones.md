@@ -4114,8 +4114,14 @@ go").**
   - the freeze;
   - RQ3/H4 and the ablations;
   - cost and time;
-  - seven open questions with recommendations.
+  - the open questions for the lead, each with a recommendation (§9).
 - **Blocked:** no code until the coordinator reviews the note and the lead approves it.
-- **Next:** the review. On approval, the three-role build comes first, if Q1 is taken as
-  recommended.
+- **The lead's rulings, 2026-10-25.**
+  - Q1: all seven roles are built as agents from the start.
+  - Q2–Q12: as recommended, except that the coordinator is code (as recommended) and the
+    verifier has its own budget, outside the run's caps.
+- **Open:** Q13, a failed hold-out admitting `structural` over a standing NM, and S7-02's
+  tier (A/C, pending the lead's confirmation).
+- **Next:** the coordinator's check of this revision, then the lead's approval of the note,
+  then the build.
 

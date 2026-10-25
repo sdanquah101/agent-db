@@ -4,14 +4,14 @@ Status: **DRAFT for the coordinator's review and the lead's approval. No code an
 until it is approved.** Written by the P2 component session after the lead's ruling of
 2026-10-25 (`docs/decisions.md`). That ruling supersedes the 2026-09-30 reading "P2 should not
 be agents with prompts", which produced the procedural design of `docs/p2_launch_brief.md`
-(draft 2) and `docs/p2_design.md`. Revised after the coordinator's review of `447f4c2`.
+(draft 2) and `docs/p2_design.md`. Revised after the coordinator's review of `447f4c2` and the check of `588187b`. The lead decided Q1–Q12 on 2026-10-25 (§9). Q13 is open.
 
 The aim is the P2 the proposal describes. Several specialist agents look at the same logged
 evidence, write expert assessments and argue for a label. Then an independent verifier argues
 against it before anything is concluded. It is built **on top of** what exists: the registry,
 the budgets, the null rule, the logs and the rerun machinery stay.
 
-**§9 is the single list of the decisions this note asks of the lead.**
+**§9 is the single list of the lead's decisions: Q1–Q12 decided 2026-10-25, Q13 open.**
 
 ---
 
@@ -104,8 +104,10 @@ call, as P1 does now). Code refuses:
 Three settled points:
 - **Assays are requested by the design role only**, under the coordinator's grant. Data
   quality asks for one through the design role, and does not hold `request_assay` itself.
-- **The verifier's `simulate` and `residual_diag` calls are charged to the run's budget** and
-  bounded by its turn budget.
+- **The verifier has its own budget** (the lead's ruling on Q9). Its `simulate`,
+  `residual_diag` and `validate` calls, and its one named separating test per round, draw on
+  its budget, not the proposers'. The budget is set apart from, and in addition to, the run's
+  caps (§8).
 - **Parameter bounds (proposal §6.5).** The calibration agent may **narrow** a parameter's
   declared bounds, as P1 does: logged, with a `bounds_justification`, and never widened. A
   bound hit is never a kinetic update. The justification is free text, so it is redacted
@@ -126,18 +128,24 @@ Three settled points:
 ### 3.3 The typed messages (fields)
 
 Every evidence item is `{label, rule, calls: [call index], values: {name: number}}`, with
-`statement` **templated by code** from those fields, never written by the model. So
-`state.json` holds no model free text. The guarantee the eval relies on is the same as now: it
-reads `calls`, `values` and `rule`, plus the typed labels and parameters.
+`statement` **templated by code** from those fields, never written by the model. P1's
+workspace also writes model text into `state.json` in two places. A bounds justification and
+the agent's summary go into `annotations`. A sensor's `set_sensor_status.reason` goes into its
+`notes`. **The P2 harness drops both**: that text goes to `messages.jsonl` only, `notes` is
+templated from the typed status, and `annotations` holds code-written lines only.
+
+So `state.json` holds no model free text. The narrower guarantee the eval relies on also holds:
+it reads `calls`, `values` and `rule`, plus the typed labels and parameters
+(`eval/attribution.py`), and no field it reads carries model text.
 
 | message | fields |
 |---|---|
 | `SensorFinding` | `role`; `statuses: {sensor: ok\|quarantined\|excluded\|flagged}`; `quarantines: {sensor: [[t0, t1]]}`; `claim: sensor\|none\|refute_sensor\|no_claim`; `channel`; `confidence: low\|medium\|high`; `evidence: [item]` |
-| `InfluentFinding` | `role`; `claim: influent\|none\|refute_influent\|no_claim`; `onset_day`; `feed_id`; `mechanism` (report only); `confidence`; `evidence` |
+| `InfluentFinding` | `role`; `claim: influent\|none\|refute_influent\|no_claim`; `onset_day`; `feed_id`; `mechanism: fractionation\|moisture\|unrecorded_delivery\|mislabel\|none` (as `influent.mechanism`, `p2_design.md` §2.3; report only); `confidence`; `evidence` |
 | `IdentFinding` | `role`; `subset: [parameter]`; `kinetic_update_allowed: bool`; `evidence` |
 | `CalFinding` | `role`; `claim: parameter\|state\|none\|refute_parameter\|refute_state\|no_claim`; `parameters: {name: {estimate, lower, upper, unit, method}}`; `bounds_narrowed: {name: [lo, hi]}` (its justification kept out of the verifier's view); `confidence`; `evidence` |
 | `AssayPlan` | `role`; `assay`; `day`; `separates: [label, label]`; `predicted: {label: number}`; `evidence` |
-| `Verdict` | `round`; `verdict: pass\|fail\|abstain`; `alternative: an admissible label or none` (checked by code: it must be admitted by the null rule, or `none`); `separating_test: {tool, args}` or null; `evidence` |
+| `Verdict` | `round`; `verdict: pass\|fail\|abstain`; `alternative: an admissible label or none` (checked by code: it must be admitted by the null rule, or `none`); `separating_test: {tool, args}` or null (`args` validated against the tool's schema with the redacted free-text fields excluded, so no prose passes through a named test); `evidence` |
 | routing entry (coordinator only) | `round`; `to: role`; `grant: {evaluations, assays}`; `reason: an enum` |
 
 The coordinator is the only writer of routing entries in `messages.jsonl`.
@@ -175,9 +183,10 @@ and "remove coordinator" becomes a cleanly defined fixed route.
      which the scan finds it.
    - **The instruction.** The verifier is told to **argue against the proposal**: find the
      admissible alternative cause, or `none`, that explains the same evidence. It names
-     **one** separating test per round (a tool call or an assay), charged to the run.
+     **one** separating test per round (a tool call or an assay), charged to the
+     verifier's own budget.
 3. **Response.** The coordinator routes the named test to the role whose allow-list holds the
-   tool, within budget. The role answers **with evidence**: new cited calls.
+   tool. The test is run on the verifier's budget; the role's own budget is untouched. The role answers **with evidence**: new cited calls.
 4. **Verdict.**
    - `pass`: the proposal survives.
    - `fail`: with the alternative and the evidence for it.
@@ -185,7 +194,8 @@ and "remove coordinator" becomes a cleanly defined fixed route.
 5. **Round semantics.**
    - At most **2 rounds**, each with its own verifier turn budget, all inside the run's caps.
    - An `abstain` in round 1 ends the loop: the run abstains.
-   - A named test outside every allow-list or budget counts as `abstain`, and is logged.
+   - A named test outside every allow-list, or beyond the verifier's budget, counts as `abstain`,
+     and is logged.
    - A `fail` sends the alternative back to the specialists for round 2.
 6. **How it ends.** The verifier's verdict is **final**. The coordinator cannot overrule it,
    and no proposer appeals past the round limit. Code concludes:
@@ -205,13 +215,17 @@ and "remove coordinator" becomes a cleanly defined fixed route.
    ("the failed case is the plant's background: …"). The verifier challenges it like any
    label.
 8. **When the null stands, the verifier still runs** (Q3). It challenges `none` by testing the
-   hold-out and the structural signature. So S6-02 at tier B gets the hold-out test that
-   decision 3 of 2026-09-30 promised.
-   - A `fail` whose alternative is `structural` sends that alternative to the calibration role
-     for round 2.
-   - If calibration then claims `structural` with cited evidence, the verifier challenges it as
-     usual.
-   - If it does not, the run abstains (step 6).
+   hold-out and the structural signature, and the hold-out result is recorded.
+   - **Under the frozen null rule** (2026-10-07(a)), `structural` is admitted only over a
+     **failed** NM, with R3 and a failed hold-out. So on a standing null, a `Verdict` whose
+     alternative is `structural` is refused by code (§3.3).
+   - The reachable outcomes are then only `pass` (`none`) or `abstain`.
+   - S6-02 at tier B, whose null stands, therefore stays admissible-`none`: the branch decision
+     3 of 2026-09-30 already allowed. The hold-out test is run and recorded, but cannot admit
+     `structural`.
+   - Whether a **failed hold-out** should become an admitting case for `structural` when NM
+     stands is a change to the frozen null rule. It is a separate question for the lead
+     (Q13).
 
 **Default visibility of shared state before the verifier.** Every role sees:
 - the typed state, including the other roles' typed findings as they arrive;
@@ -226,8 +240,8 @@ No role sees another role's assessment. The hold-out is visible only to the veri
 - **Registry-only tools; no QC bypass.** Allow-lists are enforced in the view (§3.1), and a
   flagged sensor is never reinstated.
 - **Every claim cites a logged call.** The unsupported-claim metric reads the evidence items.
-- **No model free text in `state.json`.** Statements are templated by code (§3.3), and
-  assessments go to `messages.jsonl`.
+- **No model free text in `state.json`.** Statements and sensor notes are templated by code,
+  annotations are code-written (§3.3), and assessments go to `messages.jsonl`.
 - **Abstain is a real option.** It is scored as abstention, never as `none`.
 - **Determinism (rule 4).**
   - Every stochastic tool call is seeded with `seeds.base` plus its call index, as P1 does.
@@ -266,25 +280,28 @@ No role sees another role's assessment. The hold-out is visible only to the veri
 ## 7. How this tests RQ3 and H4
 
 **The comparison.** P2 against the frozen P1, with the same registry, budgets and model, on the
-same cells, two seeds per cell. **Three asymmetries are not removed by that, and are stated
+same cells, two seeds per cell. **Four asymmetries are not removed by that, and are stated
 beside every comparison:**
 
 | asymmetry | what isolates it |
 |---|---|
 | **(a)** P2's roles call `declared_background`; the frozen P1 does not (decision 1 of 2026-09-30) | **nothing in P2.** Only a matched P1 arm (P1 with the band tool, unfrozen, development only) would remove it (Q5) |
 | **(b)** P2's verifier holds `validate` and sees the full hold-out inside the loop, over up to two rounds; P1's hold-out is scored once by the harness | the **verifier-off** ablation |
-| **(c)** P2 has no wall-clock limit; P1's runs were stopped at 90–150 min | not removable afterwards; reported with P1's wall-clock-stopped runs counted as failures |
+| **(c)** P2 has no wall-clock limit; P1 had a 90–150 min allowance | not removable afterwards. No frozen revision-2 run hit the allowance; the two killed P1 runs (S0-01 B/C, S3-01 C/B) are in arm 1b, not in the comparison |
+| **(d)** P2's verifier has its own budget on top of the run's caps (the lead's ruling on Q9); P1 had one budget | the **verifier-off** ablation |
 
 **H4** predicts a gain only with two or more simultaneous faults (Level 7). **No current
 development cell has two faults.** The proposal is to add **S7-01** (`sensor` + `influent`;
-defined at B/B) at B/A, B/B and B/C, and **S7-02** (`structural` + `parameter`; defined at
-A/C) at A/A, with two seeds each, as **new development cells**. The brief's standing rule is
+defined at B/B) at B/A, B/B and B/C, and **S7-02** (omitted SAO, `structural`, plus an ammonia inhibition shift, `parameter`) at
+**A/C, its defined tier**, with two seeds each, as **new development cells**. Not A/A: tier A
+has no TAN or VFA (proposal §6.4), and `p2_design.md` §4.4 already records that a smooth
+parameter fault can be missed at tier A. A/C is also the tier the scenario was written for. The brief's standing rule is
 development cells only, and new cells need the lead's word (Q6).
 
 **The ablations of §6.7 E**, each a configuration switch:
 1. verifier off;
 2. coordinator off (a fixed route);
-3. one specialist off at a time (its tools run by code, as P0 does);
+3. one specialist off at a time: each of the five specialists (data quality, influent, identifiability, calibration, design), its tools run by code as P0 does, all available from the first build under the Q1 ruling;
 4. self-correction off (one round, no response step);
 5. persistent state off (each role sees only its own calls).
 
@@ -293,8 +310,8 @@ The procedural P2 is an extra arm: "decision points only".
 | stage | cells | seeds | runs | what it can detect |
 |---|---|---|---|---|
 | development | the ten development cells | 2 | 20 | only differences of 3–4 hits or more |
-| H4 (Q6) | S7-01 ×3 tiers, S7-02 A/A | 2 | 8 | descriptive only |
-| ablations | the four S7 cells and two clean cells | 2 | 12 per ablation, 60 in all | only differences of 3–4 hits or more |
+| H4 (Q6) | S7-01 at B/A, B/B, B/C; S7-02 at A/C | 2 | 8 | descriptive only |
+| ablations | the four S7 cells and two clean cells, S0-01 B/B (null stands) and S1-01 B/B (null fails) | 2 | 12 per configuration; 9 configurations (verifier, coordinator, the five specialists, self-correction, persistent state): **108** | only differences of 3–4 hits or more |
 | final | the factorial share of §7 | 5 | 480 | the pre-registered analysis |
 
 The code-only floor for each development cell is `reports/p2_power/`: the procedural P2 with
@@ -302,87 +319,152 @@ every decision at its fallback. Any agent result is read against it.
 
 ## 8. Cost and time
 
-**Per run (an estimate, before any measurement).**
-- **P1 for comparison.** P1 costs USD 0.02–0.06 a run with `gpt-5.6-luna`: 10–27 turns and
-  0.3–1.4 M tokens, mostly cached input (`reports/p1_pilot.csv`, revision 2).
-- **P2's model calls.** About six bounded role conversations plus one or two verifier rounds,
-  each roughly half a P1 run: **about 3–6 × P1, USD 0.10–0.30 per run**.
-- **The verifier's input, bounded.** The projection is capped at 200 points per output (§4).
-  At about 100 k tokens per verifier turn, 14 turns and 2 rounds come to about **2.8 M input
-  tokens per run for the verifier alone**:
-  - **USD 0.06 if cached** (USD 0.02 per M);
-  - **USD 0.56 if uncached** (USD 0.20 per M).
-- **The estimate's assumption.** The USD 0.10–0.30 estimate **assumes prompt caching works for
-  agent turns, as it did for P1.** The current cap of USD 0.25 a run would bind uncached, so
-  the pilot caps are a lead question (Q8).
+**Per run (an estimate, before any measurement), from one sizing.**
 
-**Per stage (model cost).**
-- The six-cell pilot: about USD 1–2.
-- Development: USD 2–6.
-- Ablations: USD 6–18.
-- The final share: USD 50–150.
-- **A Claude Opus 5.5 arm** (Q2): P1 on Claude cost USD 9.86 for 10 runs, so about USD 3–6 per
-  P2 run and **about USD 1.5–3 k for the final share**.
+- **P1 for comparison.** P1 costs USD 0.02–0.06 a run with `gpt-5.6-luna`: 10–27 turns and
+  0.3–1.4 M tokens, mostly cached input (`reports/p1_pilot.csv`, revision 2). Its blended rate
+  is about USD 0.05–0.065 per M tokens (0.08 on its smallest run).
+- **The five specialists.** Each is a bounded conversation of roughly half a P1 run: 0.15–0.7 M
+  tokens. That is 0.75–3.5 M tokens for all five.
+- **The verifier.** The projection is capped at 200 points per output (§4). At about 100 k
+  tokens per turn, 14 turns and 2 rounds come to about **2.8 M input tokens per run**.
+- **A run in all: about 3.6–6.3 M tokens.**
+  - **Cached** (as P1's were), at P1's blended rate: **about USD 0.2–0.4 per run**. The honest
+    upper end is about USD 0.40.
+  - **Uncached**, at USD 0.20 per M input: about **USD 0.8–1.3 per run**. The verifier alone
+    would be USD 0.56.
+- **Two budgets (the lead's ruling on Q9).**
+  - **The proposers** (the five specialists, and coordination as code) are bound by the run's
+    caps (Q8): USD 0.50, 200 requests and 10 M tokens for the pilot. Their 0.75–3.5 M tokens
+    hold under those caps, at about USD 0.04–0.23 cached.
+  - **The verifier** has its own caps, separate from and in addition to the run's. Proposed:
+
+    | | per round | per run (2 rounds) |
+    |---|---|---|
+    | requests | 20 | 40 |
+    | tokens | 2 M | 4 M |
+    | USD | 0.25 | 0.50 |
+    | simulator evaluations (its `simulate`, `validate` and the named test) | 40 | 80 |
+    | assay units (a named test that is an assay) | 1 | 1 |
+
+    Its expected 2.8 M tokens (about USD 0.14–0.18 cached, 0.56 uncached) fit inside them.
+  - **What is reported.** A run's total cost is the proposers' spend plus the verifier's. The
+    two are logged separately (`calls.jsonl` attributes each call to its role, and the report
+    gives both and their sum).
+  - **Against the current caps.** The 6 M-token cap of `p2.yaml` would have been hit at the
+    upper end, and USD 0.25 would have bound.
+
+**Per stage (model cost, cached, at USD 0.2–0.4 a run).**
+
+| stage | runs | model cost |
+|---|---|---|
+| the six-cell pilot (all seven roles, the Q1 ruling; proposers + verifier) | 6 | about USD 1.2–2.4 |
+| development | 20 | USD 4–8 |
+| H4 cells (Q6) | 8 | USD 1.6–3.2 |
+| ablations (9 configurations × 12) | 108 | USD 22–43 |
+| the final share | 480 | USD 96–192 |
+
+**A Claude Opus 5.5 arm** (Q2): P1 on Claude cost USD 9.86 for 10 runs, so about USD 3–6 per P2
+run and **about USD 1.5–3 k for the final share**.
 
 **Runner time.** The simulator, not the model, sets the wall clock: about 45–60 min a run now,
 more if agents call more fits. The live driver runs **serially** (one process). At that rate:
 
 | stage | runner time (serial) |
 |---|---|
-| development (20 runs) | about 17 h |
-| ablations (60 runs) | about 50 h |
+| the six-cell pilot | about 5–6 h |
+| development (20 runs) | about 15–20 h |
+| H4 cells (8 runs) | about 6–8 h |
+| ablations (108 runs) | about 81–108 h (≈ 90 h) |
 | final share (480 runs) | **360–480 runner-hours, 15–20 days** |
 
 Offline parts already run in parallel. Running live parts in parallel, two or three on four
 cores, would need the lead's word and a check that the per-run caps stay per run.
 
-**Weeks of work (one session), an honest range: 4–6 in all, before development runs.**
+**Weeks of work (one session), with all seven roles from the start: 5–7 in all, before
+development runs.**
 1. The evidence module and the typed schemas, moved and tested offline: 1 week.
 2. The agent harness on P1's loop, the allow-list views, the projection and the gateway
    extension: 1–2 weeks.
-3. The roles, the verifier loop, and the scripted-model tests (every guard rail with a negative
-   control and a mutation): 1–2 weeks.
+3. All seven roles, the verifier loop, and the scripted-model tests (every guard rail with a
+   negative control and a mutation): 2–3 weeks.
 4. The freeze, an offline dry run with scripted models, and the six-cell pilot: 1 week.
 
 **The G4 gate and the descope clause.** By calendar this is about week 11 of the 36-week plan.
-The week-26 descope clause (P2 with three roles: data quality, calibration and verifier) is
-**not** triggered. Three roles first (Q1) is recommended on build risk alone: it builds and
-tests the adversarial loop, the part attempts 1–3 most lacked, before the remaining four roles.
+The lead decided on 2026-10-25 that all seven roles are built from the start (Q1). The
+proposal's week-26 descope clause (P2 with three roles: data quality, calibration and verifier)
+is not triggered. It stays the fallback if the build slips toward G4. The ablation switches
+make that descope a configuration, not a rewrite.
 
-## 9. The decisions asked of the lead (each with a recommendation)
+## 9. The lead's decisions
 
-1. **Three roles first, or all seven at once?** *Recommend three first:* data quality,
-   calibration and verifier, with coordination in code. It carries the least build risk and
-   tests the verifier loop soonest.
-2. **The model.** P1's frozen `gpt-5.6-luna`, or a stronger one? *Recommend P1's frozen model*
-   for every arm of the RQ3 comparison. A Claude arm is a separate, costed extension: about
-   USD 3–6 a run and USD 1.5–3 k for the final share.
-3. **`none` over a failed null, and the verifier when the null stands** (§4, steps 6–8).
-   *Recommend:*
+**Ruled on 2026-10-25.** The lead's words, relayed by the coordinator:
+- on Q1: "FOr the first, let's have all the agents";
+- on the rest: "Yes to all except that the coordinator should be code. Let the verifier get
+  its own budget outside of what you have set."
+
+Every recommendation below therefore stands as decided, with the lead's two points stated in
+Q7 and Q9. Q13 was written after the ruling and is **open**.
+
+1. **DECIDED: all seven roles from the start.** Data quality, influent, identifiability,
+   calibration, experimental design and verification are built as agents from the first build;
+   coordination is code (Q7).
+2. **DECIDED: P1's frozen `gpt-5.6-luna` for every arm** of the RQ3 comparison. A Claude arm
+   (about USD 3–6 a run, USD 1.5–3 k for the final share) is not part of the plan.
+3. **DECIDED: `none` over a failed null, and the verifier when the null stands** (§4, steps
+   6–8):
    - a specialist may emit a cited `none` finding, and the verifier challenges it like any
      label;
    - a last-round `fail` whose alternative is `none` concludes `none`, not abstain;
-   - the verifier runs when the null stands too, so S6-02 gets its hold-out test.
-4. **D-1 under a free verifier** (§5). *Recommend:* the full hold-out to the verifier only; a
+   - the verifier runs when the null stands too, and its hold-out result is recorded. What it
+     can conclude there **depends on Q13 (open)**: under the frozen null rule, `pass`
+     (`none`) or `abstain` only.
+4. **DECIDED: D-1 under a free verifier** (§5). The full hold-out goes to the verifier only. A
    passed hold-out never counts against a non-structural label, stated in the prompt and
    enforced on the `Verdict`.
-5. **The `declared_background` asymmetry with P1** (§7 a). Run a matched P1 arm (P1 plus the
-   band tool, unfrozen, development only), or disclose? *Recommend disclosing now, and deciding
-   after the pilot* whether the matched arm is worth its cost.
-6. **New development cells for H4** (§7). *Recommend adding* S7-01 at B/A, B/B and B/C, and
-   S7-02 at A/A, two seeds each. No development cell has two faults now.
-7. **The coordinator: code or model?** *Recommend code*, with a model coordinator only as an
-   optional ablation.
-8. **The caps.** *Recommend* USD 0.50, 200 requests and 10 M tokens per run for the pilot, to
-   measure the real cost uncached or cached. Then a frozen cap at about twice the measured
-   median.
-9. **The verifier's tests.** *Recommend* one named separating test per round, charged to the
-   run's budget, with the verifier's own `simulate` and `residual_diag` calls charged the same
-   way.
-10. **Parameter bounds.** *Recommend* that calibration may narrow bounds, logged with a
-    justification (redacted from the verifier), and never widen them. A bound hit is never a
-    kinetic update.
-11. **The round limit.** *Recommend 2.* A third round only if the pilot shows round 2 leaving
-    separable cases unsettled.
-12. **The procedural P2's place in the paper.** *Recommend* reporting it as the "decision
-    points only" arm: an honest negative result, with attempts 1–3 as its record.
+5. **DECIDED: the `declared_background` asymmetry with P1** (§7 a) is disclosed now. Whether
+   to run a matched P1 arm (P1 plus the band tool, unfrozen, development only) is decided after
+   the pilot.
+6. **DECIDED: new development cells for H4** (§7): S7-01 at B/A, B/B and B/C, and S7-02 at
+   **A/C, pending the lead's confirmation of the tier**, two seeds each.
+   - The lead approved the four cells on text that said A/A.
+   - The check of `588187b` corrected the tier to S7-02's defined A/C: tier A has no TAN or
+     VFA.
+   - The coordinator has told the lead of the correction, which stands unless the lead
+     objects.
+7. **DECIDED: the coordinator is code.** The lead stated this explicitly. A model coordinator
+   is at most an optional ablation.
+8. **DECIDED: the caps** for the run's proposers are USD 0.50, 200 requests and 10 M tokens
+   per run for the pilot. After the pilot they are frozen at about twice the measured median.
+9. **DECIDED, the lead's variant: the verifier has its own budget**, separate from and in
+   addition to the run's caps (§8 gives the proposed per-round and per-run caps).
+   - It names one separating test per round.
+   - Its `simulate`, `residual_diag` and `validate` calls, and its named test, draw on its own
+     budget.
+   - The run's reported cost is the proposers' spend plus the verifier's, both logged
+     separately.
+   - This is an asymmetry with P1, which had one budget (§7 d). The verifier-off ablation
+     removes it.
+10. **DECIDED: parameter bounds.** Calibration may narrow bounds, logged with a justification
+    (redacted from the verifier), and never widen them. A bound hit is never a kinetic
+    update.
+11. **DECIDED: two rounds.**
+12. **DECIDED: the procedural P2 is reported** as the "decision points only" arm, with attempts
+    1–3 as its record.
+
+**Also decided with Q1–Q12: assays.** Data quality requests assays only through the design
+role's grant (§3.1).
+
+13. **OPEN: a failed hold-out as an admitting case for `structural` when NM stands.** This would
+    **change the null rule frozen on 2026-10-07 (a)**: today `structural` is admitted only over
+    a failed NM, with R3 and a failed hold-out.
+    - *Option (i), keep the rule.* On a standing null the verifier can conclude only `none` or
+      `abstain`. S6-02 at tier B stays admissible-`none`, as decision 3 of 2026-09-30
+      allowed.
+    - *Option (ii), change it.* A failed hold-out, with R3, admits `structural` over a standing
+      null. S6 becomes reachable at tier B, but a hold-out that fails by chance on a clean
+      cell would then become a structural false alarm.
+
+    *Recommend (i) for the first build.* Record the verifier's hold-out result on every
+    standing-null run in the pilot and development, to measure how often the hold-out fails
+    on clean cells. Then decide (ii) with that rate in hand.

@@ -8118,3 +8118,58 @@ challenged cannot answer RQ3.
 **What moves.** Nothing yet: this PR is docs only.
 - `eval/`, `sim/`, `scenarios/`, `tools/impl/`, `tools/llm.py`, P0 and P1 are untouched.
 - The procedural P2's records (attempts 1–3, the offline power run) stand as its record.
+
+## 2026-10-25 — RULING (the lead): all seven P2 roles are built as agents from the start (design note Q1)
+
+**The lead's words** (relayed by the coordinator at 20:25 UTC): "FOr the first, let's have all
+the agents".
+
+**Decision.** All seven roles are built as agents from the first build, not three first:
+- data quality, influent, identifiability, calibration, experimental design and verification;
+- coordination follows Q7, still open.
+
+**Reason.** The lead's choice.
+
+**What it changes.** The design note recommended three roles first, on build risk. With all
+seven:
+- the build takes about 5–7 weeks, not 4–6;
+- the six-cell pilot runs all seven roles;
+- all five single-specialist ablations are available from the first build;
+- the proposal's three-role descope clause stays the fallback if the build slips toward G4.
+
+**Alternative.** Three roles first (data quality, calibration, verifier). Not taken.
+
+## 2026-10-25 — RULING (the lead): the rest of the design note's questions (Q2–Q12)
+
+**The lead's words** (relayed by the coordinator at 20:50 UTC): "Yes to all except that the
+coordinator should be code. Let the verifier get its own budget outside of what you have set."
+
+**Decisions.** Every recommendation of §9 stands, with the lead's two points:
+- **Q2:** P1's frozen `gpt-5.6-luna` for every arm.
+- **Q3:** a cited `none` finding is allowed; a last-round `fail` whose alternative is `none`
+  concludes `none`; the verifier runs when the null stands. What it can conclude there depends
+  on Q13, written after the ruling and **open**: a failed hold-out as an admitting case for
+  `structural` when NM stands, which would change the null rule frozen on 2026-10-07 (a).
+- **Q4:** D-1 under a free verifier, as recommended.
+- **Q5:** disclose the `declared_background` asymmetry now; decide a matched P1 arm after the
+  pilot.
+- **Q6:** new development cells S7-01 at B/A, B/B and B/C, and S7-02, two seeds each. S7-02 is
+  at its defined tier A/C, pending the lead's confirmation: the lead approved the cells on text
+  that said A/A, and the tier was corrected after.
+- **Q7:** the coordinator is **code**, stated by the lead.
+- **Q8:** the proposers' caps are USD 0.50, 200 requests and 10 M tokens per run for the pilot,
+  then frozen at about twice the measured median.
+- **Q9 (the lead's variant):** **the verifier has its own budget**, separate from and in
+  addition to the run's caps. Its tools and its one named test per round draw on it. A run's
+  reported cost is the proposers' spend plus the verifier's, both logged separately. This is
+  an asymmetry with P1, removed by the verifier-off ablation.
+- **Q10:** bounds are narrowed only, logged, never widened; a bound hit is never a kinetic
+  update.
+- **Q11:** two rounds.
+- **Q12:** the procedural P2 is reported as the "decision points only" arm.
+- **Assays:** data quality requests assays only through the design role's grant.
+
+**Reason.** The lead's ruling on the recommendations of `docs/p2_agents_design.md` §9.
+
+**Alternatives.** As listed under each question in the note.
+
