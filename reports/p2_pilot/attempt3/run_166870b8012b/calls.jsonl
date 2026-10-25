@@ -1,0 +1,26 @@
+{"seq":0,"name":"sim.generate_influent","version":"1.0","args_hash":"95ce78487365a57c","outcome":"ok","detail":""}
+{"seq":1,"name":"sim.burn_in","version":"1.0","args_hash":"e178ebd96ee86b76","outcome":"ok","detail":""}
+{"seq":2,"name":"sim.simulate_truth","version":"1.0","args_hash":"95ce78487365a57c","outcome":"ok","detail":""}
+{"seq":3,"name":"sim.channel_series","version":"1.0","args_hash":"f1e13066040745f5","outcome":"ok","detail":""}
+{"seq":4,"name":"sim.observe","version":"1.0","args_hash":"01bff8082752100e","outcome":"ok","detail":""}
+{"seq":5,"name":"registry.open","version":"1.0","args_hash":"d6daab88af2c856c","outcome":"ok","detail":"clock start: no wall-clock limit (the wall clock is reported, never refused on)"}
+{"seq":6,"name":"describe_model","version":"1.0","args_hash":"6e46ab5fd289f281","outcome":"ok","detail":""}
+{"seq":7,"name":"feed_loads","version":"1.0","args_hash":"6e46ab5fd289f281","outcome":"ok","detail":""}
+{"seq":8,"name":"simulate","version":"1.0","args_hash":"2374dcaf9eadfb0e","outcome":"ok","detail":""}
+{"seq":9,"name":"data_qc","version":"1.0","args_hash":"f80870875538b142","outcome":"ok","detail":""}
+{"seq":10,"name":"declared_background","version":"1.0","args_hash":"52ad44ebfc89c7a0","outcome":"ok","detail":""}
+{"seq":11,"name":"mass_balance","version":"1.0","args_hash":"3dcf2dfe668fa682","outcome":"ok","detail":""}
+{"seq":12,"name":"gsa_morris","version":"1.0","args_hash":"e756cc4bd2b5d1b8","outcome":"ok","detail":""}
+{"seq":13,"name":"fisher_info","version":"1.0","args_hash":"7b4ca55ae05f7772","outcome":"ok","detail":""}
+{"seq":14,"name":"fit_lsq","version":"1.0","args_hash":"5cde022e12ddcf9c","outcome":"ok","detail":"not_converged"}
+{"seq":15,"name":"simulate","version":"1.0","args_hash":"423f38b7376adb80","outcome":"ok","detail":""}
+{"seq":16,"name":"declared_background","version":"1.0","args_hash":"52ad44ebfc89c7a0","outcome":"ok","detail":""}
+{"seq":17,"name":"bayes_mcmc","version":"1.0","args_hash":"5b32e8e1c451abdd","outcome":"ok","detail":"not_converged"}
+{"seq":18,"name":"residual_diag","version":"1.0","args_hash":"a294a92fc0065c4c","outcome":"ok","detail":""}
+{"seq":19,"name":"residual_diag","version":"1.0","args_hash":"5ae591d2de7cca8c","outcome":"ok","detail":""}
+{"seq":20,"name":"residual_diag","version":"1.0","args_hash":"a5b48e6b79497ae4","outcome":"ok","detail":""}
+{"seq":21,"name":"residual_diag","version":"1.0","args_hash":"bd947821f3111e91","outcome":"ok","detail":""}
+{"seq":22,"name":"residual_diag","version":"1.0","args_hash":"25264821b47a9a3f","outcome":"ok","detail":""}
+{"seq":23,"name":"residual_diag","version":"1.0","args_hash":"9167c63df46395d7","outcome":"ok","detail":""}
+{"seq":24,"name":"validate","version":"1.0","args_hash":"de1c13590be78fdf","outcome":"ok","detail":""}
+{"seq":25,"name":"validate","version":"1.0","args_hash":"58cc44f1b1c86479","outcome":"ok","detail":""}
