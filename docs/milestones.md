@@ -4116,5 +4116,6 @@ go").**
   - cost and time;
   - seven open questions with recommendations.
 - **Blocked:** no code until the coordinator reviews the note and the lead approves it.
-- **Next:** the review; then, on approval, the three-role build first (the note's Q1).
+- **Next:** the review. On approval, the three-role build comes first, if Q1 is taken as
+  recommended.
 
