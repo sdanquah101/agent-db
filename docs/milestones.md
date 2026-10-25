@@ -4096,7 +4096,10 @@ recommendations").**
   - S0-01 r1 (clean) is a false alarm, `sensor`. That is the admission rule's known
     limitation (accepted with D-1), now reaching the outcome: the differential took the
     admitted label, as its coded fallback would have.
-- **Where the model mattered.** The only answers that differed from code were the three
-  `dq.coupled` readings. Six runs are not evidence of skill.
+- **Where the model mattered.** The only answers whose applied value differed from code
+  were the three `dq.coupled` readings, and each restated the S1 table's `coupled_inside`
+  field that code computed and showed it: not independent judgement. The differential's
+  `rejected` list differed on all seven calls but is never applied. Six runs are not
+  evidence of skill.
 - **Next:** the coordinator's review of the report. No live call before a new word.
 

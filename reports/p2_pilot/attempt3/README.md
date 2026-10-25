@@ -62,7 +62,9 @@ P0 and the frozen P1 (revision 2, `gpt-5.6-luna`, no brief) were run on replicat
 
 Code computes the null table from the reference fit on the raw record. It is identical to the offline re-run's on all six runs: the model has no input to it.
 
-The only model answers that differ from the coded fallback are the three `dq.coupled` readings. Each is `coupled_inside` where the offline reading is `insufficient`, and each lets code admit `sensor`:
+The only answers whose **applied** value differs from the coded fallback are the three `dq.coupled` readings. Each is `coupled_inside` where the offline reading is `insufficient`, and each lets code admit `sensor`. The differential's `rejected` list differs from code's own on all seven calls, but it is recorded and never applied: `step_verify` applies only the label.
+
+**These three readings are not independent judgement.** Each restates a field code computed and showed the model: the S1 table's `"coupled_inside": true`. With `s1_holds` taken from that field, and a reading of `coupled_inside` or `assay_implicates` admitting `sensor`, attempt 3's outcomes equal a pure-code rule: admit `sensor` when NS fails on one channel and the S1 table holds. The only offline difference is that the coded fallback reads `insufficient`. The model agreed with what code showed it.
 
 | run | truth | null fails on | `dq.coupled` (live / offline) | admitted | the differential's choice | the coded fallback on the same inputs | outcome |
 |---|---|---|---|---|---|---|---|
@@ -70,10 +72,10 @@ The only model answers that differ from the coded fallback are the three `dq.cou
 | S2-01 B/B r1 | sensor | `ph` alone | `coupled_inside` / `insufficient` | `sensor` | `sensor` | `sensor` (`first_in_p0_order`) | `sensor`: correct |
 | S8-01 B/B r0 | sensor | `gas_flow` alone | `coupled_inside` / `insufficient` | `sensor` | `sensor` | `sensor` (`first_in_p0_order`) | `sensor`: correct |
 
-- **The differential added nothing on any run.** On all seven `verify.differential` calls, its label equals the coded fallback on the same inputs: `first_in_p0_order` of the admitted labels, or `none` when nothing is admitted.
+- **The differential's applied answer added nothing on any run.** On all seven `verify.differential` calls, its label equals the coded fallback on the same inputs: `first_in_p0_order` of the admitted labels, or `none` when nothing is admitted. Its `rejected` list differs from code's on every call, and is never applied (the decision table shows both).
   - In attempt 2, on S0-01 r1 and S8-01 r0, the model set the admitted `sensor` aside, citing `holdout_passed`.
   - Since D-1 it is not shown the hold-out bit beside `sensor`, and since D-3 `holdout_passed` is allowed with `structural` only.
-  - With that route gone, it took the admitted label each time.
+  - It took the admitted label each time.
 - **S0-01 r1 is the known design limitation, now reaching the outcome.** On the clean S0-01 r1, the null fails on `ph` alone and the S1 table holds. A `coupled_inside` reading then makes code admit `sensor`, and nothing downstream declines it. This limitation was stated before attempt 2 and accepted by the lead with D-1. It is not a new defect, but it is now a false alarm in the record.
 - **The `dq.trust` answers changed nothing.** All nine requested quarantines equal QC's flagged windows minus any first-HRT spike: the coded fallback, on every one.
 
@@ -95,41 +97,42 @@ The last column is the coded fallback on the same inputs: what the offline decid
 | S0-01 B/B r0 | `dq.trust` (gas_flow) | decided (attempt 1) | `{"quarantine": [[44.0, 44.0], [46.0, 46.0]], "reason": "spike_run", "sensor": "gas_flow"}` | quarantine [[44.0, 44.0], [46.0, 46.0]] (QC's flagged windows; the same) |
 | S0-01 B/B r0 | `dq.trust` (ph) | not asked (nothing shown) | — | {"quarantine": [], "reason": "spike_run", "sensor": "ph"} (taken) |
 | S0-01 B/B r0 | `cal.split` | not asked (answer unused in deliverable 3) | — | {"channels": ["gas_flow", "ph"], "common_step_day": 15.0} (taken) |
-| S0-01 B/B r0 | `verify.differential` | decided (attempt 1) | `{"label": "none", "rejected": []}` | `first_in_p0_order`: `none` (offered: ['none']; the same label) |
+| S0-01 B/B r0 | `verify.differential` | decided (attempt 1) | `{"label": "none", "rejected": []}` | `first_in_p0_order`: `none` (offered: ['none']; the same label), rejected [{"label": "parameter", "code": "signature_absent"}, {"label": "structural", "code": "signature_absent"}] (code's; the model's differs, and is never applied) |
 | S0-01 B/B r1 | `dq.trust` (gas_flow) | decided (attempt 1) | `{"quarantine": [[59.0, 59.0]], "reason": "spike_run", "sensor": "gas_flow"}` | quarantine [[59.0, 59.0]] (QC's flagged windows; the same) |
 | S0-01 B/B r1 | `dq.trust` (ph) | decided (attempt 1) | `{"quarantine": [[149.0, 149.0]], "reason": "spike_run", "sensor": "ph"}` | quarantine [[149.0, 149.0]] (QC's flagged windows; the same) |
 | S0-01 B/B r1 | `dq.coupled` (ph) | decided (attempt 1) | `{"code": "coupled_inside", "sensor": "ph"}` | `insufficient`: no sensor finding |
 | S0-01 B/B r1 | `cal.split` | not asked (answer unused in deliverable 3) | — | {"channels": ["gas_flow", "ph"], "common_step_day": 10.0} (taken) |
-| S0-01 B/B r1 | `verify.differential` | decided (attempt 1) | `{"label": "sensor", "rejected": [{"code": "signature_absent", "label": "influent"}, {"code": "signature_absent", "label": "state"}, {"code": "signature_absent", "label": "parameter"}, {"code": "signature_absent", "label": "structural"}]}` | `first_in_p0_order`: `sensor` (offered: ['sensor', 'none']; the same label) |
+| S0-01 B/B r1 | `verify.differential` | decided (attempt 1) | `{"label": "sensor", "rejected": [{"code": "signature_absent", "label": "influent"}, {"code": "signature_absent", "label": "state"}, {"code": "signature_absent", "label": "parameter"}, {"code": "signature_absent", "label": "structural"}]}` | `first_in_p0_order`: `sensor` (offered: ['sensor', 'none']; the same label), rejected [{"label": "parameter", "code": "signature_absent"}] (code's; the model's differs, and is never applied) |
 | S2-01 B/B r0 | `dq.trust` (gas_flow) | decided (attempt 1) | `{"quarantine": [[92.0, 92.0]], "reason": "spike_run", "sensor": "gas_flow"}` | quarantine [[92.0, 92.0]] (QC's flagged windows; the same) |
 | S2-01 B/B r0 | `dq.trust` (ph) | decided (attempt 1) | `{"quarantine": [[90.0, 90.0]], "reason": "spike_run", "sensor": "ph"}` | quarantine [[90.0, 90.0]] (QC's flagged windows; the same) |
 | S2-01 B/B r0 | `cal.split` | not asked (answer unused in deliverable 3) | — | {"channels": ["alkalinity", "gas_flow"], "common_step_day": 112.0} (taken) |
-| S2-01 B/B r0 | `verify.differential` | decided (attempt 1) | `{"label": "none", "rejected": []}` | `first_in_p0_order`: `none` (offered: ['none']; the same label) |
-| S2-01 B/B r0 | `verify.differential` | decided (attempt 1) | `{"label": "none", "rejected": []}` | `first_in_p0_order`: `none` (offered: ['none']; the same label) |
+| S2-01 B/B r0 | `verify.differential` | decided (attempt 1) | `{"label": "none", "rejected": []}` | `first_in_p0_order`: `none` (offered: ['none']; the same label), rejected [{"label": "parameter", "code": "signature_absent"}] (code's; the model's differs, and is never applied) |
+| S2-01 B/B r0 | `verify.differential` | decided (attempt 1) | `{"label": "none", "rejected": []}` | `first_in_p0_order`: `none` (offered: ['none']; the same label), rejected [{"label": "parameter", "code": "signature_absent"}] (code's; the model's differs, and is never applied) |
 | S2-01 B/B r1 | `dq.trust` (ch4_fraction) | decided (attempt 1) | `{"quarantine": [[22.0, 22.0]], "reason": "spike_run", "sensor": "ch4_fraction"}` | quarantine [[22.0, 22.0]] (QC's flagged windows; the same) |
-| S2-01 B/B r1 | `dq.trust` (gas_flow) | decided (attempt 1) | `{"quarantine": [[23.0, 23.0], [89.0, 89.0], [109.0, 109.0], [131.0, 131.0]], "reason": "spike_run", "sensor": "gas_flow"}` | quarantine [[23.0, 23.0], [89.0, 89.0], [109.0, 109.0], [131.0, 131.0]] (QC's flagged windows; the same) |
+| S2-01 B/B r1 | `dq.trust` (gas_flow) | decided (attempt 1) | `{"quarantine": [[23.0, 23.0], [89.0, 89.0], [109.0, 109.0], [131.0, 131.0]], "reason": "spike_run", "sensor": "gas_flow"}` | quarantine [[23.0, 23.0], [89.0, 89.0], [109.0, 109.0], [131.0, 131.0]] (QC's flagged windows minus the first-HRT spike at day 0; the same) |
 | S2-01 B/B r1 | `dq.trust` (ph) | not asked (nothing shown) | — | {"quarantine": [], "reason": "spike_run", "sensor": "ph"} (taken) |
 | S2-01 B/B r1 | `dq.coupled` (ph) | decided (attempt 1) | `{"code": "coupled_inside", "sensor": "ph"}` | `insufficient`: no sensor finding |
 | S2-01 B/B r1 | `cal.split` | not asked (answer unused in deliverable 3) | — | {"channels": ["cod_total", "ph", "tan"], "common_step_day": 55.0} (taken) |
-| S2-01 B/B r1 | `verify.differential` | decided (attempt 1) | `{"label": "sensor", "rejected": [{"code": "signature_absent", "label": "influent"}, {"code": "signature_absent", "label": "state"}, {"code": "signature_absent", "label": "parameter"}, {"code": "signature_absent", "label": "structural"}]}` | `first_in_p0_order`: `sensor` (offered: ['sensor', 'none']; the same label) |
+| S2-01 B/B r1 | `verify.differential` | decided (attempt 1) | `{"label": "sensor", "rejected": [{"code": "signature_absent", "label": "influent"}, {"code": "signature_absent", "label": "state"}, {"code": "signature_absent", "label": "parameter"}, {"code": "signature_absent", "label": "structural"}]}` | `first_in_p0_order`: `sensor` (offered: ['sensor', 'none']; the same label), rejected [{"label": "parameter", "code": "signature_absent"}] (code's; the model's differs, and is never applied) |
 | S8-01 B/B r0 | `dq.trust` (gas_flow) | decided (attempt 1) | `{"quarantine": [[68.0, 68.0], [89.0, 89.0]], "reason": "spike_run", "sensor": "gas_flow"}` | quarantine [[68.0, 68.0], [89.0, 89.0]] (QC's flagged windows; the same) |
 | S8-01 B/B r0 | `cal.bound` | not asked (answer unused in deliverable 3) | — | {"code": "identifiability_limit"} (taken) |
 | S8-01 B/B r0 | `cal.bound` | not asked (answer unused in deliverable 3) | — | {"code": "identifiability_limit"} (taken) |
 | S8-01 B/B r0 | `dq.coupled` (gas_flow) | decided (attempt 1) | `{"code": "coupled_inside", "sensor": "gas_flow"}` | `insufficient`: no sensor finding |
 | S8-01 B/B r0 | `cal.split` | not asked (answer unused in deliverable 3) | — | {"channels": ["gas_flow", "ph"], "common_step_day": 10.0} (taken) |
-| S8-01 B/B r0 | `verify.differential` | decided (attempt 1) | `{"label": "sensor", "rejected": []}` | `first_in_p0_order`: `sensor` (offered: ['sensor', 'none']; the same label) |
+| S8-01 B/B r0 | `verify.differential` | decided (attempt 1) | `{"label": "sensor", "rejected": []}` | `first_in_p0_order`: `sensor` (offered: ['sensor', 'none']; the same label), rejected [{"label": "state", "code": "signature_absent"}, {"label": "parameter", "code": "signature_absent"}] (code's; the model's differs, and is never applied) |
 | S8-01 B/B r1 | `dq.trust` (alkalinity) | not asked (nothing shown) | — | {"quarantine": [], "reason": "spike_run", "sensor": "alkalinity"} (taken) |
 | S8-01 B/B r1 | `dq.trust` (gas_flow) | not asked (nothing shown) | — | {"quarantine": [], "reason": "spike_run", "sensor": "gas_flow"} (taken) |
 | S8-01 B/B r1 | `dq.trust` (ph) | decided (attempt 1) | `{"quarantine": [[89.0, 89.0]], "reason": "spike_run", "sensor": "ph"}` | quarantine [[89.0, 89.0]] (QC's flagged windows; the same) |
 | S8-01 B/B r1 | `cal.bound` | not asked (answer unused in deliverable 3) | — | {"code": "identifiability_limit"} (taken) |
 | S8-01 B/B r1 | `cal.split` | not asked (answer unused in deliverable 3) | — | {"channels": ["gas_flow", "ph"], "common_step_day": 61.0} (taken) |
-| S8-01 B/B r1 | `verify.differential` | decided (attempt 1) | `{"label": "none", "rejected": []}` | `first_in_p0_order`: `none` (offered: ['none']; the same label) |
+| S8-01 B/B r1 | `verify.differential` | decided (attempt 1) | `{"label": "none", "rejected": []}` | `first_in_p0_order`: `none` (offered: ['none']; the same label), rejected [{"label": "parameter", "code": "signature_absent"}] (code's; the model's differs, and is never applied) |
 
 **Totals:**
 - `dq.trust`: 9 decided and 4 not asked (nothing shown).
 - `dq.coupled`: 3 decided.
 - `verify.differential`: 7 decided. S2-01 r0 asked it twice: round 1 and the REVISE round.
 - `cal.split`: 6 not asked. `cal.bound`: 3 not asked.
+- **Note for deliverable 4 (no change now).** Four of the seven differential calls offered only `none`, so their answer was forced (USD 0.000822 in all), and S2-01 r0's REVISE call repeated round 1's request byte for byte. A3's principle would cover them.
 - **D-3 fallbacks: none.** Every `rejected` entry was valid, for example `influent`, `state`, `parameter` and `structural`, each `signature_absent`.
 
 ## The records
