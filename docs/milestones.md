@@ -4149,6 +4149,20 @@ word, "merge"; then the coordinator's "start the code".**
   and sandbox stay unchanged. Open to the coordinator: a package split with a sandbox change.
 - **Deferred to the driver step:** registering the Q6 cells (S7-01 at B/A, B/B, B/C; S7-02
   at A/C; two seeds each) in the development list.
-- **Next:** the coordinator's review of step 1; then step 2, the agent harness on P1's loop,
-  the allow-list views, the projection and the gateway extension.
+- **The coordinator's review of PR #38 at `7e42a55` (fixes needed), all taken in one commit:**
+  B1 `structural_case` read `r3_all`, a key no code writes, so the standing-NM branch was
+  dead; it now reads `r3_channels_all` against `need` (`structural_channels_min`), or the
+  pipeline's own `structural_proposed`, and a test pins every key the agent section reads to
+  a key the pipeline writes, with pipeline-shaped fixtures. B2 `NAME_PATTERN` admits
+  `K_S_pro`, `K_I_nh3`, `pH` (a test over every fitted and base ADM1 parameter name and every
+  channel key). S1 `free_text_fields` flags untyped nodes (`Any`, `list[Any]`,
+  `dict[str, Any]`, `patternProperties`), and `SeparatingTest.args` is typed to tokens and
+  numbers (no `Any`, no runtime regex). S2 units are the registry symbol after `unit_head`,
+  compared by `same_unit`; rules are a `Literal` of the pipeline's signature keys
+  (`docs/decisions.md`, 2026-10-26). Nits: a fail cites evidence; day and bound fields state
+  their unit; `AssayPlan` carries the assay's unit; the hold-out divergence from the frozen
+  `admit` is stated in the docstring; no private import from the isolation tests.
+- **Next:** the coordinator's re-review; the lead's ruling on the layout (one jailed file or a
+  staged package); then step 2, the agent harness on P1's loop, the allow-list views, the
+  projection and the gateway extension.
 

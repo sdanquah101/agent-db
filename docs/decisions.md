@@ -8263,7 +8263,43 @@ runner change (a new entry); the file section needs neither.
   can still take it, since the sections move as units.
 - A second entry file registered in `tools/runner.py`. Refused by the freeze.
 
-**Consequence.** The file grows to about the size of P1's `agent.py`. `tests/test_p2_workflow.py`'s
-import pin and rule 1's scanner apply to the whole file, as before. The label vocabulary in
-the new message models is a pattern, not an enum, for the reason recorded on 2026-10-19
-(the scanner refuses the bare initial-state label).
+**Superseded the same day.** The lead ruled "Implement option A" (the staged package): see
+the entry "The lead's ruling on the layout: a package staged into the jail (option A)",
+which arrives with the sandbox change (branch `claude/p2-agents-sandbox`). Step 1 stays one
+file as merged; step 2 splits its section into modules as units.
+
+**Consequence.** The file is already past the size of P1's `agent.py` (about 3 200 lines
+against 2 500 after step 1) and grows with every step. `tests/test_p2_workflow.py`'s import
+pin and rule 1's scanner apply to the whole file, as before. The label vocabulary in the new
+message models is a pattern, not an enum, for the reason recorded on 2026-10-19 (the scanner
+refuses the bare initial-state label).
+
+
+## 2026-10-26 — Units and rules in the agent messages: the symbol, and the pipeline's signature keys
+
+**Decision.** In the agent P2's typed messages (`docs/p2_agents_design.md` §3.3), a unit a
+model writes is the **symbol** of the registry's unit string (`kg N/m3`, `m3/d`, `-`,
+`sigma`; `UNIT_PATTERN`), never the registry's full string, which carries a convention note
+in words (`kg N/m3 (total ammoniacal nitrogen, S_IN)`, rule 6). Code takes the symbol of a
+registry string by `unit_head` (the text before the note) and the harness compares a
+model's unit with the registry's through `same_unit`. The rule an evidence item rests on is
+a `Literal` of the signature keys the pipeline's steps write (`sensor`, `early_late`,
+`biomass_improves`, `onset`, `feed_covariate`, `change_point`, `change_point_tied`,
+`inhibition`, `r3`, `holdout_failed`), not a free pattern; a test pins each name to a key
+the code writes, and the same test pins every signature key the agent section reads to one
+the pipeline writes.
+
+**Reason.** The review of step 1 (2026-10-26): the first unit pattern refused 16 of the 22
+channel unit strings, and the rule pattern admitted any short token. A unit field that
+accepts the registry's full strings would accept prose, which §3.3 forbids; a symbol with a
+code-side normalisation keeps the field closed and still lets the harness check the model's
+unit against the registry's. The same review found the standing-NM admission reading a
+signature key no code writes (`r3_all`): a dead branch that a hand-made fixture passed. The
+pin on the keys read against the keys written closes that class.
+
+**Alternatives.**
+- Code templates the units from the cited call's output (the model never writes a unit).
+  Cleaner for S1, but an evidence item's values are named by the model (`mean_z`), so the
+  harness cannot map every value to a registry quantity; kept for the harness step where a
+  value names a registry output, as an addition.
+- A relaxed pattern admitting the registry's strings whole. Refused: it admits prose.

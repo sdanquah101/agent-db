@@ -552,7 +552,11 @@ def admit(
 # arm; the procedural arm (Q12, the "decision points only" arm) keeps `admit` as frozen.
 
 
-def structural_case(table: dict[str, Any] | None, signatures: dict[str, Any]) -> tuple[bool, str]:
+def structural_case(
+    table: dict[str, Any] | None,
+    signatures: dict[str, Any],
+    need: int | None = None,
+) -> tuple[bool, str]:
     """The amended admitting case for ``structural`` (docs/decisions.md, 2026-10-25, Q13 and Q14).
 
     Two branches, both needing a failed hold-out:
@@ -560,8 +564,18 @@ def structural_case(table: dict[str, Any] | None, signatures: dict[str, Any]) ->
     1. **NM failed** (the rule frozen on 2026-10-07 (a)): P0's R3 criterion on two or more
        **failed** channels (``signatures["r3"]``, the 2026-10-08 ruling) and a failed hold-out.
     2. **NM stands** (the lead's "Yes to both" and "Yes" of 2026-10-25): a failed hold-out
-       **and** R3 counted over **all** channels (``signatures["r3_all"]``), two independent
-       pieces of evidence. This amends the 2026-10-08 ruling for this case only.
+       **and** R3 counted over **all** channels, two independent pieces of evidence. This
+       amends the 2026-10-08 ruling for this case only. R3 over all channels is read from
+       what ``step_profile`` writes: ``signatures["r3_channels_all"]`` counted against
+       ``need`` (``structural_channels_min``), or, with no ``need`` given, the pipeline's own
+       count ``signatures["structural_proposed"]`` (``len(r3_channels_all) >= need`` at its
+       configured minimum). A test pins every key this function reads to one the pipeline
+       writes.
+
+    One reading differs from the frozen :func:`admit`: a hold-out that was never checked
+    (``holdout_failed`` absent, as well as ``None``) is ``holdout_unavailable`` here, where
+    :func:`admit` reads an absent key as ``holdout_passed``. The pipeline always writes the
+    key before admission, so the two agree on every pipeline input.
 
     Returns:
         ``(admitted, code)``: the code is the design's rejection code when not admitted
@@ -570,11 +584,15 @@ def structural_case(table: dict[str, Any] | None, signatures: dict[str, Any]) ->
     """
     t = table or {}
     nm = bool(t.get("NM"))
-    r3 = bool(signatures.get("r3")) if nm else bool(signatures.get("r3_all"))
+    if nm:
+        r3 = bool(signatures.get("r3"))
+    elif need is not None:
+        r3 = len(signatures.get("r3_channels_all", [])) >= int(need)
+    else:
+        r3 = bool(signatures.get("structural_proposed"))
     holdout = signatures.get("holdout_failed")
     if not r3:
-        code = str(signatures.get("structural_code", "signature_absent"))
-        return False, code if code != "signature_absent" or nm else "signature_absent"
+        return False, str(signatures.get("structural_code", "signature_absent"))
     if holdout is None:
         return False, "holdout_unavailable"
     if not holdout:
@@ -586,17 +604,18 @@ def admit_agent(
     lab: dict[str, str],
     table: dict[str, Any] | None,
     signatures: dict[str, Any],
+    need: int | None = None,
 ) -> dict[str, Any]:
     """Admission for the agent arm: :func:`admit` with the amended ``structural`` case.
 
     ``sensor``, ``influent``, ``state`` and ``parameter`` are judged exactly as :func:`admit`
     does (a test pins the two equal on every input). ``structural`` follows
-    :func:`structural_case`: when NM stands it needs a failed hold-out and R3 over all
-    channels (docs/decisions.md, 2026-10-25, Q13 and Q14; ``docs/p2_design.md`` §4.4 is
-    superseded on this point for this arm only). With no table (the verifier off) no null
-    case is checked, as in :func:`admit`.
+    :func:`structural_case` with ``need`` (``structural_channels_min``): when NM stands it
+    needs a failed hold-out and R3 over all channels (docs/decisions.md, 2026-10-25, Q13 and
+    Q14; ``docs/p2_design.md`` §4.4 is superseded on this point for this arm only). With no
+    table (the verifier off) no null case is checked, as in :func:`admit`.
     """
-    base = admit(lab, table, {k: v for k, v in signatures.items()})
+    base = admit(lab, table, signatures)
     structural = lab["structural"]
     admitted = [x for x in base["admitted"] if x != structural]
     rejected = [r for r in base["rejected"] if r["label"] != structural]
@@ -606,10 +625,14 @@ def admit_agent(
             str(signatures.get("structural_code", "signature_absent")),
         )
     else:
-        ok, code = structural_case(table, signatures)
+        ok, code = structural_case(table, signatures, need)
     if ok:
         admitted.append(structural)
-    elif signatures.get("structural_proposed") or signatures.get("r3") or signatures.get("r3_all"):
+    elif (
+        signatures.get("structural_proposed")
+        or signatures.get("r3")
+        or signatures.get("r3_channels_all")
+    ):
         rejected.append({"label": structural, "code": code})
     return {"admitted": admitted, "rejected": rejected}
 
@@ -619,6 +642,7 @@ def admissible_alternative(
     lab: dict[str, str],
     table: dict[str, Any] | None,
     signatures: dict[str, Any],
+    need: int | None = None,
 ) -> bool:
     """Whether a verifier's alternative may be named: ``none``, or a label the amended rule admits.
 
@@ -627,7 +651,7 @@ def admissible_alternative(
     """
     if alternative == lab["none"]:
         return True
-    return alternative in admit_agent(lab, table, signatures)["admitted"]
+    return alternative in admit_agent(lab, table, signatures, need)["admitted"]
 
 
 # -- the typed messages (design note §3.3) ------------------------------------------------
@@ -636,10 +660,15 @@ def admissible_alternative(
 # label vocabulary is a pattern, not an enum, for the reason CANDIDATE_PATTERN gives.
 
 LABEL_OR_NONE_PATTERN = r"^(sensor|influent|state|parameter|structural|none)$"
-NAME_PATTERN = r"^[a-z][a-z0-9_]{0,31}$"
-"""A sensor, parameter, assay or tool name: an identifier, never prose."""
-RULE_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:+-]{0,31}$"
-UNIT_PATTERN = r"^[A-Za-z0-9/%^_.()\- ]{1,24}$"
+NAME_PATTERN = r"^[A-Za-z][A-Za-z0-9_]{0,31}$"
+"""A sensor, parameter, assay or tool name: an identifier (``K_S_pro``, ``pH``), never prose."""
+UNIT_PATTERN = r"^(-|%|[A-Za-z0-9]{1,8}(?: [A-Z][A-Za-z0-9]{0,7})?(?:/[A-Za-z0-9]{1,8})?)$"
+"""A unit symbol as a model writes it: ``kg COD/m3``, ``m3/d``, ``-``, ``1/d``, ``sigma``.
+
+The registry's unit strings carry a convention note after the symbol (``kg N/m3 (total
+ammoniacal nitrogen, S_IN)``, rule 6); :func:`unit_head` is the symbol a model's unit is
+compared with (docs/decisions.md, 2026-10-26).
+"""
 TOKEN_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_.:+/-]{0,31}$"
 """A value a model may put in a named test's arguments: an identifier or a number as text."""
 CONFIDENCE_PATTERN = r"^(low|medium|high)$"
@@ -656,7 +685,54 @@ ROUND_TWO_ONLY_CLAIMS = frozenset({"structural"})
 Name = Annotated[str, Field(pattern=NAME_PATTERN)]
 LabelOrNone = Annotated[str, Field(pattern=LABEL_OR_NONE_PATTERN)]
 Confidence = Annotated[str, Field(pattern=CONFIDENCE_PATTERN)]
-Window = tuple[float, float]
+Unit = Annotated[str, Field(pattern=UNIT_PATTERN)]
+Day = Annotated[float, Field(description="A day of the run, d")]
+DayWindow = Annotated[tuple[float, float], Field(description="(start, end) of a window, d")]
+Bounds = Annotated[
+    tuple[float, float], Field(description="(lower, upper), in the parameter's unit")
+]
+Rule = Literal[
+    "sensor",
+    "early_late",
+    "biomass_improves",
+    "onset",
+    "feed_covariate",
+    "change_point",
+    "change_point_tied",
+    "inhibition",
+    "r3",
+    "holdout_failed",
+]
+"""The rules a piece of evidence may rest on: the signatures the pipeline's steps write
+(``step_qc`` S1 as ``sensor``, ``step_profile``, the hold-out), by their key. A test pins each
+name to a key the code writes."""
+Token = Annotated[str, Field(pattern=TOKEN_PATTERN)]
+ArgScalar = Token | int | float | bool | None
+ArgLevel2 = ArgScalar | list[ArgScalar] | dict[Name, ArgScalar]
+ArgLevel1 = ArgScalar | list[ArgLevel2] | dict[Name, ArgLevel2]
+ArgValue = ArgScalar | list[ArgLevel1] | dict[Name, ArgLevel1]
+"""A named test's argument: tokens and numbers, nested at most three levels below ``args``;
+no prose at any depth."""
+
+
+def unit_head(unit: str) -> str:
+    """The symbol of a registry unit string: the text before its convention note.
+
+    ``kg N/m3 (total ammoniacal nitrogen, S_IN)`` is ``kg N/m3``; ``m3/d at 0 degC and 1
+    atm, water vapour removed`` is ``m3/d``; ``- (multiplier of the BSM2 default 2)`` is
+    ``-``. A model writes the symbol (``UNIT_PATTERN``); the harness compares it with the
+    registry's through :func:`same_unit`.
+    """
+    words = unit.strip().split(" ")
+    head = words[0]
+    if len(words) > 1 and words[1][:1].isupper() and words[1].replace("/", "").isalnum():
+        head = f"{head} {words[1]}"
+    return head
+
+
+def same_unit(a: str, b: str) -> bool:
+    """Whether two unit strings name the same symbol after :func:`unit_head`."""
+    return unit_head(a) == unit_head(b)
 
 
 class _Msg(BaseModel):
@@ -667,15 +743,16 @@ class EvidenceRef(_Msg):
     """One piece of evidence: a label, the rule it rests on, the logged calls and the numbers.
 
     ``statement`` is not a field: code templates it from these (:func:`statement_for`), so no
-    model text reaches ``state.json``. ``units`` carries the registry's unit of each value
-    (rule 6); a value with no unit is a count or a ratio.
+    model text reaches ``state.json``. ``units`` carries the symbol of each value's unit
+    (rule 6; :func:`unit_head` of the registry's string); a value with no unit is a count or
+    a ratio.
     """
 
     label: LabelOrNone
-    rule: Annotated[str, Field(pattern=RULE_PATTERN)]
+    rule: Rule
     calls: Annotated[list[int], Field(min_length=1)]
     values: dict[Name, float | int | bool | None] = Field(default_factory=dict)
-    units: dict[Name, Annotated[str, Field(pattern=UNIT_PATTERN)]] = Field(default_factory=dict)
+    units: dict[Name, Unit] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _units_name_values(self) -> EvidenceRef:
@@ -708,7 +785,7 @@ class SensorFinding(_Msg):
     statuses: dict[Name, Annotated[str, Field(pattern=STATUS_PATTERN)]] = Field(
         default_factory=dict
     )
-    quarantines: dict[Name, list[Window]] = Field(default_factory=dict)
+    quarantines: dict[Name, list[DayWindow]] = Field(default_factory=dict)
     claim: Annotated[str, Field(pattern=SENSOR_CLAIM_PATTERN)]
     channel: Name | None = None
     confidence: Confidence
@@ -729,7 +806,7 @@ class InfluentFinding(_Msg):
 
     role: Literal["influent"] = "influent"
     claim: Annotated[str, Field(pattern=INFLUENT_CLAIM_PATTERN)]
-    onset_day: float | None = None
+    onset_day: Day | None = Field(default=None, description="The onset day, d")
     feed_id: Name | None = None
     mechanism: Literal["fractionation", "moisture", "unrecorded_delivery", "mislabel", "none"] = (
         "none"
@@ -759,7 +836,7 @@ class ParamEstimate(_Msg):
     estimate: float
     lower: float | None = None
     upper: float | None = None
-    unit: Annotated[str, Field(pattern=UNIT_PATTERN)]
+    unit: Unit
     method: Literal["posterior", "profile", "fisher", "none"]
 
     @model_validator(mode="after")
@@ -782,7 +859,7 @@ class CalFinding(_Msg):
     role: Literal["calibration"] = "calibration"
     claim: Annotated[str, Field(pattern=CAL_CLAIM_PATTERN)]
     parameters: dict[Name, ParamEstimate] = Field(default_factory=dict)
-    bounds_narrowed: dict[Name, Window] = Field(default_factory=dict)
+    bounds_narrowed: dict[Name, Bounds] = Field(default_factory=dict)
     confidence: Confidence
     evidence: list[EvidenceRef] = Field(default_factory=list)
 
@@ -795,11 +872,16 @@ class CalFinding(_Msg):
 
 
 class AssayPlan(_Msg):
-    """The design role's plan: one assay that separates two named causes."""
+    """The design role's plan: one assay that separates two named causes.
+
+    ``predicted`` is the assay's value under each cause, in ``unit`` (rule 6): the symbol of
+    the assay's registry unit, compared through :func:`same_unit` by the harness.
+    """
 
     role: Literal["design"] = "design"
     assay: Name
-    day: float
+    day: Day
+    unit: Unit
     separates: tuple[LabelOrNone, LabelOrNone]
     predicted: dict[LabelOrNone, float] = Field(default_factory=dict)
     evidence: list[EvidenceRef] = Field(default_factory=list)
@@ -825,35 +907,22 @@ class HoldoutResult(_Msg):
 class SeparatingTest(_Msg):
     """The one test a verifier names per round. ``args`` carries no prose.
 
-    Every string in ``args`` is a token (an identifier or a number as text); the harness
-    also validates ``args`` against the tool's own schema with the redacted free-text fields
-    excluded (design note §3.3).
+    Every string in ``args`` is a token (an identifier or a number as text) by type
+    (``ArgValue``); the harness also validates ``args`` against the tool's own schema with
+    the redacted free-text fields excluded (design note §3.3).
     """
 
     tool: Name
-    args: dict[Name, Any] = Field(default_factory=dict)
-
-    @model_validator(mode="after")
-    def _no_prose(self) -> SeparatingTest:
-        import re
-
-        def check(x: Any, where: str) -> None:
-            if isinstance(x, str):
-                if not re.fullmatch(TOKEN_PATTERN, x):
-                    raise ValueError(f"{where}: a string argument must be a token")
-            elif isinstance(x, dict):
-                for k, v in x.items():
-                    check(v, f"{where}.{k}")
-            elif isinstance(x, (list, tuple)):
-                for i, v in enumerate(x):
-                    check(v, f"{where}[{i}]")
-
-        check(self.args, "args")
-        return self
+    args: dict[Name, ArgValue] = Field(default_factory=dict)
 
 
 class Verdict(_Msg):
-    """The verifier's answer for one round (design note §4): pass, fail or abstain."""
+    """The verifier's answer for one round (design note §4): pass, fail or abstain.
+
+    A fail names its alternative and cites at least one piece of evidence (§4, step 4). The
+    D-1 check (the hold-out is the verifier's; calibration cites ``holdout``, typed, in
+    round 2 and never the hold-out itself) lives in the harness, not here.
+    """
 
     round: Annotated[int, Field(ge=1, le=2)]
     verdict: Literal["pass", "fail", "abstain"]
@@ -866,6 +935,8 @@ class Verdict(_Msg):
     def _shape(self) -> Verdict:
         if self.verdict == "fail" and self.alternative is None:
             raise ValueError("a fail names the alternative")
+        if self.verdict == "fail" and not self.evidence:
+            raise ValueError("a fail cites its evidence")
         if self.verdict != "fail" and (self.alternative is not None or self.separating_test):
             raise ValueError("only a fail names an alternative or a test")
         return self
@@ -920,10 +991,13 @@ def claim_allowed_in_round(finding: _Msg, round_: int) -> bool:
 
 
 def free_text_fields(model: type[BaseModel]) -> list[str]:
-    """The string fields of ``model`` (and its nested models) with no enumeration or pattern.
+    """The fields of ``model`` (and its nested models) a model could write prose into.
 
-    The static half of the no-free-text guarantee (design note §3.3, S1): a test asserts this
-    is empty for every message model, and that a model with a plain ``str`` field is found.
+    A string with no enumeration or pattern; an untyped node (``Any``: no type, reference,
+    alternatives, enumeration or constant); an object open to any value
+    (``additionalProperties: true``). The static half of the no-free-text guarantee (design
+    note §3.3, S1): a test asserts this is empty for every message model, and that a planted
+    plain ``str``, ``Any``, ``list[Any]`` and ``dict[str, Any]`` are each found.
     """
     found: list[str] = []
     schema = model.model_json_schema()
@@ -933,18 +1007,25 @@ def free_text_fields(model: type[BaseModel]) -> list[str]:
         if "$ref" in node:
             walk(defs[node["$ref"].rsplit("/", 1)[1]], where)
             return
-        for key in ("anyOf", "oneOf", "allOf"):
-            for alt in node.get(key, []):
-                walk(alt, where)
+        alternatives = [alt for key in ("anyOf", "oneOf", "allOf") for alt in node.get(key, [])]
+        for alt in alternatives:
+            walk(alt, where)
         if node.get("type") == "string" and not any(
             k in node for k in ("pattern", "enum", "const", "format")
         ):
             found.append(where)
+        typed = "type" in node or alternatives or any(k in node for k in ("enum", "const"))
+        if not typed:
+            found.append(f"{where}[untyped]")
         for name, prop in node.get("properties", {}).items():
             walk(prop, f"{where}.{name}" if where else name)
         for key in ("additionalProperties", "items"):
             if isinstance(node.get(key), dict):
                 walk(node[key], f"{where}[{key}]")
+            elif node.get(key) is True:
+                found.append(f"{where}[{key}]")
+        for prop in node.get("patternProperties", {}).values():
+            walk(prop, f"{where}[patternProperties]")
         for item in node.get("prefixItems", []):
             walk(item, f"{where}[]")
         if "propertyNames" in node and isinstance(node["propertyNames"], dict):
