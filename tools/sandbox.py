@@ -62,6 +62,7 @@ __all__ = [
     "FORBIDDEN_MODULES",
     "JAIL_EXIT",
     "JAIL_MARKER",
+    "JAIL_PACKAGE_MARKER",
     "SANDBOX_PACKAGES",
     "SandboxError",
     "SandboxResult",
@@ -69,6 +70,7 @@ __all__ = [
     "launch",
     "sandbox_interpreter",
     "stage",
+    "stage_workflow",
 ]
 
 FORBIDDEN_MODULES: tuple[str, ...] = ("sim", "scenarios", "anchor", "eval", "state")
@@ -89,6 +91,17 @@ the jail's failure, *with* it the workflow's exit code (jail review, 2026-09-21,
 JAIL_MARKER = "jail.started"
 """File the jail script creates in the sandbox directory just before it starts the
 workflow interpreter; its absence after a ``JAIL_EXIT`` means the jail never got there."""
+
+JAIL_PACKAGE_MARKER = ".jail-package"
+"""The opt-in for package staging (docs/decisions.md, 2026-10-26, the lead's option A).
+
+When this file sits beside the entry script, :func:`launch` copies the script's package
+(its directory, and the ``__init__.py`` of each ancestor package up to the package root)
+into ``<sandbox>/package/`` at the package's dotted path, and the bootstrap puts
+``/box/package`` on ``sys.path`` after the stub and before its forbidden-module probe. The
+entry is still run by path; its siblings import by the same dotted name as on the host
+(``workflows.p2_multi_agent.evidence``). Without the marker nothing is staged: a package's
+``__init__.py`` alone opts nothing in, so P0's and P1's boxes are what they were."""
 
 _PACKAGE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = _PACKAGE_DIR.parent
@@ -348,7 +361,10 @@ _BOOTSTRAP = textwrap.dedent(
     import importlib.util, json, os, runpy, shutil, subprocess, sys
     stub = os.environ["AD_AGENTBENCH_STUB_DIR"]
     site_dirs = json.loads(os.environ["AD_AGENTBENCH_SITE_DIRS"])
-    sys.path[:0] = [stub]
+    package_dir = os.environ.get("AD_AGENTBENCH_PACKAGE_DIR") or None
+    # the staged package goes on the path BEFORE the probe below: a staged module with a
+    # forbidden name is refused like any other, and ``tools`` must still be the stub
+    sys.path[:0] = [stub] + ([package_dir] if package_dir else [])
     sys.path.extend(site_dirs)
     forbidden = json.loads(os.environ["AD_AGENTBENCH_FORBIDDEN"])
     resolved = [name for name in forbidden if importlib.util.find_spec(name) is not None]
@@ -423,7 +439,14 @@ def _check_location(box: Path, run_dir: Path | None) -> None:
 
 
 def _python_chain(interpreter: Path) -> tuple[Path, list[str]]:
-    """The interpreter's real binary and the symlink names its venv chain passes through."""
+    """The interpreter's real binary and every host path its venv chain passes through.
+
+    The jail binds the real binary at ``/usr/bin/python-jail`` and links each returned name
+    to it, so the venv's ``bin/python`` resolves inside. The real binary's own path is one
+    of the names when it lies outside the venv: on a host whose venv links
+    ``bin/python3.11`` straight to the binary, the chain's one hop *is* the real path, and
+    leaving it out left ``/venv/bin/python`` dangling (exit 127; the review of 2026-10-26).
+    """
     links: list[str] = []
     venv_root = Path(interpreter).absolute().parent.parent
     current = Path(interpreter).absolute()
@@ -438,8 +461,59 @@ def _python_chain(interpreter: Path) -> tuple[Path, list[str]]:
             # outside the venv: a host path the chain resolves through
             links.append(str(current))
     real = current.resolve()
-    names = [link for link in links if link != str(real)]
-    return real, names
+    if not _is_under(real, venv_root) and str(real) not in links:
+        links.append(str(real))
+    return real, links
+
+
+def _package_root(package: Path) -> Path:
+    """The directory the package's dotted name starts from: above the last ``__init__.py``."""
+    root = package
+    while (root.parent / "__init__.py").is_file() and root.parent != root:
+        root = root.parent
+    return root.parent
+
+
+def stage_workflow(script: str | Path, sandbox: str | Path) -> tuple[Path, Path | None]:
+    """Copy the entry script into the box as ``workflow.py``; stage its package if opted in.
+
+    Returns the staged script and the staged package directory (``<sandbox>/package``),
+    which is ``None`` unless :data:`JAIL_PACKAGE_MARKER` sits beside the script. A package
+    holding a module or directory named like a forbidden module, at any depth or as its own
+    top-level name, is refused before any jail is built.
+
+    Raises:
+        SandboxError: If the package carries a forbidden module name.
+    """
+    box = Path(sandbox)
+    source = Path(script).resolve()
+    staged_script = box / "workflow.py"
+    shutil.copy2(source, staged_script)
+    target = box / "package"
+    if target.exists():
+        shutil.rmtree(target)
+    if not (source.parent / JAIL_PACKAGE_MARKER).is_file():
+        return staged_script, None
+    package = source.parent
+    root = _package_root(package)
+    relative = package.relative_to(root)
+    names = {relative.parts[0]} | {
+        p.stem for p in package.rglob("*") if p.suffix == ".py" or p.is_dir()
+    }
+    forbidden = sorted(names & set(FORBIDDEN_MODULES))
+    if forbidden:
+        raise SandboxError(
+            f"the package {package} carries a forbidden module name {forbidden}; it is not staged"
+        )
+    for ancestor in reversed(relative.parents):  # the package root's own children first
+        init = root / ancestor / "__init__.py"
+        if ancestor.parts and init.is_file():
+            (target / ancestor).mkdir(parents=True, exist_ok=True)
+            shutil.copy2(init, target / ancestor / "__init__.py")
+    shutil.copytree(
+        package, target / relative, ignore=shutil.ignore_patterns("__pycache__", "*.pyc")
+    )
+    return staged_script, target
 
 
 def _hidden_package_dirs(libdirs: list[str]) -> list[str]:
@@ -509,8 +583,7 @@ def launch(
     stage(box)
     work = box / "cwd"
     work.mkdir(exist_ok=True)
-    staged_script = box / "workflow.py"
-    shutil.copy2(script, staged_script)
+    _, package = stage_workflow(script, box)
     socket_path = box / "registry.sock"
     if socket_path.exists():
         socket_path.unlink()
@@ -543,6 +616,7 @@ def launch(
         "AD_AGENTBENCH_SITE_DIRS": json.dumps(site_dirs),
         "AD_AGENTBENCH_FORBIDDEN": json.dumps(list(FORBIDDEN_MODULES)),
         "AD_AGENTBENCH_WORKFLOW": "/box/workflow.py",
+        "AD_AGENTBENCH_PACKAGE_DIR": "/box/package" if package is not None else "",
     }
     command = [
         unshare,

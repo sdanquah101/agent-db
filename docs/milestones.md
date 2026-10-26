@@ -4131,3 +4131,20 @@ go").**
 - **Next:** the coordinator's check of this revision, then the lead's approval of the note,
   then the build.
 
+
+**2026-10-26 — The lead's ruling on the layout ("Implement option A"): package staging in
+the jail.** Branch `claude/p2-agents-sandbox`, a draft PR from `main`, separate from step 1
+(`claude/p2-agents-evidence`, PR #38).
+- `tools/sandbox.py`: `JAIL_PACKAGE_MARKER` (`.jail-package`), `stage_workflow` (the entry
+  copy, and the package at its dotted path when the marker is beside the entry; forbidden
+  module names refused before the jail is built), `/box/package` on the bootstrap's path
+  before its probe. `_python_chain` keeps the real binary's path (the one-hop venv that
+  exited 127). `tools/runner.py` byte-identical. `workflows/p2_multi_agent/.jail-package`
+  added: the P2 jail now stages its package (the entry imports nothing from it yet).
+- `tests/test_sandbox_package.py`: the opt-in (P0's and P1's boxes unchanged; the marker is
+  the only opt-in), the import by host name, the forbidden names (launcher and bootstrap),
+  no path escape with the planted truth, the scanner over every staged module, the chain
+  (unit, and a one-hop venv in the jail with the old chain as the control).
+- `docs/decisions.md`: the ruling, with alternative B (one file + sha256 pin) not taken.
+- **Next:** the coordinator's review; the lead's word to merge; then step 2 (the harness),
+  which splits step 1's section into `evidence.py` / `messages.py` as units.
