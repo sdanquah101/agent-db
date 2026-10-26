@@ -8078,3 +8078,163 @@ gaps the reviews listed.
   `9443306b76f43029ff5a39962ec9b4845a231c31f788bc5fb2494bab772ba29c` → `cf59bcbb555aab376dd53a0a3ce7d8d91e3b453df8165879c39f9163dcc2f404`.
 - The approval record of 2026-10-14, already spent, refuses all the more. `eval/`, `sim/`,
   `scenarios/`, `tools/impl/`, `tools/llm.py`, P0 and P1 are untouched.
+
+## 2026-10-25 — RULING (the lead): P2 is rebuilt as agents, on top of what exists ("Let's go")
+
+**The lead's words** (relayed by the coordinator at 14:55 UTC). After reading pilot attempt 3:
+
+> "I think the design is the problem. I thought we will have multiple AI agents looking at
+> the data, making expert assessments, with multiple adversarial contemplations to come up
+> with the answer?"
+
+The coordinator recommended rebuilding P2's top layer as proposal §6.5 intends, on top of
+what exists, starting with a design note. The lead answered: "Let's go."
+
+**Decision.**
+- **What is superseded.** The 2026-09-30 reading "P2 should not be agents with prompts"
+  (`docs/p2_launch_brief.md`, draft 2) is superseded. That reading produced the procedural
+  P2: seven coded procedures, and a model asked only at twelve typed decision points.
+- **What replaces it.** P2's top layer is redesigned as role agents with an adversarial
+  verifier. The registry, budgets, logs, truth isolation, QC gate, null rule, rerun machinery
+  and approval record are kept.
+- **Step 1 is a design note only:** `docs/p2_agents_design.md`. It has no code and no live
+  call. The coordinator reviews it, and the lead approves it before any code is written.
+
+**Reason.** Pilot attempt 3 showed that the procedural P2 adds no judgement:
+- every applied model answer equalled the coded fallback, or restated a field code had
+  computed and shown the model;
+- its outcomes equal a pure-code rule;
+- attempts 2 and 3 both score 3 of 6, against 2 of 6 offline.
+
+A P2 in which no model can choose what to examine, request a test, weigh causes or be
+challenged cannot answer RQ3.
+
+**Alternatives.**
+- Keep the procedural P2 and tune its decision points. Rejected by the ruling: the design,
+  not the tuning, is the limit.
+- Replace P2 wholesale. Not taken: the kept layers are reviewed, frozen where they must be,
+  and shared with P0 and P1.
+
+**What moves.** Nothing yet: this PR is docs only.
+- `eval/`, `sim/`, `scenarios/`, `tools/impl/`, `tools/llm.py`, P0 and P1 are untouched.
+- The procedural P2's records (attempts 1–3, the offline power run) stand as its record.
+
+## 2026-10-25 — RULING (the lead): all seven P2 roles are built as agents from the start (design note Q1)
+
+**The lead's words** (relayed by the coordinator at 20:25 UTC): "FOr the first, let's have all
+the agents".
+
+**Decision.** All seven roles are built as agents from the first build, not three first:
+- data quality, influent, identifiability, calibration, experimental design and verification;
+- coordination follows Q7, still open.
+
+**Reason.** The lead's choice.
+
+**What it changes.** The design note recommended three roles first, on build risk. With all
+seven:
+- the build takes about 5–7 weeks, not 4–6;
+- the six-cell pilot runs all seven roles;
+- all five single-specialist ablations are available from the first build;
+- the proposal's three-role descope clause stays the fallback if the build slips toward G4.
+
+**Alternative.** Three roles first (data quality, calibration, verifier). Not taken.
+
+## 2026-10-25 — RULING (the lead): the rest of the design note's questions (Q2–Q12)
+
+**The lead's words** (relayed by the coordinator at 20:50 UTC): "Yes to all except that the
+coordinator should be code. Let the verifier get its own budget outside of what you have set."
+
+**Decisions.** Every recommendation of §9 stands, with the lead's two points:
+- **Q2:** P1's frozen `gpt-5.6-luna` for every arm.
+- **Q3:** a cited `none` finding is allowed; a last-round `fail` whose alternative is `none`
+  concludes `none`; the verifier runs when the null stands. What it can conclude there depends
+  on Q13, written after the ruling and **open**: a failed hold-out as an admitting case for
+  `structural` when NM stands, which would change the null rule frozen on 2026-10-07 (a).
+- **Q4:** D-1 under a free verifier, as recommended.
+- **Q5:** disclose the `declared_background` asymmetry now; decide a matched P1 arm after the
+  pilot.
+- **Q6:** new development cells S7-01 at B/A, B/B and B/C, and S7-02, two seeds each. S7-02 is
+  at its defined tier A/C, pending the lead's confirmation: the lead approved the cells on text
+  that said A/A, and the tier was corrected after.
+- **Q7:** the coordinator is **code**, stated by the lead.
+- **Q8:** the proposers' caps are USD 0.50, 200 requests and 10 M tokens per run for the pilot,
+  then frozen at about twice the measured median.
+- **Q9 (the lead's variant):** **the verifier has its own budget**, separate from and in
+  addition to the run's caps. Its tools and its one named test per round draw on it. A run's
+  reported cost is the proposers' spend plus the verifier's, both logged separately. This is
+  an asymmetry with P1, removed by the verifier-off ablation.
+- **Q10:** bounds are narrowed only, logged, never widened; a bound hit is never a kinetic
+  update.
+- **Q11:** two rounds.
+- **Q12:** the procedural P2 is reported as the "decision points only" arm.
+- **Assays:** data quality requests assays only through the design role's grant.
+
+**Reason.** The lead's ruling on the recommendations of `docs/p2_agents_design.md` §9.
+
+**Alternatives.** As listed under each question in the note.
+
+**See also** the next entry: Q13 and S7-02's tier, decided the same day ("Yes to both").
+
+## 2026-10-25 — RULING (the lead): a failed hold-out admits `structural` over a standing NM (a change to the null rule), and S7-02 is at A/C
+
+**The lead's words** (relayed by the coordinator at 20:55 UTC), on Q13 of the design note and
+on S7-02's tier: "Yes to both".
+
+**Decision (a): a change to the null rule frozen on 2026-10-07 (a).** For the agent P2,
+`structural` is admitted:
+- over a **failed** NM, as before (P0's R3 on two or more failed channels, and a failed
+  hold-out); **or**
+- over a **standing** NM when the **hold-out fails**.
+
+The lead ruled on the question as the coordinator put it: "a failed hold-out counts as an
+admitting case for structural when the background comparison stands". Nothing else about the
+frozen admission rule was ruled; R3's definition and channel count are unchanged. On a standing
+NM no channel has failed, so R3 as frozen cannot hold there. Counting it over all channels is a
+further change, asked of the lead as Q14 of the design note and decided in the next entry
+("Yes").
+
+The verifier's `Verdict` with alternative `structural` is admissible on either case.
+`p2_design.md` §4.4 is marked superseded on this point and kept as the procedural P2's rule.
+The code change, when it comes, carries this entry's reference.
+
+**Reason.** Without it, the verifier's hold-out test on a standing null could never conclude
+`structural`. A hidden structural fault on a quiet plant (S6-02 at tier B, decision 3 of
+2026-09-30) would always end `none`.
+
+**Alternatives.**
+- Leave the rule. A hidden structural fault on a quiet plant then ends `none`, and S6-02 at
+  tier B stays admissible-`none`. This was the design note's recommendation; the lead chose
+  the change.
+- **The risk accepted:** a chance hold-out failure on a clean cell becomes a structural false
+  alarm. It is measured from the verifier's recorded hold-out results on standing-null runs.
+
+**Decision (b).** S7-02, as a new H4 development cell, is at its defined tier **A/C**, not the
+A/A of the earlier text.
+
+**What moves.** Docs only now. The null-rule change enters the agent P2's frozen record when it
+is built. The procedural P2 and its records keep the 2026-10-07 rule.
+
+## 2026-10-25 — RULING (the lead): R3 is counted over all channels when NM stands (amends the 2026-10-08 ruling for that case)
+
+**The lead's words** (relayed by the coordinator at 22:15 UTC), on Q14 of the design note:
+"Yes".
+
+**Decision.** For the agent P2, when NM **stands**, `structural` is admitted only by **both** a
+failed hold-out **and** P0's R3 criterion counted over **all** channels: two independent pieces
+of evidence.
+- This **amends the ruling of 2026-10-08** ("R3 counted over the failed channels only"), for
+  the standing-NM case only.
+- When NM fails, R3 stays on the failed channels, as frozen.
+- With the Q13 entry above, the admission rule for `structural` has two branches: NM failed (as
+  frozen), or NM stands (a failed hold-out and R3 over all channels).
+- `p2_design.md` §4.4 carries the superseded note. The code change will carry this entry's
+  reference.
+
+**Reason.** With no failed channel, the frozen count is vacuous: R3 could never hold on a
+standing NM, so the route the Q13 ruling opened could never admit `structural`.
+
+**Alternatives.**
+- The hold-out alone. Not taken: a chance hold-out failure on a clean cell would be a
+  structural false alarm on one piece of evidence.
+- R3 as frozen. Then Q13 has no effect.
+

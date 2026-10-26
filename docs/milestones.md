@@ -4103,3 +4103,31 @@ recommendations").**
   evidence of skill.
 - **Next:** the coordinator's review of the report. No live call before a new word.
 
+**2026-10-25 — PR #36 merged (`85c66b4`); the lead's ruling to rebuild P2 as agents ("Let's
+go").**
+- Step 1 is the design note `docs/p2_agents_design.md` (draft PR, docs only). It covers:
+  - what changes and why (attempts 2–3);
+  - what is kept as code;
+  - the seven roles as agents;
+  - the adversarial verifier loop;
+  - the guard rails, with D-1 revisited;
+  - the freeze;
+  - RQ3/H4 and the ablations;
+  - cost and time;
+  - the open questions for the lead, each with a recommendation (§9).
+- **Blocked:** no code until the coordinator reviews the note and the lead approves it.
+- **The lead's rulings, 2026-10-25.**
+  - Q1: all seven roles are built as agents from the start.
+  - Q2–Q12: as recommended, except that the coordinator is code (as recommended) and the
+    verifier has its own budget, outside the run's caps.
+- **Also decided, 2026-10-25 ("Yes to both"):**
+  - Q13: a failed hold-out admits `structural` over a standing NM. This is a change to the
+    frozen null rule, recorded in `docs/decisions.md`; `p2_design.md` §4.4 is marked
+    superseded on this point.
+  - S7-02 is at A/C.
+- **Q14 decided, 2026-10-25 ("Yes"):** when NM stands, `structural` needs both a failed
+  hold-out and R3 over all channels. This amends the 2026-10-08 ruling for that case.
+- **Nothing in §9 is open.**
+- **Next:** the coordinator's check of this revision, then the lead's approval of the note,
+  then the build.
+
