@@ -8238,3 +8238,32 @@ standing NM, so the route the Q13 ruling opened could never admit `structural`.
   structural false alarm on one piece of evidence.
 - R3 as frozen. Then Q13 has no effect.
 
+
+## 2026-10-26 — The agent P2's code lives in the one jailed file (a layout decision, not in the design note)
+
+**Decision.** The agent P2 (`docs/p2_agents_design.md`) is built inside
+`workflows/p2_multi_agent/workflow.py`, beside the procedural arm, as delimited sections. The
+"evidence module" the note names (§2) is the evidence section of that file: the null table,
+the signatures and the admission, shared by both arms. The procedural arm's `admit` stays as
+frozen; the agent arm's `admit_agent` carries the amended rule (Q13, Q14).
+
+**Reason.** The jail ships one script: `tools.sandbox.launch` copies the entry file into the
+box, and the bootstrap's `sys.path` holds only the client stub and the site directories.
+Nothing under `workflows/` is importable from inside the jail, which is why `workflow.py`
+already restates the null rule rather than importing `scripts/null_rule_loo.py`. The note
+lists `tools/runner.py` (which maps each workflow to one entry file) and `tools/sandbox.py`
+as reused unchanged, and the coordinator's rules of 2026-10-26 freeze `tools/runner.py`. A
+separate module would therefore need either a sandbox change (staging a package) or a
+runner change (a new entry); the file section needs neither.
+
+**Alternatives.**
+- Stage the package in the jail (a `tools/sandbox.py` change, with the truth-isolation tests
+  as the guard) and split the arm into `evidence.py`, `messages.py` and `agents.py`. Cleaner
+  modules, at the price of a change to the isolation layer. Open to the coordinator; step 2
+  can still take it, since the sections move as units.
+- A second entry file registered in `tools/runner.py`. Refused by the freeze.
+
+**Consequence.** The file grows to about the size of P1's `agent.py`. `tests/test_p2_workflow.py`'s
+import pin and rule 1's scanner apply to the whole file, as before. The label vocabulary in
+the new message models is a pattern, not an enum, for the reason recorded on 2026-10-19
+(the scanner refuses the bare initial-state label).
