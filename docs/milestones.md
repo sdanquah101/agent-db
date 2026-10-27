@@ -4162,9 +4162,9 @@ word, "merge"; then the coordinator's "start the code".**
   (`docs/decisions.md`, 2026-10-26). Nits: a fail cites evidence; day and bound fields state
   their unit; `AssayPlan` carries the assay's unit; the hold-out divergence from the frozen
   `admit` is stated in the docstring; no private import from the isolation tests.
-- **Next:** the coordinator's re-review; the lead's ruling on the layout (one jailed file or a
-  staged package); then step 2, the agent harness on P1's loop, the allow-list views, the
-  projection and the gateway extension.
+- **Outcome:** merged at `a185072` on the lead's word ("merge 38"), 2026-10-27. The layout
+  was ruled the same day (option A, the staged package: the entry below), so step 2 moves
+  this section into the package as units.
 
 **2026-10-26 — The lead's ruling on the layout ("Implement option A"): package staging in
 the jail.** Branch `claude/p2-agents-sandbox`, a draft PR from `main`, separate from step 1
@@ -4192,3 +4192,27 @@ the jail.** Branch `claude/p2-agents-sandbox`, a draft PR from `main`, separate 
   `tools/sandbox.py` corrected.
 - **Next:** the coordinator's re-review; the lead's word to merge; then step 2 (the
   harness), which splits step 1's section into `evidence.py` / `messages.py` as units.
+
+**2026-10-27 — PR #39 merged (`8f78881`, the lead: "merge 39"); the lead's model ruling
+("Let's use luna first", `docs/decisions.md`); step 2 begins.** First PR of step 2, branch
+`claude/p2-agents-package`, a draft from `main` at `8f78881`: the package split.
+- `workflows/p2_multi_agent/` is now the staged package the jail imports: `evidence.py`
+  (the frozen `admit`, moved **verbatim** — a test pins its source digest — and the agent
+  arm's `structural_case` / `admit_agent` / `admissible_alternative`) and `messages.py`
+  (the typed messages, `unit_head` / `same_unit`, `free_text_fields`,
+  `claim_allowed_in_round`), moved as units from `workflow.py`, which imports `admit` from
+  the module and is otherwise unchanged (both freeze digests unchanged; the procedural arm
+  runs as before). The import pin admits `workflows` for the entry; each module has its own
+  pin and passes rule 1's scanner.
+- The #38 review's nits, carried: F1 `free_text_fields` flags free-keyed objects
+  (`dict[str, float]`); F2 the signature-key pin sees subscript reads; F3 the configured
+  `structural_channels_min` is read from `p0.yaml` in the tests, and the `need` parameter is
+  dropped for the pipeline's own `structural_proposed` (no caller can pass a literal, a
+  stricter or a looser minimum); F4 the deliberate rejection record is stated; F5 the
+  identifier collections are bounded (`MAX_CHANNELS`, `MAX_PARAMETERS`, pinned to the
+  registry's counts, and `MAX_VALUES`); F6 the step-1 entry's "Next" line; F7 the
+  parameter-unit string is built as `tools/fitted.py` builds it.
+- **Carried on:** #39's nits G1–G6 (`tools/sandbox.py`, a tiny follow-up PR unless step 2
+  touches the file); `package_sha256` into the run record; the harness (next PR).
+- **Next:** the coordinator's review; then the harness PR (P1's loop as package code, the
+  role views with the §3.1 allow-lists, the projected log, the coordinator as code).

@@ -8361,3 +8361,24 @@ directory or top-level name (F2). `stage_workflow` returns the **sha256 of the s
 tree** (sorted relative paths and bytes) and `launch` reports it in `SandboxResult.
 package_sha256`; writing it into the run's record is step 2's (the runner, which writes
 the record, is frozen; the agent harness writes its own record through `tools.run`).
+
+
+## 2026-10-27 — The P2 agents' model: luna first
+
+**The lead's words.** "Let's use luna first."
+
+**Decision.** Q2 of `docs/p2_agents_design.md` stands as decided: the frozen
+`gpt-5.6-luna` (provider `openai`) for every arm of the RQ3 comparison, with the pilot caps
+as decided (USD 0.50 / 200 requests / 10 M tokens per run for the proposers, plus the
+verifier's own budget). A Claude Opus 5.5 arm is a later, separately costed extension, if
+the pilot warrants it. Nothing in the build changes.
+
+**The options put to the lead.**
+1. Claude Opus 5.5 for all roles, with P1 on Opus as the comparator.
+2. An Opus verifier only, the proposers on luna.
+3. Keep luna (taken).
+
+**Reason.** The comparison's model is one of its frozen settings (Q2); changing it before
+the pilot has run would cost the comparator (P1, frozen on luna) and the cost tables of §8,
+and would answer a question the pilot has not yet asked. An Opus arm after the pilot is a
+costed extension with the luna result as its baseline.
