@@ -791,4 +791,7 @@ def test_the_jailed_agent_arm_writes_the_declared_record(jailed_agents):
     kinds = [json.loads(x)["kind"] for x in (out / "messages.jsonl").read_text().splitlines()]
     assert "decision" in kinds and "verdict" in kinds
     summary = json.loads((out / "summary.json").read_text())
-    assert summary["decider"] == "offline" and summary.get("llm_turns", 0) == 0
+    # offline no gateway is built, so the summary's model fields are null, as the
+    # procedural arm's are (never a count)
+    assert summary["decider"] == "offline" and summary["llm_turns"] is None
+    assert summary["model_id"] is None and summary["llm_cost_usd"] is None
