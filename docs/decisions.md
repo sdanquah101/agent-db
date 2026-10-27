@@ -8303,3 +8303,61 @@ pin on the keys read against the keys written closes that class.
   harness cannot map every value to a registry quantity; kept for the harness step where a
   value names a registry output, as an addition.
 - A relaxed pattern admitting the registry's strings whole. Refused: it admits prose.
+
+## 2026-10-26 — The lead's ruling on the layout: a package staged into the jail (option A)
+
+**The lead's words.** "Implement option A."
+
+**Decision.** The agent P2's code lives in a **package** staged into the jail, through a
+minimal, opt-in change to `tools/sandbox.py`:
+- `launch` copies the entry script's package into `<sandbox>/package/` at its dotted path
+  (`workflows/p2_multi_agent/`, with `workflows/__init__.py`) **only** when the marker file
+  `.jail-package` sits beside the entry. A package's `__init__.py` alone opts nothing in, so
+  P0's and P1's boxes are what they were (a test stages both and finds the stub and
+  `workflow.py` and nothing else).
+- The bootstrap puts `/box/package` on `sys.path` after the stub and **before** its
+  forbidden-module probe, so a staged module named `state`, `sim`, `scenarios`, `anchor` or
+  `eval` is refused as any other would be, and `tools` must still resolve to the stub. The
+  launcher refuses such a name before any jail is built, at any depth of the package and as
+  the package's own name.
+- The staged copy sees nothing of the host tree (its `__file__` is under `/box/package`;
+  the host package path, a truth planted beside it, the repository and the hidden tree's
+  spelling are unreachable, while its own staged sibling is readable), and every module of
+  the staged P2 package is one `tests/test_truth_isolation.py` already scans.
+- `tools/runner.py` is unchanged (byte-identical; it is frozen): the entry stays
+  `workflows/p2_multi_agent/workflow.py`, run by path as before. The entry imports its
+  siblings by the same dotted name as on the host (`workflows.p2_multi_agent.evidence`).
+- Step 2 of the build splits the step-1 section of `workflow.py` into `evidence.py` and
+  `messages.py` as units, no logic change, once this change has merged.
+
+**Reason.** The design note (§2) names an evidence module shared by both arms and typed
+message modules; the jail shipped one file, so step 1 put them in a section of the entry
+(the layout entry above). A one-file arm grows past 3 000 lines with every step and makes
+the procedural arm's frozen record and the agent arm one text, which the freeze test can
+only pin as a whole. A staged package keeps the modules the note names, with the rule-1
+guards extended to the staged tree rather than weakened: the marker is explicit, the probe
+runs with the package on the path, and the launcher refuses forbidden names itself.
+
+**Alternative (B), not taken.** One jailed file with a sha256 pin on the procedural
+section. No sandbox change, but the arm stays one file, the pin is a line-range convention
+that every edit to the file moves, and the note's modules never exist as modules.
+
+**In the same change.** `tools.sandbox._python_chain` dropped the real binary's path from
+the names the jail links to `/usr/bin/python-jail`. On a host whose sandbox venv links
+`bin/python3.11` straight to the real binary, the chain's one hop *is* that path, so the
+jail had no link for it and `/venv/bin/python` dangled: every jailed run exited 127 (the
+reviewer's container, 2026-10-26; this one's chain goes through `/usr/local/bin/python`
+and never showed it). The real path is now linked too; a test builds a one-hop venv from
+the real binary and runs it in the jail, with the old chain as the control (exit 127, the
+jail's marker written).
+
+**After the coordinator's review of 2026-10-27 (F1–F3).** The launcher refuses, before any
+jail is built: a **symlink** anywhere in the package (`copytree` followed links, so a linked
+file or directory would have been copied from the host into the box, and a linked directory
+escaped the name scan; F1); a file that is **not a module** or the marker (nothing enters
+the jail unscanned; F3); and, besides the forbidden modules, the scanner's truth modules
+`truth`, `truth_store`, `distinguish` and the stub's name `tools` as a staged module,
+directory or top-level name (F2). `stage_workflow` returns the **sha256 of the staged
+tree** (sorted relative paths and bytes) and `launch` reports it in `SandboxResult.
+package_sha256`; writing it into the run's record is step 2's (the runner, which writes
+the record, is frozen; the agent harness writes its own record through `tools.run`).

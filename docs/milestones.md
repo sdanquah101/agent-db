@@ -4166,3 +4166,29 @@ word, "merge"; then the coordinator's "start the code".**
   staged package); then step 2, the agent harness on P1's loop, the allow-list views, the
   projection and the gateway extension.
 
+**2026-10-26 — The lead's ruling on the layout ("Implement option A"): package staging in
+the jail.** Branch `claude/p2-agents-sandbox`, a draft PR from `main`, separate from step 1
+(`claude/p2-agents-evidence`, PR #38).
+- `tools/sandbox.py`: `JAIL_PACKAGE_MARKER` (`.jail-package`), `stage_workflow` (the entry
+  copy, and the package at its dotted path when the marker is beside the entry; forbidden
+  module names refused before the jail is built), `/box/package` on the bootstrap's path
+  before its probe. `_python_chain` keeps the real binary's path (the one-hop venv that
+  exited 127). `tools/runner.py` byte-identical. `workflows/p2_multi_agent/.jail-package`
+  added: the P2 jail now stages its package (the entry imports nothing from it yet).
+- `tests/test_sandbox_package.py`: the opt-in (P0's and P1's boxes unchanged; the marker is
+  the only opt-in), the import by host name, the forbidden names (launcher and bootstrap),
+  no path escape with the planted truth, the scanner over every staged module, the chain
+  (unit, and a one-hop venv in the jail with the old chain as the control).
+- `docs/decisions.md`: the ruling, with alternative B (one file + sha256 pin) not taken.
+- **The coordinator's review (2026-10-27, fixes needed on one hole), taken in one commit:**
+  F1 symlinks anywhere in the package refused before the jail (a file link, a directory
+  link carrying `state.py` past the name scan, a nested link, a dangling link; the plain
+  modules beside them stage and read). F2 `STAGED_NAME_DENY` adds `truth`, `truth_store`,
+  `distinguish` and `tools` to the forbidden modules, each tested as a module, a directory
+  or the package's own name. F3 only `*.py` and the marker are staged (a data file is
+  refused); `stage_workflow` returns the staged tree's sha256 and `launch` reports it
+  (`SandboxResult.package_sha256`); the run record carries it from step 2. Nits: the
+  manifest-by-assertion comment; the design note's "reused unchanged" line for
+  `tools/sandbox.py` corrected.
+- **Next:** the coordinator's re-review; the lead's word to merge; then step 2 (the
+  harness), which splits step 1's section into `evidence.py` / `messages.py` as units.

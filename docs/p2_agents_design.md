@@ -57,7 +57,7 @@ top layer is kept** (§2).
 |---|---|---|
 | The registry, its tools, versions and budgets (simulator evaluations, assay units; no wall-clock limit for P2) | the only numerical code; budgets enforced in the registry (rules 2, 3); quantities carry the registry's units (rule 6) | `tools/impl/`, `tools/registry.py`, `tools/runner.py` |
 | Logging and provenance | `calls.jsonl` and the model log, written on the privileged side | `tools/runner.py`, `tools/llm.py` (frozen, used as is) |
-| Truth isolation and the jail | workflows run in the jail and see `runs/<id>/` only; the truth-isolation scanner applies to the new code | `tools/sandbox.py`, `tests/test_truth_isolation.py` |
+| Truth isolation and the jail | workflows run in the jail and see `runs/<id>/` only; the truth-isolation scanner applies to the new code | `tools/sandbox.py` (changed once, 2026-10-26, for the lead's option A: opt-in package staging, `docs/decisions.md`), `tests/test_truth_isolation.py` |
 | The QC gate | `data_qc` runs first. A QC-flagged sensor never enters an objective: the `set_sensor_status` view refuses putting one back (no QC bypass). P0's §3.1 exclusions apply. | the existing P2 step, run as code before the agents |
 | The declared background and the null rule | **Evidence shown to every agent:** the null table (NB, NM, NS, the failed channels, the placement against the band). The hard rule stays: **a label other than `none` needs a failed null case of the kind the label requires** (admission, §4.4). Code refuses a finding that breaks it. **The amended admission rule for `structural`, stated once here** (the lead's rulings of 2026-10-25, Q13 and Q14). Two branches:
 (1) **NM failed**, as frozen: P0's R3 criterion on two or more **failed** channels, and a failed hold-out;
