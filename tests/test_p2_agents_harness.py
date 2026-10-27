@@ -769,7 +769,7 @@ def jailed_agents(tmp_path_factory):
     return run, root, result
 
 
-def test_the_jailed_agent_arm_writes_the_declared_record(jailed_agents):
+def test_the_jailed_agent_arm_writes_the_declared_record(jailed_agents, tmp_path):
     run, root, result = jailed_agents
     out = root / run.run_id / "workflows" / "p2"
     assert {p.name for p in out.iterdir()} == {
@@ -778,7 +778,23 @@ def test_the_jailed_agent_arm_writes_the_declared_record(jailed_agents):
         "messages.jsonl",
         "decisions.jsonl",  # the code steps' decision points, each at its offline fallback
         "summary.json",
+        "launch.json",  # the launcher's record of the staged package (privileged side)
     }
+    # the record carries the digest of the code that ran: the staged tree's, as the
+    # launcher computes it, and every staged module by name (the review of #40, H2)
+    from tools.sandbox import stage_workflow
+
+    launch = json.loads((out / "launch.json").read_text())
+    box = tmp_path / "box_digest"
+    box.mkdir()
+    staged = stage_workflow(REPO / "workflows" / "p2_multi_agent" / "workflow.py", box)
+    assert launch["package_sha256"] == staged.package_sha256
+    assert launch["entry"] == "workflows/p2_multi_agent/workflow.py"
+    assert launch["entry_sha256"] == staged.entry_sha256
+    assert set(launch["modules"]) == set(staged.modules)
+    assert {"workflows/p2_multi_agent/agents.py", "workflows/p2_multi_agent/messages.py"} <= set(
+        launch["modules"]
+    )
     decisions = [json.loads(x) for x in (out / "decisions.jsonl").read_text().splitlines()]
     assert decisions and all(r["fallback_used"] and r["attempts"] == 0 for r in decisions)
     doc = TaskState.model_validate_json((out / "state.json").read_text())

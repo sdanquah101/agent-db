@@ -4203,7 +4203,11 @@ the jail.** Branch `claude/p2-agents-sandbox`, a draft PR from `main`, separate 
   `claim_allowed_in_round`), moved as units from `workflow.py`, which imports `admit` from
   the module and is otherwise unchanged (both freeze digests unchanged; the procedural arm
   runs as before). The import pin admits `workflows` for the entry; each module has its own
-  pin and passes rule 1's scanner.
+  pin and passes rule 1's scanner. **The null table and the signature functions stay in
+  the entry** (the design note §2 places them in the evidence module): the harness runs
+  them as the procedural arm's code steps, and moving them is a change to the entry the
+  frozen procedural arm runs, so they move in a later PR on the coordinator's word (the
+  review of #40, H3).
 - The #38 review's nits, carried: F1 `free_text_fields` flags free-keyed objects
   (`dict[str, float]`); F2 the signature-key pin sees subscript reads; F3 the configured
   `structural_channels_min` is read from `p0.yaml` in the tests, and the `need` parameter is
@@ -4238,5 +4242,19 @@ the jail.** Branch `claude/p2-agents-sandbox`, a draft PR from `main`, separate 
 - `tests/test_p2_agents_harness.py`: each guard rail with its negative control, in-process
   on scripted responders, and one jailed offline run through the runner.
 - `docs/decisions.md`: the five build choices the note left open.
+- **The #40 review's nits, carried (H1–H4), and #39's (G1–G6), since the file is touched:**
+  H1 a jailed import of every staged module of the P2 package, with a removed module as the
+  control (`tests/test_sandbox_package.py`); H2 **the launch record**: `launch.json` beside
+  the workflow's outputs, written by `tools.sandbox.launch` on the privileged side under a
+  reserved name of the output sink whenever a package was staged (the entry, its sha256,
+  `package_sha256`, the staged modules; the runner is frozen, so not `summary.json`: the
+  decisions entry), checked in the jailed runs of both P2 arms and in a probe that tries to
+  forge it; H3 the milestones line above on the null table and the signatures; H4 the test
+  reads `structural_channels_min` at `attribution.structural_channels_min`. G1 the symlink
+  check precedes the bytecode skip (a link named `x.pyc` or `__pycache__` is refused); G2
+  nothing is copied into the box, the entry included, until the package has passed every
+  check; G3 the copies never follow a link; G4 the deny list equals the forbidden modules,
+  the scanner's truth modules and `tools` by assertion; G5 the docstring says where the
+  names are checked; G6 the digest test's rename-only control.
 - **Next:** the coordinator's review; then the verifier's second round, the separating
-  test and its own registry budget; then `package_sha256` into the record and the Q6 cells.
+  test and its own registry budget; then the Q6 cells.

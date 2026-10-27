@@ -8318,8 +8318,9 @@ minimal, opt-in change to `tools/sandbox.py`:
 - The bootstrap puts `/box/package` on `sys.path` after the stub and **before** its
   forbidden-module probe, so a staged module named `state`, `sim`, `scenarios`, `anchor` or
   `eval` is refused as any other would be, and `tools` must still resolve to the stub. The
-  launcher refuses such a name before any jail is built, at any depth of the package and as
-  the package's own name.
+  launcher refuses such a name before any jail is built, at any depth inside the package
+  and as the package's top-level name (not as an intermediate ancestor's name, which is not
+  importable on its own; the bootstrap's probe is the second layer: the review of #39, G5).
 - The staged copy sees nothing of the host tree (its `__file__` is under `/box/package`;
   the host package path, a truth planted beside it, the repository and the hidden tree's
   spelling are unreachable, while its own staged sibling is readable), and every module of
@@ -8434,4 +8435,38 @@ offline verifier that passes (the arm would conclude `none` on every cell: a cla
 the verdict checks (the admitted alternative, the hold-out citation, D-1) and the
 conclusion rules of §4 step 6. The second round (a `fail` sends the alternative back to
 the specialists), the separating test's routing and the verifier's own registry budget
-are the next PR; `package_sha256` into the run record and the Q6 cells, the one after.
+are the next PR; the Q6 cells, the one after. The staged package's digest reaches the run
+record in this PR (the entry below), as the review of #40 asked (H2).
+
+
+## 2026-10-27 — The launch record: the digest of the code that ran, beside the run's outputs
+
+**Decision.** `tools.sandbox.launch` writes `launch.json` into the workflow's output
+directory (`runs/<id>/workflows/<workflow>/`, beside `state.json` and the runner's
+`summary.json`) whenever the entry's package opted into staging: the entry (repository-
+relative, or its name alone outside the repository), the entry's sha256, the staged tree's
+sha256 (`package_sha256`, as `stage_workflow` computes it) and every staged module by
+path. The name is **reserved** in the output sink, as the model gateway's log is: the
+workflow's `write_output` refuses it, and the record is written before the workflow
+starts. A launch without a staged package writes nothing, so the frozen P0 and P1 records
+are byte-for-byte what they were; the procedural P2 arm, whose package opts in, gains the
+file (its code and digests are unchanged).
+
+**Reason.** The review of PR #39 (F3) and of #40 (H2): once `admit` and the typed messages
+live outside the entry, nothing at run time pinned the admission text (`check_p2_frozen`
+never covered the entry; a test's digest constant was the only guard). The record must
+come from the **privileged side**, from the launcher that staged the tree, or it is the
+workflow's own account of itself (rule 3: evaluation reads what the privileged side
+wrote). The two places the step-2 scope named are closed: `summary.json` is written by
+`tools/runner.py`, which the rules of 2026-10-26 freeze; the redacted manifest is the
+simulator's, frozen too. The sink is the one privileged writer of that directory that is
+not frozen.
+
+**Alternatives.**
+- A `package_sha256` field in `summary.json`: the natural place; refused by the runner's
+  freeze. When the runner is next unfrozen, the summary can copy the record's digest.
+- The digest served to the jail (a `status` field) and copied by the workflow into its
+  state: a self-report; the workflow could write anything.
+- A line in `calls.jsonl`: the log's readers (`eval/`, frozen) expect tool calls only.
+- Writing the record for every launch: changes the frozen arms' output directories for no
+  gain (P0 and P1 stage no package; their entry's digest is the commit's).
