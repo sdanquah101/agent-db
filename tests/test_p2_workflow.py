@@ -561,8 +561,12 @@ def test_the_workflow_passes_rule_one_and_imports_only_what_the_jail_has():
     assert find_truth_references(path) == []
     text = path.read_text(encoding="utf-8")
     imports = set(re.findall(r"^(?:from|import) ([a-z_]+)", text, flags=re.M))
+    # `workflows`: the entry's own package, staged into the jail beside it since the lead's
+    # option A (tools/sandbox.py, docs/decisions.md 2026-10-26); nothing else of the host
     assert imports <= {"__future__", "hashlib", "json", "math", "collections", "typing",
-                       "numpy", "pydantic", "tools"}  # fmt: skip
+                       "numpy", "pydantic", "tools", "workflows"}  # fmt: skip
+    own = set(re.findall(r"^from (workflows\.[a-z0-9_.]+) import", text, flags=re.M))
+    assert own == {"workflows.p2_multi_agent.evidence"}
 
 
 # ------------------------------------------------------------------ 10. dq.trust
