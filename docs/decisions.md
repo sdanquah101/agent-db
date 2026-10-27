@@ -8286,3 +8286,14 @@ reviewer's container, 2026-10-26; this one's chain goes through `/usr/local/bin/
 and never showed it). The real path is now linked too; a test builds a one-hop venv from
 the real binary and runs it in the jail, with the old chain as the control (exit 127, the
 jail's marker written).
+
+**After the coordinator's review of 2026-10-27 (F1–F3).** The launcher refuses, before any
+jail is built: a **symlink** anywhere in the package (`copytree` followed links, so a linked
+file or directory would have been copied from the host into the box, and a linked directory
+escaped the name scan; F1); a file that is **not a module** or the marker (nothing enters
+the jail unscanned; F3); and, besides the forbidden modules, the scanner's truth modules
+`truth`, `truth_store`, `distinguish` and the stub's name `tools` as a staged module,
+directory or top-level name (F2). `stage_workflow` returns the **sha256 of the staged
+tree** (sorted relative paths and bytes) and `launch` reports it in `SandboxResult.
+package_sha256`; writing it into the run's record is step 2's (the runner, which writes
+the record, is frozen; the agent harness writes its own record through `tools.run`).

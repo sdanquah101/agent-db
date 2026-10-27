@@ -7,15 +7,20 @@ control:
 
 * without the marker the box holds exactly what it held before (P0's and P1's entries:
   the stub and ``workflow.py``); with it, the package appears;
-* a staged package imports by its host name and sees its own files; without the marker
-  the same import fails;
-* a package carrying a forbidden module name (``state.py``, a ``scenarios/`` directory,
-  or ``sim`` as its own name) is refused before the jail is built, a clean one runs, and a
-  forbidden module planted after staging is refused by the bootstrap's probe;
+* a staged package imports by its host name and sees its own modules; without the marker
+  the same import fails; the launch reports the staged tree's digest;
+* a package carrying a denied name (``state.py``, a ``scenarios/`` directory, ``sim`` as
+  its own name, and the scanner's ``truth``/``truth_store``/``distinguish`` and the stub's
+  ``tools``) is refused before the jail is built, a clean one runs, and a forbidden module
+  planted after staging is refused by the bootstrap's probe;
+* a symlink anywhere in the package (a file, or a directory that would carry ``state.py``
+  past the name scan) and a file that is not a module are refused before the jail is built;
+  a plain module beside them is staged and readable (the review of 2026-10-27, F1);
 * the staged copy sees nothing of the host tree: not the package's host path, not a
   truth planted beside it, not the repository, while its own staged sibling is readable;
 * every module of the staged P2 package is one the truth-isolation scanner checks, and the
   scanner catches a violation planted in a staged module;
+* the staged tree's digest is stable and moves with any module;
 * ``_python_chain`` keeps the real binary's path (the one-hop venv that dangled before,
   the review of 2026-10-26), and a one-hop venv runs in the jail where the old chain
   exited 127.
@@ -25,6 +30,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -41,6 +47,7 @@ from tools.sandbox import (
     FORBIDDEN_MODULES,
     JAIL_MARKER,
     JAIL_PACKAGE_MARKER,
+    STAGED_NAME_DENY,
     SandboxError,
     _python_chain,
     launch,
@@ -51,6 +58,7 @@ from tools.sandbox import (
 P0_ENTRY = REPO_ROOT / "workflows" / "p0_scripted" / "pipeline.py"
 P1_ENTRY = REPO_ROOT / "workflows" / "p1_single_agent" / "agent.py"
 P2_ENTRY = REPO_ROOT / "workflows" / "p2_multi_agent" / "workflow.py"
+SHA256 = re.compile(r"^[0-9a-f]{64}$")
 
 
 def _registry():
@@ -58,12 +66,11 @@ def _registry():
 
 
 def _package(root: Path, name: str = "pkg", *, marker: bool = True) -> Path:
-    """A package ``root/<name>/`` with a helper module, a data file and an entry script."""
+    """A package ``root/<name>/`` with a helper module and an entry script."""
     pkg = root / name
     pkg.mkdir(parents=True)
     (pkg / "__init__.py").write_text("", encoding="utf-8")
     (pkg / "helper.py").write_text("VALUE = 42\n", encoding="utf-8")
-    (pkg / "data.txt").write_text("sibling\n", encoding="utf-8")
     if marker:
         (pkg / JAIL_PACKAGE_MARKER).write_text("staged into the jail\n", encoding="utf-8")
     (pkg / "entry.py").write_text(
@@ -72,10 +79,9 @@ def _package(root: Path, name: str = "pkg", *, marker: bool = True) -> Path:
             import json, os, sys
             import tools
             from {name} import helper
-            here = os.path.dirname(helper.__file__)
             print(json.dumps({{
                 "value": helper.VALUE,
-                "sibling": open(os.path.join(here, "data.txt")).read().strip(),
+                "sibling": open(helper.__file__).read().strip(),
                 "helper_file": helper.__file__,
                 "tools_origin": tools.__file__,
                 "path": sys.path,
@@ -91,16 +97,18 @@ def _package(root: Path, name: str = "pkg", *, marker: bool = True) -> Path:
 
 
 def test_without_the_marker_the_box_is_what_it_was_and_p0_and_p1_carry_no_marker(tmp_path):
+    # "what it was" is a manifest by assertion: before this change `launch` put the stub
+    # (`stage`) and the entry copy in the box and nothing else, and that is what is checked
     for entry in (P0_ENTRY, P1_ENTRY):
         assert not (entry.parent / JAIL_PACKAGE_MARKER).exists(), entry
         assert (entry.parent / "__init__.py").is_file()  # an __init__ alone opts nothing in
         box = tmp_path / entry.parent.name
         box.mkdir()
         stage(box)
-        staged, package = stage_workflow(entry, box)
-        assert package is None
+        staged = stage_workflow(entry, box)
+        assert staged.package is None and staged.package_sha256 is None
         assert sorted(p.name for p in box.iterdir()) == ["site", "workflow.py"]
-        assert staged.read_bytes() == entry.read_bytes()
+        assert staged.script.read_bytes() == entry.read_bytes()
     # the negative control: the same P1 directory with the marker added stages its package
     copy = tmp_path / "copy" / "p1_single_agent"
     shutil.copytree(P1_ENTRY.parent, copy, ignore=shutil.ignore_patterns("__pycache__"))
@@ -108,20 +116,21 @@ def test_without_the_marker_the_box_is_what_it_was_and_p0_and_p1_carry_no_marker
     box = tmp_path / "box_marked"
     box.mkdir()
     stage(box)
-    staged, package = stage_workflow(copy / "agent.py", box)
-    assert package == box / "package"
+    staged = stage_workflow(copy / "agent.py", box)
+    assert staged.package == box / "package"
     assert sorted(p.name for p in box.iterdir()) == ["package", "site", "workflow.py"]
-    assert (package / "p1_single_agent" / "agent.py").read_bytes() == P1_ENTRY.read_bytes()
-    assert not (package / "p1_single_agent" / "__pycache__").exists()
+    assert (staged.package / "p1_single_agent" / "agent.py").read_bytes() == P1_ENTRY.read_bytes()
+    assert not (staged.package / "p1_single_agent" / "__pycache__").exists()
     # the P2 package opts in, at its dotted path, with the ancestor package's __init__
     assert (P2_ENTRY.parent / JAIL_PACKAGE_MARKER).is_file()
     box = tmp_path / "box_p2"
     box.mkdir()
-    _, package = stage_workflow(P2_ENTRY, box)
-    assert package is not None
-    assert (package / "workflows" / "__init__.py").is_file()
-    assert (package / "workflows" / "p2_multi_agent" / "workflow.py").is_file()
-    assert sorted(p.name for p in package.iterdir()) == ["workflows"]
+    staged = stage_workflow(P2_ENTRY, box)
+    assert staged.package is not None
+    assert (staged.package / "workflows" / "__init__.py").is_file()
+    assert (staged.package / "workflows" / "p2_multi_agent" / "workflow.py").is_file()
+    assert sorted(p.name for p in staged.package.iterdir()) == ["workflows"]
+    assert SHA256.match(staged.package_sha256)
 
 
 def test_a_staged_package_imports_by_its_host_name_and_the_marker_is_the_only_opt_in(tmp_path):
@@ -131,10 +140,15 @@ def test_a_staged_package_imports_by_its_host_name_and_the_marker_is_the_only_op
     result = launch(pkg / "entry.py", _registry(), sandbox=box, timeout_s=120.0)
     assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout.strip().splitlines()[-1])
-    assert report["value"] == 42 and report["sibling"] == "sibling"
+    assert report["value"] == 42 and report["sibling"] == "VALUE = 42"
     assert report["helper_file"] == "/box/package/pkg/helper.py"
     assert report["tools_origin"] == "/box/site/tools/__init__.py"  # the stub comes first
     assert report["path"][:2] == ["/box/site", "/box/package"]
+    # the launch reports the staged tree's digest, the same `stage_workflow` computes
+    again = tmp_path / "again"
+    again.mkdir()
+    assert result.package_sha256 == stage_workflow(pkg / "entry.py", again).package_sha256
+    assert SHA256.match(result.package_sha256)
     # the negative control: the same package without the marker is not there
     bare = _package(tmp_path / "without", marker=False)
     box2 = tmp_path / "box2"
@@ -143,23 +157,28 @@ def test_a_staged_package_imports_by_its_host_name_and_the_marker_is_the_only_op
     assert result.returncode != 0
     assert "No module named 'pkg'" in result.stderr
     assert not (box2 / "package").exists()
+    assert result.package_sha256 is None
 
 
-# ------------------------------------------------------------------ forbidden names
+# ------------------------------------------------------------------ denied names
 
 
-def test_a_package_with_a_forbidden_module_name_is_refused_and_a_clean_one_runs(
-    tmp_path, monkeypatch
-):
+def test_a_package_with_a_denied_module_name_is_refused_and_a_clean_one_runs(tmp_path, monkeypatch):
     registry = _registry()
-    # a forbidden module inside the package, a forbidden directory, the package's own name
-    planted = _package(tmp_path / "module")
-    (planted / "state.py").write_text("SECRET = 1\n", encoding="utf-8")
-    directory = _package(tmp_path / "directory")
+    assert set(FORBIDDEN_MODULES) < set(STAGED_NAME_DENY)
+    assert {"truth", "truth_store", "distinguish", "tools"} <= set(STAGED_NAME_DENY)
+    cases = []
+    for name in STAGED_NAME_DENY:  # each denied name as a module inside the package ...
+        pkg = _package(tmp_path / f"module_{name}")
+        (pkg / f"{name}.py").write_text("SECRET = 1\n", encoding="utf-8")
+        cases.append((pkg, name))
+    directory = _package(tmp_path / "directory")  # ... as a directory ...
     (directory / "scenarios").mkdir()
-    own_name = _package(tmp_path / "own", name="sim")
-    for pkg, name in ((planted, "state"), (directory, "scenarios"), (own_name, "sim")):
-        box = tmp_path / f"box_{name}"
+    cases.append((directory, "scenarios"))
+    for name in ("sim", "truth_store", "tools"):  # ... and as the package's own name
+        cases.append((_package(tmp_path / f"own_{name}", name=name), name))
+    for pkg, name in cases:
+        box = tmp_path / f"box_{pkg.parent.name}"
         box.mkdir()
         with pytest.raises(SandboxError, match=f"forbidden module name \\['{name}'\\]"):
             launch(pkg / "entry.py", registry, sandbox=box, timeout_s=120.0)
@@ -176,9 +195,9 @@ def test_a_package_with_a_forbidden_module_name_is_refused_and_a_clean_one_runs(
     original = sandbox_module.stage_workflow
 
     def plant_after_staging(script, sandbox):
-        staged, package = original(script, sandbox)
-        (package / "state.py").write_text("SECRET = 1\n", encoding="utf-8")
-        return staged, package
+        staged = original(script, sandbox)
+        (staged.package / "state.py").write_text("SECRET = 1\n", encoding="utf-8")
+        return staged
 
     monkeypatch.setattr(sandbox_module, "stage_workflow", plant_after_staging)
     box = tmp_path / "box_planted"
@@ -187,6 +206,68 @@ def test_a_package_with_a_forbidden_module_name_is_refused_and_a_clean_one_runs(
     assert result.returncode == 3
     assert "sandbox refused to start: forbidden modules resolve ['state']" in result.stderr
     assert "42" not in result.stdout
+
+
+# ------------------------------------------------------------------ symlinks, non-modules
+
+
+def test_a_symlink_or_a_non_module_anywhere_in_the_package_is_refused(tmp_path):
+    registry = _registry()
+    host = tmp_path / "host"
+    host.mkdir()
+    (host / "secret.json").write_text('{"truth": 1}', encoding="utf-8")
+    (host / "dir").mkdir()
+    (host / "dir" / "state.py").write_text("SECRET = 1\n", encoding="utf-8")
+    (host / "dir" / "note.py").write_text("NOTE = 1\n", encoding="utf-8")
+
+    # a file link, a directory link (which rglob would not descend, so its state.py would
+    # pass a name scan), a link inside a subpackage, and a dangling link
+    def linked(name: str, where: str, target: Path) -> Path:
+        pkg = _package(tmp_path / name)
+        path = pkg / where
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.parent != pkg:
+            (path.parent / "__init__.py").write_text("", encoding="utf-8")
+        path.symlink_to(target)
+        return pkg
+
+    # ... and a symlinked __init__.py of an ancestor package (staged with the package)
+    outer = tmp_path / "ancestor" / "outer"
+    inner = _package(outer, name="inner")
+    (outer / "__init__.py").symlink_to(host / "dir" / "note.py")
+    for pkg in (
+        linked("file_link", "link_file.py", host / "secret.json"),
+        linked("dir_link", "link_dir", host / "dir"),
+        linked("nested_link", "sub/link.py", host / "dir" / "note.py"),
+        linked("dangling", "gone.py", host / "missing.py"),
+        inner,
+    ):
+        box = tmp_path / f"box_{pkg.parent.name}"
+        box.mkdir()
+        with pytest.raises(SandboxError, match="symlink"):
+            launch(pkg / "entry.py", registry, sandbox=box, timeout_s=120.0)
+        assert not (box / "package").exists()
+        assert not (box / JAIL_MARKER).exists()
+    # a file that is not a module enters no jail unscanned
+    data = _package(tmp_path / "data")
+    (data / "data.txt").write_text("sibling\n", encoding="utf-8")
+    box = tmp_path / "box_data"
+    box.mkdir()
+    with pytest.raises(SandboxError, match="not a module"):
+        launch(data / "entry.py", registry, sandbox=box, timeout_s=120.0)
+    assert not (box / "package").exists()
+    # the negative control: the plain modules beside them are staged and readable
+    plain = _package(tmp_path / "plain")
+    (plain / "sub").mkdir()
+    (plain / "sub" / "__init__.py").write_text("", encoding="utf-8")
+    (plain / "sub" / "note.py").write_text("NOTE = 1\n", encoding="utf-8")
+    box = tmp_path / "box_plain"
+    box.mkdir()
+    result = launch(plain / "entry.py", registry, sandbox=box, timeout_s=120.0)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout.strip().splitlines()[-1])["sibling"] == "VALUE = 42"
+    assert (box / "package" / "pkg" / "sub" / "note.py").read_text() == "NOTE = 1\n"
+    assert not any(p.is_symlink() for p in (box / "package").rglob("*"))
 
 
 # ------------------------------------------------------------------ no path escape
@@ -213,7 +294,7 @@ def test_the_staged_copy_sees_nothing_of_the_host_tree(tmp_path):
                 ("truth_store_relative", os.path.join(here, "..", "truth_store", "index.jsonl")),
                 ("truth_store_host", {str(host_root / "truth_store" / "index.jsonl")!r}),
                 ("repository", {str(REPO_ROOT / "CLAUDE.md")!r}),
-                ("sibling", os.path.join(here, "data.txt")),
+                ("sibling", os.path.join(here, "helper.py")),
             ):
                 try:
                     with open(path, encoding="utf-8") as fh:
@@ -247,13 +328,13 @@ def test_the_staged_copy_sees_nothing_of_the_host_tree(tmp_path):
     assert report["here"] == "/box/package/pkg"
     for label, outcome in report["opens"].items():
         if label == "sibling":
-            assert outcome == "OPENED"  # the negative control: its own staged file
+            assert outcome == "OPENED"  # the negative control: its own staged module
         else:
             assert outcome != "OPENED", (label, outcome)
     assert report["walk"] == []
     assert report["host_paths_on_sys_path"] == []
     assert set(report["staged"]) - {"__pycache__"} == {  # the jail's own bytecode aside
-        "__init__.py", "helper.py", "data.txt", "entry.py", "probe.py", JAIL_PACKAGE_MARKER
+        "__init__.py", "helper.py", "entry.py", "probe.py", JAIL_PACKAGE_MARKER
     }  # fmt: skip
 
 
@@ -263,18 +344,52 @@ def test_the_staged_copy_sees_nothing_of_the_host_tree(tmp_path):
 def test_the_scanner_covers_every_module_of_the_staged_p2_package(tmp_path):
     box = tmp_path / "box"
     box.mkdir()
-    _, package = stage_workflow(P2_ENTRY, box)
+    package = stage_workflow(P2_ENTRY, box).package
     assert package is not None
     staged = sorted(p.relative_to(package) for p in package.rglob("*.py"))
     assert staged, "nothing staged"
     scanned = {p.relative_to(REPO_ROOT) for p in workflow_modules()}
     assert set(staged) <= scanned, sorted(set(staged) - scanned)
     assert not [v for p in staged for v in find_truth_references(package / p)]
+    # the staged tree holds modules and the marker, nothing else
+    files = {p.name for p in package.rglob("*") if p.is_file()}
+    assert all(name.endswith(".py") or name == JAIL_PACKAGE_MARKER for name in files), files
     # the negative control: a violation planted in a staged module is a finding
     bad = package / "workflows" / "p2_multi_agent" / "planted.py"
     bad.write_text("import sim\n", encoding="utf-8")
     assert [v.kind for v in find_truth_references(bad)] == ["import"]
     assert bad.relative_to(package) not in scanned  # and only because it is not on the host
+
+
+# ------------------------------------------------------------------ the digest
+
+
+def test_the_staged_trees_digest_is_stable_and_moves_with_any_module(tmp_path):
+    first, second = tmp_path / "a", tmp_path / "b"
+    first.mkdir()
+    second.mkdir()
+    one = stage_workflow(P2_ENTRY, first).package_sha256
+    assert one == stage_workflow(P2_ENTRY, second).package_sha256
+    assert SHA256.match(one)
+    # a copy of the package with one byte changed in a module, or a module added, differs
+    copy = tmp_path / "copy" / "p2_multi_agent"
+    shutil.copytree(P2_ENTRY.parent, copy, ignore=shutil.ignore_patterns("__pycache__"))
+    box = tmp_path / "box_copy"
+    box.mkdir()
+    same_layout = stage_workflow(copy / "workflow.py", box).package_sha256
+    assert same_layout != one  # the dotted path differs (no `workflows/` ancestor): recorded
+    (copy / "workflow.py").write_text(
+        (copy / "workflow.py").read_text(encoding="utf-8") + "\n# changed\n", encoding="utf-8"
+    )
+    box = tmp_path / "box_changed"
+    box.mkdir()
+    changed = stage_workflow(copy / "workflow.py", box).package_sha256
+    assert changed != same_layout
+    (copy / "extra.py").write_text("X = 1\n", encoding="utf-8")
+    box = tmp_path / "box_added"
+    box.mkdir()
+    added = stage_workflow(copy / "workflow.py", box).package_sha256
+    assert added not in {one, same_layout, changed}
 
 
 # ------------------------------------------------------------------ the python chain
@@ -340,4 +455,3 @@ def test_a_one_hop_venv_runs_in_the_jail_where_the_old_chain_dangled(tmp_path, m
     result = launch(script, _registry(), sandbox=box2, timeout_s=120.0)
     assert (box2 / JAIL_MARKER).exists()
     assert result.returncode == 127 and "RAN" not in result.stdout
-    assert FORBIDDEN_MODULES  # the probe never ran: nothing started

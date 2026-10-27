@@ -64,8 +64,10 @@ __all__ = [
     "JAIL_MARKER",
     "JAIL_PACKAGE_MARKER",
     "SANDBOX_PACKAGES",
+    "STAGED_NAME_DENY",
     "SandboxError",
     "SandboxResult",
+    "StagedWorkflow",
     "interpreter_site_directories",
     "launch",
     "sandbox_interpreter",
@@ -75,6 +77,17 @@ __all__ = [
 
 FORBIDDEN_MODULES: tuple[str, ...] = ("sim", "scenarios", "anchor", "eval", "state")
 """Modules that must not resolve in the workflow process or any child of it."""
+
+STAGED_NAME_DENY: tuple[str, ...] = (
+    *FORBIDDEN_MODULES,
+    "truth",
+    "truth_store",
+    "distinguish",
+    "tools",
+)
+"""Names a staged package, or any module or directory in it, may not carry: the forbidden
+modules, the truth-isolation scanner's truth modules, and ``tools``, which the stub owns (a
+staged ``tools`` would be shadowed by it and never work)."""
 
 SANDBOX_PACKAGES: tuple[str, ...] = ("numpy", "scipy", "pydantic")
 """What the sandbox environment contains, pinned to the host's versions. Nothing else: not
@@ -413,6 +426,8 @@ class SandboxResult:
     stderr: str
     n_requests: int
     """Requests the registry server answered."""
+    package_sha256: str | None = None
+    """The staged package's tree digest (:class:`StagedWorkflow`), when one was staged."""
 
 
 def _is_under(path: Path, root: Path) -> bool:
@@ -474,16 +489,67 @@ def _package_root(package: Path) -> Path:
     return root.parent
 
 
-def stage_workflow(script: str | Path, sandbox: str | Path) -> tuple[Path, Path | None]:
+@dataclass(frozen=True)
+class StagedWorkflow:
+    """What :func:`stage_workflow` put in the box."""
+
+    script: Path
+    """The entry, copied to ``<sandbox>/workflow.py``."""
+    package: Path | None
+    """``<sandbox>/package``, or ``None`` when the entry's package did not opt in."""
+    package_sha256: str | None
+    """sha256 over the staged tree (sorted relative paths and bytes); ``None`` without one."""
+
+
+def _package_entries(package: Path) -> list[Path]:
+    """Every entry of the package that may be staged, refusing what may not.
+
+    Symlinks are refused wherever they point (a file or directory link would be copied from
+    the host into the box, and a linked directory escapes the name scan: the review of
+    2026-10-27, F1); so is any file that is not a module or the marker (nothing enters the
+    jail unscanned). Bytecode caches are skipped.
+    """
+    entries: list[Path] = []
+    for entry in sorted(package.rglob("*")):
+        relative = entry.relative_to(package)
+        if "__pycache__" in relative.parts or entry.suffix == ".pyc":
+            continue
+        if entry.is_symlink():
+            raise SandboxError(
+                f"{entry} is a symlink; a staged package carries none (it would copy "
+                "the link's target from the host into the jail)"
+            )
+        if entry.is_dir() or entry.suffix == ".py" or entry.name == JAIL_PACKAGE_MARKER:
+            entries.append(entry)
+            continue
+        raise SandboxError(
+            f"{entry} is not a module; a staged package carries *.py files and "
+            f"{JAIL_PACKAGE_MARKER} only"
+        )
+    return entries
+
+
+def _tree_sha256(root: Path) -> str:
+    """sha256 over a directory tree: each file's sorted relative path, then its bytes."""
+    digest = hashlib.sha256()
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        digest.update(path.relative_to(root).as_posix().encode() + b"\0")
+        digest.update(path.read_bytes() + b"\0")
+    return digest.hexdigest()
+
+
+def stage_workflow(script: str | Path, sandbox: str | Path) -> StagedWorkflow:
     """Copy the entry script into the box as ``workflow.py``; stage its package if opted in.
 
-    Returns the staged script and the staged package directory (``<sandbox>/package``),
-    which is ``None`` unless :data:`JAIL_PACKAGE_MARKER` sits beside the script. A package
-    holding a module or directory named like a forbidden module, at any depth or as its own
-    top-level name, is refused before any jail is built.
+    The package is staged (``<sandbox>/package/``, at its dotted path) only when
+    :data:`JAIL_PACKAGE_MARKER` sits beside the script. Before any jail is built the
+    launcher refuses a package that carries a symlink anywhere, a file that is not a module
+    or the marker, or a module, directory or top-level name in :data:`STAGED_NAME_DENY`.
+    The digest of the staged tree is returned for the record (step 2 of the agent build
+    writes it into the run's record; ``tools/runner.py`` is frozen).
 
     Raises:
-        SandboxError: If the package carries a forbidden module name.
+        SandboxError: If the package may not be staged.
     """
     box = Path(sandbox)
     source = Path(script).resolve()
@@ -493,27 +559,33 @@ def stage_workflow(script: str | Path, sandbox: str | Path) -> tuple[Path, Path 
     if target.exists():
         shutil.rmtree(target)
     if not (source.parent / JAIL_PACKAGE_MARKER).is_file():
-        return staged_script, None
+        return StagedWorkflow(staged_script, None, None)
     package = source.parent
     root = _package_root(package)
     relative = package.relative_to(root)
-    names = {relative.parts[0]} | {
-        p.stem for p in package.rglob("*") if p.suffix == ".py" or p.is_dir()
-    }
-    forbidden = sorted(names & set(FORBIDDEN_MODULES))
-    if forbidden:
+    entries = _package_entries(package)
+    names = {relative.parts[0]} | {e.stem for e in entries if e.is_dir() or e.suffix == ".py"}
+    denied = sorted(names & set(STAGED_NAME_DENY))
+    if denied:
         raise SandboxError(
-            f"the package {package} carries a forbidden module name {forbidden}; it is not staged"
+            f"the package {package} carries a forbidden module name {denied}; it is not staged"
         )
     for ancestor in reversed(relative.parents):  # the package root's own children first
         init = root / ancestor / "__init__.py"
-        if ancestor.parts and init.is_file():
-            (target / ancestor).mkdir(parents=True, exist_ok=True)
-            shutil.copy2(init, target / ancestor / "__init__.py")
-    shutil.copytree(
-        package, target / relative, ignore=shutil.ignore_patterns("__pycache__", "*.pyc")
-    )
-    return staged_script, target
+        if not ancestor.parts or not init.is_file():
+            continue
+        if init.is_symlink():
+            raise SandboxError(f"{init} is a symlink; a staged package carries none")
+        (target / ancestor).mkdir(parents=True, exist_ok=True)
+        shutil.copy2(init, target / ancestor / "__init__.py")
+    (target / relative).mkdir(parents=True, exist_ok=True)
+    for entry in entries:
+        staged = target / relative / entry.relative_to(package)
+        if entry.is_dir():
+            staged.mkdir(exist_ok=True)
+        else:
+            shutil.copy2(entry, staged)
+    return StagedWorkflow(staged_script, target, _tree_sha256(target))
 
 
 def _hidden_package_dirs(libdirs: list[str]) -> list[str]:
@@ -583,7 +655,8 @@ def launch(
     stage(box)
     work = box / "cwd"
     work.mkdir(exist_ok=True)
-    _, package = stage_workflow(script, box)
+    staged = stage_workflow(script, box)
+    package = staged.package
     socket_path = box / "registry.sock"
     if socket_path.exists():
         socket_path.unlink()
@@ -653,4 +726,5 @@ def launch(
         stdout=completed.stdout,
         stderr=completed.stderr,
         n_requests=server.n_requests,
+        package_sha256=staged.package_sha256,
     )

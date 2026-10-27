@@ -4146,5 +4146,15 @@ the jail.** Branch `claude/p2-agents-sandbox`, a draft PR from `main`, separate 
   no path escape with the planted truth, the scanner over every staged module, the chain
   (unit, and a one-hop venv in the jail with the old chain as the control).
 - `docs/decisions.md`: the ruling, with alternative B (one file + sha256 pin) not taken.
-- **Next:** the coordinator's review; the lead's word to merge; then step 2 (the harness),
-  which splits step 1's section into `evidence.py` / `messages.py` as units.
+- **The coordinator's review (2026-10-27, fixes needed on one hole), taken in one commit:**
+  F1 symlinks anywhere in the package refused before the jail (a file link, a directory
+  link carrying `state.py` past the name scan, a nested link, a dangling link; the plain
+  modules beside them stage and read). F2 `STAGED_NAME_DENY` adds `truth`, `truth_store`,
+  `distinguish` and `tools` to the forbidden modules, each tested as a module, a directory
+  or the package's own name. F3 only `*.py` and the marker are staged (a data file is
+  refused); `stage_workflow` returns the staged tree's sha256 and `launch` reports it
+  (`SandboxResult.package_sha256`); the run record carries it from step 2. Nits: the
+  manifest-by-assertion comment; the design note's "reused unchanged" line for
+  `tools/sandbox.py` corrected.
+- **Next:** the coordinator's re-review; the lead's word to merge; then step 2 (the
+  harness), which splits step 1's section into `evidence.py` / `messages.py` as units.
