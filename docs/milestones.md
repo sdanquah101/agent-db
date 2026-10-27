@@ -4131,3 +4131,38 @@ go").**
 - **Next:** the coordinator's check of this revision, then the lead's approval of the note,
   then the build.
 
+**2026-10-26 — PR #37 merged (`a62a691`): the design note is the approved record. The lead's
+word, "merge"; then the coordinator's "start the code".**
+- **Step 1 of the build** (branch `claude/p2-agents-evidence`, a draft PR): the evidence
+  section and the typed messages, offline, no model.
+  - The amended admission for the agent arm, `admit_agent` and `structural_case`: NM failed
+    as frozen, or NM standing with a failed hold-out **and** R3 over all channels (Q13, Q14).
+    The procedural arm's `admit` is untouched.
+  - `admissible_alternative`: the code check of a verdict's alternative.
+  - The typed messages of §3.3: `EvidenceRef` (statement templated by code),
+    `SensorFinding`, `InfluentFinding`, `IdentFinding`, `CalFinding`, `AssayPlan`,
+    `HoldoutResult`, `SeparatingTest`, `Verdict`, `RoutingEntry`. No field is free text;
+    `free_text_fields` proves it per model.
+  - Tests with negative controls and mutations (`tests/test_p2_agents_evidence.py`).
+- **A layout decision** (`docs/decisions.md`, 2026-10-26): the agent arm lives in the one
+  jailed file beside the procedural arm, because the jail ships one script and the runner
+  and sandbox stay unchanged. Open to the coordinator: a package split with a sandbox change.
+- **Deferred to the driver step:** registering the Q6 cells (S7-01 at B/A, B/B, B/C; S7-02
+  at A/C; two seeds each) in the development list.
+- **The coordinator's review of PR #38 at `7e42a55` (fixes needed), all taken in one commit:**
+  B1 `structural_case` read `r3_all`, a key no code writes, so the standing-NM branch was
+  dead; it now reads `r3_channels_all` against `need` (`structural_channels_min`), or the
+  pipeline's own `structural_proposed`, and a test pins every key the agent section reads to
+  a key the pipeline writes, with pipeline-shaped fixtures. B2 `NAME_PATTERN` admits
+  `K_S_pro`, `K_I_nh3`, `pH` (a test over every fitted and base ADM1 parameter name and every
+  channel key). S1 `free_text_fields` flags untyped nodes (`Any`, `list[Any]`,
+  `dict[str, Any]`, `patternProperties`), and `SeparatingTest.args` is typed to tokens and
+  numbers (no `Any`, no runtime regex). S2 units are the registry symbol after `unit_head`,
+  compared by `same_unit`; rules are a `Literal` of the pipeline's signature keys
+  (`docs/decisions.md`, 2026-10-26). Nits: a fail cites evidence; day and bound fields state
+  their unit; `AssayPlan` carries the assay's unit; the hold-out divergence from the frozen
+  `admit` is stated in the docstring; no private import from the isolation tests.
+- **Next:** the coordinator's re-review; the lead's ruling on the layout (one jailed file or a
+  staged package); then step 2, the agent harness on P1's loop, the allow-list views, the
+  projection and the gateway extension.
+
