@@ -519,6 +519,10 @@ def test_the_label_patterns_match_the_configured_vocabulary_and_pass_rule_ones_s
     [
         ("evidence.py", {"__future__", "typing"}),
         ("messages.py", {"__future__", "typing", "pydantic"}),
+        (
+            "agents.py",
+            {"__future__", "json", "math", "typing", "numpy", "pydantic", "tools", "workflows"},
+        ),
     ],
 )
 def test_each_module_of_the_package_imports_only_what_the_jail_has(module: str, allowed: set):

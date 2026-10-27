@@ -735,6 +735,55 @@ class P2Runner(_Frozen):
     )
 
 
+_AgentRoles = Literal[
+    "data_quality",
+    "influent",
+    "identifiability",
+    "calibration",
+    "design",
+    "verification",
+]
+"""The six model-backed roles of the agent P2; coordination is code (design note §3.3)."""
+
+
+class P2AgentRole(_Frozen):
+    """One agent role's allow-list and turn budget (design note §3.1, §3.2)."""
+
+    tools: tuple[str, ...] = Field(description="Registry tools the role's view admits")
+    turns: _PosInt = Field(description="Model turns the role may take per routing")
+
+
+class P2AgentProjection(_Frozen):
+    """The projected action log's size bound (design note §4, step 2)."""
+
+    max_points: _PosInt = Field(description="Points an array in a projected output keeps")
+    preview: _PosInt = Field(description="Elements shown before a long array is summarised")
+
+
+class P2Agents(_Frozen):
+    """The agent arm of P2 (``docs/p2_agents_design.md``; the lead's option A, 2026-10-26).
+
+    A configuration that carries this block selects the agent arm: its roles are
+    model-backed agents on P1's loop, with the allow-lists of §3.1 and the turn budgets of
+    §3.2, the coordinator is code, and the procedural arm's code steps (QC, the reference
+    fit, the null table, the signatures) run first as the shared evidence. Without the
+    block the configuration is the procedural arm's ("decision points only", Q12).
+    """
+
+    roles: dict[_AgentRoles, P2AgentRole]
+    prompts: dict[_AgentRoles, str] = Field(description="Each role's prompt file, beside")
+    projection: P2AgentProjection
+    rounds: _PosInt = Field(description="The verifier's round limit (Q11: two)")
+
+    @model_validator(mode="after")
+    def _complete(self) -> P2Agents:
+        for what, have in (("roles", self.roles), ("prompts", self.prompts)):
+            missing = set(_AgentRoles.__args__) - set(have)
+            if missing:
+                raise ValueError(f"agents.{what}: missing {sorted(missing)}")
+        return self
+
+
 class P2Config(_Frozen):
     """``configs/workflows/p2.yaml``; P0's settings come from ``p0_config``, not retyped."""
 
@@ -758,6 +807,15 @@ class P2Config(_Frozen):
     holdout: P2Holdout
     templates: dict[str, str]
     runner: P2Runner
+    # the agent arm's block and the file it extends are not part of the dump: the digest of
+    # the procedural configuration (an approval's config_sha256) must not move when the
+    # schema gains them; tools.p2_live.config_digest adds the agents block explicitly
+    agents: P2Agents | None = Field(default=None, exclude=True)
+    extends: str | None = Field(
+        default=None,
+        exclude=True,
+        description="A configuration file beside this one whose fields this one overlays",
+    )
     config_dir: Path = Field(default=WORKFLOW_CONFIG_DIR, exclude=True)
 
     @model_validator(mode="after")
@@ -777,12 +835,41 @@ class P2Config(_Frozen):
 
 
 def load_p2(path: Path = WORKFLOW_CONFIG_DIR / "p2.yaml") -> P2Config:
-    """Parse and validate ``p2.yaml``; its files resolve beside it."""
+    """Parse and validate ``p2.yaml``; its files resolve beside it.
+
+    A file with ``extends: <file>`` overlays its own top-level fields on that file's (one
+    level, no chain): the agent arm's ``p2_agents.yaml`` carries its ``agents`` block and
+    its ``workflow_version`` and takes everything else, the frozen record included, from
+    ``p2.yaml``, so the two arms cannot drift apart.
+    """
     path = Path(path)
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise ValueError(f"{path}: expected a YAML mapping")
+    base_name = raw.get("extends")
+    if base_name is not None:
+        base = yaml.safe_load((path.parent / str(base_name)).read_text(encoding="utf-8"))
+        if not isinstance(base, dict) or "extends" in base:
+            raise ValueError(f"{path}: extends names a file that is not a plain configuration")
+        raw = {**base, **raw}
     return P2Config.model_validate({**raw, "config_dir": path.parent})
+
+
+def load_p2_agent_prompts(config: P2Config) -> dict[str, dict[str, str]]:
+    """Each agent role's prompt: its text and the text's sha256 (the agent arm only).
+
+    Raises:
+        ValueError: If the configuration carries no agent arm.
+    """
+    import hashlib
+
+    if config.agents is None:
+        raise ValueError("the configuration carries no agent arm (no agents block)")
+    out = {}
+    for role, name in config.agents.prompts.items():
+        text = (config.config_dir / name).read_text(encoding="utf-8")
+        out[role] = {"text": text, "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()}
+    return out
 
 
 def load_p2_templates(config: P2Config) -> dict[str, dict[str, str]]:
@@ -862,6 +949,15 @@ def sandbox_config(config: P0Config | P1Config | P2Config, *, live: bool = False
             }
             for name, spec in load_assays().assays.items()
         }
+        if config.agents is not None:
+            # the agent arm: its roles, their prompts' texts (the digests stay on the
+            # privileged side, in the gateway), the projection bound and the round limit
+            agents = config.agents.model_dump(mode="json")
+            agents["prompts"] = {
+                role: p["text"] for role, p in load_p2_agent_prompts(config).items()
+            }
+            payload["agents"] = agents
+            payload["tool_size_ceilings"] = tool_size_ceilings()
     elif isinstance(config, P1Config):
         from tools.config import load_assays
 

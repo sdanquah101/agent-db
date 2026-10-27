@@ -565,8 +565,8 @@ def test_the_workflow_passes_rule_one_and_imports_only_what_the_jail_has():
     # option A (tools/sandbox.py, docs/decisions.md 2026-10-26); nothing else of the host
     assert imports <= {"__future__", "hashlib", "json", "math", "collections", "typing",
                        "numpy", "pydantic", "tools", "workflows"}  # fmt: skip
-    own = set(re.findall(r"^from (workflows\.[a-z0-9_.]+) import", text, flags=re.M))
-    assert own == {"workflows.p2_multi_agent.evidence"}
+    own = set(re.findall(r"^\s*from (workflows\.[a-z0-9_.]+) import", text, flags=re.M))
+    assert own == {"workflows.p2_multi_agent.evidence", "workflows.p2_multi_agent.agents"}
 
 
 # ------------------------------------------------------------------ 10. dq.trust

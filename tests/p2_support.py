@@ -41,9 +41,31 @@ class BudgetExceededError(ToolError):
     """The stub's budget error."""
 
 
-def ns(**kw: Any) -> types.SimpleNamespace:
+class NS(types.SimpleNamespace):
+    """A plain object with attributes and a registry model's ``model_dump``."""
+
+    def model_dump(self, mode: str = "json") -> Any:
+        """The object as JSON values, recursively (what the agent arm's handlers call)."""
+        return _plain(self)
+
+
+def _plain(x: Any) -> Any:
+    if isinstance(x, dict):
+        return {str(k): _plain(v) for k, v in x.items()}
+    if isinstance(x, list | tuple):
+        return [_plain(v) for v in x]
+    if isinstance(x, np.ndarray):
+        return [None if not np.isfinite(v) else float(v) for v in x.tolist()]
+    if isinstance(x, types.SimpleNamespace):
+        return {k: _plain(v) for k, v in vars(x).items()}
+    if isinstance(x, float) and not np.isfinite(x):
+        return None
+    return x
+
+
+def ns(**kw: Any) -> NS:
     """A plain object with attributes."""
-    return types.SimpleNamespace(**kw)
+    return NS(**kw)
 
 
 class FakeRun:
@@ -67,6 +89,9 @@ class FakeRun:
 
     def operator_notes(self) -> list[dict[str, Any]]:
         return [{"day": 40, "author": "operator", "text": "a note"}]
+
+    def feed_assays(self) -> list[dict[str, Any]]:
+        return []
 
     def write_output(self, relative: str, content: str) -> dict[str, Any]:
         self.outputs[relative] = content
@@ -148,7 +173,9 @@ class FakeTools:
 
     def _describe_model(self, model: str) -> Any:
         return ns(parameter_names=PARAMS, lower=[0.25] * len(PARAMS), upper=[4.0] * len(PARAMS),
-                  parameter_units={p: "-" for p in PARAMS}, output_names=list(self.base),
+                  defaults=[1.0] * len(PARAMS), parameter_units={p: "-" for p in PARAMS},
+                  output_names=list(self.base),
+                  output_units={ch: CHANNELS[n][1] for n, (ch, *_) in CHANNELS.items()},
                   t=np.arange(T_DAYS + 1.0))  # fmt: skip
 
     def _feed_loads(self, model: str) -> Any:
@@ -162,7 +189,7 @@ class FakeTools:
         shift = sum((parameters or {}).values()) * 0.0
         scale = kw.get("biomass_scale") or 1.0
         out = {ch: v.mean() + shift + 0.0 * t + (scale - 1.0) * 0.0 for ch, v in self.base.items()}
-        return ns(t=t, outputs=out)
+        return ns(t=t, outputs=out, success=True, message="", n_evaluations=1)
 
     def _data_qc(self, series: Any, event_windows: Any, **kw: Any) -> Any:
         res = [ns(name=s["name"], flags=[], missing_fraction=0.0, flatlines=[], spikes=[5.0],

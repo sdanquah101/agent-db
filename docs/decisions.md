@@ -8382,3 +8382,56 @@ the pilot warrants it. Nothing in the build changes.
 the pilot has run would cost the comparator (P1, frozen on luna) and the cost tables of §8,
 and would answer a question the pilot has not yet asked. An Opus arm after the pilot is a
 costed extension with the luna result as its baseline.
+
+
+## 2026-10-27 — The agent arm's harness: what the design note left to the build (step 2)
+
+**Decision.** Five choices the note (`docs/p2_agents_design.md`) does not make, taken in
+the harness PR and open to the coordinator's review:
+
+1. **The arm is selected by its configuration file.** `configs/workflows/p2_agents.yaml`
+   carries `extends: p2.yaml` and the `agents` block; the runner's `config_path` selects it,
+   and the entry `workflow.py` dispatches on `cfg["agents"]`. The procedural `p2.yaml` is
+   untouched and its digest (an approval's `config_sha256`, the pilot's
+   `cf59bcbb…f404`) does not move: the `agents` and `extends` fields are excluded from the
+   model dump, and `config_digest` adds the agents block and its prompts' digests
+   explicitly, so an approval of the agent arm binds them. The two arms share every other
+   field, the frozen record included (`extends` is one level, no chain).
+2. **The procedural arm's code steps are the agent arm's shared evidence.** QC, the
+   reference fit, the null table and the signatures (`step_read` to `step_profile`, every
+   decision point at its offline fallback) run first, as the note's §2 keeps them as code;
+   the roles then reason over the typed state and call their own tools. The admission is
+   `admit_agent` over the pipeline's own table and signatures, so the configured
+   `structural_channels_min` reaches it by construction. The code steps' calls are in the
+   record; their outputs are not in the projected log (the typed state summarises them).
+3. **The projection's redaction rule.** Beside the declared free-text fields
+   (`set_sensor_status.reason`, `fit_*.bounds_justification`), every string argument that
+   is not a token (an identifier or a number as text, `messages.TOKEN_PATTERN`) is
+   redacted at any depth. Numbers, booleans and identifiers pass.
+4. **Grants.** The coordinator grants each routed role an equal share of the evaluations
+   left (floor), and the design role the assay units left; a sized call whose registry
+   bound exceeds the role's grant is refused by the harness before it runs (P1's
+   `estimate_evaluations`), so one role cannot spend another's share. The verifier's own
+   budget (Q9), enforced in the registry, is the next PR's.
+5. **The offline responder abstains.** With no model reachable (`decider: offline`), a
+   scripted responder in the package makes each role one tool call and one `none` /
+   `no_claim` finding, and the verifier abstains: the arm runs end to end with no model,
+   and its floor is a record that claims nothing. An arm with no model should not claim.
+
+**Reason.** 1 keeps the runner frozen and the pilot's approval record valid; 2 is the
+note's "kept as code" list made concrete and reuses the frozen rule's inputs; 3 is the
+only rule under which a sensor or parameter name survives and a sentence never does; 4
+keeps "the role's own budget is untouched" (§4, step 3) meaningful before the registry
+knows roles; 5 is the honest floor.
+
+**Alternatives.** A runner flag for the arm (the runner is frozen). A second copy of
+`p2.yaml` with the agents block (a frozen record in two files, which must then be equal).
+Redacting only the declared fields (a sentence in any other string field would pass).
+Letting every role draw on the whole budget (one role could starve the verifier). An
+offline verifier that passes (the arm would conclude `none` on every cell: a claim).
+
+**Scope of the harness PR, and what follows.** The harness runs one verifier round with
+the verdict checks (the admitted alternative, the hold-out citation, D-1) and the
+conclusion rules of §4 step 6. The second round (a `fail` sends the alternative back to
+the specialists), the separating test's routing and the verifier's own registry budget
+are the next PR; `package_sha256` into the run record and the Q6 cells, the one after.

@@ -4216,3 +4216,27 @@ the jail.** Branch `claude/p2-agents-sandbox`, a draft PR from `main`, separate 
   touches the file); `package_sha256` into the run record; the harness (next PR).
 - **Next:** the coordinator's review; then the harness PR (P1's loop as package code, the
   role views with the §3.1 allow-lists, the projected log, the coordinator as code).
+
+**2026-10-27 — Step 2, the harness (branch `claude/p2-agents-harness`, a draft PR cut from
+`claude/p2-agents-package`, PR #40, which it depends on).**
+- `workflows/p2_multi_agent/agents.py`: the roles on P1's loop (copied from
+  `workflows/p1_single_agent/agent.py` at `8f78881`, named in the docstring), each with
+  the §3.1 allow-list enforced in its view, the §3.2 turn budget, a grant of evaluations
+  and assays; the projected action log with every free-text field redacted and `stored`;
+  typed findings checked by code (cited calls, produced values, registry units, the round
+  rule); the coordinator as code (QC first; the failed null case's specialists, or all on a
+  standing null; design on a conflict; the verifier), the only writer of routing entries;
+  one verifier round with the verdict checks (`admissible_alternative`, the hold-out
+  citation, D-1) and code's conclusion (§4, step 6); no model free text in `state.json`;
+  the offline scripted responder (the arm runs with no model and abstains).
+- `configs/workflows/p2_agents.yaml` (`extends: p2.yaml`, the `agents` block) and the six
+  role prompts under `configs/workflows/p2_prompts/agents/`; `tools/workflow_config.py`
+  (`P2Agents`, `extends`, the jail document's `agents`); `tools/p2_live.py`
+  (`P2AgentGateway`: a role's turn checked against its prompt and tools; `config_digest`
+  binds the agents block); the entry dispatches on `cfg["agents"]`. The procedural digest
+  and both freeze digests are unchanged.
+- `tests/test_p2_agents_harness.py`: each guard rail with its negative control, in-process
+  on scripted responders, and one jailed offline run through the runner.
+- `docs/decisions.md`: the five build choices the note left open.
+- **Next:** the coordinator's review; then the verifier's second round, the separating
+  test and its own registry budget; then `package_sha256` into the record and the Q6 cells.
