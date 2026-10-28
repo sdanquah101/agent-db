@@ -277,9 +277,17 @@ class RegistryServer:
                 return {"ok": True, "result": self.registry.describe(str(request["name"]))}
             if op == "remaining":
                 return {"ok": True, "result": self.registry.remaining().model_dump(mode="json")}
+            if op == "reserves":
+                return {"ok": True, "result": self.registry.reserves_remaining()}
             if op == "call":
                 args = decode_arrays(request.get("args") or {})
-                return {"ok": True, "result": self.registry.call_json(str(request["name"]), args)}
+                role = request.get("role")
+                return {
+                    "ok": True,
+                    "result": self.registry.call_json(
+                        str(request["name"]), args, role=None if role is None else str(role)
+                    ),
+                }
             if op == "run":
                 if self._view is None:
                     return {"ok": False, "error": "this registry serves no run", "kind": "RunError"}

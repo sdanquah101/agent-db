@@ -70,6 +70,7 @@ __all__ = [
     "SandboxError",
     "SandboxResult",
     "StagedWorkflow",
+    "apply_reserves",
     "interpreter_site_directories",
     "launch",
     "launch_record",
@@ -642,6 +643,39 @@ def launch_record(staged: StagedWorkflow) -> dict[str, Any]:
     }
 
 
+def apply_reserves(box: Path, registry: Registry) -> dict[str, dict[str, int]]:
+    """Set the registry's reserves from the jail document the runner wrote into the box.
+
+    The agent P2's verifier draws on its own reserve inside the cell's envelope
+    (``docs/p2_agents_design.md`` Q9; ``agents.verifier_budget`` of ``p2_agents.yaml``).
+    The privileged runner that opens the registry is frozen, so the reserve reaches the
+    registry here, from the document the runner wrote into ``<box>/cwd/`` before the
+    launch: read on this side before any jail exists, it is the validated configuration,
+    not the workflow's word. Returns what was reserved (``{}`` without a document or
+    without the block).
+    """
+    reserved: dict[str, dict[str, int]] = {}
+    for doc_path in sorted(Path(box).glob("cwd/*_config.json")):
+        try:
+            doc = json.loads(doc_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        agents = doc.get("agents") if isinstance(doc, dict) else None
+        budget = agents.get("verifier_budget") if isinstance(agents, dict) else None
+        if not isinstance(budget, dict):
+            continue
+        registry.reserve(
+            "verification",
+            simulator_evals=int(budget["simulator_evals"]),
+            assay_units=int(budget["assay_units"]),
+        )
+        reserved["verification"] = {
+            "simulator_evals": int(budget["simulator_evals"]),
+            "assay_units": int(budget["assay_units"]),
+        }
+    return reserved
+
+
 def _hidden_package_dirs(libdirs: list[str]) -> list[str]:
     """Every ``site-packages`` / ``dist-packages`` under the mounted library directories."""
     hidden: list[str] = []
@@ -756,6 +790,7 @@ def launch(
         "/bin/sh",
         str(jail_script),
     ]
+    apply_reserves(box, registry)
     server = RegistryServer(
         registry, socket_path, run_dir=run_dir, workflow=workflow, model_gateway=model_gateway
     )

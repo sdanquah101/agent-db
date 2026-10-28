@@ -33,11 +33,20 @@ every role is shown. Then:
 * the **coordinator is code** (§3.3, Q7): QC first; then the specialists whose null case
   failed, or all of them when the null stands; the design role when two findings
   conflict; then the verifier. It is the only writer of routing entries;
-* **code concludes** (§4, step 6): the verifier's verdict is final; a ``pass`` concludes
-  the leading admitted claim, a last-round ``fail`` concludes ``none`` for the alternative
-  ``none`` and abstains otherwise, an ``abstain`` abstains. With the verifier off (an
-  ablation) the leading admitted claim concludes, ``none`` on a standing null, else
-  abstain. The admission is the evidence module's amended rule (``admit_agent``).
+* **the verifier's own budget** (Q9): its calls and its named separating test are tagged
+  for the registry's reserve (``agents.verifier_budget``, set by the launcher) and refused
+  past it; the proposers share the envelope outside it; the report gives each side's spend;
+* **round 2** (§4, steps 3 and 5): a round-1 ``fail`` runs the named test as code through
+  the owning role's view on the verifier's reserve, sends the alternative back to the
+  leading proposer and its claimant roles, and the verifier judges again; a test no list
+  holds, invalid, or beyond the reserve counts as ``abstain``;
+* **code concludes** (§4, step 6): the verifier's last verdict is final; a ``pass``
+  concludes the leading admitted claim (``none`` on a standing null, else abstain), a
+  last-round ``fail`` concludes ``none`` for the alternative ``none`` and abstains
+  otherwise, an ``abstain`` abstains, and a round the verifier left without a verdict
+  abstains. With the verifier off (an ablation) the leading admitted claim concludes,
+  ``none`` on a standing null, else abstain. The admission is the evidence module's
+  amended rule (``admit_agent``).
 
 No model free text reaches ``state.json`` (§3.3): statements are templated by code, a
 sensor's note is templated from its typed status, annotations are code-written; a role's
@@ -307,8 +316,17 @@ class Recorder:
         """The registry's call count: the index the next call will carry."""
         return int(tools.remaining().n_calls)
 
-    def call(self, role: str, step: str, name: str, **args: Any) -> tuple[Any, int]:
-        """Call a tool, record it under the role, and re-raise its error after recording."""
+    def call(
+        self, role: str, step: str, name: str, charge_to: str | None = None, **args: Any
+    ) -> tuple[Any, int]:
+        """Call a tool, record it under the role, and re-raise its error after recording.
+
+        The call is tagged for the registry's reserves with ``charge_to`` (default: the
+        role): the verifier's calls, and the separating test it names, draw on its own
+        reserve (Q9) whichever role's view runs them; the spend is booked under the
+        charged role, the step keeps the role whose view ran it.
+        """
+        charged = charge_to or role
         before = tools.remaining()
         index = int(before.n_calls)
         record: dict[str, Any] = {
@@ -322,7 +340,7 @@ class Recorder:
             "detail": "",
         }
         try:
-            out = tools.call(name, **args)
+            out = tools.call(name, _role=charged, **args)
         except tools.BudgetExceededError as exc:
             record["outcome"], record["detail"] = "budget_exceeded", str(exc)[:300]
             raise
@@ -337,7 +355,7 @@ class Recorder:
             self.actions.append(record)
             after = tools.remaining()
             use = self.by_role.setdefault(
-                role, {"evaluations": 0, "wall_clock_s": 0.0, "assay_units": 0, "calls": 0}
+                charged, {"evaluations": 0, "wall_clock_s": 0.0, "assay_units": 0, "calls": 0}
             )
             spent = int(before.simulator_evals) - int(after.simulator_evals)
             use["evaluations"] += spent
@@ -390,11 +408,14 @@ class Recorder:
 class RoleView:
     """One role's view of the registry: its allow-list (§3.1), then the registry."""
 
-    def __init__(self, role: str, allowed: list[str], rec: Recorder) -> None:
-        """Set up."""
+    def __init__(
+        self, role: str, allowed: list[str], rec: Recorder, charge_to: str | None = None
+    ) -> None:
+        """Set up; ``charge_to`` tags the view's calls for another role's reserve."""
         self.role = role
         self.allowed = frozenset(allowed)
         self.rec = rec
+        self.charge_to = charge_to
 
     def call(self, step: str, name: str, **args: Any) -> tuple[Any, int]:
         """Call ``name`` if the role holds it; refuse and record otherwise.
@@ -414,7 +435,7 @@ class RoleView:
                 None,
             )
             raise ActionError(f"{name} is not on the {self.role} role's list")
-        return self.rec.call(self.role, step, name, **args)
+        return self.rec.call(self.role, step, name, charge_to=self.charge_to, **args)
 
 
 # ------------------------------------------------------------------ the projection
@@ -940,12 +961,25 @@ class Workspace:
             raise ActionError(f"no {what} result with call_index {index!r}; have {sorted(table)}")
         return table[index]
 
+    @staticmethod
+    def reserves() -> dict[str, dict[str, int]]:
+        """The registry's reserves and what is left of them (the verifier's, Q9)."""
+        return tools.reserves()
+
     def budget(self) -> dict[str, Any]:
-        """What is left of the registry's envelope."""
+        """What is left of the registry's envelope, the reserves apart."""
         rem = tools.remaining()
+        held = self.reserves()
         return {
             "simulator_evals_left": int(rem.simulator_evals),
             "assay_units_left": int(rem.assay_units),
+            "reserves": {
+                role: {
+                    "simulator_evals": int(r["simulator_evals"]),
+                    "assay_units": int(r["assay_units"]),
+                }
+                for role, r in held.items()
+            },
         }
 
     def unit_of_sensor(self, name: str) -> str:
@@ -1378,20 +1412,27 @@ class Workspace:
                     )
                 bounds[n] = (lo, hi)
             args["bounds"] = bounds
-            self.bounds_narrowed.update(bounds)
-            # the justification is free text: the role's own message in messages.jsonl,
-            # redacted in the projection, never in state.json (§3.1; J6)
-            self.base.log.send(
-                "proposal",
-                view.role,
-                COORDINATOR,
-                "bounds_justification",
-                {
-                    "bounds": {n: [lo, hi] for n, (lo, hi) in bounds.items()},
-                    "justification": str(inp.get("bounds_justification")),
-                },
-            )
         return args
+
+    def commit_bounds(self, view: RoleView, inp: dict[str, Any], bounds: dict[str, Any]) -> None:
+        """Record a fit's narrowing once the fit has run (K4: a refused fit narrows nothing).
+
+        The justification is free text: the role's own message in ``messages.jsonl``,
+        redacted in the projection, never in ``state.json`` (§3.1; J6).
+        """
+        if not bounds:
+            return
+        self.bounds_narrowed.update(bounds)
+        self.base.log.send(
+            "proposal",
+            view.role,
+            COORDINATOR,
+            "bounds_justification",
+            {
+                "bounds": {n: [lo, hi] for n, (lo, hi) in bounds.items()},
+                "justification": str(inp.get("bounds_justification")),
+            },
+        )
 
     def fit_result(self, out: Any) -> dict[str, Any]:
         """A fitter's output, by parameter."""
@@ -1427,6 +1468,7 @@ class Workspace:
         out, index = self._call(view, name, inp, **args)
         self.fits[index] = out
         self.fit_bounds[index] = dict(args.get("bounds") or {})
+        self.commit_bounds(view, inp, dict(args.get("bounds") or {}))
         names = list(out.parameters)
         sd = list(out.sd) if out.sd is not None else [None] * len(names)
         for n, t, d in zip(names, out.theta, sd, strict=True):
@@ -1453,6 +1495,7 @@ class Workspace:
                 args[key] = inp[key]
         out, index = self._call(view, "bayes_mcmc", inp, **args)
         self.posteriors[index] = out
+        self.commit_bounds(view, inp, dict(args.get("bounds") or {}))
         names = list(out.parameters)
         q = {k: list(v) for k, v in dict(out.quantiles).items()}
         for i, n in enumerate(names):
@@ -1864,6 +1907,8 @@ def check_finding(ws: Workspace, role: str, payload: Any, round_: int) -> Any:
     if role == "design" and finding.assay not in ws.cfg.get("assay_catalogue", {}):
         raise ActionError(f"finding: no requestable assay {finding.assay!r}")
     if role == VERIFIER:
+        if finding.round != round_:
+            raise ActionError(f"verdict: round {finding.round} is not this round ({round_})")
         if finding.holdout is not None:
             rec = ws.rec.ok_index(finding.holdout.call)
             if rec is None or rec["name"] != "validate":
@@ -2272,12 +2317,23 @@ class Coordinator:
         spend; the assay units go to the design role.
         """
         rem = tools.remaining()
-        share = max(int(rem.simulator_evals) // max(len(roles), 1), 0)
-        assays = int(rem.assay_units)
-        return {
-            role: {"evaluations": share, "assays": assays if role == "design" else 0}
-            for role in roles
+        held = tools.reserves().get(VERIFIER, {"simulator_evals": 0, "assay_units": 0})
+        # the verifier's reserve is its own (Q9): its grant is what the reserve holds, and
+        # the proposers share what the envelope holds outside it
+        outside_e = max(int(rem.simulator_evals) - int(held["simulator_evals"]), 0)
+        outside_a = max(int(rem.assay_units) - int(held["assay_units"]), 0)
+        proposers = [r for r in roles if r != VERIFIER]
+        share = max(outside_e // max(len(proposers), 1), 0)
+        grants = {
+            role: {"evaluations": share, "assays": outside_a if role == "design" else 0}
+            for role in proposers
         }
+        if VERIFIER in roles:
+            grants[VERIFIER] = {
+                "evaluations": int(held["simulator_evals"]),
+                "assays": int(held["assay_units"]),
+            }
+        return grants
 
     def conflict(self, findings: dict[str, Any]) -> tuple[str, str] | None:
         """Two findings claiming different causes, if any (the design role's trigger)."""
@@ -2323,6 +2379,10 @@ class AgentRun:
         self.verdict: dict[str, Any] = {}
         self.completed = False
         self.evidence: list[dict[str, Any]] = []
+        self.separating_tests: list[dict[str, Any]] = []
+        self.verifier_rounds = 0
+        """How many times the verifier was routed: a round it answered with no verdict
+        abstains the run (its silence never passes a proposal; J1)."""
 
     # -- the stages ----------------------------------------------------------------------
     def code_steps(self) -> None:
@@ -2381,6 +2441,7 @@ class AgentRun:
             "signatures": json.loads(procedural.to_json(b.signatures)),
             "findings": findings,
             "verdicts": verdicts,
+            "separating_tests": list(self.separating_tests),
             # a proposer's projection hides the hold-out test's output (§4, step 8; J7)
             "projected_log": project(
                 self.rec,
@@ -2408,6 +2469,8 @@ class AgentRun:
         ws = self.ws
         assert ws is not None
         self.coordinator.route(round_, role, reason, grant)
+        if role == VERIFIER:
+            self.verifier_rounds += 1
         turns = int(self.agents_cfg["roles"][role]["turns"])
         agent = RoleAgent(
             role,
@@ -2467,7 +2530,10 @@ class AgentRun:
             if self.on.get("design", True) and self.coordinator.conflict(self.findings):
                 self.run_role("design", round_, "conflict", stage(["design"])["design"])
             if self.switch.get("verifier", True):
-                self.run_role(VERIFIER, round_, "verify", stage([VERIFIER])[VERIFIER])
+                verdict = self.run_role(VERIFIER, round_, "verify", stage([VERIFIER])[VERIFIER])
+                rounds = int(self.agents_cfg.get("rounds", 1))
+                if verdict is not None and verdict.verdict == "fail" and rounds >= 2:
+                    self.second_round(verdict)
         except procedural.ModelCapReached as exc:
             self.codes.append("model_cap")
             self.annotations.append(f"model cap reached: {str(exc)[:200]}")
@@ -2479,6 +2545,116 @@ class AgentRun:
         self.conclude()
         self.completed = True
         self.write(completed=True)
+
+    # -- round 2 (§4, steps 3 and 5) -----------------------------------------------------
+    def second_round(self, verdict: Any) -> None:
+        """A round-1 ``fail``: the named test, the roles' answers, the verifier again.
+
+        The separating test the verdict names runs first, on the verifier's reserve, through
+        the view of the role whose allow-list holds the tool (§4, step 3). A test outside
+        every allow-list, invalid for its tool, or beyond the verifier's reserve counts as
+        ``abstain`` and is logged (step 5). Then the alternative goes back to the
+        specialists (:meth:`responders_for`), who answer with evidence, and the verifier
+        delivers the last round's verdict.
+        """
+        stage = self.coordinator.grants_for
+        if verdict.separating_test is not None and not self.run_separating_test(
+            verdict.separating_test
+        ):
+            self.codes.append("separating_test_unavailable")
+            self.verdict = {"verdict": "abstain", "reason": "separating_test_unavailable"}
+            return
+        responders = self.responders_for(verdict)
+        grants = stage(responders)
+        for role in responders:
+            self.run_role(role, 2, "respond", grants[role])
+        self.run_role(VERIFIER, 2, "verify", stage([VERIFIER])[VERIFIER])
+
+    def responders_for(self, verdict: Any) -> list[str]:
+        """Who answers a ``fail``: the leading proposer and the alternative's claimant roles."""
+        _, leading_role, _ = self.leading()
+        key = next((k for k, v in self.lab.items() if v == verdict.alternative), None)
+        wanted = {leading_role, *CLAIMS_FOR_LABEL.get(key or "", ())}
+        roles = [r for r in SPECIALISTS if r in wanted and r != "design" and self.on.get(r, True)]
+        return roles or self.coordinator.specialists_for()
+
+    def run_separating_test(self, test: Any) -> bool:
+        """Run the verifier's named test as code, charged to the verifier's reserve.
+
+        Returns:
+            Whether it ran. The reasons it may not are annotated: no role's allow-list
+            holds the tool (``set_sensor_status`` is a judgement, never a test), the
+            arguments fail the tool's own schema (the redacted free-text fields excluded),
+            or the bound exceeds the reserve.
+        """
+        ws = self.ws
+        assert ws is not None
+        tool = str(test.tool)
+        specs = registry_tool_specs()
+        owner = next(
+            (
+                r
+                for r in SPECIALISTS
+                if tool in self.agents_cfg["roles"][r]["tools"] and self.on.get(r, True)
+            ),
+            None,
+        )
+        if owner is None or tool not in specs or tool == "set_sensor_status":
+            self.annotations.append(f"separating test {tool!r}: no role's allow-list holds it")
+            return False
+        redacted = REDACTED.get(tool, frozenset())
+        schema = specs[tool]["input_schema"]
+        schema = {
+            **schema,
+            "properties": {k: v for k, v in schema["properties"].items() if k not in redacted},
+            "required": [k for k in schema["required"] if k not in redacted],
+        }
+        args = dict(test.args)
+        try:
+            check(args, schema, tool)
+        except ActionError as exc:
+            self.annotations.append(f"separating test {tool!r}: {exc}")
+            return False
+        held = ws.reserves().get(VERIFIER, {"simulator_evals": 0, "assay_units": 0})
+        bound = estimate_evaluations(tool, args, self.cfg.get("tool_size_ceilings", {}))
+        price = 0
+        if tool == "request_assay":
+            price = int(
+                self.cfg.get("assay_catalogue", {})
+                .get(str(args.get("assay")), {})
+                .get("unit_cost", 1)
+            )
+        if bound > int(held["simulator_evals"]) or price > int(held["assay_units"]):
+            self.annotations.append(
+                f"separating test {tool!r}: a bound of {bound} evaluations and {price} assay "
+                f"unit(s) exceeds the verifier's reserve"
+            )
+            return False
+        view = RoleView(owner, list(self.agents_cfg["roles"][owner]["tools"]), self.rec, VERIFIER)
+        self.coordinator.route(2, owner, "separating_test", {"evaluations": bound, "assays": price})
+        handler = ws.handlers()[tool]
+        try:
+            payload = (
+                handler(view, args, tool)
+                if tool in ("fit_lsq", "fit_de", "fit_cmaes")
+                else handler(view, args)
+            )
+        except (ActionError, tools.ToolError) as exc:
+            self.rec.failure(
+                owner, "separating_test", tool, "error", str(exc), "counts as abstain", None
+            )
+            self.annotations.append(f"separating test {tool!r} failed: {str(exc)[:200]}")
+            return False
+        self.separating_tests.append(
+            {
+                "round": 1,
+                "tool": tool,
+                "owner": owner,
+                "call_index": payload.get("call_index"),
+                "charged_to": VERIFIER,
+            }
+        )
+        return True
 
     # -- the conclusion (§4, step 6) -----------------------------------------------------
     def leading(self) -> tuple[str | None, str | None, list[str]]:
@@ -2526,10 +2702,11 @@ class AgentRun:
         verifier_on = bool(self.switch.get("verifier", True))
         if self.verdict.get("verdict") == "abstain":
             label, rule = ABSTAIN_LABEL, f"abstain:{self.verdict['reason']}"
-        elif verdict is None and verifier_on:
-            # the verifier ran (its turns, a model error or a refusal) and delivered no
-            # verdict: its silence never passes a proposal (§4, steps 5 and 6; the review
-            # of PR #41, J1)
+        elif verifier_on and self.verifier_rounds > len(self.verdicts):
+            # the verifier was routed (in either round) and delivered no verdict: its
+            # turns ran out, the model failed or refused. Its silence never passes a
+            # proposal, and an earlier round's verdict does not stand in for the missing
+            # one (§4, steps 5 and 6; the review of PR #41, J1)
             label, rule = ABSTAIN_LABEL, "abstain:no_verdict"
             self.verdict = {"verdict": "abstain", "reason": "no_verdict"}
         elif verdict is None:
@@ -2770,12 +2947,39 @@ class AgentRun:
             "verdicts": [v.model_dump(mode="json") for v in self.verdicts],
             "routing": list(self.coordinator.entries),
             "role_runs": list(self.role_runs),
+            "separating_tests": list(self.separating_tests),
             "by_role": {
                 role: {**use, "wall_clock_s": None} if self.base.unlimited else use
                 for role, use in self.rec.by_role.items()
             },
+            "spend": self.spend(),
             "refusals": self.rec.refusals,
             "completed": doc["final"]["completed"],
+        }
+
+    def spend(self) -> dict[str, Any]:
+        """The registry spend by side (Q9): the code steps', the proposers', the verifier's.
+
+        Read from the recorder's per-call charges by the role each call was charged to,
+        beside the reserves the registry reports; the privileged summary keeps its own
+        count from the meter.
+        """
+
+        def total(rows: list[dict[str, float]]) -> dict[str, float]:
+            return {
+                "evaluations": int(sum(r.get("evaluations", 0) for r in rows)),
+                "assay_units": int(sum(r.get("assay_units", 0) for r in rows)),
+                "calls": int(sum(r.get("calls", 0) for r in rows)),
+            }
+
+        by = self.rec.by_role
+        return {
+            "code": total([u for r, u in by.items() if r.startswith("code.")]),
+            "proposers": total(
+                [u for r, u in by.items() if not r.startswith("code.") and r != VERIFIER]
+            ),
+            "verifier": total([u for r, u in by.items() if r == VERIFIER]),
+            "reserves": tools.reserves() if self.ws is not None else {},
         }
 
     def write(self, *, completed: bool) -> None:

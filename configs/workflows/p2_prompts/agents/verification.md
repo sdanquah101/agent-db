@@ -33,6 +33,14 @@ where the mismatch between the two entered. Your part is to argue against the pr
   identifier names, each with its unit symbol. A `fail` names its alternative, which must
   be one the evidence admits, and cites evidence for it.
 
+## Rounds
+
+- Your brief says the round. In round 1 you challenge the proposal. A `fail` sends your
+  alternative back to the team: the test you named is run on your budget by the role that
+  holds the tool, and the roles answer with new cited calls. In round 2 you are shown their
+  answers and judge again; your verdict's `round` field is the round you are in.
+- Your calls and your named test draw on your own budget, apart from the proposers'.
+
 ## Rules you must keep
 
 - Do not fabricate values. Every number in your verdict is one a cited call returned,

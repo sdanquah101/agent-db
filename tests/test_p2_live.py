@@ -1158,3 +1158,39 @@ def test_the_offline_report_is_generated_from_the_records(tmp_path, monkeypatch)
         in md
     )
     assert "| S2-01 B/B r1 | False | True | ph | tan | False | insufficient | — |" in md
+
+
+# ------------------------------------------------------------------ the agent arm's caps (K2)
+
+
+def test_an_approval_of_the_agent_arm_is_checked_against_the_agent_caps(tmp_path, monkeypatch):
+    """``require_live_approval`` compares an approval's caps to the arm's own (``run_caps``).
+
+    The agent arm's record names ``agents.caps`` (the lead's Q8); the procedural record,
+    which names ``p2.yaml``'s caps, is refused for the agent configuration and the other
+    way round (the review of PR #41 at 57fb759, K2).
+    """
+    import yaml
+
+    from scripts import p2_pilot
+    from tools.workflow_config import WORKFLOW_CONFIG_DIR
+
+    arm = load_p2(WORKFLOW_CONFIG_DIR / "p2_agents.yaml")
+    base = load_p2()
+    assert p2_live.run_caps(arm) == arm.agents.caps != base.caps
+    path = tmp_path / "p2_live_approval.yaml"
+    monkeypatch.setattr(p2_live, "APPROVAL_FILE", path)
+    monkeypatch.setattr(p2_live, "_git_clean", lambda p: (True, ""))
+    runs = p2_pilot.approval_runs()
+    # the agent arm's record: its caps and its configuration digest
+    agent_record = _record(arm.agents.caps.model_dump(mode="json"), runs, config=arm)
+    path.write_text(yaml.safe_dump(agent_record))
+    assert p2_live.require_live_approval(arm)["digest"] == agent_record["digest"]
+    # the negative controls: the procedural caps on the agent arm's digest are refused as
+    # caps; the agent record is refused for the procedural configuration (its digest)
+    path.write_text(yaml.safe_dump(_record(base.caps.model_dump(mode="json"), runs, config=arm)))
+    with pytest.raises(ValueError, match="other caps"):
+        p2_live.require_live_approval(arm)
+    path.write_text(yaml.safe_dump(agent_record))
+    with pytest.raises(ValueError, match=r"other caps|another configuration"):
+        p2_live.require_live_approval(base)

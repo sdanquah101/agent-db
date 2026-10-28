@@ -96,6 +96,12 @@ def _cfg() -> dict[str, Any]:
 def _install(monkeypatch, fake: FakeTools) -> None:
     monkeypatch.setattr(wf, "tools", fake)
     monkeypatch.setattr(agents, "tools", fake)
+    # the verifier's reserve, as the launcher sets it in the registry from the jail
+    # document (tools.sandbox.apply_reserves); in-process the fake registry takes it here
+    budget = load_p2(AGENTS_YAML).agents.verifier_budget
+    fake.reserve(
+        "verification", simulator_evals=budget.simulator_evals, assay_units=budget.assay_units
+    )
 
 
 class Script:
@@ -194,7 +200,10 @@ def test_the_agents_configuration_extends_the_procedural_one_and_leaves_its_dige
     assert arm.agents.rounds == 2
     doc = sandbox_config(arm)
     # the caps stay on the privileged side, as p2.yaml's (J3); the seed base is the jail's
-    assert set(doc["agents"]) == {"roles", "prompts", "projection", "rounds", "seeds"}
+    assert set(doc["agents"]) == {
+        "roles", "prompts", "projection", "rounds", "seeds", "verifier_budget"
+    }  # fmt: skip
+    assert doc["agents"]["verifier_budget"] == {"simulator_evals": 80, "assay_units": 1}
     assert doc["agents"]["seeds"] == {"base": arm.agents.seeds.base}
     prompts = load_p2_agent_prompts(arm)
     assert doc["agents"]["prompts"] == {r: p["text"] for r, p in prompts.items()}
@@ -701,7 +710,9 @@ def test_code_concludes_from_the_verdict(monkeypatch, verdict, expected_label, e
         }
     ver = Script([[{"name": "simulate", "input": {}}], [_emit("verification", **verdict, **extra)]])
     _admit_everything(monkeypatch)
-    _, fake = _run(monkeypatch, {"data_quality": dq, "verification": ver})
+    cfg = _cfg()
+    cfg["agents"]["rounds"] = 1  # the conclusion rules of the LAST round; round 2 is tested below
+    _, fake = _run(monkeypatch, {"data_quality": dq, "verification": ver}, cfg=cfg)
     report = json.loads(fake.run.outputs["report.json"])
     assert (report["label"], report["outcome"]) == (expected_label, expected_outcome), report[
         "verdict"
@@ -784,7 +795,11 @@ def test_the_gateway_accepts_a_roles_turn_and_refuses_foreign_ones(tmp_path):
     from tools.p2_live import config_digest, run_caps
 
     base = load_p2()
-    assert (gw.max_turns, gw.max_total_tokens, gw.max_usd) == (200, 10_000_000, 0.5)
+    # the run's caps are the proposers' (Q8) and the verifier's (Q9) added; each side is
+    # held to its own in check_attempt (tested below)
+    assert (gw.max_turns, gw.max_total_tokens, gw.max_usd) == (240, 14_000_000, 1.0)
+    assert gw.proposer_caps == {"max_requests": 200, "max_total_tokens": 10_000_000, "max_usd": 0.5}
+    assert gw.verifier_caps == {"max_requests": 40, "max_total_tokens": 4_000_000, "max_usd": 0.5}
     assert run_caps(arm) == arm.agents.caps and run_caps(base) == base.caps
     assert (base.caps.max_requests, arm.caps.max_requests) == (60, 60)  # p2.yaml's, untouched
     assert sum(r.turns for r in arm.agents.roles.values()) <= arm.agents.caps.max_requests
@@ -998,8 +1013,8 @@ def test_a_pass_with_no_proposal_over_a_failed_null_abstains(monkeypatch):
     ver = Script([[{"name": "simulate", "input": {}}], [_emit("verification")]])
     _, fake3 = _run(monkeypatch, {"verification": ver}, fake=FakeTools("B", "B"))
     report3 = json.loads(fake3.run.outputs["report.json"])
-    if not report3["null_table"]["null_rejected"]:
-        assert (report3["label"], report3["rule"]) == ("none", "agents:pass:none")
+    assert not report3["null_table"]["null_rejected"]  # the plain fixture's null stands (K3)
+    assert (report3["label"], report3["rule"]) == ("none", "agents:pass:none")
 
 
 def test_a_value_is_the_calls_to_five_digits_and_the_record_keeps_the_calls_own(monkeypatch):
@@ -1011,7 +1026,10 @@ def test_a_value_is_the_calls_to_five_digits_and_the_record_keeps_the_calls_own(
     ws = run.ws
     view = agents.RoleView("data_quality", ALLOW_LIST["data_quality"], run.rec)
     index = ws.t_simulate(view, {})["call_index"]
-    produced = next(v for v, _, s in run.rec.produced[index]["mean_predicted"] if s == "tan")
+    # a produced value with more than five significant digits, so the five shown differ
+    # from the call's own (K1: the fixture's 900.0 equals its rendering)
+    produced = 900.123456
+    run.rec.produced[index]["mean_predicted"] = [(produced, "mg/L", "tan")]
 
     def finding(value: float) -> dict[str, Any]:
         return {
@@ -1030,6 +1048,7 @@ def test_a_value_is_the_calls_to_five_digits_and_the_record_keeps_the_calls_own(
         }
 
     shown = float(f"{produced:.5g}")
+    assert shown != produced  # 900.12 vs 900.123456: the record must keep the latter
     accepted = agents.check_finding(ws, "data_quality", finding(shown), 1)
     assert agents.evidence_items(accepted)[0]["values"]["mean_predicted"] == produced
     assert accepted.evidence[0].values["mean_predicted"] == produced
@@ -1101,10 +1120,19 @@ def test_grants_are_fixed_when_a_stage_starts(monkeypatch):
     run = agents.AgentRun(_cfg())
     run.code_steps()
     left = int(fake.remaining().simulator_evals)
+    held = fake.reserves()["verification"]
+    assert held == {
+        "simulator_evals": 80, "simulator_evals_total": 80, "assay_units": 1, "assay_units_total": 1
+    }  # fmt: skip
     grants = run.coordinator.grants_for(["influent", "identifiability", "calibration"])
-    assert {g["evaluations"] for g in grants.values()} == {left // 3}
+    # the proposers share what the envelope holds outside the verifier's reserve (Q9)
+    assert {g["evaluations"] for g in grants.values()} == {(left - 80) // 3}
     assert {g["assays"] for g in grants.values()} == {0}
-    assert run.coordinator.grants_for(["design"])["design"]["assays"] == fake.totals["assays"]
+    assert run.coordinator.grants_for(["design"])["design"]["assays"] == fake.totals["assays"] - 1
+    # the verifier's grant is its reserve
+    assert run.coordinator.grants_for(["verification"]) == {
+        "verification": {"evaluations": 80, "assays": 1}
+    }
     # in a run: identifiability spends, calibration's share is the same as its own
     ident = Script(
         [
@@ -1120,6 +1148,310 @@ def test_grants_are_fixed_when_a_stage_starts(monkeypatch):
     spent = next(r for r in json.loads(fake2.run.outputs["report.json"])["role_runs"]
                  if r["role"] == "identifiability")["spent"]["evaluations"]  # fmt: skip
     assert spent == 6  # 3 trajectories x (1 + 1)
+
+
+# ------------------------------------------------------------------ round 2, the reserve
+
+
+def _none_finding(role: str) -> dict[str, Any]:
+    return _emit(
+        role,
+        claim="none",
+        evidence=[
+            {"label": "none", "rule": "sensor", "calls": ["LAST"], "values": {}, "units": {}}
+        ],
+    )
+
+
+def _fail(alternative: str, test: dict[str, Any] | None = None, round_: int = 1) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "round": round_,
+        "verdict": "fail",
+        "alternative": alternative,
+        "evidence": [
+            {"label": alternative, "rule": "sensor", "calls": ["LAST"], "values": {}, "units": {}}
+        ],
+    }
+    if test is not None:
+        body["separating_test"] = test
+    return _emit("verification", **body)
+
+
+def test_a_round_one_fail_runs_the_named_test_on_the_verifiers_budget_and_a_second_round(
+    monkeypatch,
+):
+    """§4 steps 3 and 5: the named test, the specialists' answer, the verifier's round 2.
+
+    The test goes to the role holding the tool, charged to the verifier's reserve; the
+    alternative goes back to the specialists; the verifier judges again in round 2.
+    """
+    dq = Script(
+        [
+            [{"name": "simulate", "input": {}}],
+            [_emit("data_quality", **_sensor_claim())],  # round 1
+            [{"name": "simulate", "input": {}}],
+            [_none_finding("data_quality")],  # round 2: it concedes
+        ]
+    )
+    test = {"tool": "residual_diag", "args": {"sensor": "ph", "prediction": "LAST"}}
+    ver = Script(
+        [
+            [{"name": "simulate", "input": {}}],
+            [_fail("none", test)],  # round 1
+            [{"name": "simulate", "input": {}}],
+            [_emit("verification", round=2, verdict="pass")],  # round 2
+        ]
+    )
+    _admit_everything(monkeypatch)
+    _, fake = _run(monkeypatch, {"data_quality": dq, "verification": ver})
+    report = json.loads(fake.run.outputs["report.json"])
+    routing = [(e["round"], e["to"], e["reason"]) for e in report["routing"]]
+    assert routing[-4:] == [
+        (1, "verification", "verify"),
+        (2, "data_quality", "separating_test"),
+        (2, "data_quality", "respond"),
+        (2, "verification", "verify"),
+    ]
+    # the named test ran through data quality's view, charged to the verifier's reserve
+    assert report["separating_tests"] == [
+        {
+            "round": 1,
+            "tool": "residual_diag",
+            "owner": "data_quality",
+            "call_index": report["separating_tests"][0]["call_index"],
+            "charged_to": "verification",
+        }
+    ]
+    index = report["separating_tests"][0]["call_index"]
+    action = next(a for a in _state(fake)["actions"] if a["call_index"] == index)
+    assert action["name"] == "residual_diag" and action["step"] == "data_quality.residual_diag"
+    assert fake.charged_roles[index] == "verification"
+    # the verifier's own calls are tagged too; a proposer's never with its tag
+    verifier_calls = [i for i, r in enumerate(fake.charged_roles) if r == "verification"]
+    assert index in verifier_calls and len(verifier_calls) == 3  # two simulates + the test
+    assert (
+        report["spend"]["verifier"]["calls"] == 3
+        and report["spend"]["verifier"]["evaluations"] == 2
+    )
+    assert fake.reserves()["verification"]["simulator_evals"] == 78
+    # round 2's answer and verdict decide: the concession passed concludes none
+    assert report["verdict"]["rounds"] == 2 and [v["round"] for v in report["verdicts"]] == [1, 2]
+    assert (report["label"], report["rule"]) == ("none", "agents:pass")
+    assert report["findings"]["data_quality"]["claim"] == "none"
+    # the brief of round 2 carried the verdict and the test's call index
+    assert dq.briefs[1]["round"] == 2 and dq.briefs[1]["verdicts"][0]["verdict"] == "fail"
+    assert dq.briefs[1]["separating_tests"][0]["call_index"] == index
+    # the negative control: a round-2 verdict stamped round 1 is refused; the verifier's
+    # silence in round 2 abstains the run
+    ver2 = Script(
+        [
+            [{"name": "simulate", "input": {}}],
+            [_fail("none", test)],
+            [_emit("verification", round=1, verdict="pass")],  # the wrong round, forever
+        ]
+    )
+    dq2 = Script([[{"name": "simulate", "input": {}}], [_emit("data_quality", **_sensor_claim())]])
+    _, fake2 = _run(monkeypatch, {"data_quality": dq2, "verification": ver2})
+    report2 = json.loads(fake2.run.outputs["report.json"])
+    assert (report2["label"], report2["rule"]) == ("abstain", "abstain:no_verdict")
+    refusals = [
+        f["message"]
+        for f in _state(fake2)["tool_failures"]
+        if f["name"] == "p2.verification.emit_finding"
+    ]
+    assert any("round 1 is not this round (2)" in m for m in refusals)
+
+
+def test_a_separating_test_no_list_holds_or_the_reserve_cannot_pay_counts_as_abstain(monkeypatch):
+    """§4 step 5: logged, and the run abstains; a judgement is never a test."""
+    for test, note in (
+        ({"tool": "validate", "args": {"prediction": "LAST"}}, "no role's allow-list"),
+        ({"tool": "set_sensor_status", "args": {"sensor": "ph"}}, "no role's allow-list"),
+        (
+            {
+                "tool": "fit_lsq",
+                "args": {"parameters": ["k_m_ac"], "n_starts": 10, "max_nfev_per_start": 40},
+            },
+            "exceeds the verifier's reserve",
+        ),
+        ({"tool": "residual_diag", "args": {"sensor": "ph"}}, "missing required field"),
+    ):
+        dq = Script(
+            [[{"name": "simulate", "input": {}}], [_emit("data_quality", **_sensor_claim())]]
+        )
+        ver = Script([[{"name": "simulate", "input": {}}], [_fail("none", test)]])
+        _admit_everything(monkeypatch)
+        _, fake = _run(monkeypatch, {"data_quality": dq, "verification": ver})
+        report = json.loads(fake.run.outputs["report.json"])
+        assert (report["label"], report["rule"]) == (
+            "abstain",
+            "abstain:separating_test_unavailable",
+        ), test
+        assert report["separating_tests"] == [] and report["verdict"]["rounds"] == 1
+        assert any(note in a for a in _state(fake)["annotations"]), (test, note)
+        assert "separating_test_unavailable" in _state(fake)["plan"]["fallbacks"]
+    # the negative control: a fail naming no test goes straight to round 2
+    dq = Script(
+        [
+            [{"name": "simulate", "input": {}}],
+            [_emit("data_quality", **_sensor_claim())],
+            [_none_finding("data_quality")],
+        ]
+    )
+    ver = Script(
+        [
+            [{"name": "simulate", "input": {}}],
+            [_fail("none")],
+            [_emit("verification", round=2, verdict="pass")],
+        ]
+    )
+    _, fake = _run(monkeypatch, {"data_quality": dq, "verification": ver})
+    report = json.loads(fake.run.outputs["report.json"])
+    assert report["verdict"]["rounds"] == 2 and report["label"] == "none"
+
+
+def test_a_proposer_is_refused_past_the_envelope_outside_the_reserve(monkeypatch):
+    """Rule 2 in the fake registry as in the real one: the reserve is the verifier's alone."""
+    fake = FakeTools("B", "B", evals=120, offsets={"ph": 8.0})
+    _install(monkeypatch, fake)  # the reserve: 80 of the 120
+    run = agents.AgentRun(_cfg())
+    run.code_steps()
+    left = int(fake.remaining().simulator_evals)
+    outside = left - 80
+    assert 0 < outside < 40
+    agent = agents.RoleAgent(
+        "calibration", run.ws, lambda r: None, round_=1,
+        grant={"evaluations": 10**6, "assays": 0}, brief={}, turns=5,
+    )  # fmt: skip
+    fit = _use("fit_lsq", {"parameters": ["k_m_ac"], "n_starts": 1, "max_nfev_per_start": 40})
+    result = agent.execute(fit)
+    assert result.get("is_error") and "outside the reserves" in result["content"]
+    assert fake.reserves()["verification"]["simulator_evals"] == 80  # untouched
+    # the negative control: the verifier's view runs the same fit on the reserve
+    view = agents.RoleView("verification", ["fit_lsq"], run.rec)
+    out = run.ws.t_fit(view, {"parameters": ["k_m_ac"], "n_starts": 1, "max_nfev_per_start": 40})
+    assert "call_index" in out and fake.reserves()["verification"]["simulator_evals"] == 40
+    assert fake.charged_roles[-1] == "verification"
+
+
+def test_the_gateway_holds_each_side_to_its_own_caps(tmp_path):
+    """Q9: the verifier's turns against its caps, the proposers' against theirs."""
+    from tools.llm import GatewayRefusal, ScriptedClient
+    from tools.p2_live import P2Gateway
+
+    arm = load_p2(AGENTS_YAML)
+    prompts = load_p2_agent_prompts(arm)
+
+    def request(role: str) -> dict[str, Any]:
+        return {
+            "system": prompts[role]["text"],
+            "tools": agents.role_tool_specs(role, list(arm.agents.roles[role].tools)),
+            "messages": [{"role": "user", "content": "the brief"}],
+        }
+
+    gw = P2Gateway.for_config(
+        arm, ScriptedClient(lambda p: {"content": [{"type": "text", "text": "ok"}]}), tmp_path
+    )
+    gw.verifier_caps["max_requests"] = 1
+    gw.complete(request("verification"))
+    with pytest.raises(GatewayRefusal, match="the verifier's 1 requests are spent"):
+        gw.complete(request("verification"))
+    # the proposers are untouched by the verifier's cap, and held to their own
+    gw.complete(request("calibration"))
+    gw.proposer_caps["max_requests"] = 2
+    gw.complete(request("influent"))
+    with pytest.raises(GatewayRefusal, match="the proposers' 2 requests are spent"):
+        gw.complete(request("data_quality"))
+    assert gw.side_usage(True)["requests"] == 1 and gw.side_usage(False)["requests"] == 2
+    assert gw.by_role["verification"]["requests"] == 1
+    # the run's own caps still bind the sum (the negative control: a run cap of 3 is spent)
+    gw2 = P2Gateway.for_config(
+        arm, ScriptedClient(lambda p: {"content": [{"type": "text", "text": "ok"}]}), tmp_path / "b"
+    )
+    gw2.max_turns = 3
+    for role in ("verification", "calibration", "influent"):
+        gw2.complete(request(role))
+    with pytest.raises(GatewayRefusal, match="the run's 3 requests are spent"):
+        gw2.complete(request("design"))
+
+
+def test_a_claim_planted_in_any_string_argument_never_reaches_a_projection(monkeypatch):
+    """§4 step 2: every string-typed tool argument that is not an enum is a free-text channel."""
+    specs = agents.registry_tool_specs()
+    planted = 0
+    for name, spec in specs.items():
+        props = spec["input_schema"]["properties"]
+        for key, prop in props.items():
+            if prop.get("type") != "string" or "enum" in prop:
+                continue
+            planted += 1
+            args = {key: PLANTED}
+            redacted = agents.redact(name, args)
+            assert redacted[key] == agents.REDACTED_MARK, (name, key)
+            rec = agents.Recorder()
+            rec.actions.append(
+                {
+                    "step": f"x.{name}",
+                    "name": name,
+                    "version": "",
+                    "args_hash": "",
+                    "seq": 0,
+                    "call_index": 0,
+                    "outcome": "ok",
+                    "detail": "",
+                }
+            )
+            assert PLANTED not in json.dumps(agents.project(rec, {0: args}, 200, 12))
+    assert planted >= 8  # sensor, name, profile, assay, reason, justification x4, ...
+    # the negative control: the identity in place of the redaction carries every one
+    monkeypatch.setattr(agents, "redact", lambda name, a: a)
+    rec = agents.Recorder()
+    rec.actions.append(
+        {
+            "step": "x.fit_lsq",
+            "name": "fit_lsq",
+            "version": "",
+            "args_hash": "",
+            "seq": 0,
+            "call_index": 0,
+            "outcome": "ok",
+            "detail": "",
+        }
+    )
+    assert PLANTED in json.dumps(
+        agents.project(rec, {0: {"bounds_justification": PLANTED}}, 200, 12)
+    )
+
+
+def test_a_refused_fit_narrows_nothing_and_leaves_no_message(monkeypatch):
+    """K4: the narrowing and its justification are recorded after the fit ran, not before."""
+    fake = FakeTools("B", "B", evals=5000, offsets={"ph": 8.0})
+    _install(monkeypatch, fake)
+    run = agents.AgentRun(_cfg())
+    run.code_steps()
+    ws = run.ws
+    view = agents.RoleView("calibration", ALLOW_LIST["calibration"], run.rec)
+    before = len(run.log.messages)
+    # a fit the registry refuses (its bound exceeds the envelope outside the reserve)
+    big = {
+        "parameters": ["k_m_ac"], "bounds": {"k_m_ac": [0.5, 2.0]},
+        "bounds_justification": "x", "n_starts": 1, "max_nfev_per_start": 10**6,
+    }  # fmt: skip
+    fake.totals["evals"] = 100
+    with pytest.raises(fake.BudgetExceededError):
+        ws.t_fit(view, big, "fit_lsq")
+    assert ws.bounds_narrowed == {} and len(run.log.messages) == before
+    with pytest.raises(agents.ActionError, match="not narrowed"):
+        agents.check_finding(
+            ws, "calibration",
+            {"claim": "no_claim", "confidence": "low", "bounds_narrowed": {"k_m_ac": [0.5, 2.0]}},
+            1,
+        )  # fmt: skip
+    # the negative control: the fit that runs narrows and leaves the message
+    fake.totals["evals"] = 5000
+    ws.t_fit(view, {**big, "max_nfev_per_start": 10}, "fit_lsq")
+    assert ws.bounds_narrowed == {"k_m_ac": (0.5, 2.0)}
+    assert run.log.messages[-1].step == "bounds_justification"
 
 
 # ------------------------------------------------------------------ rule 1 and the pins

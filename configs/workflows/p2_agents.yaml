@@ -53,3 +53,17 @@ agents:
     max_total_tokens: 10000000  # DESIGN  Q8: 10 M tokens
     max_usd: 0.50               # DESIGN  Q8
     input_chars_per_token: 2.0  # DESIGN  as p2.yaml: conservative
+  # the verifier's own budget (the lead's Q9; the design note §8's table, per run, two
+  # rounds): a reserve inside the cell's envelope, set in the registry by the launcher
+  # (tools/sandbox.py apply_reserves) from this document, drawn on by the verifier's calls
+  # and its named separating test, refused past it; the proposers are refused past what
+  # the envelope holds outside it
+  verifier_budget:
+    simulator_evals: 80         # DESIGN  §8: 40 per round
+    assay_units: 1              # DESIGN  §8: a named test that is an assay
+  # the verifier's own model caps (Q9; §8), enforced by the gateway per role beside the
+  # proposers' caps above; the run's total is their sum
+  verifier_caps:
+    max_requests: 40            # DESIGN  §8: 20 per round
+    max_total_tokens: 4000000   # DESIGN  §8: 2 M per round
+    max_usd: 0.50               # DESIGN  §8: 0.25 per round

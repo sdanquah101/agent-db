@@ -17,6 +17,10 @@ or a mechanism the model lacks. Your part is what reached the digester.
   failed balance case is the plant's background; `refute_influent` when the record
   refutes an influent cause another role proposed; `no_claim` otherwise.
 
+- In round 2 your brief carries the verifier's verdict and the result of the test it
+  named: answer its alternative with new cited calls, or concede it with `none` or a
+  `refute_influent` claim.
+
 ## What you may do
 
 - `inspect_record`, `mass_balance`, `feed_loads`, `simulate` and `declared_background`,

@@ -42,6 +42,7 @@ __all__ = [
     "last_call",
     "llm",
     "remaining",
+    "reserves",
     "run",
     "tools",
 ]
@@ -128,6 +129,16 @@ def remaining() -> RemainingBudget:
     return RemainingBudget.model_validate(_connection.request({"op": "remaining"}))
 
 
+def reserves() -> dict[str, dict[str, int]]:
+    """Each role's reserve inside the envelope and what is left of it (``{}`` without one).
+
+    A reserve is set on the privileged side (``tools.registry.Registry.reserve``); a call
+    tagged with its role (:func:`call`'s ``_role``) draws on it and is refused past it, and
+    every other call is refused past what the envelope holds outside the reserves.
+    """
+    return {str(k): dict(v) for k, v in dict(_connection.request({"op": "reserves"})).items()}
+
+
 _last_record: dict[str, Any] | None = None
 
 
@@ -141,17 +152,24 @@ def last_call() -> dict[str, Any] | None:
     return None if _last_record is None else dict(_last_record)
 
 
-def call(name: str, **args: Any) -> ToolOutput:
+def call(name: str, _role: str | None = None, **args: Any) -> ToolOutput:
     """Call one tool through the registry.
+
+    ``_role`` tags the call for the registry's reserves (the agent P2's verifier draws on
+    its own; ``docs/p2_agents_design.md`` Q9): the workflow's attribution, kept beside the
+    meter's charge in the privileged record. No tool takes an argument of that name.
 
     Raises:
         UnknownToolError: No such tool.
         ToolArgumentError: The arguments do not validate.
-        BudgetExceededError: The call would exceed the budget.
+        BudgetExceededError: The call would exceed the budget, or the role's reserve.
         ToolError: The tool failed.
     """
     global _last_record
-    envelope = _connection.request({"op": "call", "name": name, "args": encode_arrays(args)})
+    message: dict[str, Any] = {"op": "call", "name": name, "args": encode_arrays(args)}
+    if _role is not None:
+        message["role"] = str(_role)
+    envelope = _connection.request(message)
     _last_record = envelope.get("record")
     outcome = envelope.get("outcome")
     if outcome == "budget_exceeded":

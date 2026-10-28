@@ -137,6 +137,30 @@ class FakeTools:
         self.used = {"evals": 0, "assays": 0, "calls": 0}
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self._last: dict[str, Any] | None = None
+        self._role: str | None = None
+        # the registry's reserves (tools.registry.Registry.reserve): role -> totals and use
+        self.reserved: dict[str, dict[str, int]] = {}
+        self.charged_roles: list[str | None] = []
+
+    def reserve(self, role: str, *, simulator_evals: int, assay_units: int) -> None:
+        """Set a role's reserve, as the privileged launcher does."""
+        self.reserved[role] = {
+            "simulator_evals": simulator_evals,
+            "assay_units": assay_units,
+            "evals_used": 0,
+            "assays_used": 0,
+        }
+
+    def reserves(self) -> dict[str, dict[str, int]]:
+        return {
+            role: {
+                "simulator_evals": max(r["simulator_evals"] - r["evals_used"], 0),
+                "simulator_evals_total": r["simulator_evals"],
+                "assay_units": max(r["assay_units"] - r["assays_used"], 0),
+                "assay_units_total": r["assay_units"],
+            }
+            for role, r in self.reserved.items()
+        }
 
     # -- the budget --------------------------------------------------------------------
     def remaining(self) -> Any:
@@ -156,12 +180,35 @@ class FakeTools:
             raise BudgetExceededError(f"{evals} evaluations do not fit")
         if self.used["assays"] + assays > self.totals["assays"]:
             raise BudgetExceededError(f"{assays} assay units do not fit")
+        # the reserves, as the registry keeps them: a tagged call draws on its own, every
+        # other call is refused past what is left outside the reserves
+        own = self.reserved.get(self._role) if self._role is not None else None
+        if own is not None:
+            if own["evals_used"] + evals > own["simulator_evals"]:
+                raise BudgetExceededError(f"the {self._role} reserve cannot pay {evals}")
+            if own["assays_used"] + assays > own["assay_units"]:
+                raise BudgetExceededError(f"the {self._role} reserve cannot pay {assays} units")
+            own["evals_used"] += evals
+            own["assays_used"] += assays
+        else:
+            held_e = sum(
+                max(r["simulator_evals"] - r["evals_used"], 0) for r in self.reserved.values()
+            )
+            held_a = sum(
+                max(r["assay_units"] - r["assays_used"], 0) for r in self.reserved.values()
+            )
+            if self.used["evals"] + evals > self.totals["evals"] - held_e:
+                raise BudgetExceededError(f"{evals} evaluations do not fit outside the reserves")
+            if self.used["assays"] + assays > self.totals["assays"] - held_a:
+                raise BudgetExceededError(f"{assays} assay units do not fit outside the reserves")
         self.used["evals"] += evals
         self.used["assays"] += assays
 
     # -- the tools ---------------------------------------------------------------------
-    def call(self, name: str, **args: Any) -> Any:
+    def call(self, name: str, _role: str | None = None, **args: Any) -> Any:
         self.calls.append((name, args))
+        self.charged_roles.append(_role)
+        self._role = _role
         seq = self.used["calls"]
         self.used["calls"] += 1
         self._last = {"seq": seq, "args_hash": f"h{seq}", "version": "1.0", "outcome": "ok"}
@@ -170,6 +217,8 @@ class FakeTools:
         except BudgetExceededError:
             self._last["outcome"] = "budget_exceeded"
             raise
+        finally:
+            self._role = None
 
     def _describe_model(self, model: str) -> Any:
         return ns(parameter_names=PARAMS, lower=[0.25] * len(PARAMS), upper=[4.0] * len(PARAMS),

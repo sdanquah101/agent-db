@@ -4274,3 +4274,30 @@ the jail.** Branch `claude/p2-agents-sandbox`, a draft PR from `main`, separate 
   entry "The agent arm's caps, seeds and conclusion rules".
 - **Next:** the coordinator's re-review; then the verifier's second round, the separating
   test and its own registry budget (Q9's caps); then the Q6 cells.
+
+**2026-10-28 — PR #41 at `57fb759`: PASS WITH NITS (K1–K4, carried). Step 2c: the
+verifier's own budget, the second round and the separating test (branch
+`claude/p2-agents-verifier`, a draft PR cut from `claude/p2-agents-harness` at `57fb759`,
+PR #41, unmerged).**
+- **The reserve.** `tools.registry.Registry.reserve`: the verifier's budget
+  (`agents.verifier_budget`: 80 evaluations, 1 assay unit per run, §8) is a reserve inside
+  the cell's envelope, enforced in the registry through the stub's role tag
+  (`tools.call(..., _role=...)`, the server's `role`, `tools.reserves()`); a tagged call is
+  refused past its reserve, every other call past the envelope outside the reserves; the
+  launcher sets it from the jail document (`tools.sandbox.apply_reserves`), the runner
+  untouched. The proposers' grants share the envelope outside the reserve; the report's
+  `spend` gives the code steps', the proposers' and the verifier's spend apart.
+- **The gateway** holds the verifier's turns to `agents.verifier_caps` (40 requests, 4 M
+  tokens, USD 0.50) and the other roles' to `agents.caps`, the run's caps their sum.
+- **Round 2.** A round-1 `fail` runs the named separating test as code through the owning
+  role's view on the verifier's reserve (outside every list, invalid or over the reserve:
+  `abstain`, annotated), routes the leading proposer and the alternative's claimants to
+  respond, then the verifier again; a verdict carries its round; a round the verifier
+  leaves without a verdict abstains the run. Prompts say so.
+- **K1–K4** (the #41 re-review): the five-digit test uses a value with more digits than
+  shown; `require_live_approval` is tested against the agent caps; the standing-null case
+  asserts it stands; a fit's narrowing and its justification are recorded after the fit ran.
+- Tests: `tests/test_registry_reserve.py` (the registry, the server, the launcher, the
+  jail), the harness's round-2, reserve, per-side caps, every-string-argument and K4 tests.
+- **Next:** the coordinator's reviews of #41 (the merge word pending), #42 and this PR;
+  then the Q6 cells and the agent arm's own frozen record (§6).

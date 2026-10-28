@@ -338,6 +338,7 @@ class RoutingEntry(_Msg):
         "conflict",
         "verify",
         "separating_test",
+        "respond",
         "round_limit",
     ]
 

@@ -8535,3 +8535,54 @@ kept the model's rendering; now equality is at the five significant digits shown
 record keeps the value the call produced. `set_sensor_status.reason` and
 `bounds_justification` reached no record offline; they are now the role's own
 `proposal` messages in `messages.jsonl` (free text stays out of `state.json`).
+
+
+## 2026-10-28 — The verifier's own budget, the second round and the separating test (Q9, §4)
+
+**The verifier's registry budget is a reserve inside the cell's envelope, enforced in the
+registry through a role tag.** The design note (§3.1, Q9, §8) gives the verifier its own
+budget "separate from and in addition to the run's caps", with 80 simulator evaluations
+and 1 assay unit per run beside its model caps. Two facts shape how it is built: rule 2
+(budgets are enforced in the registry, never in a workflow) and the frozen runner, which
+opens the registry with the cell's envelope and nothing else. **Decision:**
+- `tools.registry.Registry.reserve(role, simulator_evals, assay_units)` carves a reserve
+  out of the envelope (never past it; the envelope is the same for every workflow, §7). A
+  call tagged with the role draws on its reserve and is refused past it; every other call
+  is refused past what the envelope holds outside the reserves. The refusal is logged as
+  the registry logs every refusal; the privileged charge record carries the role.
+- The tag travels as the stub's `tools.call(name, _role=..., **args)` (no tool takes an
+  argument of that name) and the server's `role` field; `tools.reserves()` serves what is
+  left. It is the workflow's attribution, as `by_role` has always been; the reserve bounds
+  what the tag can claim, and only the harness's own code tags (a model never chooses).
+- The reserve reaches the registry through `tools.sandbox.apply_reserves`: the launcher
+  reads the jail document the runner wrote into the box (`agents.verifier_budget`) before
+  any jail exists, so the numbers are the validated configuration's. The runner stays
+  frozen.
+- The proposers' grants share what the envelope holds outside the reserve; the verifier's
+  grant is its reserve. The report's `spend` gives the code steps', the proposers' and
+  the verifier's spend apart, with the reserves, beside the privileged summary's own count.
+
+The **"in addition to"** of Q9 is read for the model caps, which are not the cell's
+envelope: the gateway holds the verifier's turns to `agents.verifier_caps` and every other
+role's to `agents.caps`, with the run's caps their sum (`side_usage`, `check_attempt`; a
+side's USD is its share of the metered cost by tokens, since the meter does not split
+input and output per role). For simulator evaluations and assays the reserve is carved
+out, not added: adding to the cell's envelope would break the equal-budget comparison and
+needs the frozen runner. **Alternatives refused:** enforce the verifier's budget in the
+harness (rule 2); a second registry for the verifier (two logs, two meters); a global
+registry setting in `configs/tools/` (an arm's budget in every workflow's configuration).
+The coordinator can overrule the carve-out reading; the change would be one line of the
+frozen runner.
+
+**Round 2 and the separating test.** A round-1 `fail` sends the alternative back (§4,
+step 5): the verifier's named test runs first, as code, through the view of the role whose
+allow-list holds the tool, charged to the verifier's reserve (step 3), with the tool's own
+schema checked and the redacted free-text fields excluded; a test no allow-list holds
+(`validate`, or a judgement such as `set_sensor_status`), one that fails its schema, or one
+whose bound exceeds the reserve counts as `abstain` and is annotated. Then the leading
+proposer and the alternative's claimant roles answer (routing reason `respond`), shown the
+verdict and the test's call index in their brief, and the verifier judges again; a verdict
+must carry the round it is given in. The conclusion reads the last round's verdict; a
+round the verifier was routed in and left without a verdict abstains the run
+(`abstain:no_verdict`), whatever an earlier round said. The offline responder's verifier
+abstains in round 1, so the offline arm never reaches round 2; the scripted tests do.

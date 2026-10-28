@@ -417,6 +417,11 @@ class P2AgentGateway(P2Gateway):
     """System prompt digest -> role."""
     role_tools: dict[str, str] = field(default_factory=dict)
     """Role -> the digest of its tool specifications."""
+    proposer_caps: dict[str, float] = field(default_factory=dict)
+    """The proposers' caps (``agents.caps``, Q8): every role but the verifier, together."""
+    verifier_caps: dict[str, float] = field(default_factory=dict)
+    """The verifier's own caps (``agents.verifier_caps``, Q9); the run's caps (``max_turns``,
+    ``max_total_tokens``, ``max_usd``) are the two added."""
 
     @classmethod
     def for_config(cls, config: P2Config, client: Any, log_dir: Any) -> P2AgentGateway:
@@ -432,10 +437,30 @@ class P2AgentGateway(P2Gateway):
             role: tools_digest(agents.role_tool_specs(role, list(spec.tools)))
             for role, spec in config.agents.roles.items()
         }
+        kwargs = cls._base_kwargs(config, client, log_dir)
+        proposers = config.agents.caps
+        verifier = config.agents.verifier_caps
+        # the run's caps are the proposers' and the verifier's added (Q9: "separate from
+        # and in addition to"); each side is held to its own in check_attempt
+        kwargs["max_turns"] = int(proposers.max_requests) + int(verifier.max_requests)
+        kwargs["max_total_tokens"] = int(proposers.max_total_tokens) + int(
+            verifier.max_total_tokens
+        )
+        kwargs["max_usd"] = float(proposers.max_usd) + float(verifier.max_usd)
         return cls(
             role_prompts=role_prompts,
             role_tools=role_tools,
-            **cls._base_kwargs(config, client, log_dir),
+            proposer_caps={
+                "max_requests": int(proposers.max_requests),
+                "max_total_tokens": int(proposers.max_total_tokens),
+                "max_usd": float(proposers.max_usd),
+            },
+            verifier_caps={
+                "max_requests": int(verifier.max_requests),
+                "max_total_tokens": int(verifier.max_total_tokens),
+                "max_usd": float(verifier.max_usd),
+            },
+            **kwargs,
         )
 
     def decision_of(self, request: dict[str, Any]) -> tuple[str, str]:
@@ -454,6 +479,49 @@ class P2AgentGateway(P2Gateway):
         if not messages or messages[0].get("role") != "user":
             raise ModelError(f"{role}: a turn's history starts with the role's brief")
         return f"agent.{role}", role
+
+    def side_usage(self, verifier: bool) -> dict[str, float]:
+        """What one side has used: requests, tokens (metered plus reserved) and USD.
+
+        A side's USD is its share of the run's metered cost by tokens (the meter does not
+        split input and output per role), plus its share of the worst case booked for
+        failed attempts.
+        """
+        rows = [u for r, u in self.by_role.items() if (r == "verification") == verifier]
+        requests = sum(int(u.get("requests", 0)) for u in rows)
+        tokens = sum(int(u.get("tokens", 0)) + int(u.get("reserved_tokens", 0)) for u in rows)
+        total = self.meter.total + self.reserved_tokens
+        cost = self.cost_usd()
+        usd = 0.0 if not total or cost is None else float(cost) * tokens / total
+        return {"requests": requests, "tokens": tokens, "usd": usd}
+
+    def check_attempt(self, point: str, tokens: int, usd: float | None) -> None:
+        """The run's caps as P2's gateway checks them, then the side's own (Q9).
+
+        The verifier's attempt is held to ``verifier_caps``; any other role's to the
+        proposers' ``caps``, together. Every refusal is logged by the caller as a cap.
+
+        Raises:
+            GatewayRefusal: Naming the cap.
+        """
+        super().check_attempt(point, tokens, usd)
+        if not self.verifier_caps or not self.proposer_caps:
+            return
+        verifier = point == "agent.verification"
+        caps = self.verifier_caps if verifier else self.proposer_caps
+        side = "the verifier's" if verifier else "the proposers'"
+        used = self.side_usage(verifier)
+        if used["requests"] + 1 > caps["max_requests"]:
+            raise GatewayRefusal(f"{point}: {side} {int(caps['max_requests'])} requests are spent")
+        if used["tokens"] + tokens > caps["max_total_tokens"]:
+            raise GatewayRefusal(
+                f"{point}: {int(used['tokens'])} + {tokens} tokens would pass {side} "
+                f"{int(caps['max_total_tokens'])}"
+            )
+        if usd is not None and used["usd"] + usd > caps["max_usd"]:
+            raise GatewayRefusal(
+                f"{point}: USD {used['usd']:.4f} + {usd:.4f} would pass {side} {caps['max_usd']}"
+            )
 
 
 class _Guarded:
