@@ -1177,20 +1177,43 @@ def test_an_approval_of_the_agent_arm_is_checked_against_the_agent_caps(tmp_path
 
     arm = load_p2(WORKFLOW_CONFIG_DIR / "p2_agents.yaml")
     base = load_p2()
-    assert p2_live.run_caps(arm) == arm.agents.caps != base.caps
+    # what the record names is the total the run can spend: the proposers' and the
+    # verifier's caps added (M5), not the proposers' alone and not p2.yaml's
+    total = p2_live.run_caps(arm)
+    assert (
+        total.max_requests == arm.agents.caps.max_requests + arm.agents.verifier_caps.max_requests
+    )
+    assert total.max_usd == arm.agents.caps.max_usd + arm.agents.verifier_caps.max_usd
+    assert total not in (arm.agents.caps, base.caps)
     path = tmp_path / "p2_live_approval.yaml"
     monkeypatch.setattr(p2_live, "APPROVAL_FILE", path)
     monkeypatch.setattr(p2_live, "_git_clean", lambda p: (True, ""))
     runs = p2_pilot.approval_runs()
-    # the agent arm's record: its caps and its configuration digest
-    agent_record = _record(arm.agents.caps.model_dump(mode="json"), runs, config=arm)
+    # the agent arm's record: the total caps and its configuration digest
+    agent_record = _record(total.model_dump(mode="json"), runs, config=arm)
     path.write_text(yaml.safe_dump(agent_record))
     assert p2_live.require_live_approval(arm)["digest"] == agent_record["digest"]
-    # the negative controls: the procedural caps on the agent arm's digest are refused as
-    # caps; the agent record is refused for the procedural configuration (its digest)
-    path.write_text(yaml.safe_dump(_record(base.caps.model_dump(mode="json"), runs, config=arm)))
-    with pytest.raises(ValueError, match="other caps"):
-        p2_live.require_live_approval(arm)
+    # the negative controls: the proposers' caps alone, or the procedural caps, on the
+    # agent arm's digest are refused as caps; the agent record is refused for the
+    # procedural configuration; a changed verifier cap moves the digest, so the record no
+    # longer names this configuration
+    for caps in (arm.agents.caps, base.caps):
+        path.write_text(yaml.safe_dump(_record(caps.model_dump(mode="json"), runs, config=arm)))
+        with pytest.raises(ValueError, match="other caps"):
+            p2_live.require_live_approval(arm)
     path.write_text(yaml.safe_dump(agent_record))
     with pytest.raises(ValueError, match=r"other caps|another configuration"):
         p2_live.require_live_approval(base)
+    changed = arm.model_copy(
+        update={
+            "agents": arm.agents.model_copy(
+                update={
+                    "verifier_caps": arm.agents.verifier_caps.model_copy(
+                        update={"max_requests": 41}
+                    )
+                }
+            )
+        }
+    )
+    with pytest.raises(ValueError, match=r"other caps|another configuration"):
+        p2_live.require_live_approval(changed)

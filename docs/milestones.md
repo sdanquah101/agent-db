@@ -4299,5 +4299,19 @@ PR #41, unmerged).**
   asserts it stands; a fit's narrowing and its justification are recorded after the fit ran.
 - Tests: `tests/test_registry_reserve.py` (the registry, the server, the launcher, the
   jail), the harness's round-2, reserve, per-side caps, every-string-argument and K4 tests.
-- **Next:** the coordinator's reviews of #41 (the merge word pending), #42 and this PR;
+- **The coordinator's review of `e4cbd2e` (23:37 UTC): FIXES NEEDED, fixed in the second
+  commit.** M1 (blocking) a verdict citing `validate` carried the hold-out's metrics into
+  every proposer's round-2 brief: a proposer now sees the verdict's typed decision and its
+  items' labels, rules and calls, never the values, and may cite the verifier's
+  `validate` call for its `holdout_failed` flag only (the probe reproduced as a test).
+  M2 the verifier-off ablation sets no reserve. M3 the meter is capped at the caller's
+  share while a call runs, so an overrunning tool never eats a reserve. M4 the launcher
+  writes `spend.json` (the count by reserve tag, from the registry) beside the outputs,
+  the report carries each call's tag beside its step, and tests cross-check them. M5 an
+  approval record names the run's total caps (`run_caps`), the split bound by the digest.
+  M6 the carve-out is recorded as an open question for the lead (Q9). Nits N1–N9: the
+  charge record's docstring, the stale "next step's" lines, the logs' shape and the USD
+  apportioning stated in decisions, `cost_bound` dropped, `rounds` typed `{1, 2}`, the
+  redaction's scope stated, the stub's tag keyword-only, the launcher's clear refusals.
+- **Next:** the lead's Q9 ruling (carve-out or addition) and the coordinator's re-review;
   then the Q6 cells and the agent arm's own frozen record (§6).

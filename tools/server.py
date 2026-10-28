@@ -47,7 +47,7 @@ from tools.llm import LLM_LOG_FILE, GatewayRefusal, ModelError, ModelGateway
 from tools.registry import Registry
 from tools.transport import decode_arrays, encode_arrays, read_message, write_message
 
-__all__ = ["LAUNCH_RECORD", "OUTPUTS_DIR", "OutputSink", "RegistryServer"]
+__all__ = ["LAUNCH_RECORD", "OUTPUTS_DIR", "SPEND_RECORD", "OutputSink", "RegistryServer"]
 
 
 MAX_OUTPUT_BYTES = 16 << 20
@@ -58,6 +58,12 @@ LAUNCH_RECORD = "launch.json"
 package's digest and modules), written by the privileged side beside the workflow's own
 outputs when the entry's package opted in (:func:`tools.sandbox.launch`); a reserved name
 the workflow may not write."""
+
+SPEND_RECORD = "spend.json"
+"""The launcher's record of the registry's charges by reserve tag after the workflow ran
+(the reserves and what each tag spent, from ``Registry.charged_calls``): the privileged
+side's count beside the workflow's own ``spend`` (the review of PR #43, M4); written only
+when a reserve was set; a reserved name the workflow may not write."""
 
 
 class OutputSink:
@@ -204,7 +210,7 @@ class RegistryServer:
             run_view = open_run(run_dir)
         self._view = run_view
         self._gateway = model_gateway
-        reserved = (LLM_LOG_FILE, LAUNCH_RECORD)
+        reserved = (LLM_LOG_FILE, LAUNCH_RECORD, SPEND_RECORD)
         self._sink = (
             OutputSink(run_dir, workflow, reserved=reserved)
             if workflow and run_dir is not None

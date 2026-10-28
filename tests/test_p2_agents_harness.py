@@ -198,6 +198,14 @@ def test_the_agents_configuration_extends_the_procedural_one_and_leaves_its_dige
     # the §3.1 allow-list, as configured, and `stored` / `emit_finding` as actions
     assert {r: set(s.tools) for r, s in arm.agents.roles.items()} == ALLOW_LIST
     assert arm.agents.rounds == 2
+    # Q11: at most two rounds, by type (N6); one is allowed (the single-round ablation)
+    from pydantic import ValidationError
+
+    from tools.workflow_config import P2Agents
+
+    with pytest.raises(ValidationError):
+        P2Agents.model_validate({**arm.agents.model_dump(), "rounds": 3})
+    assert P2Agents.model_validate({**arm.agents.model_dump(), "rounds": 1}).rounds == 1
     doc = sandbox_config(arm)
     # the caps stay on the privileged side, as p2.yaml's (J3); the seed base is the jail's
     assert set(doc["agents"]) == {
@@ -800,7 +808,10 @@ def test_the_gateway_accepts_a_roles_turn_and_refuses_foreign_ones(tmp_path):
     assert (gw.max_turns, gw.max_total_tokens, gw.max_usd) == (240, 14_000_000, 1.0)
     assert gw.proposer_caps == {"max_requests": 200, "max_total_tokens": 10_000_000, "max_usd": 0.5}
     assert gw.verifier_caps == {"max_requests": 40, "max_total_tokens": 4_000_000, "max_usd": 0.5}
-    assert run_caps(arm) == arm.agents.caps and run_caps(base) == base.caps
+    # what an approval names is the total the run can spend (M5): the two sides added
+    total = run_caps(arm)
+    assert (total.max_requests, total.max_total_tokens, total.max_usd) == (240, 14_000_000, 1.0)
+    assert run_caps(base) == base.caps
     assert (base.caps.max_requests, arm.caps.max_requests) == (60, 60)  # p2.yaml's, untouched
     assert sum(r.turns for r in arm.agents.roles.values()) <= arm.agents.caps.max_requests
     tightened = arm.model_copy(
@@ -1234,6 +1245,15 @@ def test_a_round_one_fail_runs_the_named_test_on_the_verifiers_budget_and_a_seco
         and report["spend"]["verifier"]["evaluations"] == 2
     )
     assert fake.reserves()["verification"]["simulator_evals"] == 78
+    # the tag beside the step (M4): a verification-tagged call is the verifier's own step
+    # or a recorded separating test, and every other call is charged to its own step's role
+    tagged = [t for t in report["tags"] if t["charged_to"] == "verification"]
+    tests = {t["call_index"] for t in report["separating_tests"]}
+    assert [t["call_index"] for t in tagged] == verifier_calls
+    assert all(t["step"].startswith("verification.") or t["call_index"] in tests for t in tagged)
+    assert sum(1 for t in tagged if t["call_index"] in tests) == 1
+    others = [t for t in report["tags"] if t["charged_to"] != "verification"]
+    assert others and all(t["step"].startswith(t["charged_to"] + ".") for t in others)
     # round 2's answer and verdict decide: the concession passed concludes none
     assert report["verdict"]["rounds"] == 2 and [v["round"] for v in report["verdicts"]] == [1, 2]
     assert (report["label"], report["rule"]) == ("none", "agents:pass")
@@ -1376,7 +1396,12 @@ def test_the_gateway_holds_each_side_to_its_own_caps(tmp_path):
 
 
 def test_a_claim_planted_in_any_string_argument_never_reaches_a_projection(monkeypatch):
-    """§4 step 2: every string-typed tool argument that is not an enum is a free-text channel."""
+    """§4 step 2: every string-typed tool argument that is not an enum is a free-text channel.
+
+    What the redaction leaves as it is, by design (N7): dictionary keys, which are field
+    names the schemas enumerate, and token-shaped strings (an identifier or a number as
+    text, at most 32 characters, `messages.TOKEN_PATTERN`), which carry no sentence.
+    """
     specs = agents.registry_tool_specs()
     planted = 0
     for name, spec in specs.items():
@@ -1454,6 +1479,87 @@ def test_a_refused_fit_narrows_nothing_and_leaves_no_message(monkeypatch):
     assert run.log.messages[-1].step == "bounds_justification"
 
 
+def test_a_verdict_reaches_a_proposer_without_the_hold_outs_numbers(monkeypatch):
+    """M1 (§4 step 8): the hold-out's metrics in a verdict never reach a proposer's brief.
+
+    A round-1 verdict citing `validate` carries the hold-out's metrics in its evidence
+    values; a proposer's brief gets the typed decision and the items' labels, rules and
+    calls, never the values. The coordinator's probe, reproduced.
+    """
+    fake = FakeTools("B", "B", offsets={"ph": 8.0})
+    _install(monkeypatch, fake)
+    run = agents.AgentRun(_cfg())
+    run.code_steps()
+    ws = run.ws
+    view = agents.RoleView("verification", ALLOW_LIST["verification"], run.rec)
+    sim_index = ws.t_simulate(view, {})["call_index"]
+    v_index = ws.t_validate(view, {"prediction": sim_index})["call_index"]
+    rmse = next(v for v, _, s in run.rec.produced[v_index]["rmse"] if s == "tan")
+    failed = next(v for v, _, _ in run.rec.produced[v_index]["holdout_failed"])
+    verdict = agents.check_finding(
+        ws,
+        "verification",
+        {
+            "round": 1,
+            "verdict": "fail",
+            "alternative": "none",
+            "holdout": {"failed": failed, "call": v_index},
+            "evidence": [
+                {
+                    "label": "none",
+                    "rule": "holdout_failed",
+                    "calls": [v_index],
+                    "values": {"rmse": rmse},
+                    "units": {"rmse": "mg/L"},
+                }
+            ],
+        },
+        1,
+    )
+    run.verdicts.append(verdict)
+    grant = {"evaluations": 0, "assays": 0}
+    needle = json.dumps(rmse)
+    for role in agents.SPECIALISTS:
+        brief = run.brief(role, 2, grant, 5)
+        assert needle not in json.dumps(brief), role
+        shown = brief["verdicts"][0]
+        assert shown["verdict"] == "fail" and shown["alternative"] == "none"
+        assert shown["holdout"] == {"failed": failed, "call": v_index}
+        assert shown["evidence"] == [
+            {"label": "none", "rule": "holdout_failed", "calls": [v_index]}
+        ]
+    # the negative controls: the verifier's own brief and the unprojected verdict carry it
+    assert needle in json.dumps(run.brief("verification", 2, grant, 5)["verdicts"][0])
+    assert needle in json.dumps(verdict.model_dump(mode="json"))
+    # and a proposer may cite the verifier's validate call for its typed flag only
+    flag = {
+        "claim": "none",
+        "confidence": "low",
+        "evidence": [
+            {
+                "label": "none",
+                "rule": "holdout_failed",
+                "calls": [v_index],
+                "values": {"holdout_failed": failed},
+                "units": {},
+            }
+        ],
+    }
+    assert agents.check_finding(ws, "calibration", flag, 2).claim == "none"
+    with pytest.raises(agents.ActionError, match="verifier's hold-out test"):
+        agents.check_finding(
+            ws,
+            "calibration",
+            {
+                **flag,
+                "evidence": [
+                    {**flag["evidence"][0], "values": {"rmse": rmse}, "units": {"rmse": "mg/L"}}
+                ],
+            },
+            2,
+        )
+
+
 # ------------------------------------------------------------------ rule 1 and the pins
 
 
@@ -1507,7 +1613,33 @@ def test_the_jailed_agent_arm_writes_the_declared_record(jailed_agents, tmp_path
         "decisions.jsonl",  # the code steps' decision points, each at its offline fallback
         "summary.json",
         "launch.json",  # the launcher's record of the staged package (privileged side)
+        "spend.json",  # the launcher's count by reserve tag (privileged side, M4)
     }
+    # the privileged count by tag against the workflow's own tags (M4): the verifier's
+    # reserve was set from the jail document; every call carries its role's tag, and a
+    # verification-tagged call is the verifier's own step or a recorded separating test
+    spend = json.loads((out / "spend.json").read_text())
+    report0 = json.loads((out / "report.json").read_text())
+    assert spend["reserves"]["verification"]["simulator_evals_total"] == 80
+    by_seq = {t["seq"]: t for t in report0["tags"] if t["seq"] is not None}
+    separating = {s["call_index"] for s in report0["separating_tests"]}
+    assert spend["tagged_calls"], "the agent arm tags every call it makes"
+    for c in spend["tagged_calls"]:
+        tag = by_seq[c["seq"]]
+        assert tag["charged_to"] == c["role"]  # the privileged tag is the workflow's own
+        if c["role"] == "verification":
+            assert tag["step"].startswith("verification.") or tag["call_index"] in separating
+        else:
+            assert tag["step"].startswith(c["role"] + ".")
+    counted = {role: row["calls"] for role, row in spend["by_tag"].items() if role != "untagged"}
+    assert counted == {
+        role: sum(1 for t in by_seq.values() if t["charged_to"] == role) for role in counted
+    }
+    assert "verification" in counted
+    assert (
+        report0["spend"]["reserves"]["verification"]["simulator_evals"]
+        == spend["reserves"]["verification"]["simulator_evals"]
+    )
     # the record carries the digest of the code that ran: the staged tree's, as the
     # launcher computes it, and every staged module by name (the review of #40, H2)
     from tools.sandbox import stage_workflow

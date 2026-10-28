@@ -161,16 +161,24 @@ def p2_live_client(config: P2Config) -> OpenAIResponsesClient:
 
 
 def run_caps(config: P2Config) -> P2Caps:
-    """The caps a run's gateway enforces and an approval must name.
+    """The caps a run's gateway enforces in total, and what an approval must name.
 
     The procedural arm's are ``p2.yaml``'s ``caps``, frozen with its decision layer. The
-    agent arm's are its own block's (``agents.caps``, the lead's Q8: 200 requests, 10 M
-    tokens, USD 0.50 for the proposers), bound by :func:`config_digest`; the procedural
-    freeze keeps ``p2.yaml``'s caps untouched (the review of PR #41, J3). The verifier's
-    own budget (Q9) is the next step's.
+    agent arm's are the proposers' (``agents.caps``, the lead's Q8: 200 requests, 10 M
+    tokens, USD 0.50) and the verifier's (``agents.verifier_caps``, Q9: 40 requests, 4 M
+    tokens, USD 0.50) **added**: the run can spend the sum, each side held to its own by
+    the gateway, so what the lead signs in an approval is what can be spent (the review of
+    PR #43, M5); the split is bound by :func:`config_digest`. The procedural freeze keeps
+    ``p2.yaml``'s caps untouched (the review of PR #41, J3).
     """
     if config.agents is not None:
-        return config.agents.caps
+        proposers, verifier = config.agents.caps, config.agents.verifier_caps
+        return P2Caps(
+            max_requests=int(proposers.max_requests) + int(verifier.max_requests),
+            max_total_tokens=int(proposers.max_total_tokens) + int(verifier.max_total_tokens),
+            max_usd=float(proposers.max_usd) + float(verifier.max_usd),
+            input_chars_per_token=float(proposers.input_chars_per_token),
+        )
     return config.caps
 
 
@@ -437,16 +445,12 @@ class P2AgentGateway(P2Gateway):
             role: tools_digest(agents.role_tool_specs(role, list(spec.tools)))
             for role, spec in config.agents.roles.items()
         }
+        # the run's caps (kwargs, from run_caps) are the proposers' and the verifier's added
+        # (Q9: "separate from and in addition to"); each side is held to its own in
+        # check_attempt
         kwargs = cls._base_kwargs(config, client, log_dir)
         proposers = config.agents.caps
         verifier = config.agents.verifier_caps
-        # the run's caps are the proposers' and the verifier's added (Q9: "separate from
-        # and in addition to"); each side is held to its own in check_attempt
-        kwargs["max_turns"] = int(proposers.max_requests) + int(verifier.max_requests)
-        kwargs["max_total_tokens"] = int(proposers.max_total_tokens) + int(
-            verifier.max_total_tokens
-        )
-        kwargs["max_usd"] = float(proposers.max_usd) + float(verifier.max_usd)
         return cls(
             role_prompts=role_prompts,
             role_tools=role_tools,

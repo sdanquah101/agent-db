@@ -448,7 +448,8 @@ class Registry:
 
         Privileged side only (never served to a workflow). Each entry: ``seq`` (the
         visible log's, ``None`` without a visible log), ``name``, ``n_evaluations``,
-        ``assay_units``, ``runtime_s``.
+        ``assay_units``, ``runtime_s`` and ``role``, the reserve tag the call carried
+        (``None`` untagged; the workflow's attribution, which the reserves bound).
         """
         return tuple(dict(c) for c in self._charged)
 
@@ -534,21 +535,33 @@ class Registry:
                 assays += max(r["assay_units"] - r["assays_used"], 0)
         return evals, assays
 
-    def cost_bound(self, name: str, **args: Any) -> tuple[int, int]:
-        """A call's declared cost: the evaluation bound and the assay price (no call made).
+    def _share_left(self) -> int:
+        """The evaluations the current caller may still spend.
 
-        Raises:
-            UnknownToolError: No such tool.
-            ToolArgumentError: The arguments do not validate.
+        Its own reserve for a tagged call; the envelope outside every reserve otherwise.
         """
-        spec = self._spec(name)
+        role = self._role
+        own = self._reserves.get(role) if role is not None else None
+        if own is not None:
+            return max(own["simulator_evals"] - own["evals_used"], 0)
+        held, _ = self._reserved_left(role)
+        return max(self._meter.remaining - held, 0)
+
+    def _run_capped(self, spec: ToolSpec, inp: ToolInput, context: ToolContext) -> ToolOutput:
+        """Run the tool with the meter capped at the caller's share for this call.
+
+        The declared bound is checked before the call (:meth:`_refusal`); a tool that
+        overruns its bound is stopped by the meter, and the meter's limit is the caller's
+        share while it runs, so an untagged overrun never eats a reserve and a tagged one
+        never leaves its reserve (the review of PR #43, M3). The limit is restored on
+        every path.
+        """
+        before = self._meter.limit
+        self._meter.limit = min(before, self._meter.used + self._share_left())
         try:
-            inp = spec.input_model.model_validate(args)
-        except ValidationError as exc:
-            raise ToolArgumentError(f"{name}: {exc}") from exc
-        context = self._context()
-        price = int(spec.assay_cost(inp, context)) if spec.assay_cost is not None else 0
-        return int(spec.cost(inp, context)), price
+            return spec.run(inp, context)
+        finally:
+            self._meter.limit = before
 
     def call(self, name: str, *, role: str | None = None, **args: Any) -> ToolOutput:
         """Call one tool (see the module docstring for the sequence).
@@ -633,7 +646,7 @@ class Registry:
             return output
 
         try:
-            output = spec.run(inp, context)
+            output = self._run_capped(spec, inp, context)
         except RunCancelled as exc:
             # the jail was killed while this call ran: the call stops at its next
             # evaluation and the truth-side log says so (its result is discarded)

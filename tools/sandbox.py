@@ -57,7 +57,7 @@ from typing import Any
 
 from tools.llm import ModelGateway
 from tools.registry import Registry
-from tools.server import LAUNCH_RECORD, RegistryServer
+from tools.server import LAUNCH_RECORD, SPEND_RECORD, RegistryServer
 
 __all__ = [
     "FORBIDDEN_MODULES",
@@ -75,6 +75,7 @@ __all__ = [
     "launch",
     "launch_record",
     "sandbox_interpreter",
+    "spend_record",
     "stage",
     "stage_workflow",
 ]
@@ -664,16 +665,64 @@ def apply_reserves(box: Path, registry: Registry) -> dict[str, dict[str, int]]:
         budget = agents.get("verifier_budget") if isinstance(agents, dict) else None
         if not isinstance(budget, dict):
             continue
-        registry.reserve(
-            "verification",
-            simulator_evals=int(budget["simulator_evals"]),
-            assay_units=int(budget["assay_units"]),
-        )
-        reserved["verification"] = {
-            "simulator_evals": int(budget["simulator_evals"]),
-            "assay_units": int(budget["assay_units"]),
-        }
+        # the verifier-off ablation spends nothing of a reserve: none is set, so the
+        # proposers' grants are the whole envelope (the review of PR #43, M2)
+        ablation = doc.get("ablation") if isinstance(doc, dict) else None
+        if isinstance(ablation, dict) and ablation.get("verifier") is False:
+            continue
+        missing = [k for k in ("simulator_evals", "assay_units") if k not in budget]
+        if missing:
+            raise SandboxError(
+                f"{doc_path.name}: agents.verifier_budget lacks {missing}; the workflow was not run"
+            )
+        evals, units = int(budget["simulator_evals"]), int(budget["assay_units"])
+        try:
+            registry.reserve("verification", simulator_evals=evals, assay_units=units)
+        except ValueError as exc:
+            # a cell whose envelope cannot hold the reserve: refused before any jail
+            # exists, with the two numbers named (N9)
+            envelope = registry.budget
+            raise SandboxError(
+                f"the verifier's reserve ({evals} evaluations, {units} assay units) does "
+                f"not fit the cell's envelope ({envelope.simulator_evals} evaluations, "
+                f"{envelope.assay_units} assay units): {exc}; the workflow was not run"
+            ) from exc
+        reserved["verification"] = {"simulator_evals": evals, "assay_units": units}
     return reserved
+
+
+def spend_record(registry: Registry) -> dict[str, Any]:
+    """What each reserve tag spent, from the registry's own charges (:data:`SPEND_RECORD`).
+
+    The frozen runner's summary attributes cost by the workflow's step names; this record
+    attributes it by the tag each call carried (the review of PR #43, M4), so the two can
+    be cross-checked: a call tagged for a reserve is either that role's own step or a
+    separating test the workflow recorded.
+    """
+    by_tag: dict[str, dict[str, int]] = {}
+    calls = []
+    for c in registry.charged_calls:
+        tag = c.get("role")
+        key = "untagged" if tag is None else str(tag)
+        row = by_tag.setdefault(key, {"calls": 0, "n_evaluations": 0, "assay_units": 0})
+        row["calls"] += 1
+        row["n_evaluations"] += int(c.get("n_evaluations", 0))
+        row["assay_units"] += int(c.get("assay_units", 0))
+        if tag is not None:
+            calls.append(
+                {
+                    "seq": c.get("seq"),
+                    "name": c.get("name"),
+                    "role": tag,
+                    "n_evaluations": int(c.get("n_evaluations", 0)),
+                    "assay_units": int(c.get("assay_units", 0)),
+                }
+            )
+    return {
+        "reserves": registry.reserves_remaining(),
+        "by_tag": by_tag,
+        "tagged_calls": calls,
+    }
 
 
 def _hidden_package_dirs(libdirs: list[str]) -> list[str]:
@@ -815,6 +864,11 @@ def launch(
         raise SandboxError(
             "the jail could not be built, so the workflow was not run: "
             + completed.stderr.strip()[-1000:]
+        )
+    if registry.reserves_remaining() and server.sink is not None:
+        # the privileged count by reserve tag, beside the workflow's own (M4)
+        server.sink.write_reserved(
+            SPEND_RECORD, json.dumps(spend_record(registry), indent=1, sort_keys=True) + "\n"
         )
     return SandboxResult(
         returncode=completed.returncode,

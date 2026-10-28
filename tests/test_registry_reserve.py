@@ -28,7 +28,7 @@ import pytest
 from state.provenance import read_calls
 from tests.test_tool_registry import registry
 from tools import Budget, BudgetExceededError, make_registry
-from tools.sandbox import apply_reserves, launch
+from tools.sandbox import SandboxError, apply_reserves, launch
 from tools.server import RegistryServer
 
 MORRIS = {"model": "linear", "parameters": ("a", "b"), "outputs": ("y",), "seed": 1}
@@ -87,8 +87,47 @@ def test_a_tagged_call_draws_on_its_reserve_and_an_untagged_one_cannot_touch_it(
         fresh.reserve("verification", simulator_evals=21, assay_units=0)
     with pytest.raises(ValueError, match="exceed the envelope"):
         fresh.reserve("verification", simulator_evals=1, assay_units=2)
-    assert fresh.cost_bound("simulate", model="linear") == (1, 0)
-    assert fresh.cost_bound("gsa_morris", **_morris(4)) == (12, 0)
+
+
+def test_an_overrunning_tool_is_stopped_at_the_callers_share_not_the_envelope(tmp_path):
+    """M3: the meter's limit is the caller's share while a call runs.
+
+    An untagged tool that lies about its bound cannot eat a reserve, and a tagged one
+    cannot leave its own.
+    """
+    from tools.registry import ToolSpec
+    from tools.schemas import SimulateInput, SimulateOutput
+
+    def greedy(inp, ctx):
+        model = ctx.model(inp.model)
+        for _ in range(100):
+            model.evaluate(model.defaults)
+        raise AssertionError("unreachable")
+
+    reg, run_dir, _ = registry(tmp_path, budget=Budget(20, 60.0, 0))
+    reg._specs["greedy"] = ToolSpec(
+        name="greedy", input_model=SimulateInput, output_model=SimulateOutput, run=greedy,
+        cost=lambda inp, ctx: 1,
+    )  # fmt: skip
+    reg.reserve("verification", simulator_evals=10, assay_units=0)
+    # untagged: stopped after the 10 outside the reserve; the reserve is untouched
+    with pytest.raises(BudgetExceededError):
+        reg.call("greedy", model="linear")
+    assert reg.remaining().simulator_evals == 10
+    assert reg.reserves_remaining()["verification"]["simulator_evals"] == 10
+    assert read_calls(run_dir)[-1].outcome == "budget_exceeded"
+    # tagged: stopped after its 10; nothing else is left to it
+    with pytest.raises(BudgetExceededError):
+        reg.call("greedy", model="linear", role="verification")
+    assert reg.remaining().simulator_evals == 0
+    assert reg.reserves_remaining()["verification"]["simulator_evals"] == 0
+    assert reg._meter.limit == 20  # the limit is restored on every path
+    # the negative control: with no reserve the envelope is the only stop (the old rule)
+    plain, _, _ = registry(tmp_path / "plain", budget=Budget(20, 60.0, 0))
+    plain._specs["greedy"] = reg._specs["greedy"]
+    with pytest.raises(BudgetExceededError):
+        plain.call("greedy", model="linear")
+    assert plain.remaining().simulator_evals == 0
 
 
 def test_the_server_tags_a_call_and_serves_the_reserves(tmp_path):
@@ -127,6 +166,28 @@ def test_the_launcher_sets_the_reserve_from_the_jail_document(tmp_path):
     box3 = tmp_path / "box3"
     box3.mkdir()
     assert apply_reserves(box3, plain) == {}
+    # the verifier-off ablation sets no reserve: nobody could spend it (M2)
+    off = make_registry(budget=Budget(100, 60.0, 2), seed=1)
+    box4 = tmp_path / "box4"
+    (box4 / "cwd").mkdir(parents=True)
+    (box4 / "cwd" / "p2_config.json").write_text(
+        json.dumps({**doc, "ablation": {"verifier": False, "roles": {}}}), encoding="utf-8"
+    )
+    assert apply_reserves(box4, off) == {} and off.reserves_remaining() == {}
+    # a document missing a key, or a cell whose envelope cannot hold the reserve, is
+    # refused before any jail exists, with a clear error (N9)
+    for bad, match, budget in (
+        ({"agents": {"verifier_budget": {"simulator_evals": 80}}}, "lacks", Budget(100, 60.0, 2)),
+        (doc, "does not fit the cell's envelope", Budget(50, 60.0, 2)),
+        (doc, "does not fit the cell's envelope", Budget(100, 60.0, 0)),
+    ):
+        small = make_registry(budget=budget, seed=1)
+        box5 = tmp_path / f"box_{match[:5]}_{budget.simulator_evals}_{budget.assay_units}"
+        (box5 / "cwd").mkdir(parents=True)
+        (box5 / "cwd" / "p2_config.json").write_text(json.dumps(bad), encoding="utf-8")
+        with pytest.raises(SandboxError, match=match):
+            apply_reserves(box5, small)
+        assert small.reserves_remaining() == {}
 
 
 def test_the_jail_sees_the_reserve_and_spends_it_through_the_stubs_role_tag(tmp_path):

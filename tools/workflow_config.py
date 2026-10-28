@@ -809,15 +809,14 @@ class P2Agents(_Frozen):
     roles: dict[_AgentRoles, P2AgentRole]
     prompts: dict[_AgentRoles, str] = Field(description="Each role's prompt file, beside")
     projection: P2AgentProjection
-    rounds: _PosInt = Field(description="The verifier's round limit (Q11: two)")
+    rounds: Literal[1, 2] = Field(description="The verifier's round limit (Q11: two at most)")
     seeds: P2AgentSeeds
     verifier_budget: P2VerifierBudget
     verifier_caps: P2VerifierCaps
     caps: P2Caps = Field(
         description="The proposers' per-run caps (the lead's Q8: USD 0.50, 200 requests, "
-        "10 M tokens for the pilot), taken by the agent arm's gateway in place of p2.yaml's "
-        "procedural caps, which the procedural freeze keeps; the verifier's own budget (Q9) "
-        "is the next step's"
+        "10 M tokens for the pilot), held by the agent arm's gateway beside the verifier's "
+        "own (verifier_caps, Q9); p2.yaml's procedural caps stay with the procedural freeze"
     )
 
     @model_validator(mode="after")

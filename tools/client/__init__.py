@@ -152,7 +152,7 @@ def last_call() -> dict[str, Any] | None:
     return None if _last_record is None else dict(_last_record)
 
 
-def call(name: str, _role: str | None = None, **args: Any) -> ToolOutput:
+def call(name: str, *, _role: str | None = None, **args: Any) -> ToolOutput:
     """Call one tool through the registry.
 
     ``_role`` tags the call for the registry's reserves (the agent P2's verifier draws on

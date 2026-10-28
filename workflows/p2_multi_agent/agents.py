@@ -310,6 +310,10 @@ class Recorder:
         self.outputs: dict[int, Any] = {}
         self.produced: dict[int, dict[str, list[tuple[Any, str, str | None]]]] = {}
         self.evals_charged = 0
+        self.tags: list[dict[str, Any]] = []
+        """Each call's reserve tag beside its step (``call_index``, ``step``,
+        ``charged_to``): the report carries it, so the privileged count by tag
+        (``spend.json``) can be cross-checked against the workflow's steps (M4)."""
 
     @staticmethod
     def next_index() -> int:
@@ -353,6 +357,14 @@ class Recorder:
             record["args_hash"] = str(logged.get("args_hash", ""))
             record["seq"] = logged.get("seq")
             self.actions.append(record)
+            self.tags.append(
+                {
+                    "call_index": index,
+                    "seq": record["seq"],
+                    "step": record["step"],
+                    "charged_to": charged,
+                }
+            )
             after = tools.remaining()
             use = self.by_role.setdefault(
                 charged, {"evaluations": 0, "wall_clock_s": 0.0, "assay_units": 0, "calls": 0}
@@ -1852,6 +1864,20 @@ def check_finding(ws: Workspace, role: str, payload: Any, round_: int) -> Any:
                 f"evidence[{i}]: call index(es) {missing} name no call of this run that returned"
             )
         produced_values: dict[str, Any] = {}
+        if role != VERIFIER:
+            # a proposer may cite a hidden tool's call (the verifier's validate) for its
+            # typed hold-out flag only, which travels in the Verdict; never for the
+            # hold-out's metrics (§4, step 8; M1)
+            hidden = [
+                c
+                for c in item.calls
+                if (ws.rec.ok_index(c) or {}).get("name") in HIDDEN_FROM_PROPOSERS
+            ]
+            if hidden and set(item.values) - {"holdout_failed"}:
+                raise ActionError(
+                    f"evidence[{i}]: call index(es) {hidden} are the verifier's hold-out test; "
+                    "a proposer may cite only its `holdout_failed` flag"
+                )
         for key, value in item.values.items():
             entries = [e for c in item.calls for e in ws.rec.produced.get(c, {}).get(key, [])]
             if not entries:
@@ -2412,7 +2438,22 @@ class AgentRun:
         assert ws is not None
         b = self.base
         findings = {r: f.model_dump(mode="json") for r, f in self.findings.items()}
-        verdicts = [v.model_dump(mode="json") for v in self.verdicts]
+        # a proposer is shown the verdict's typed decision (round, verdict, alternative,
+        # the hold-out flag and call, the named test) and its evidence items' labels,
+        # rules and call indices, never the values the verifier's calls produced: a
+        # verdict citing `validate` would otherwise carry the hold-out's metrics into a
+        # round-2 brief (§4, step 8; the review of PR #43, M1)
+        verdicts = [
+            v.model_dump(mode="json")
+            if role == VERIFIER
+            else {
+                **v.model_dump(mode="json"),
+                "evidence": [
+                    {"label": e.label, "rule": e.rule, "calls": list(e.calls)} for e in v.evidence
+                ],
+            }
+            for v in self.verdicts
+        ]
         brief: dict[str, Any] = {
             "role": role,
             "round": round_,
@@ -2948,6 +2989,7 @@ class AgentRun:
             "routing": list(self.coordinator.entries),
             "role_runs": list(self.role_runs),
             "separating_tests": list(self.separating_tests),
+            "tags": list(self.rec.tags),
             "by_role": {
                 role: {**use, "wall_clock_s": None} if self.base.unlimited else use
                 for role, use in self.rec.by_role.items()

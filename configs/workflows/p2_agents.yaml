@@ -46,8 +46,8 @@ agents:
     base: 1000                  # DESIGN  (p0.yaml's seeds are per procedural step)
   # the proposers' caps, the lead's Q8 (docs/p2_agents_design.md §9, decision 8): taken by
   # the agent arm's gateway in place of p2.yaml's caps, which the procedural freeze keeps
-  # (check_p2_frozen reads p2.yaml's; an approval of this arm names these, through
-  # config_digest). The verifier's own budget (Q9) is the next step's.
+  # (check_p2_frozen reads p2.yaml's; an approval of this arm names the run's total caps,
+  # these and the verifier's below added, and binds the split through config_digest)
   caps:
     max_requests: 200           # DESIGN  Q8
     max_total_tokens: 10000000  # DESIGN  Q8: 10 M tokens
