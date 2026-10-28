@@ -517,7 +517,7 @@ def test_the_label_patterns_match_the_configured_vocabulary_and_pass_rule_ones_s
 @pytest.mark.parametrize(
     ("module", "allowed"),
     [
-        ("evidence.py", {"__future__", "typing"}),
+        ("evidence.py", {"__future__", "collections", "typing"}),
         ("messages.py", {"__future__", "typing", "pydantic"}),
     ],
 )

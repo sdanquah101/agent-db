@@ -29,6 +29,7 @@ from tools import p2_live
 from tools.llm import GatewayRefusal, ModelError, ScriptedClient
 from tools.p2_live import P2Gateway, check_p2_frozen, frozen_digests, frozen_record_sha256
 from tools.workflow_config import DECISION_POINTS, load_p1, load_p2, sandbox_config
+from workflows.p2_multi_agent import evidence as ev
 from workflows.p2_multi_agent import workflow as wf
 
 REPO = Path(__file__).resolve().parents[1]
@@ -753,7 +754,7 @@ def test_r3_reads_the_reference_fits_bounds_not_a_chosen_subsets(monkeypatch, cf
         side = 1 if ch in failed else 0
         run.placement.update({f"{ch}.at_defaults.mean_z": side, f"{ch}.after_fit.mean_z": side,
                               f"{ch}.after_fit.rms_z": side})  # fmt: skip
-    run.table = wf.null_table(run.placement)
+    run.table = ev.null_table(run.placement)
     attr = cfg["p0"]["attribution"]
     rmse = 2 * float(attr["structural_rmse_z_min"])
     run.residuals = {ch: {"channel": ch, "rmse_z": rmse, "serially_structured": True,

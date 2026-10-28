@@ -4216,3 +4216,22 @@ the jail.** Branch `claude/p2-agents-sandbox`, a draft PR from `main`, separate 
   touches the file); `package_sha256` into the run record; the harness (next PR).
 - **Next:** the coordinator's review; then the harness PR (P1's loop as package code, the
   role views with the §3.1 allow-lists, the projected log, the coordinator as code).
+
+**2026-10-28 — PR #40 merged (`4c190fe`, the lead: "merge 40"); the null rule and the
+signatures move into the evidence module (branch `claude/p2-agents-evidence-move`, a
+draft PR from `main`).** The coordinator's relay of 00:50 UTC directs the move the design
+note §2 names and the #40 review's H3 asked about.
+- `workflows/p2_multi_agent/evidence.py` now holds the null rule (the placement helpers,
+  NB / NM / NS, the failed channels, `null_table`) and the signatures (`nb_side`, the onset
+  test, the feed covariate, early/late, the change points, R3, inhibition, the S1 table),
+  with `NEVER_IN_OBJECTIVE`, `BALANCE_STATS` and `Placement`: twenty-nine definitions moved
+  out of `workflow.py`, each identical by AST to `main`'s, no other definition changed
+  (`docs/decisions.md`, 2026-10-28). The entry imports the eighteen names its steps use;
+  `tests/test_p2_workflow.py`, `test_p2_decision_fixes.py` and `test_p2_live.py` import the
+  moved names from the evidence module; its import pin admits `collections`. Both freeze
+  digests and the pilot configuration digest are unchanged.
+- Open beside it: PR #41 (the harness), on `main` since `1486cfb`; the two PRs touch the
+  entry's import block only in common, a trivial merge whichever lands second.
+- **Next:** the coordinator's reviews of #41 and of this PR; then the verifier's second
+  round, the separating test's routing and the verifier's own registry budget (the next
+  PR, on #41); then the Q6 cells.
