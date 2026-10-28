@@ -50,7 +50,9 @@ Live, each turn goes through ``tools.llm`` to the privileged gateway, which chec
 role's frozen prompt and tools and the caps.
 
 Rule 1: nothing here reads the truth store; the hold-out is the verifier's only, through
-``validate``. Rule 4: every stochastic call is seeded with P0's base plus its call index.
+``validate`` (its output is hidden from every proposer's projection and ``stored``, §4
+step 8). Rule 4: every stochastic call is seeded with the arm's declared base
+(``agents.seeds.base``) plus its call index.
 """
 
 from __future__ import annotations
@@ -87,6 +89,10 @@ COORDINATOR = "coordination"
 ROLES: tuple[str, ...] = (*SPECIALISTS, VERIFIER)
 HARNESS_ACTIONS: tuple[str, ...] = ("stored", "emit_finding")
 """The two actions every role holds beside its registry tools (§3.1)."""
+HIDDEN_FROM_PROPOSERS: tuple[str, ...] = ("validate",)
+"""Tools whose outputs no proposer's projection or ``stored`` carries: the hold-out stays
+visible to the verifier only (§4, step 8; the review of PR #41, J7). What travels is the
+verifier's typed ``Verdict``."""
 
 REDACTED: dict[str, frozenset[str]] = {
     "set_sensor_status": frozenset({"reason"}),
@@ -462,9 +468,18 @@ def cut_points(value: Any, max_points: int) -> Any:
 
 
 def project(
-    rec: Recorder, args_by_index: dict[int, dict[str, Any]], max_points: int, preview: int
+    rec: Recorder,
+    args_by_index: dict[int, dict[str, Any]],
+    max_points: int,
+    preview: int,
+    *,
+    hidden: tuple[str, ...] = (),
 ) -> list[dict[str, Any]]:
-    """The projected action log: what the verifier (and every role) is shown of the calls."""
+    """The projected action log: what a role is shown of the calls.
+
+    A call of a tool in ``hidden`` keeps its index, tool, arguments and outcome and loses
+    its output (``hidden: true``): a proposer's projection hides ``validate`` (§4, step 8).
+    """
     out = []
     for a in rec.actions:
         index = int(a["call_index"])
@@ -476,7 +491,9 @@ def project(
             "args": redact(a["name"], args_by_index.get(index, {})),
             "outcome": a["outcome"],
         }
-        if index in rec.outputs:
+        if a["name"] in hidden:
+            entry["hidden"] = True
+        elif index in rec.outputs:
             entry["output"] = compact(cut_points(rec.outputs[index], max_points), preview)
         out.append(entry)
     return out
@@ -905,8 +922,13 @@ class Workspace:
             raise ActionError(f"unknown parameter(s) {unknown}; see describe_model")
 
     def seed(self) -> int:
-        """Rule 4: P0's declared base plus the call index the next call will carry."""
-        return int(self.cfg["p0"]["seeds"]["base"]) + Recorder.next_index()
+        """Rule 4: the arm's declared base (``agents.seeds.base``) plus the next call's index.
+
+        P0's seeds table is per procedural step (``p0.yaml`` ``seeds``: morris, sobol, ...),
+        not a base; the arm declares its own, bound by the configuration digest (the review
+        of PR #41, J0).
+        """
+        return int(self.agents_cfg["seeds"]["base"]) + Recorder.next_index()
 
     def stored_result(self, table: dict[int, Any], index: Any, what: str) -> Any:
         """A stored result by call index.
@@ -1331,7 +1353,7 @@ class Workspace:
         self.rec.produce(index, "profile_upper", _f(hi), self.units.get(out.parameter, "-"))
         return self._out(index, _dump(out))
 
-    def _fit_args(self, inp: dict[str, Any]) -> dict[str, Any]:
+    def _fit_args(self, view: RoleView, inp: dict[str, Any]) -> dict[str, Any]:
         self.check_parameters(inp["parameters"])
         args: dict[str, Any] = {
             "model": MODEL,
@@ -1357,6 +1379,18 @@ class Workspace:
                 bounds[n] = (lo, hi)
             args["bounds"] = bounds
             self.bounds_narrowed.update(bounds)
+            # the justification is free text: the role's own message in messages.jsonl,
+            # redacted in the projection, never in state.json (§3.1; J6)
+            self.base.log.send(
+                "proposal",
+                view.role,
+                COORDINATOR,
+                "bounds_justification",
+                {
+                    "bounds": {n: [lo, hi] for n, (lo, hi) in bounds.items()},
+                    "justification": str(inp.get("bounds_justification")),
+                },
+            )
         return args
 
     def fit_result(self, out: Any) -> dict[str, Any]:
@@ -1381,7 +1415,7 @@ class Workspace:
 
     def t_fit(self, view: RoleView, inp: dict[str, Any], name: str = "fit_lsq") -> dict[str, Any]:
         """Run the named fitter on the calibration data."""
-        args = self._fit_args(inp)
+        args = self._fit_args(view, inp)
         sizes = {
             "fit_lsq": ("n_starts", "max_nfev_per_start"),
             "fit_de": ("popsize", "max_generations"),
@@ -1413,7 +1447,7 @@ class Workspace:
             start = {n: float(v) for n, v in zip(fit.parameters, fit.theta, strict=True)}
             start.update(inp.get("start") or {})
             inp["start"] = {n: v for n, v in start.items() if n in inp["parameters"]}
-        args = self._fit_args(inp)
+        args = self._fit_args(view, inp)
         for key in ("likelihood", "n_walkers", "n_steps"):
             if key in inp:
                 args[key] = inp[key]
@@ -1611,13 +1645,22 @@ class Workspace:
                     f"window (after {self.cal[1]:g} d), which is not yours to edit"
                 )
         for start, end in windows:
-            inside = (s.t >= start) & (s.t <= end)
+            inside = (s.t >= start) & (s.t < end)  # [start, end), as every window here (J13)
             s.value = np.where(inside, np.nan, s.value)
             s.quarantined.append([float(start), float(end)])
         s.status, s.in_objective = status, in_obj
-        # the reason is free text: it is logged with the call's arguments (messages.jsonl,
-        # the redacted projection) and never reaches state.json; its length is the record
-        self.sensor_reason_lengths[s.name] = len(str(inp.get("reason", "")))
+        # the reason is free text: it goes to messages.jsonl as the role's own message and
+        # is redacted in the projection; it never reaches state.json, whose note carries
+        # its length (§3.3; the review of PR #41, J6)
+        reason = str(inp.get("reason", ""))
+        self.sensor_reason_lengths[s.name] = len(reason)
+        self.base.log.send(
+            "proposal",
+            view.role,
+            COORDINATOR,
+            "set_sensor_status.reason",
+            {"sensor": s.name, "status": status, "in_objective": in_obj, "reason": reason},
+        )
         return {
             "sensor": s.name,
             "status": s.status,
@@ -1708,12 +1751,25 @@ class Workspace:
         result["n_channels_failed"] = failed
         return self._out(index, result)
 
-    def stored(self, inp: dict[str, Any]) -> dict[str, Any]:
-        """A full stored output by call index (a harness action, no registry call)."""
+    def stored(self, inp: dict[str, Any], role: str) -> dict[str, Any]:
+        """A full stored output by call index (a harness action, no registry call).
+
+        A proposer never fetches a hidden tool's output (``validate``: the hold-out is the
+        verifier's only, §4 step 8).
+
+        Raises:
+            ActionError: No such output, or one the role may not see.
+        """
         index = inp.get("call_index")
         if not isinstance(index, int) or index not in self.rec.outputs:
             raise ActionError(
                 f"no stored output with call_index {index!r}; have {sorted(self.rec.outputs)}"
+            )
+        action = self.rec.ok_index(index)
+        if role != VERIFIER and action is not None and action["name"] in HIDDEN_FROM_PROPOSERS:
+            raise ActionError(
+                f"call_index {index} is a {action['name']} output: the hold-out is the "
+                "verifier's only"
             )
         return {"call_index": index, "result": compact(self.rec.outputs[index], self.max_points)}
 
@@ -1745,12 +1801,14 @@ def check_finding(ws: Workspace, role: str, payload: Any, round_: int) -> Any:
         raise ActionError(f"finding: {where}: {first.get('msg')}") from exc
     if not messages.claim_allowed_in_round(finding, round_):
         raise ActionError(f"finding: claim {finding.claim!r} is a round-2 claim")
+    checked: list[Any] = []
     for i, item in enumerate(finding.evidence):
         missing = [c for c in item.calls if ws.rec.ok_index(c) is None]
         if missing:
             raise ActionError(
                 f"evidence[{i}]: call index(es) {missing} name no call of this run that returned"
             )
+        produced_values: dict[str, Any] = {}
         for key, value in item.values.items():
             entries = [e for c in item.calls for e in ws.rec.produced.get(c, {}).get(key, [])]
             if not entries:
@@ -1781,6 +1839,11 @@ def check_finding(ws: Workspace, role: str, payload: Any, round_: int) -> Any:
                 raise ActionError(
                     f"evidence[{i}]: `{key}` has unit {given!r}; the registry gives {sorted(units)}"
                 )
+            # the record keeps the value the call produced, not the model's rendering of
+            # it (J5): the two agree to the five digits shown
+            produced_values[key] = matched[0][0]
+        checked.append(item.model_copy(update={"values": produced_values}))
+    finding = finding.model_copy(update={"evidence": checked})
     if role == "data_quality":
         for name in (*finding.statuses, *finding.quarantines):
             if name not in ws.series:
@@ -1821,19 +1884,21 @@ def check_finding(ws: Workspace, role: str, payload: Any, round_: int) -> Any:
                     f"verdict: the alternative {finding.alternative!r} is not admitted by the "
                     "evidence"
                 )
-            # D-1: a fail against a non-structural label whose only evidence is a passed hold-out
+            # D-1: a fail against a non-structural label whose only evidence is a passed
+            # hold-out. A fail that cites a validate call states its hold-out result in
+            # `holdout` (checked above against what that call found), so the outcome is
+            # never the verifier's to leave out (the review of PR #41, J2)
+            cited = [c for item in finding.evidence for c in item.calls]
+            validates = [c for c in cited if (ws.rec.ok_index(c) or {}).get("name") == "validate"]
+            if validates and finding.holdout is None:
+                raise ActionError(
+                    "verdict: a fail citing a validate call states its result in `holdout`"
+                )
+            if validates and finding.holdout.call not in validates:
+                raise ActionError("verdict: holdout.call is not one of the cited validate calls")
             non_structural = finding.alternative not in (ws.lab["structural"], ws.lab["none"])
-            only_holdout = all(
-                ws.rec.ok_index(c) is not None and ws.rec.ok_index(c)["name"] == "validate"
-                for item in finding.evidence
-                for c in item.calls
-            )
-            if (
-                non_structural
-                and only_holdout
-                and finding.holdout is not None
-                and not finding.holdout.failed
-            ):
+            only_holdout = bool(validates) and len(validates) == len(cited)
+            if non_structural and only_holdout and not finding.holdout.failed:
                 raise ActionError(
                     "verdict: a passed hold-out is not evidence against a non-structural cause "
                     "(D-1)"
@@ -1848,8 +1913,9 @@ def _same_value(produced: Any, value: Any) -> bool:
         return produced == value
     if produced is None or value is None:
         return produced is value
-    a, b = float(produced), float(value)
-    return abs(a - b) <= 1e-3 * max(abs(a), abs(b)) + 1e-9
+    # equal to the five significant digits the model is shown (P1's rounding); a value off
+    # in the fourth digit is not the call's (J5)
+    return _round(float(produced)) == _round(float(value))
 
 
 def evidence_items(finding: Any) -> list[dict[str, Any]]:
@@ -1961,7 +2027,7 @@ class RoleAgent:
                 self.finding = check_finding(self.ws, self.role, inp["finding"], self.round)
                 return self._result(block, {"accepted": True}, False)
             if name == "stored":
-                return self._result(block, self.ws.stored(inp), False)
+                return self._result(block, self.ws.stored(inp, self.role), False)
             self.guard_grant(name, inp)
             before = tools.remaining()
             handler = self.ws.handlers()[name]
@@ -2085,11 +2151,14 @@ class OfflineModel:
         """Set up for ``role``."""
         self.role = role
         self.turn = 0
+        self.brief: dict[str, Any] = {}
 
     def __call__(self, request: dict[str, Any]) -> dict[str, Any]:
         """The next reply, read off the request's history."""
         self.turn += 1
         history = request["messages"]
+        if self.turn == 1 and history:
+            self.brief = json.loads(history[0]["content"])  # the role's brief (typed)
         last = history[-1]["content"] if history else ""
         result = None
         if isinstance(last, list):
@@ -2110,13 +2179,14 @@ class OfflineModel:
         return {"response": response, "status": {}}
 
     def first_call(self) -> tuple[str, dict[str, Any]]:
-        """The one tool use of the role."""
+        """The one tool use of the role (design fetches the last projected output)."""
+        shown = [e["call_index"] for e in self.brief.get("projected_log", []) if "output" in e]
         return {
             "data_quality": ("data_qc", {}),
             "influent": ("mass_balance", {}),
             "identifiability": ("describe_model", {}),
             "calibration": ("simulate", {}),
-            "design": ("stored", {"call_index": 0}),
+            "design": ("stored", {"call_index": shown[-1] if shown else 0}),
             VERIFIER: ("declared_background", {}),
         }[self.role]
 
@@ -2142,9 +2212,13 @@ class OfflineModel:
         if self.role == "calibration":
             return {"claim": "no_claim", "confidence": "low", "evidence": cited}
         if self.role == "design":
+            # a plan naming the first requestable assay of the catalogue, on the first day
+            # of the calibration window: the harness accepts it (J10); nothing is requested
+            catalogue = sorted(self.brief.get("assay_catalogue") or {})
+            window = self.brief.get("calibration_window") or [0.0, 0.0]
             return {
-                "assay": "none",
-                "day": 0.0,
+                "assay": catalogue[0] if catalogue else "none",
+                "day": float(window[0]),
                 "unit": "-",
                 "separates": ["sensor", "none"],
                 "predicted": {},
@@ -2190,12 +2264,20 @@ class Coordinator:
             wanted.append("calibration")
         return wanted or ordered
 
-    def grant_for(self, roles: list[str], role: str) -> dict[str, int]:
-        """An equal share of the evaluations left for the roles of this stage; assays to design."""
+    def grants_for(self, roles: list[str]) -> dict[str, dict[str, int]]:
+        """The grants of one stage, computed once at its start (J12).
+
+        Each routed role of the stage gets the same share of the evaluations left when the
+        stage starts, so a later role's share does not shrink with the earlier roles'
+        spend; the assay units go to the design role.
+        """
         rem = tools.remaining()
-        share = int(rem.simulator_evals) // max(len(roles), 1)
-        assays = int(rem.assay_units) if role == "design" else 0
-        return {"evaluations": max(share, 0), "assays": assays}
+        share = max(int(rem.simulator_evals) // max(len(roles), 1), 0)
+        assays = int(rem.assay_units)
+        return {
+            role: {"evaluations": share, "assays": assays if role == "design" else 0}
+            for role in roles
+        }
 
     def conflict(self, findings: dict[str, Any]) -> tuple[str, str] | None:
         """Two findings claiming different causes, if any (the design role's trigger)."""
@@ -2299,7 +2381,14 @@ class AgentRun:
             "signatures": json.loads(procedural.to_json(b.signatures)),
             "findings": findings,
             "verdicts": verdicts,
-            "projected_log": project(self.rec, ws.args_by_index, ws.max_points, ws.preview),
+            # a proposer's projection hides the hold-out test's output (§4, step 8; J7)
+            "projected_log": project(
+                self.rec,
+                ws.args_by_index,
+                ws.max_points,
+                ws.preview,
+                hidden=() if role == VERIFIER else HIDDEN_FROM_PROPOSERS,
+            ),
             "grant": grant,
             "turns": turns,
             "labels": self.labels,
@@ -2314,11 +2403,10 @@ class AgentRun:
             brief["assay_catalogue"] = self.cfg.get("assay_catalogue", {})
         return brief
 
-    def run_role(self, role: str, round_: int, reason: str, roles: list[str]) -> Any:
+    def run_role(self, role: str, round_: int, reason: str, grant: dict[str, int]) -> Any:
         """One routing of ``role``: the coordinator's entry, the role's turns, its finding."""
         ws = self.ws
         assert ws is not None
-        grant = self.coordinator.grant_for(roles, role)
         self.coordinator.route(round_, role, reason, grant)
         turns = int(self.agents_cfg["roles"][role]["turns"])
         agent = RoleAgent(
@@ -2365,17 +2453,21 @@ class AgentRun:
         try:
             self.code_steps()
             round_ = 1
+            stage = self.coordinator.grants_for
             if self.on.get("data_quality", True):
-                self.run_role("data_quality", round_, "qc_first", ["data_quality"])
+                self.run_role(
+                    "data_quality", round_, "qc_first", stage(["data_quality"])["data_quality"]
+                )
             table = self.base.table
             reason = "null_failed" if table and table.get("null_rejected") else "null_stands"
             roles = self.coordinator.specialists_for()
+            grants = stage(roles)  # one share each, fixed when the stage starts (J12)
             for role in roles:
-                self.run_role(role, round_, reason, roles)
+                self.run_role(role, round_, reason, grants[role])
             if self.on.get("design", True) and self.coordinator.conflict(self.findings):
-                self.run_role("design", round_, "conflict", ["design"])
+                self.run_role("design", round_, "conflict", stage(["design"])["design"])
             if self.switch.get("verifier", True):
-                self.run_role(VERIFIER, round_, "verify", [VERIFIER])
+                self.run_role(VERIFIER, round_, "verify", stage([VERIFIER])[VERIFIER])
         except procedural.ModelCapReached as exc:
             self.codes.append("model_cap")
             self.annotations.append(f"model cap reached: {str(exc)[:200]}")
@@ -2431,28 +2523,40 @@ class AgentRun:
         table = self.base.table
         null_stands = not (table and table.get("null_rejected"))
         verdict = self.verdicts[-1] if self.verdicts else None
-        reason = ""
+        verifier_on = bool(self.switch.get("verifier", True))
         if self.verdict.get("verdict") == "abstain":
             label, rule = ABSTAIN_LABEL, f"abstain:{self.verdict['reason']}"
+        elif verdict is None and verifier_on:
+            # the verifier ran (its turns, a model error or a refusal) and delivered no
+            # verdict: its silence never passes a proposal (§4, steps 5 and 6; the review
+            # of PR #41, J1)
+            label, rule = ABSTAIN_LABEL, "abstain:no_verdict"
+            self.verdict = {"verdict": "abstain", "reason": "no_verdict"}
         elif verdict is None:
+            # the verifier-off ablation: code concludes the leading admitted claim
             if claim is not None:
                 label, rule = claim, "verifier_off:leading_claim"
             elif null_stands:
                 label, rule = lab["none"], "verifier_off:null_stands"
             else:
                 label, rule = ABSTAIN_LABEL, "abstain:no_admitted_claim"
-            if not self.switch.get("verifier", True):
-                reason = "verifier_off"
             self.verdict = {
                 "verdict": "abstain" if label == ABSTAIN_LABEL else "pass",
-                "reason": reason or rule.split(":")[-1],
+                "reason": "no_admitted_claim" if label == ABSTAIN_LABEL else "verifier_off",
             }
         elif verdict.verdict == "pass":
             if claim is not None:
                 label, rule = claim, f"{RULE}:pass"
-            else:
+                self.verdict = {"verdict": "pass", "reason": "pass"}
+            elif null_stands:
                 label, rule = lab["none"], f"{RULE}:pass:none"
-            self.verdict = {"verdict": "pass", "reason": "pass"}
+                self.verdict = {"verdict": "pass", "reason": "pass"}
+            else:
+                # a failed null, no admitted claim and no `none` finding to pass: §4 step 7
+                # reaches `none` over a failed null only through a specialist's cited
+                # finding (J4)
+                label, rule = ABSTAIN_LABEL, "abstain:no_proposal"
+                self.verdict = {"verdict": "abstain", "reason": "no_proposal"}
         elif verdict.verdict == "fail":
             if verdict.alternative == lab["none"]:
                 label, rule = lab["none"], f"{RULE}:fail:none"

@@ -760,6 +760,17 @@ class P2AgentProjection(_Frozen):
     preview: _PosInt = Field(description="Elements shown before a long array is summarised")
 
 
+class P2AgentSeeds(_Frozen):
+    """Rule 4 for the agent arm: every seeded call takes ``base`` plus its call index.
+
+    P0's seeds table is per tool (``p0.yaml`` ``seeds``: morris, sobol, ...), for the
+    procedural steps; a role's calls are not those steps, so the arm declares its own base
+    (the review of PR #41, J0).
+    """
+
+    base: _PosInt = Field(description="The base seed of the roles' seeded calls")
+
+
 class P2Agents(_Frozen):
     """The agent arm of P2 (``docs/p2_agents_design.md``; the lead's option A, 2026-10-26).
 
@@ -774,6 +785,13 @@ class P2Agents(_Frozen):
     prompts: dict[_AgentRoles, str] = Field(description="Each role's prompt file, beside")
     projection: P2AgentProjection
     rounds: _PosInt = Field(description="The verifier's round limit (Q11: two)")
+    seeds: P2AgentSeeds
+    caps: P2Caps = Field(
+        description="The proposers' per-run caps (the lead's Q8: USD 0.50, 200 requests, "
+        "10 M tokens for the pilot), taken by the agent arm's gateway in place of p2.yaml's "
+        "procedural caps, which the procedural freeze keeps; the verifier's own budget (Q9) "
+        "is the next step's"
+    )
 
     @model_validator(mode="after")
     def _complete(self) -> P2Agents:
@@ -953,6 +971,7 @@ def sandbox_config(config: P0Config | P1Config | P2Config, *, live: bool = False
             # the agent arm: its roles, their prompts' texts (the digests stay on the
             # privileged side, in the gateway), the projection bound and the round limit
             agents = config.agents.model_dump(mode="json")
+            agents.pop("caps", None)  # the caps stay on the privileged side, as p2.yaml's
             agents["prompts"] = {
                 role: p["text"] for role, p in load_p2_agent_prompts(config).items()
             }

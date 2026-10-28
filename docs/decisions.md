@@ -8409,9 +8409,11 @@ the harness PR and open to the coordinator's review:
    (`set_sensor_status.reason`, `fit_*.bounds_justification`), every string argument that
    is not a token (an identifier or a number as text, `messages.TOKEN_PATTERN`) is
    redacted at any depth. Numbers, booleans and identifiers pass.
-4. **Grants.** The coordinator grants each routed role an equal share of the evaluations
-   left (floor), and the design role the assay units left; a sized call whose registry
-   bound exceeds the role's grant is refused by the harness before it runs (P1's
+4. **Grants.** The coordinator grants each routed role of a stage the same share of the
+   evaluations left **when the stage starts** (floor; computed once per stage, so a later
+   role's share does not shrink with the earlier roles' spend: the review of PR #41, J12),
+   and the design role the assay units left; a sized call whose registry bound exceeds
+   the role's grant is refused by the harness before it runs (P1's
    `estimate_evaluations`), so one role cannot spend another's share. The verifier's own
    budget (Q9), enforced in the registry, is the next PR's.
 5. **The offline responder abstains.** With no model reachable (`decider: offline`), a
@@ -8470,3 +8472,66 @@ not frozen.
 - A line in `calls.jsonl`: the log's readers (`eval/`, frozen) expect tool calls only.
 - Writing the record for every launch: changes the frozen arms' output directories for no
   gain (P0 and P1 stage no package; their entry's digest is the commit's).
+
+
+## 2026-10-28 — The agent arm's caps, seeds and conclusion rules (the review of PR #41 at 1486cfb)
+
+The coordinator's fresh-context review found four blocking defects (J0–J3) and six to fix
+in the same PR (J4–J9); the decisions they forced are here, the rest is in the PR.
+
+**J3, the caps (a contradiction with Q8, now resolved).** `p2_agents.yaml` extends
+`p2.yaml`, and `check_p2_frozen` requires `caps` to equal the procedural freeze's (60
+requests, 6 M tokens, USD 0.25), so the agent arm could carry no other caps, while the
+lead DECIDED Q8: USD 0.50, 200 requests and 10 M tokens for the proposers (and Q9: the
+verifier's own budget beside them). The configured round-1 turn budgets alone sum to 66.
+**Decision:** the agent arm's proposer caps live in its own block, `agents.caps` (Q8's
+numbers), and the gateway takes them through `tools.p2_live.run_caps` in place of
+`p2.yaml`'s; `require_live_approval` compares an approval's caps to the same; `config_digest`
+binds them (the agents block is in it). `p2.yaml`'s caps are untouched, so the procedural
+freeze stands, and the jail document carries no caps (as before). They are not yet in a
+frozen record of their own: the design note §6's "new frozen record" is cut before any live
+run, with the prompts, schemas, allow-list, turn budgets and projection rule, and will name
+them. The verifier's own caps (§8's table: 40 requests, 4 M tokens, USD 0.50, 80 evaluations,
+1 assay unit per run) arrive with the verifier's budget in the next PR.
+*Alternatives:* raise `p2.yaml`'s caps (refused: the procedural arm's freeze and its pilot
+record); make `check_p2_frozen` skip the caps for the agent arm (hides the difference the
+freeze exists to catch).
+
+**J0, the seed base.** `Workspace.seed` read `p0.seeds.base`, which P0's table does not
+have (its seeds are per step: morris, sobol, ...), so every seeded handler died with a
+`KeyError` the loop did not catch, and the run ended `completed: false`; no test drove a
+seeded tool through the agent loop and the fake fitter lacked `method`. **Decision:** the
+arm declares `agents.seeds.base` (bound by `config_digest`); a seeded call takes base plus
+its call index (rule 4). One test runs every handler once through `RoleAgent.execute`
+against the test double's full output shapes, and checks each seeded call's seed.
+
+**J1 and J4, what code concludes when the verifier is silent or passes nothing.** A
+missing verdict was read as "verifier off" whether the ablation was off or the verifier
+ran and delivered nothing (turns spent, a model error, a refusal), so a silent verifier
+passed the leading claim. **Decision:** with the verifier on and no verdict, the run
+abstains (`abstain:no_verdict`); the verifier's silence never passes a proposal (§4,
+steps 5 and 6). A `pass` with no admitted claim concludes `none` only on a standing
+null; over a failed null it abstains (`abstain:no_proposal`), since §4 step 7 reaches
+`none` over a failed null only through a specialist's cited `none` finding, which the
+verifier then passes.
+
+**J2, D-1 under the verifier's omission.** The D-1 check required `holdout` to be set, so
+a `fail` against an admitted non-structural label whose only cited calls were a passed
+`validate`, with `holdout` left out, was accepted; and the suite's D-1 case never ran.
+**Decision:** a `fail` that cites a `validate` call states its result in `holdout`, which
+must name one of the cited `validate` calls and match what it found; D-1 then reads the
+stated outcome. The test builds the case (every label admitted, the recorded hold-out a
+pass) and checks the refusal, the omission, the mismatch and four controls.
+
+**J7, the hold-out stays the verifier's.** `project` carried every stored output,
+`validate`'s included, and `stored` served any index: harmless while the verifier runs
+last, a leak once round 2 shows proposers the log (§4, step 8: "the `validate` output
+remains outside every proposer's view"). **Decision:** a proposer's projection keeps a
+`validate` call's index, tool, arguments and outcome and hides its output; `stored`
+refuses a hidden output to a proposer. The verifier sees both.
+
+**J5 and J6, the record.** A cited value matched the call's to 0.1 % and `state.json`
+kept the model's rendering; now equality is at the five significant digits shown and the
+record keeps the value the call produced. `set_sensor_status.reason` and
+`bounds_justification` reached no record offline; they are now the role's own
+`proposal` messages in `messages.jsonl` (free text stays out of `state.json`).

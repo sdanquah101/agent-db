@@ -32,6 +32,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 
 from state.task_state import TaskState
@@ -173,7 +174,9 @@ def _state(fake: FakeTools) -> dict[str, Any]:
 # ------------------------------------------------------------------ the configuration
 
 
-def test_the_agents_configuration_extends_the_procedural_one_and_leaves_its_digest_alone():
+def test_the_agents_configuration_extends_the_procedural_one_and_leaves_its_digest_alone(
+    tmp_path,
+):
     from scripts.p2_pilot import pilot_config_digest
     from tools.p2_live import check_p2_frozen, config_digest
 
@@ -190,7 +193,9 @@ def test_the_agents_configuration_extends_the_procedural_one_and_leaves_its_dige
     assert {r: set(s.tools) for r, s in arm.agents.roles.items()} == ALLOW_LIST
     assert arm.agents.rounds == 2
     doc = sandbox_config(arm)
-    assert set(doc["agents"]) == {"roles", "prompts", "projection", "rounds"}
+    # the caps stay on the privileged side, as p2.yaml's (J3); the seed base is the jail's
+    assert set(doc["agents"]) == {"roles", "prompts", "projection", "rounds", "seeds"}
+    assert doc["agents"]["seeds"] == {"base": arm.agents.seeds.base}
     prompts = load_p2_agent_prompts(arm)
     assert doc["agents"]["prompts"] == {r: p["text"] for r, p in prompts.items()}
     assert "tool_size_ceilings" in doc
@@ -198,11 +203,18 @@ def test_the_agents_configuration_extends_the_procedural_one_and_leaves_its_dige
     for role, p in prompts.items():
         assert not re.search(r"\bS\d-\d\d\b", p["text"]), role
         assert not re.search(r"\bR[1-5][ab]?\b", p["text"]), role
-    # the negative control: a configuration extending a file that itself extends is refused
-    with pytest.raises(ValueError, match="extends"):
-        load_p2(REPO / "tests" / "data" / "nonexistent.yaml") if False else (_ for _ in ()).throw(
-            ValueError("extends")
-        )
+    # the negative control (a real one, J9): a configuration extending a file that itself
+    # extends is refused by load_p2; the files are copied beside each other, since
+    # `extends` resolves beside the configuration
+    import shutil
+
+    here = tmp_path / "configs"
+    here.mkdir()
+    for name in ("p2.yaml", "p2_agents.yaml"):
+        shutil.copy2(WORKFLOW_CONFIG_DIR / name, here / name)
+    (here / "chain.yaml").write_text("extends: p2_agents.yaml\nworkflow_version: x\n")
+    with pytest.raises(ValueError, match="extends names a file that is not a plain"):
+        load_p2(here / "chain.yaml")
 
 
 def test_each_role_is_offered_its_tools_stored_and_its_typed_finding():
@@ -295,6 +307,10 @@ def test_a_qc_flagged_sensor_is_never_reinstated(monkeypatch):
         },
     )
     assert out["quarantined_windows"] == [[10.0, 20.0]] and "tan" in out["objective_now"]
+    # the window is [start, end): days 10..19 dropped, day 20 kept (J13)
+    tan = ws.series["tan"]
+    dropped = np.isnan(tan.value) & (tan.t >= 9.0) & (tan.t <= 21.0)
+    assert sorted(tan.t[dropped].tolist()) == [float(d) for d in range(10, 20)]
     with pytest.raises(agents.ActionError, match="hold-out"):
         ws.t_status(
             view,
@@ -350,34 +366,72 @@ def test_a_planted_claim_reaches_messages_only_and_the_projection_redacts_it(mon
             ],
         ]
     )
+    # the claim planted in a tool-argument string of a REGISTRY call (J8): a fit's
+    # bounds_justification enters args_by_index, so the projection must redact it
+    fit = {
+        "name": "fit_lsq",
+        "input": {
+            "parameters": ["k_m_ac"],
+            "bounds": {"k_m_ac": [0.5, 2.0]},
+            "bounds_justification": PLANTED,
+            "n_starts": 1,
+            "max_nfev_per_start": 10,
+        },
+    }
+    cal = Script([[fit], [_emit("calibration")]])
     verifier = Script([[{"name": "declared_background", "input": {}}], [_emit("verification")]])
-    _, fake = _run(monkeypatch, {"data_quality": dq, "verification": verifier})
+    _, fake = _run(monkeypatch, {"data_quality": dq, "calibration": cal, "verification": verifier})
     state_text = fake.run.outputs["state.json"]
     assert PLANTED not in state_text
-    assert PLANTED in fake.run.outputs["messages.jsonl"]  # the assessment, free text, lives there
+    # the assessment, the sensor reason and the justification, free text, live in
+    # messages.jsonl as the roles' own messages (J6)
+    lines = [json.loads(x) for x in fake.run.outputs["messages.jsonl"].splitlines()]
+    reasons = [m for m in lines if m["step"] == "set_sensor_status.reason"]
+    assert reasons and reasons[0]["from_role"] == "data_quality"
+    assert reasons[0]["body"] == {
+        "sensor": "ph",
+        "status": "excluded",
+        "in_objective": False,
+        "reason": PLANTED,
+    }
+    justified = [m for m in lines if m["step"] == "bounds_justification"]
+    assert justified and justified[0]["from_role"] == "calibration"
+    assert justified[0]["body"]["justification"] == PLANTED
+    assert justified[0]["body"]["bounds"] == {"k_m_ac": [0.5, 2.0]}
+    assert any(m["step"] == "assessment.1" and PLANTED in m["body"]["text"] for m in lines)
     brief = verifier.briefs[0]
     assert PLANTED not in json.dumps(brief)
     entry = [
         e for e in brief["projected_log"] if e["tool"] == "data_qc" and e["role"] == "data_quality"
     ][-1]
     assert entry["args"] == {} and entry["outcome"] == "ok" and "output" in entry
+    fit_entry = [e for e in brief["projected_log"] if e["tool"] == "fit_lsq"][-1]
+    assert fit_entry["role"] == "calibration"
+    assert fit_entry["args"]["bounds_justification"] == agents.REDACTED_MARK
+    assert fit_entry["args"]["bounds"] == {"k_m_ac": [0.5, 2.0]}
     # the redaction: the declared free-text field, and any non-token string, at any depth
+    # (three deep too)
     args = {
         "sensor": "ph",
         "status": "excluded",
         "reason": PLANTED,
-        "nested": {"note": "two words", "k": "x2"},
+        "nested": {"note": "two words", "k": "x2", "deeper": {"deepest": [PLANTED, "x3"]}},
     }
     assert agents.redact("set_sensor_status", args) == {
         "sensor": "ph",
         "status": "excluded",
         "reason": agents.REDACTED_MARK,
-        "nested": {"note": agents.REDACTED_MARK, "k": "x2"},
+        "nested": {
+            "note": agents.REDACTED_MARK,
+            "k": "x2",
+            "deeper": {"deepest": [agents.REDACTED_MARK, "x3"]},
+        },
     }
     assert agents.redact("fit_lsq", {"bounds_justification": "x2"}) == {
         "bounds_justification": agents.REDACTED_MARK
     }
-    # the negative control: without the redaction the projection carries the claim
+    # the negative control, on the real channel: with the redaction replaced by the
+    # identity, the verifier's projection carries the planted justification
     rec = agents.Recorder()
     rec.actions.append(
         {
@@ -395,6 +449,11 @@ def test_a_planted_claim_reaches_messages_only_and_the_projection_redacts_it(mon
     assert PLANTED not in json.dumps(projected)
     monkeypatch.setattr(agents, "redact", lambda name, a: a)
     assert PLANTED in json.dumps(agents.project(rec, {0: args}, 200, 12))
+    cal2 = Script([[fit], [_emit("calibration")]])
+    verifier2 = Script([[{"name": "declared_background", "input": {}}], [_emit("verification")]])
+    _run(monkeypatch, {"calibration": cal2, "verification": verifier2})
+    unredacted = [e for e in verifier2.briefs[0]["projected_log"] if e["tool"] == "fit_lsq"][-1]
+    assert unredacted["args"]["bounds_justification"] == PLANTED
 
 
 def test_stored_fetches_a_full_output_and_the_projection_cuts_arrays(monkeypatch):
@@ -406,10 +465,10 @@ def test_stored_fetches_a_full_output_and_the_projection_cuts_arrays(monkeypatch
     view = agents.RoleView("influent", ALLOW_LIST["influent"], run.rec)
     out = ws.t_feed_loads(view, {})
     index = out["call_index"]
-    full = ws.stored({"call_index": index})
+    full = ws.stored({"call_index": index}, "influent")
     assert full["call_index"] == index and "t" in full["result"]
     with pytest.raises(agents.ActionError, match="no stored output"):
-        ws.stored({"call_index": 10**6})
+        ws.stored({"call_index": 10**6}, "influent")
     assert agents.cut_points(list(range(1000)), 200) == [
         agents.compact(v, 200) for v in range(0, 1000, 5)
     ]
@@ -528,31 +587,68 @@ def test_a_verdict_is_checked_for_its_alternative_its_hold_out_and_d1(monkeypatc
             {"round": 1, "verdict": "fail", "alternative": not_admitted, "evidence": cited},
             1,
         )
+    # a fail that cites the validate call states its result (J2): with it, `none` is admitted
+    with_holdout = {"holdout": {"failed": failed, "call": v_index}}
     assert (
         agents.check_finding(
             ws,
             "verification",
-            {"round": 1, "verdict": "fail", "alternative": "none", "evidence": cited},
+            {
+                "round": 1,
+                "verdict": "fail",
+                "alternative": "none",
+                "evidence": cited,
+                **with_holdout,
+            },
             1,
         ).alternative
         == "none"
     )
-    # D-1: a fail against a non-structural cause whose only evidence is a passed hold-out
-    if admitted and not failed:
-        label = admitted[0]
-        with pytest.raises(agents.ActionError, match="D-1"):
-            agents.check_finding(
-                ws,
-                "verification",
-                {
-                    "round": 1,
-                    "verdict": "fail",
-                    "alternative": label,
-                    "holdout": {"failed": False, "call": v_index},
-                    "evidence": cited,
-                },
-                1,
-            )
+    # D-1: a fail against a non-structural cause whose only evidence is a passed hold-out.
+    # The case is built, not hoped for (J2): every label is admitted (the admission is the
+    # evidence module's, tested there) and the validate call's recorded result is a pass
+    _admit_everything(monkeypatch)
+    run.rec.produced[v_index]["holdout_failed"] = [(False, "-", None)]
+    passed = {"failed": False, "call": v_index}
+    fail_sensor = {"round": 1, "verdict": "fail", "alternative": "sensor", "evidence": cited}
+    with pytest.raises(agents.ActionError, match="D-1"):
+        agents.check_finding(ws, "verification", {**fail_sensor, "holdout": passed}, 1)
+    # a fail citing a validate call may not leave `holdout` out ...
+    with pytest.raises(agents.ActionError, match="states its result in `holdout`"):
+        agents.check_finding(ws, "verification", fail_sensor, 1)
+    # ... nor name a validate call the evidence does not cite
+    sim2 = ws.t_simulate(view, {})
+    v2 = ws.t_validate(view, {"prediction": sim2["call_index"]})["call_index"]
+    run.rec.produced[v2]["holdout_failed"] = [(False, "-", None)]
+    with pytest.raises(agents.ActionError, match="not one of the cited validate calls"):
+        agents.check_finding(
+            ws, "verification", {**fail_sensor, "holdout": {"failed": False, "call": v2}}, 1
+        )
+    # the controls: the same fail against `structural` or `none` passes D-1; a fail against
+    # sensor with a FAILED hold-out passes; one with other evidence beside the hold-out passes
+    for alternative in ("structural", "none"):
+        ok = {**fail_sensor, "alternative": alternative, "holdout": passed}
+        assert agents.check_finding(ws, "verification", ok, 1).alternative == alternative
+    run.rec.produced[v_index]["holdout_failed"] = [(True, "-", None)]
+    failed_holdout = {**fail_sensor, "holdout": {"failed": True, "call": v_index}}
+    assert agents.check_finding(ws, "verification", failed_holdout, 1).holdout.failed
+    run.rec.produced[v_index]["holdout_failed"] = [(False, "-", None)]
+    more = [
+        *cited,
+        {
+            "label": "sensor",
+            "rule": "sensor",
+            "calls": [sim["call_index"]],
+            "values": {},
+            "units": {},
+        },
+    ]
+    assert (
+        agents.check_finding(
+            ws, "verification", {**fail_sensor, "holdout": passed, "evidence": more}, 1
+        ).alternative
+        == "sensor"
+    )
 
 
 # ------------------------------------------------------------------ the conclusion
@@ -682,6 +778,24 @@ def test_the_gateway_accepts_a_roles_turn_and_refuses_foreign_ones(tmp_path):
         arm, ScriptedClient(lambda p: {"content": [{"type": "text", "text": "ok"}]}), tmp_path
     )
     assert isinstance(gw, P2AgentGateway)
+    # the agent arm's caps are its own block's, the lead's Q8 (J3): the gateway takes
+    # them, the procedural freeze keeps p2.yaml's, and an approval binds them through
+    # the configuration digest
+    from tools.p2_live import config_digest, run_caps
+
+    base = load_p2()
+    assert (gw.max_turns, gw.max_total_tokens, gw.max_usd) == (200, 10_000_000, 0.5)
+    assert run_caps(arm) == arm.agents.caps and run_caps(base) == base.caps
+    assert (base.caps.max_requests, arm.caps.max_requests) == (60, 60)  # p2.yaml's, untouched
+    assert sum(r.turns for r in arm.agents.roles.values()) <= arm.agents.caps.max_requests
+    tightened = arm.model_copy(
+        update={
+            "agents": arm.agents.model_copy(
+                update={"caps": arm.agents.caps.model_copy(update={"max_requests": 150})}
+            )
+        }
+    )
+    assert config_digest(tightened) != config_digest(arm)
     prompts = load_p2_agent_prompts(arm)
     specs = agents.role_tool_specs("calibration", list(arm.agents.roles["calibration"].tools))
     request = {
@@ -724,6 +838,288 @@ def test_the_gateway_accepts_a_roles_turn_and_refuses_foreign_ones(tmp_path):
         load_p2(), ScriptedClient(lambda p: {"content": []}), tmp_path / "plain"
     )
     assert type(plain) is P2Gateway
+
+
+# ------------------------------------------------------------------ the review of 1486cfb
+
+
+SEEDED = (
+    "gsa_morris",
+    "gsa_sobol",
+    "profile_likelihood",
+    "fit_lsq",
+    "fit_de",
+    "fit_cmaes",
+    "bayes_mcmc",
+    "voi_assay",
+)
+"""Every handler that seeds its registry call (rule 4)."""
+
+
+def _use(name: str, inp: dict[str, Any]) -> dict[str, Any]:
+    return {"type": "tool_use", "id": f"u-{name}", "name": name, "input": inp}
+
+
+def _content(result: dict[str, Any]) -> dict[str, Any]:
+    return json.loads(result["content"])
+
+
+def test_every_handler_runs_through_execute_and_every_seeded_call_is_seeded(monkeypatch):
+    """J0 / J11: no handler dies on the registry's shapes; a seeded call carries base + index."""
+    fake = FakeTools("B", "B", evals=5000, offsets={"ph": 8.0})
+    _install(monkeypatch, fake)
+    cfg = _cfg()
+    run = agents.AgentRun(cfg)
+    run.code_steps()
+    ws = run.ws
+    base = int(cfg["agents"]["seeds"]["base"])
+    every = sorted(agents.registry_tool_specs())
+    assert set(SEEDED) <= set(every)
+    # one agent holding every tool (the allow-lists are tested elsewhere), a wide grant
+    agent = agents.RoleAgent(
+        "calibration",
+        ws,
+        lambda r: None,
+        round_=1,
+        grant={"evaluations": 10**6, "assays": 2},
+        brief={},
+        turns=5,
+    )
+    agent.view = agents.RoleView("calibration", every, run.rec)
+    agent.specs = agents.role_tool_specs("calibration", every)
+    first_assay = sorted(cfg["assay_catalogue"])[0]
+    sim_index = _content(agent.execute(_use("simulate", {})))["call_index"]
+    fit_index = _content(
+        agent.execute(
+            _use("fit_lsq", {"parameters": ["k_m_ac"], "n_starts": 1, "max_nfev_per_start": 10})
+        )
+    )["call_index"]
+    post_index = _content(
+        agent.execute(
+            _use(
+                "bayes_mcmc",
+                {"parameters": ["k_m_ac"], "from_fit": fit_index, "n_walkers": 4, "n_steps": 4},
+            )
+        )
+    )["call_index"]
+    day = float(ws.cal[0]) + 1.0
+    inputs = {
+        "inspect_record": {"what": "sensor", "name": "tan"},
+        "describe_model": {},
+        "feed_loads": {},
+        "data_qc": {},
+        "mass_balance": {},
+        "gsa_morris": {"parameters": ["k_m_ac", "K_S_ac"], "n_trajectories": 2},
+        "gsa_sobol": {"parameters": ["k_m_ac", "K_S_ac"], "n_samples": 4},
+        "fisher_info": {"parameters": ["k_m_ac"]},
+        "profile_likelihood": {
+            "parameters": ["k_m_ac", "K_S_ac"],
+            "profile": "k_m_ac",
+            "n_grid": 3,
+            "n_starts": 1,
+        },
+        "fit_de": {"parameters": ["k_m_ac"], "popsize": 2, "max_generations": 1},
+        "fit_cmaes": {"parameters": ["k_m_ac"], "max_evaluations": 10},
+        "residual_diag": {"sensor": "tan", "prediction": sim_index},
+        "request_assay": {"assay": first_assay, "day": day},
+        "voi_assay": {"posterior": post_index, "day": day, "n_outer": 2},
+        "set_sensor_status": {
+            "sensor": "tan",
+            "status": "ok",
+            "in_objective": True,
+            "reason": "fine",
+        },
+        "declared_background": {},
+        "validate": {"prediction": sim_index},
+    }
+    assert set(inputs) | {"simulate", "fit_lsq", "bayes_mcmc"} == set(every)
+    for name, inp in inputs.items():
+        before = agents.Recorder.next_index()
+        result = agent.execute(_use(name, inp))
+        assert not result.get("is_error"), (name, result["content"])
+        if name in SEEDED:
+            called = [a for n, a in fake.calls if n == name][-1]
+            assert called["seed"] == base + before, name
+    for name, index in (("fit_lsq", fit_index), ("bayes_mcmc", post_index)):
+        assert [a for n, a in fake.calls if n == name][-1]["seed"] == base + index
+    assert agent.state["refused"] == 0
+    assert not agent.execute(_use("stored", {"call_index": sim_index})).get("is_error")
+    # the negative control: the base is the configuration's, so another base moves the seed
+    ws.agents_cfg = {**ws.agents_cfg, "seeds": {"base": base + 7}}
+    before = agents.Recorder.next_index()
+    assert not agent.execute(_use("fit_cmaes", inputs["fit_cmaes"])).get("is_error")
+    assert [a for n, a in fake.calls if n == "fit_cmaes"][-1]["seed"] == base + 7 + before
+
+
+def test_a_silent_verifier_never_passes_a_proposal(monkeypatch):
+    """J1: the verifier ran and delivered no verdict: the run abstains."""
+    dq = Script([[{"name": "simulate", "input": {}}], [_emit("data_quality", **_sensor_claim())]])
+    silent = Script([[{"type": "text", "text": "I have nothing to add."}]])  # never emits
+    _admit_everything(monkeypatch)
+    _, fake = _run(monkeypatch, {"data_quality": dq, "verification": silent})
+    report = json.loads(fake.run.outputs["report.json"])
+    assert (report["label"], report["rule"]) == ("abstain", "abstain:no_verdict")
+    assert report["verdict"]["rounds"] == 0 and report["verdicts"] == []
+    ver = next(r for r in report["role_runs"] if r["role"] == "verification")
+    assert ver["stop"].endswith("turns used without a finding")
+    # the negative control: the same proposal with a verdict concludes it
+    dq = Script([[{"name": "simulate", "input": {}}], [_emit("data_quality", **_sensor_claim())]])
+    loud = Script([[{"name": "simulate", "input": {}}], [_emit("verification")]])
+    _, fake2 = _run(monkeypatch, {"data_quality": dq, "verification": loud})
+    assert json.loads(fake2.run.outputs["report.json"])["label"] == "sensor"
+
+
+def test_a_pass_with_no_proposal_over_a_failed_null_abstains(monkeypatch):
+    """J4: `none` over a failed null needs a specialist's cited `none` finding."""
+    ver = Script([[{"name": "simulate", "input": {}}], [_emit("verification")]])
+    _, fake = _run(monkeypatch, {"verification": ver})  # every specialist claims nothing
+    report = json.loads(fake.run.outputs["report.json"])
+    assert report["null_table"]["null_rejected"]  # the fixture's ph offset fails NS
+    assert (report["label"], report["rule"]) == ("abstain", "abstain:no_proposal")
+    assert report["verdict"] == {
+        **report["verdict"],
+        "verdict": "abstain",
+        "reason": "no_proposal",
+    }
+    # the control: a specialist's cited `none` finding, passed, concludes none
+    none_finding = _emit(
+        "data_quality",
+        claim="none",
+        evidence=[
+            {"label": "none", "rule": "sensor", "calls": ["LAST"], "values": {}, "units": {}}
+        ],
+    )
+    dq = Script([[{"name": "simulate", "input": {}}], [none_finding]])
+    ver = Script([[{"name": "simulate", "input": {}}], [_emit("verification")]])
+    _, fake2 = _run(monkeypatch, {"data_quality": dq, "verification": ver})
+    report2 = json.loads(fake2.run.outputs["report.json"])
+    assert (report2["label"], report2["rule"]) == ("none", "agents:pass")
+    # and on a standing null a pass with no claim is none
+    ver = Script([[{"name": "simulate", "input": {}}], [_emit("verification")]])
+    _, fake3 = _run(monkeypatch, {"verification": ver}, fake=FakeTools("B", "B"))
+    report3 = json.loads(fake3.run.outputs["report.json"])
+    if not report3["null_table"]["null_rejected"]:
+        assert (report3["label"], report3["rule"]) == ("none", "agents:pass:none")
+
+
+def test_a_value_is_the_calls_to_five_digits_and_the_record_keeps_the_calls_own(monkeypatch):
+    """J5: equality at the five digits shown; state.json carries the produced value."""
+    fake = FakeTools("B", "B", offsets={"ph": 8.0})
+    _install(monkeypatch, fake)
+    run = agents.AgentRun(_cfg())
+    run.code_steps()
+    ws = run.ws
+    view = agents.RoleView("data_quality", ALLOW_LIST["data_quality"], run.rec)
+    index = ws.t_simulate(view, {})["call_index"]
+    produced = next(v for v, _, s in run.rec.produced[index]["mean_predicted"] if s == "tan")
+
+    def finding(value: float) -> dict[str, Any]:
+        return {
+            "claim": "sensor",
+            "channel": "ph",
+            "confidence": "high",
+            "evidence": [
+                {
+                    "label": "sensor",
+                    "rule": "sensor",
+                    "calls": [index],
+                    "values": {"mean_predicted": value},
+                    "units": {"mean_predicted": "mg/L"},
+                }
+            ],
+        }
+
+    shown = float(f"{produced:.5g}")
+    accepted = agents.check_finding(ws, "data_quality", finding(shown), 1)
+    assert agents.evidence_items(accepted)[0]["values"]["mean_predicted"] == produced
+    assert accepted.evidence[0].values["mean_predicted"] == produced
+    off = produced * (1 + 5e-4)  # 0.05 % off: inside the old 0.1 % tolerance, refused now
+    assert f"{off:.5g}" != f"{produced:.5g}"
+    with pytest.raises(agents.ActionError, match="not what the cited calls produced"):
+        agents.check_finding(ws, "data_quality", finding(off), 1)
+    assert agents._same_value(2.61128, 2.61363) is False
+    assert agents._same_value(2.61128, 2.611283) is True
+
+
+def test_the_hold_out_output_is_hidden_from_every_proposer(monkeypatch):
+    """J7: `validate`'s output reaches the verifier's projection and `stored` only (§4 step 8)."""
+    fake = FakeTools("B", "B", offsets={"ph": 8.0})
+    _install(monkeypatch, fake)
+    run = agents.AgentRun(_cfg())
+    run.code_steps()
+    ws = run.ws
+    view = agents.RoleView("verification", ALLOW_LIST["verification"], run.rec)
+    sim_index = ws.t_simulate(view, {})["call_index"]
+    v_index = ws.t_validate(view, {"prediction": sim_index})["call_index"]
+    grant = {"evaluations": 0, "assays": 0}
+    for role in agents.SPECIALISTS:
+        log = run.brief(role, 1, grant, 5)["projected_log"]
+        entry = next(e for e in log if e["call_index"] == v_index)
+        assert entry["tool"] == "validate" and entry["hidden"] is True and "output" not in entry
+        assert "holdout_failed" not in json.dumps(log)
+        with pytest.raises(agents.ActionError, match="verifier's only"):
+            ws.stored({"call_index": v_index}, role)
+        assert ws.stored({"call_index": sim_index}, role)["call_index"] == sim_index
+    # the negative control: the verifier sees the output, in its projection and by index
+    log = run.brief("verification", 1, grant, 5)["projected_log"]
+    entry = next(e for e in log if e["call_index"] == v_index)
+    assert "output" in entry and "hidden" not in entry and "holdout_failed" in json.dumps(entry)
+    assert ws.stored({"call_index": v_index}, "verification")["call_index"] == v_index
+
+
+def test_the_offline_design_finding_is_accepted_on_a_conflict(monkeypatch):
+    """J10: the scripted design role's plan passes the harness's check."""
+    dq = Script([[{"name": "simulate", "input": {}}], [_emit("data_quality", **_sensor_claim())]])
+    param = _emit(
+        "calibration",
+        claim="parameter",
+        confidence="high",
+        evidence=[
+            {
+                "label": "parameter",
+                "rule": "change_point",
+                "calls": ["LAST"],
+                "values": {},
+                "units": {},
+            }
+        ],
+    )
+    cal = Script([[{"name": "simulate", "input": {}}], [param]])
+    _admit_everything(monkeypatch)
+    _, fake = _run(monkeypatch, {"data_quality": dq, "calibration": cal})  # design: offline
+    report = json.loads(fake.run.outputs["report.json"])
+    assert any(e["to"] == "design" and e["reason"] == "conflict" for e in report["routing"])
+    assert report["findings"]["design"]["assay"] in _cfg()["assay_catalogue"]
+    design = next(r for r in report["role_runs"] if r["role"] == "design")
+    assert design["stop"] == "finding emitted" and design["refused"] == 0
+
+
+def test_grants_are_fixed_when_a_stage_starts(monkeypatch):
+    """J12: every role of a stage gets the same share, whatever the earlier roles spent."""
+    fake = FakeTools("B", "B", offsets={"ph": 8.0})
+    _install(monkeypatch, fake)
+    run = agents.AgentRun(_cfg())
+    run.code_steps()
+    left = int(fake.remaining().simulator_evals)
+    grants = run.coordinator.grants_for(["influent", "identifiability", "calibration"])
+    assert {g["evaluations"] for g in grants.values()} == {left // 3}
+    assert {g["assays"] for g in grants.values()} == {0}
+    assert run.coordinator.grants_for(["design"])["design"]["assays"] == fake.totals["assays"]
+    # in a run: identifiability spends, calibration's share is the same as its own
+    ident = Script(
+        [
+            [{"name": "gsa_morris", "input": {"parameters": ["k_m_ac"], "n_trajectories": 3}}],
+            [_emit("identifiability")],
+        ]
+    )
+    _, fake2 = _run(monkeypatch, {"identifiability": ident})
+    routing = json.loads(fake2.run.outputs["report.json"])["routing"]
+    stage = [e for e in routing if e["to"] in ("identifiability", "calibration")]
+    assert [e["to"] for e in stage] == ["identifiability", "calibration"]
+    assert stage[0]["grant"]["evaluations"] == stage[1]["grant"]["evaluations"] > 0
+    spent = next(r for r in json.loads(fake2.run.outputs["report.json"])["role_runs"]
+                 if r["role"] == "identifiability")["spent"]["evaluations"]  # fmt: skip
+    assert spent == 6  # 3 trajectories x (1 + 1)
 
 
 # ------------------------------------------------------------------ rule 1 and the pins

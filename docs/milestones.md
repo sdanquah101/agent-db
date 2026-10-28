@@ -4256,5 +4256,21 @@ the jail.** Branch `claude/p2-agents-sandbox`, a draft PR from `main`, separate 
   check; G3 the copies never follow a link; G4 the deny list equals the forbidden modules,
   the scanner's truth modules and `tools` by assertion; G5 the docstring says where the
   names are checked; G6 the digest test's rename-only control.
-- **Next:** the coordinator's review; then the verifier's second round, the separating
-  test and its own registry budget; then the Q6 cells.
+- **The coordinator's review of `1486cfb` (2026-10-28 01:40 UTC): FIXES NEEDED, fixed in the
+  fourth commit.** Blocking: J0 the arm's seed base (`agents.seeds.base`; `p0.seeds` is per
+  step, so every seeded handler died), with a test running every handler once through the
+  loop; J1 a silent verifier abstains the run (`abstain:no_verdict`); J2 a `fail` citing a
+  `validate` call states its hold-out result, and the D-1 test now executes; J3 the
+  proposers' caps are the agent arm's own block (Q8: 200 requests, 10 M tokens, USD 0.50),
+  taken by the gateway and the approval check, `p2.yaml`'s freeze untouched. Should-fix:
+  J4 a `pass` with no proposal over a failed null abstains (`abstain:no_proposal`); J5
+  values at five digits, the record keeps the call's value; J6 the sensor reason and the
+  bounds justification are the roles' messages in `messages.jsonl`; J7 `validate`'s output
+  hidden from every proposer's projection and `stored`; J8 the planted claim rides a fit's
+  `bounds_justification`, with the identity-redact control and a depth-3 case; J9 a real
+  extends-chain control. Nits J10–J13: the offline design plan names a catalogue assay and
+  fetches the last projected output; the test double has the registry's full output
+  shapes; grants are fixed per stage; the quarantine window is `[start, end)`. Decisions
+  entry "The agent arm's caps, seeds and conclusion rules".
+- **Next:** the coordinator's re-review; then the verifier's second round, the separating
+  test and its own registry budget (Q9's caps); then the Q6 cells.

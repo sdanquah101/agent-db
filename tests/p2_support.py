@@ -55,7 +55,7 @@ def _plain(x: Any) -> Any:
     if isinstance(x, list | tuple):
         return [_plain(v) for v in x]
     if isinstance(x, np.ndarray):
-        return [None if not np.isfinite(v) else float(v) for v in x.tolist()]
+        return _plain(x.tolist())  # any shape; a non-finite element is None
     if isinstance(x, types.SimpleNamespace):
         return {k: _plain(v) for k, v in vars(x).items()}
     if isinstance(x, float) and not np.isfinite(x):
@@ -215,37 +215,105 @@ class FakeTools:
                           cod_admissible=abs(c) < 0.15))  # fmt: skip
         return ns(windows=out, charge_drift=0.3, charge_consistent=False, admissible=True)
 
-    def _gsa_morris(self, parameters: Any, outputs: Any, n_trajectories: int, **kw: Any) -> Any:
-        self._charge(n_trajectories * (len(parameters) + 1))
-        mu = [1.0 / (i + 1) for i in range(len(parameters))]
-        return ns(parameters=list(parameters), results=[ns(mu_star=mu) for _ in outputs])
+    def _gsa_morris(
+        self, parameters: Any, outputs: Any, n_trajectories: int = 10, **kw: Any
+    ) -> Any:
+        cost = n_trajectories * (len(parameters) + 1)
+        self._charge(cost)
+        k = len(parameters)
+        mu = [1.0 / (i + 1) for i in range(k)]
+        return ns(parameters=list(parameters), n_trajectories=n_trajectories, n_evaluations=cost,
+                  units={}, results=[ns(output=o, mu=list(mu), mu_star=list(mu), sigma=[0.1] * k,
+                                        ranking=list(parameters)) for o in outputs])  # fmt: skip
+
+    def _gsa_sobol(
+        self, parameters: Any, outputs: Any, n_samples: int = 64, second_order: bool = True,
+        **kw: Any,
+    ) -> Any:  # fmt: skip
+        k = len(parameters)
+        cost = n_samples * (2 * k + 2) if second_order else n_samples * (k + 2)
+        self._charge(cost)
+        s = [1.0 / (i + 2) for i in range(k)]
+        return ns(parameters=list(parameters), n_samples=n_samples, n_evaluations=cost,
+                  units={},
+                  results=[ns(output=o, variance=1.0, S1=list(s), S1_conf=[0.01] * k,
+                              ST=[v + 0.1 for v in s], ST_conf=[0.02] * k, S2=None,
+                              S2_conf=None, ranking=list(parameters))
+                           for o in outputs])  # fmt: skip
 
     def _fisher_info(self, parameters: Any, **kw: Any) -> Any:
-        self._charge(2 * len(parameters))
-        return ns(parameters=list(parameters), crlb_sd=[0.1] * len(parameters))
+        k = len(parameters)
+        self._charge(2 * k + 1)
+        eye = np.eye(k)
+        return ns(parameters=list(parameters), fim=eye * 100.0, eigenvalues=[100.0] * k,
+                  eigenvectors=eye, condition_number=1.0, rank=k, null_directions=np.zeros((0, k)),
+                  correlation=eye, crlb_sd=[0.1] * k, ill_conditioned=False,
+                  n_evaluations=2 * k + 1)  # fmt: skip
+
+    def _profile_likelihood(
+        self, parameters: Any, profile: str, n_grid: int = 7, n_starts: int = 1, **kw: Any
+    ) -> Any:
+        cost = n_grid * n_starts * 40
+        self._charge(cost)
+        grid = np.linspace(0.5, 2.0, n_grid)
+        return ns(parameter=profile, grid=grid, chi2=100.0 + 10.0 * (grid - 1.0) ** 2,
+                  threshold=103.84, interval=(0.7, 1.4), identifiable=True, flat=False,
+                  best_fit_per_point=np.ones((n_grid, max(len(parameters) - 1, 0))),
+                  n_evaluations=cost)  # fmt: skip
+
+    def _fit(self, parameters: Any, cost: int, method: str) -> Any:
+        """A fitter's output, the registry's full shape (``FitOutput``)."""
+        self._charge(cost)
+        k = len(parameters)
+        return ns(method=method, parameters=list(parameters), theta=np.ones(k),
+                  lower=np.full(k, 0.25), upper=np.full(k, 4.0), n_data=100, covariance=None,
+                  sd=np.full(k, 0.1), at_bound=[], converged=True, message="",
+                  n_evaluations=cost, chi2=100.0)  # fmt: skip
 
     def _fit_lsq(self, parameters: Any, max_nfev_per_start: int = 40, **kw: Any) -> Any:
-        self._charge(max_nfev_per_start)
-        k = len(parameters)
-        return ns(parameters=list(parameters), theta=np.ones(k), chi2=100.0, at_bound=[],
-                  converged=True, sd=np.full(k, 0.1), n_data=100, message="",
-                  n_evaluations=max_nfev_per_start, covariance=None)  # fmt: skip
+        # the second positional parameter stays max_nfev_per_start: the P2 suites' fakes
+        # subclass this and pass it positionally
+        return self._fit(parameters, max_nfev_per_start, "lsq")
+
+    def _fit_de(
+        self, parameters: Any, popsize: int = 5, max_generations: int = 3, **kw: Any
+    ) -> Any:
+        return self._fit(
+            parameters, popsize * max(len(parameters), 1) * (max_generations + 1), "de"
+        )
+
+    def _fit_cmaes(self, parameters: Any, max_evaluations: int = 40, **kw: Any) -> Any:
+        return self._fit(parameters, max_evaluations, "cmaes")
 
     def _residual_diag(self, **kw: Any) -> Any:
         return ns(serially_structured=False, lag1_autocorrelation=0.0, trend_slope_per_d=0.0,
                   most_explanatory=None, covariates=[])  # fmt: skip
 
-    def _bayes_mcmc(self, parameters: Any, n_walkers: int, n_steps: int, **kw: Any) -> Any:
-        self._charge(n_walkers * (n_steps + 1))
+    def _bayes_mcmc(self, parameters: Any, n_walkers: int = 8, n_steps: int = 10, **kw: Any) -> Any:
+        cost = n_walkers * (n_steps + 1)
+        self._charge(cost)
         k = len(parameters)
-        return ns(parameters=list(parameters), converged=self.mcmc_converged,
+        return ns(parameters=list(parameters), mean=np.ones(k), sd=np.full(k, 0.1),
+                  quantiles={"q05": np.full(k, 0.8), "q50": np.ones(k), "q95": np.full(k, 1.2)},
                   rhat=np.full(k, 1.01 if self.mcmc_converged else 3.0), ess=np.full(k, 50.0),
-                  warning="",
-                  quantiles={"q05": np.full(k, 0.8), "q95": np.full(k, 1.2)})  # fmt: skip
+                  acceptance_fraction=0.3, converged=self.mcmc_converged,
+                  samples=np.ones((n_walkers * n_steps // 2, k)), log_prob_max=-50.0,
+                  n_walkers=n_walkers, n_steps=n_steps, n_evaluations=cost, warning="")  # fmt: skip
+
+    def _voi_assay(
+        self, samples: Any, parameters: Any, day: float, assays: Any = None,
+        n_outer: int = 8, **kw: Any,
+    ) -> Any:  # fmt: skip
+        self._charge(n_outer)
+        names = list(assays or ["vfa_assay"])
+        return ns(day=day, n_evaluations=n_outer, ranking=names,
+                  results=[ns(assay=a, channel="vfa_total", unit_cost=1, eig_nats=0.5,
+                              eig_per_unit=0.5, predictive_sd=30.0, noise_sd=20.0)
+                           for a in names])  # fmt: skip
 
     def _request_assay(self, assay: str, day: float) -> Any:
         self._charge(assays=1)
-        return ns(report_day=day + 3.0,
+        return ns(assay=assay, report_day=day + 3.0,
                   results=[ns(channel="vfa_total", value=300.0, sd=20.0, unit="mg/L")])  # fmt: skip
 
     def _validate(self, observed: Any, t: Any, predicted: Any, holdout: Any = None,

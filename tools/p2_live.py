@@ -39,6 +39,7 @@ from tools.llm import (
 )
 from tools.workflow_config import (
     DECISION_POINTS,
+    P2Caps,
     P2Config,
     P2Frozen,
     load_p2_agent_prompts,
@@ -159,6 +160,20 @@ def p2_live_client(config: P2Config) -> OpenAIResponsesClient:
     return OpenAIResponsesClient(config.model)
 
 
+def run_caps(config: P2Config) -> P2Caps:
+    """The caps a run's gateway enforces and an approval must name.
+
+    The procedural arm's are ``p2.yaml``'s ``caps``, frozen with its decision layer. The
+    agent arm's are its own block's (``agents.caps``, the lead's Q8: 200 requests, 10 M
+    tokens, USD 0.50 for the proposers), bound by :func:`config_digest`; the procedural
+    freeze keeps ``p2.yaml``'s caps untouched (the review of PR #41, J3). The verifier's
+    own budget (Q9) is the next step's.
+    """
+    if config.agents is not None:
+        return config.agents.caps
+    return config.caps
+
+
 @dataclass
 class P2Gateway(ModelGateway):
     """P1's gateway, with P2's request check and caps projected before each request.
@@ -212,15 +227,16 @@ class P2Gateway(ModelGateway):
     @classmethod
     def _base_kwargs(cls, config: P2Config, client: Any, log_dir: Any) -> dict[str, Any]:
         provenance = p2_provenance(config)
+        caps = run_caps(config)
         return {
             "settings": config.model,
             "client": client,
             "log_dir": log_dir,
-            "max_turns": config.caps.max_requests,
-            "max_total_tokens": config.caps.max_total_tokens,
+            "max_turns": caps.max_requests,
+            "max_total_tokens": caps.max_total_tokens,
             "provenance": dict(provenance),
-            "max_usd": float(config.caps.max_usd),
-            "input_chars_per_token": float(config.caps.input_chars_per_token),
+            "max_usd": float(caps.max_usd),
+            "input_chars_per_token": float(caps.input_chars_per_token),
             "null_label": str(config.p0().labels.none),
             "labels": tuple(str(v) for v in config.p0().labels.model_dump().values()),
             "base_provenance": dict(provenance),
@@ -621,7 +637,7 @@ def require_live_approval(
     record = yaml.safe_load(APPROVAL_FILE.read_text(encoding="utf-8")) or {}
     if record.get("digest") != approval_digest(record):
         raise ValueError("the approval record's digest does not match its content")
-    if record.get("caps") != config.caps.model_dump(mode="json"):
+    if record.get("caps") != run_caps(config).model_dump(mode="json"):
         raise ValueError("the approval names other caps than the configuration's")
     if record.get("frozen_sha256") != frozen_record_sha256():
         raise ValueError("the approval names another freeze than the committed one")

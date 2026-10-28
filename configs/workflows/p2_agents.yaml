@@ -42,3 +42,14 @@ agents:
     max_points: 200             # DESIGN  §4 step 2: arrays in the projected log are cut here
     preview: 12                 # DESIGN  P1's array_preview
   rounds: 2                     # DESIGN  Q11: the verifier's round limit
+  seeds:                        # rule 4: a role's seeded call takes base + its call index
+    base: 1000                  # DESIGN  (p0.yaml's seeds are per procedural step)
+  # the proposers' caps, the lead's Q8 (docs/p2_agents_design.md §9, decision 8): taken by
+  # the agent arm's gateway in place of p2.yaml's caps, which the procedural freeze keeps
+  # (check_p2_frozen reads p2.yaml's; an approval of this arm names these, through
+  # config_digest). The verifier's own budget (Q9) is the next step's.
+  caps:
+    max_requests: 200           # DESIGN  Q8
+    max_total_tokens: 10000000  # DESIGN  Q8: 10 M tokens
+    max_usd: 0.50               # DESIGN  Q8
+    input_chars_per_token: 2.0  # DESIGN  as p2.yaml: conservative
