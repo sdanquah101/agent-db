@@ -4398,5 +4398,16 @@ PR #41, unmerged).**
   envelope, tagged ≤ reserve), in decisions; N11 the M1 information-flow rule in
   decisions and the round-2 paragraph corrected; the "in addition to" sentence reworded.
   Full `pytest -q` on the fix: 897 passed, 2 skipped, 1 h 28 min; ruff clean.
-- **Next:** the coordinator's check of this delta and the lead's "merge 43"; then the Q6
-  cells and the agent arm's own frozen record (§6).
+- **`c785d43` PASSES review** (the coordinator, 19:45 UTC: S2 and S1 fixed, every mutation
+  killed, the nits done). PR #42 merged (`e3eafd8`, the lead: "merge 42"); `origin/main`
+  merged into the branch as a merge commit (`8815179`, the two docs' conflicts resolved in
+  date order, nothing else changed; the P2, harness, reserve, sandbox and isolation suites
+  208 passed). **PR #43 merged at `01d78ac` (the lead: "merge 43", 23:20 UTC).** `main`
+  now carries the verifier's own budget under ruling B, the second round and the
+  separating test.
+- **Next:** the proposed order, for the coordinator to confirm with the lead: (1) the Q6
+  development cells (S7-01 at B/A, B/B, B/C; S7-02 at A/C; two seeds each) registered as
+  development cells and their code-only floor in `reports/p2_power/`; (2) the agent arm's
+  own frozen record (§6) before any live run, with `check_p2_frozen` covering it and an
+  approval record naming its digest. Then the pilot, only on a new approval record the
+  lead approves.
