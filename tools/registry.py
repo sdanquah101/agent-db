@@ -341,6 +341,8 @@ class Registry:
         self._assay_units_used = 0
         self._n_calls = 0
         self._charged: list[dict[str, Any]] = []
+        self._reserves: dict[str, dict[str, int]] = {}
+        self._role: str | None = None
         self._models: dict[str, Model] = dict(models or {})
         self._state_space: dict[str, StateSpaceModel] = dict(state_space_models or {})
         self._assay_server = assay_server
@@ -446,7 +448,8 @@ class Registry:
 
         Privileged side only (never served to a workflow). Each entry: ``seq`` (the
         visible log's, ``None`` without a visible log), ``name``, ``n_evaluations``,
-        ``assay_units``, ``runtime_s``.
+        ``assay_units``, ``runtime_s`` and ``role``, the reserve tag the call carried
+        (``None`` untagged; the workflow's attribution, which the reserves bound).
         """
         return tuple(dict(c) for c in self._charged)
 
@@ -470,18 +473,103 @@ class Registry:
             if self.budget.wall_clock_enforced
             else self.budget.wall_clock_min
         )
+        evals_left, assays_left = self._envelope_left()
         return RemainingBudget(
-            simulator_evals=self._meter.remaining,
+            simulator_evals=evals_left,
             simulator_evals_total=self.budget.simulator_evals,
             wall_clock_min=left,
             wall_clock_min_total=self.budget.wall_clock_min,
-            assay_units=max(self.budget.assay_units - self._assay_units_used, 0),
+            assay_units=assays_left,
             assay_units_total=self.budget.assay_units,
             n_calls=self._n_calls,
         )
 
-    def call(self, name: str, **args: Any) -> ToolOutput:
+    # -- reserves (docs/p2_agents_design.md §3.1, Q9: the verifier's own budget) ---------
+    def reserve(self, role: str, *, simulator_evals: int, assay_units: int) -> None:
+        """Set a role's reserve on top of the cell's envelope (privileged side only).
+
+        The lead's ruling on Q9 (2026-10-29, "B"): a reserve is **additional** to the
+        envelope. A call tagged with ``role`` draws on the reserve and is refused past it;
+        every other call keeps the whole envelope, which no reserve moves. With no reserve
+        set the registry behaves exactly as before (P0, P1 and the procedural P2 are
+        unchanged).
+
+        Raises:
+            ValueError: A negative reserve, or the role has spent.
+        """
+        current = self._reserves.get(role)
+        if current is not None and (current["evals_used"] or current["assays_used"]):
+            raise ValueError(f"the {role} reserve is in use; it cannot be reset")
+        if int(simulator_evals) < 0 or int(assay_units) < 0:
+            raise ValueError("a reserve is not negative")
+        self._reserves[role] = {
+            "simulator_evals": int(simulator_evals),
+            "assay_units": int(assay_units),
+            "evals_used": 0,
+            "assays_used": 0,
+        }
+
+    def reserves_remaining(self) -> dict[str, dict[str, int]]:
+        """Each reserve's totals and what is left of it (served to the workflow)."""
+        return {
+            role: {
+                "simulator_evals": max(r["simulator_evals"] - r["evals_used"], 0),
+                "simulator_evals_total": r["simulator_evals"],
+                "assay_units": max(r["assay_units"] - r["assays_used"], 0),
+                "assay_units_total": r["assay_units"],
+            }
+            for role, r in self._reserves.items()
+        }
+
+    def _envelope_left(self) -> tuple[int, int]:
+        """Evaluations and assay units the cell's envelope still holds.
+
+        The reserves' spend is paid by the reserves, on top of the envelope, so it is
+        taken off the meter's total; with no reserve this is the meter's own remainder.
+        """
+        spent_e = sum(r["evals_used"] for r in self._reserves.values())
+        spent_a = sum(r["assays_used"] for r in self._reserves.values())
+        evals = max(self.budget.simulator_evals - (self._meter.used - spent_e), 0)
+        assays = max(self.budget.assay_units - (self._assay_units_used - spent_a), 0)
+        return evals, assays
+
+    def _own_reserve(self) -> dict[str, int] | None:
+        """The current caller's reserve, if its tag names one."""
+        return self._reserves.get(self._role) if self._role is not None else None
+
+    def _share_left(self) -> int:
+        """The evaluations the current caller may still spend.
+
+        Its own reserve for a call tagged for one; the whole envelope otherwise.
+        """
+        own = self._own_reserve()
+        if own is not None:
+            return max(own["simulator_evals"] - own["evals_used"], 0)
+        return self._envelope_left()[0]
+
+    def _run_capped(self, spec: ToolSpec, inp: ToolInput, context: ToolContext) -> ToolOutput:
+        """Run the tool with the meter's limit at the caller's share for this call.
+
+        The declared bound is checked before the call (:meth:`_refusal`); a tool that
+        overruns its bound is stopped by the meter, and the meter's limit is the caller's
+        share while it runs: the envelope for an untagged call, so an overrun never eats
+        a reserve; its reserve for a tagged one, which raises the limit past the envelope
+        by what the reserve holds and never further (the review of PR #43, M3; the lead's
+        Q9 ruling). The limit is restored on every path; with no reserve it never moves.
+        """
+        before = self._meter.limit
+        if self._reserves:
+            self._meter.limit = self._meter.used + self._share_left()
+        try:
+            return spec.run(inp, context)
+        finally:
+            self._meter.limit = before
+
+    def call(self, name: str, *, role: str | None = None, **args: Any) -> ToolOutput:
         """Call one tool (see the module docstring for the sequence).
+
+        ``role`` tags the call for the reserves (:meth:`reserve`): the workflow's own
+        attribution, which the record keeps beside the meter's charge.
 
         Returns:
             The tool's output. An injected failure is returned like any other result.
@@ -493,10 +581,12 @@ class Registry:
             ToolError: The tool raised; the message is in the log.
         """
         self._in_flight += 1
+        self._role = str(role) if role is not None else None
         try:
             return self._call(name, **args)
         finally:
             self._in_flight -= 1
+            self._role = None
 
     def _call(self, name: str, **args: Any) -> ToolOutput:
         spec = self._spec(name)
@@ -558,7 +648,7 @@ class Registry:
             return output
 
         try:
-            output = spec.run(inp, context)
+            output = self._run_capped(spec, inp, context)
         except RunCancelled as exc:
             # the jail was killed while this call ran: the call stops at its next
             # evaluation and the truth-side log says so (its result is discarded)
@@ -590,18 +680,21 @@ class Registry:
         self._log(name, version, hashed, started, "ok", note, charged(), units)
         return output
 
-    def call_json(self, name: str, args: Mapping[str, Any]) -> dict[str, Any]:
+    def call_json(
+        self, name: str, args: Mapping[str, Any], role: str | None = None
+    ) -> dict[str, Any]:
         """The transport's form of :meth:`call`: never raises, returns a JSON-safe envelope.
 
         ``{"outcome": "ok", "output": {...}}`` on success (an injected failure looks the
         same to the caller), ``{"outcome": "budget_exceeded" | "error", "error": msg}``
         otherwise. Every envelope carries ``"record"``: the visible log line's ``seq`` and
         ``args_hash`` and the tool's version (:meth:`CallOutcome.as_record`), so a workflow
-        can name the call in its task state exactly as ``calls.jsonl`` does.
+        can name the call in its task state exactly as ``calls.jsonl`` does. ``role`` is
+        the call's tag for the reserves.
         """
         before = self.last
         try:
-            output = self.call(name, **dict(args))
+            output = self.call(name, role=role, **dict(args))
         except BudgetExceededError as exc:
             return {"outcome": "budget_exceeded", "error": str(exc), "record": self._record(before)}
         except ToolError as exc:
@@ -649,16 +742,31 @@ class Registry:
                 f"({elapsed:.2f} min elapsed)"
             )
         bound = int(spec.cost(inp, context))
-        if bound > self._meter.remaining:
+        price = int(spec.assay_cost(inp, context)) if spec.assay_cost is not None else 0
+        # the reserves (docs/p2_agents_design.md Q9, the lead's ruling B): a call tagged
+        # for a reserve is refused past that reserve, on top of the envelope; every other
+        # call is refused past the envelope, which no reserve moves
+        own = self._own_reserve()
+        if own is not None:
+            role = self._role
+            left_e = max(own["simulator_evals"] - own["evals_used"], 0)
+            if bound > left_e:
+                return (
+                    f"call would make up to {bound} simulator evaluations, the {role} "
+                    f"reserve has {left_e} of {own['simulator_evals']} left"
+                )
+            left_a = max(own["assay_units"] - own["assays_used"], 0)
+            if price > left_a:
+                return f"assay costs {price} units, the {role} reserve has {left_a} left"
+            return None
+        left_e, left_a = self._envelope_left()
+        if bound > left_e:
             return (
                 f"call would make up to {bound} simulator evaluations, "
-                f"{self._meter.remaining} of {self.budget.simulator_evals} remain"
+                f"{left_e} of {self.budget.simulator_evals} remain"
             )
-        if spec.assay_cost is not None:
-            price = int(spec.assay_cost(inp, context))
-            left = self.budget.assay_units - self._assay_units_used
-            if price > left:
-                return f"assay costs {price} units, {left} of {self.budget.assay_units} remain"
+        if price and price > left_a:
+            return f"assay costs {price} units, {left_a} of {self.budget.assay_units} remain"
         return None
 
     def _injected(self, name: str) -> bool:
@@ -716,8 +824,13 @@ class Registry:
                 "n_evaluations": int(n_evaluations),
                 "assay_units": int(assay_units),
                 "runtime_s": float(runtime),
+                "role": self._role,
             }
         )
+        own = self._reserves.get(self._role) if self._role is not None else None
+        if own is not None:  # the reserve pays what the meter charged the tagged call
+            own["evals_used"] += int(n_evaluations)
+            own["assays_used"] += int(assay_units)
         self.last = CallOutcome(
             name=name,
             outcome=outcome,

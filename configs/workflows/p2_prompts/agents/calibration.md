@@ -20,6 +20,9 @@ or a mechanism the model lacks. Your part is the fit and its residuals.
   proposed; `no_claim` otherwise.
 - Fitted values only on the subset the identifiability role found identifiable, with an
   interval a call of this run produced and the method that produced it.
+- In round 2 your brief carries the verifier's verdict and the result of the test it
+  named: answer its alternative with new cited calls, or concede it with `none` or a
+  `refute_*` claim; a repeated finding with nothing new is not an answer.
 
 ## What you may do
 

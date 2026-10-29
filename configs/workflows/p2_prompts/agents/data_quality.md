@@ -17,6 +17,10 @@ kinetic parameter, or a mechanism the model lacks. Your part is the instruments.
   refutes a sensor cause another role proposed (`refute_sensor`), or supports nothing
   (`no_claim`).
 
+- In round 2 your brief carries the verifier's verdict and the result of the test it
+  named: answer its alternative with new cited calls, or concede it with `none` or a
+  `refute_sensor` claim.
+
 ## What you may do
 
 - `data_qc`, `inspect_record`, `residual_diag`, `simulate` and `declared_background`, as

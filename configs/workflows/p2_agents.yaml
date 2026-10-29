@@ -46,10 +46,25 @@ agents:
     base: 1000                  # DESIGN  (p0.yaml's seeds are per procedural step)
   # the proposers' caps, the lead's Q8 (docs/p2_agents_design.md §9, decision 8): taken by
   # the agent arm's gateway in place of p2.yaml's caps, which the procedural freeze keeps
-  # (check_p2_frozen reads p2.yaml's; an approval of this arm names these, through
-  # config_digest). The verifier's own budget (Q9) is the next step's.
+  # (check_p2_frozen reads p2.yaml's; an approval of this arm names the run's total caps,
+  # these and the verifier's below added, and binds the split through config_digest)
   caps:
     max_requests: 200           # DESIGN  Q8
     max_total_tokens: 10000000  # DESIGN  Q8: 10 M tokens
     max_usd: 0.50               # DESIGN  Q8
     input_chars_per_token: 2.0  # DESIGN  as p2.yaml: conservative
+  # the verifier's own budget (the lead's Q9; the design note §8's table, per run, two
+  # rounds): a reserve ON TOP of the cell's envelope (the lead's ruling B, 2026-10-29), set
+  # in the registry by the launcher (tools/sandbox.py apply_reserves) from this document,
+  # drawn on by the verifier's calls and its named separating test, refused past it; the
+  # proposers keep the whole envelope, exactly P1's; no reserve under the verifier-off
+  # ablation
+  verifier_budget:
+    simulator_evals: 80         # DESIGN  §8: 40 per round
+    assay_units: 1              # DESIGN  §8: a named test that is an assay
+  # the verifier's own model caps (Q9; §8), enforced by the gateway per role beside the
+  # proposers' caps above; the run's total is their sum
+  verifier_caps:
+    max_requests: 40            # DESIGN  §8: 20 per round
+    max_total_tokens: 4000000   # DESIGN  §8: 2 M per round
+    max_usd: 0.50               # DESIGN  §8: 0.25 per round

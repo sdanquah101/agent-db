@@ -4276,7 +4276,6 @@ the jail.** Branch `claude/p2-agents-sandbox`, a draft PR from `main`, separate 
 - **Next:** the coordinator's re-review; then the verifier's second round, the separating
   test and its own registry budget (Q9's caps); then the Q6 cells.
 
-
 **2026-10-28 — PR #40 merged (`4c190fe`, the lead: "merge 40"); the null rule and the
 signatures move into the evidence module (branch `claude/p2-agents-evidence-move`, a
 draft PR from `main`).** The coordinator's relay of 00:50 UTC directs the move the design
@@ -4303,3 +4302,101 @@ note §2 names and the #40 review's H3 asked about.
   a rebinding as the control. L5 needed no action.
 - **Next:** the coordinator's check of the merge commit, the lead's "merge 42"; then
   PR #43 (the verifier loop, on `main` once merged); then the Q6 cells.
+
+**2026-10-28 — PR #41 at `57fb759`: PASS WITH NITS (K1–K4, carried). Step 2c: the
+verifier's own budget, the second round and the separating test (branch
+`claude/p2-agents-verifier`, a draft PR cut from `claude/p2-agents-harness` at `57fb759`,
+PR #41, unmerged).**
+- **The reserve.** `tools.registry.Registry.reserve`: the verifier's budget
+  (`agents.verifier_budget`: 80 evaluations, 1 assay unit per run, §8) is a reserve inside
+  the cell's envelope, enforced in the registry through the stub's role tag
+  (`tools.call(..., _role=...)`, the server's `role`, `tools.reserves()`); a tagged call is
+  refused past its reserve, every other call past the envelope outside the reserves; the
+  launcher sets it from the jail document (`tools.sandbox.apply_reserves`), the runner
+  untouched. The proposers' grants share the envelope outside the reserve; the report's
+  `spend` gives the code steps', the proposers' and the verifier's spend apart. (As first
+  built; the lead's ruling of 2026-10-29, below, puts the reserve on top of the envelope.)
+- **The gateway** holds the verifier's turns to `agents.verifier_caps` (40 requests, 4 M
+  tokens, USD 0.50) and the other roles' to `agents.caps`, the run's caps their sum.
+- **Round 2.** A round-1 `fail` runs the named separating test as code through the owning
+  role's view on the verifier's reserve (outside every list, invalid or over the reserve:
+  `abstain`, annotated), routes the leading proposer and the alternative's claimants to
+  respond, then the verifier again; a verdict carries its round; a round the verifier
+  leaves without a verdict abstains the run. Prompts say so.
+- **K1–K4** (the #41 re-review): the five-digit test uses a value with more digits than
+  shown; `require_live_approval` is tested against the agent caps; the standing-null case
+  asserts it stands; a fit's narrowing and its justification are recorded after the fit ran.
+- Tests: `tests/test_registry_reserve.py` (the registry, the server, the launcher, the
+  jail), the harness's round-2, reserve, per-side caps, every-string-argument and K4 tests.
+- **The coordinator's review of `e4cbd2e` (23:37 UTC): FIXES NEEDED, fixed in the second
+  commit.** M1 (blocking) a verdict citing `validate` carried the hold-out's metrics into
+  every proposer's round-2 brief: a proposer now sees the verdict's typed decision and its
+  items' labels, rules and calls, never the values, and may cite the verifier's
+  `validate` call for its `holdout_failed` flag only (the probe reproduced as a test).
+  M2 the verifier-off ablation sets no reserve. M3 the meter is capped at the caller's
+  share while a call runs, so an overrunning tool never eats a reserve. M4 the launcher
+  writes `spend.json` (the count by reserve tag, from the registry) beside the outputs,
+  the report carries each call's tag beside its step, and tests cross-check them. M5 an
+  approval record names the run's total caps (`run_caps`), the split bound by the digest.
+  M6 the carve-out is recorded as an open question for the lead (Q9). Nits N1–N9: the
+  charge record's docstring, the stale "next step's" lines, the logs' shape and the USD
+  apportioning stated in decisions, `cost_bound` dropped, `rounds` typed `{1, 2}`, the
+  redaction's scope stated, the stub's tag keyword-only, the launcher's clear refusals.
+  Pushed as `ea4557e`; full `pytest -q` on it 891 passed, 2 skipped (the unfetched SCADA
+  file), 1 h 12 min; ruff clean. The jailed test's M4 cross-check first assumed only the
+  verifier's calls are tagged; every call carries its role's tag, and the check now
+  matches each privileged tag to the report's.
+- **The lead's Q9 ruling, 2026-10-29 (relayed 01:02 UTC): "B", the reserve on top.** The
+  verifier's simulator evaluations and assay units are additional to the cell's envelope,
+  as Q9's words and the approved note's §7(d) and §8 table say. Built in the registry, not
+  the frozen runner: a reserve raises the meter for the tagged role only (`_run_capped`
+  lifts the limit by what the reserve holds while a tagged call runs); untagged calls keep
+  the full envelope, which never moves for them (`remaining()` and the refusals read the
+  envelope with the reserves' spend taken off the meter's total); `apply_reserves` no
+  longer refuses a reserve larger than the envelope; `grants_for` shares the whole
+  envelope among the proposers; the verifier-off ablation sets no reserve, so that arm's
+  budget is P1's exactly. The decisions entry quotes the ruling in place of the open
+  question (M6). Tests rewritten for the ruling with their controls (the reserve tests,
+  the grants test, the proposer-refused test; a reserve larger than the envelope accepted;
+  the envelope unchanged after a tagged spend; no reserve → the old refusals verbatim).
+  Full `pytest -q` on the ruling's commit (`b998566`): 891 passed, 2 skipped (the
+  unfetched SCADA file), 1 h 17 min, the P0/P1 freeze digests and the procedural P2 among
+  them; ruff clean.
+- **PR #41 merged (`6702b58`, the lead: "merge 41"); `origin/main` merged into this
+  branch as a merge commit (`54ce440`, no conflict, no tree change: the branch carried
+  `57fb759`); `tools/runner.py` byte-identical to `main`.** The coordinator's four named
+  tests for the ruling (relayed 02:42 UTC), each with its control: a proposer spends the
+  whole P1 envelope while the verifier holds its reserve (the same 20 evaluations and the
+  same refusal on P1's registry; the reserve then pays a tagged call); the verifier is
+  refused past 80 evaluations and past 1 assay unit (the envelope untouched; a 1-unit
+  assay passes the gate; the envelope lends no unit); verifier-off sets no reserve (the
+  ablation block with the verifier on sets it); with no tagged call the visible
+  `calls.jsonl` is byte-identical with and without a reserve and the truth-side log
+  identical but for its timestamps (a tagged call changes both), plus the harness-level
+  assay-unit test on the fake, and **`tests/test_p2_freeze.py`** (marker `p2_freeze`,
+  deselected): the procedural P2 cell of the jailed test run at `origin/main` and at the
+  head, back to back, the visible call projections and the verdict equal, the agent arm
+  on the same cell as the control (run once here: 1 passed, 37 min). Full `pytest -q` on
+  the tests' commit: 895 passed, 2 skipped, 1 h 18 min; ruff clean.
+- **The coordinator's review of `b998566` with `86b068d` (08:15 UTC, relayed 10:33):
+  FIXES NEEDED, one blocking.** M1–M6 and N1, N3–N9 confirmed fixed; ruling B in the
+  registry, the runner untouched, P0/P1/procedural-P2 logs byte-identical end to end.
+  **S2 (blocking):** the agent arm's state wrote `simulator_evals_used` and
+  `assay_units_used` as the envelope's total less its remainder, which under B leaves out
+  the reserve's spend, and the frozen `eval/efficiency.py` flags that as
+  `self_report_mismatch` against the meter (the reviewer's probe: 171 against 172). Fixed
+  workflow-side: `spent_in_all` adds every reserve's spend from `tools.reserves()`; a test
+  where the verifier spends three evaluations and the assay unit shows the state equal to
+  the meter, with the envelope-only report as the control; the jailed agent run asserts
+  the state's `*_used` equal the runner's summary from the meter. The decisions entry
+  records that `simulator_evals_fraction` can exceed 1 for the agent arm, up to
+  (E + 80) / E, and how Family C reads it. **S1 remainder:** a real-cell test spends the
+  reserve's assay unit with a tagged call, shows the envelope's units untouched, and a
+  second tagged assay refused because the first was booked (the control: an untagged
+  assay draws on the envelope). **Nits:** N2 the gateway docstring; N10 the attribution
+  is the harness's, a forged tag's reach and the privileged guarantee (untagged ≤
+  envelope, tagged ≤ reserve), in decisions; N11 the M1 information-flow rule in
+  decisions and the round-2 paragraph corrected; the "in addition to" sentence reworded.
+  Full `pytest -q` on the fix: 897 passed, 2 skipped, 1 h 28 min; ruff clean.
+- **Next:** the coordinator's check of this delta and the lead's "merge 43"; then the Q6
+  cells and the agent arm's own frozen record (§6).

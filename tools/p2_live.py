@@ -161,16 +161,24 @@ def p2_live_client(config: P2Config) -> OpenAIResponsesClient:
 
 
 def run_caps(config: P2Config) -> P2Caps:
-    """The caps a run's gateway enforces and an approval must name.
+    """The caps a run's gateway enforces in total, and what an approval must name.
 
     The procedural arm's are ``p2.yaml``'s ``caps``, frozen with its decision layer. The
-    agent arm's are its own block's (``agents.caps``, the lead's Q8: 200 requests, 10 M
-    tokens, USD 0.50 for the proposers), bound by :func:`config_digest`; the procedural
-    freeze keeps ``p2.yaml``'s caps untouched (the review of PR #41, J3). The verifier's
-    own budget (Q9) is the next step's.
+    agent arm's are the proposers' (``agents.caps``, the lead's Q8: 200 requests, 10 M
+    tokens, USD 0.50) and the verifier's (``agents.verifier_caps``, Q9: 40 requests, 4 M
+    tokens, USD 0.50) **added**: the run can spend the sum, each side held to its own by
+    the gateway, so what the lead signs in an approval is what can be spent (the review of
+    PR #43, M5); the split is bound by :func:`config_digest`. The procedural freeze keeps
+    ``p2.yaml``'s caps untouched (the review of PR #41, J3).
     """
     if config.agents is not None:
-        return config.agents.caps
+        proposers, verifier = config.agents.caps, config.agents.verifier_caps
+        return P2Caps(
+            max_requests=int(proposers.max_requests) + int(verifier.max_requests),
+            max_total_tokens=int(proposers.max_total_tokens) + int(verifier.max_total_tokens),
+            max_usd=float(proposers.max_usd) + float(verifier.max_usd),
+            input_chars_per_token=float(proposers.input_chars_per_token),
+        )
     return config.caps
 
 
@@ -408,15 +416,21 @@ class P2AgentGateway(P2Gateway):
     digest), its tools are exactly that role's specifications (the registry tools of its
     allow-list, ``stored`` and its ``emit_finding``; by digest) and its messages are an
     agent history (``check_agent_request``: user and assistant turns of text, tool uses and
-    tool results, starting with the role's brief). The caps are the run's, projected per
-    attempt as for the decision points; the role is named by the prompt the request
-    matched, never by the jail. The verifier's own budget is the next step's.
+    tool results, starting with the role's brief). The caps are projected per attempt as
+    for the decision points, the run's first and then the side's: the verifier's turns
+    against ``verifier_caps``, every other role's against ``proposer_caps`` (Q9); the role
+    is named by the prompt the request matched, never by the jail.
     """
 
     role_prompts: dict[str, str] = field(default_factory=dict)
     """System prompt digest -> role."""
     role_tools: dict[str, str] = field(default_factory=dict)
     """Role -> the digest of its tool specifications."""
+    proposer_caps: dict[str, float] = field(default_factory=dict)
+    """The proposers' caps (``agents.caps``, Q8): every role but the verifier, together."""
+    verifier_caps: dict[str, float] = field(default_factory=dict)
+    """The verifier's own caps (``agents.verifier_caps``, Q9); the run's caps (``max_turns``,
+    ``max_total_tokens``, ``max_usd``) are the two added."""
 
     @classmethod
     def for_config(cls, config: P2Config, client: Any, log_dir: Any) -> P2AgentGateway:
@@ -432,10 +446,26 @@ class P2AgentGateway(P2Gateway):
             role: tools_digest(agents.role_tool_specs(role, list(spec.tools)))
             for role, spec in config.agents.roles.items()
         }
+        # the run's caps (kwargs, from run_caps) are the proposers' and the verifier's added
+        # (Q9: "separate from and in addition to"); each side is held to its own in
+        # check_attempt
+        kwargs = cls._base_kwargs(config, client, log_dir)
+        proposers = config.agents.caps
+        verifier = config.agents.verifier_caps
         return cls(
             role_prompts=role_prompts,
             role_tools=role_tools,
-            **cls._base_kwargs(config, client, log_dir),
+            proposer_caps={
+                "max_requests": int(proposers.max_requests),
+                "max_total_tokens": int(proposers.max_total_tokens),
+                "max_usd": float(proposers.max_usd),
+            },
+            verifier_caps={
+                "max_requests": int(verifier.max_requests),
+                "max_total_tokens": int(verifier.max_total_tokens),
+                "max_usd": float(verifier.max_usd),
+            },
+            **kwargs,
         )
 
     def decision_of(self, request: dict[str, Any]) -> tuple[str, str]:
@@ -454,6 +484,49 @@ class P2AgentGateway(P2Gateway):
         if not messages or messages[0].get("role") != "user":
             raise ModelError(f"{role}: a turn's history starts with the role's brief")
         return f"agent.{role}", role
+
+    def side_usage(self, verifier: bool) -> dict[str, float]:
+        """What one side has used: requests, tokens (metered plus reserved) and USD.
+
+        A side's USD is its share of the run's metered cost by tokens (the meter does not
+        split input and output per role), plus its share of the worst case booked for
+        failed attempts.
+        """
+        rows = [u for r, u in self.by_role.items() if (r == "verification") == verifier]
+        requests = sum(int(u.get("requests", 0)) for u in rows)
+        tokens = sum(int(u.get("tokens", 0)) + int(u.get("reserved_tokens", 0)) for u in rows)
+        total = self.meter.total + self.reserved_tokens
+        cost = self.cost_usd()
+        usd = 0.0 if not total or cost is None else float(cost) * tokens / total
+        return {"requests": requests, "tokens": tokens, "usd": usd}
+
+    def check_attempt(self, point: str, tokens: int, usd: float | None) -> None:
+        """The run's caps as P2's gateway checks them, then the side's own (Q9).
+
+        The verifier's attempt is held to ``verifier_caps``; any other role's to the
+        proposers' ``caps``, together. Every refusal is logged by the caller as a cap.
+
+        Raises:
+            GatewayRefusal: Naming the cap.
+        """
+        super().check_attempt(point, tokens, usd)
+        if not self.verifier_caps or not self.proposer_caps:
+            return
+        verifier = point == "agent.verification"
+        caps = self.verifier_caps if verifier else self.proposer_caps
+        side = "the verifier's" if verifier else "the proposers'"
+        used = self.side_usage(verifier)
+        if used["requests"] + 1 > caps["max_requests"]:
+            raise GatewayRefusal(f"{point}: {side} {int(caps['max_requests'])} requests are spent")
+        if used["tokens"] + tokens > caps["max_total_tokens"]:
+            raise GatewayRefusal(
+                f"{point}: {int(used['tokens'])} + {tokens} tokens would pass {side} "
+                f"{int(caps['max_total_tokens'])}"
+            )
+        if usd is not None and used["usd"] + usd > caps["max_usd"]:
+            raise GatewayRefusal(
+                f"{point}: USD {used['usd']:.4f} + {usd:.4f} would pass {side} {caps['max_usd']}"
+            )
 
 
 class _Guarded:

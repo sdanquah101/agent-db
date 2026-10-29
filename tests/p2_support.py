@@ -137,14 +137,46 @@ class FakeTools:
         self.used = {"evals": 0, "assays": 0, "calls": 0}
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self._last: dict[str, Any] | None = None
+        self._role: str | None = None
+        # the registry's reserves (tools.registry.Registry.reserve): role -> totals and use
+        self.reserved: dict[str, dict[str, int]] = {}
+        self.charged_roles: list[str | None] = []
+
+    def reserve(self, role: str, *, simulator_evals: int, assay_units: int) -> None:
+        """Set a role's reserve, as the privileged launcher does."""
+        self.reserved[role] = {
+            "simulator_evals": simulator_evals,
+            "assay_units": assay_units,
+            "evals_used": 0,
+            "assays_used": 0,
+        }
+
+    def reserves(self) -> dict[str, dict[str, int]]:
+        return {
+            role: {
+                "simulator_evals": max(r["simulator_evals"] - r["evals_used"], 0),
+                "simulator_evals_total": r["simulator_evals"],
+                "assay_units": max(r["assay_units"] - r["assays_used"], 0),
+                "assay_units_total": r["assay_units"],
+            }
+            for role, r in self.reserved.items()
+        }
 
     # -- the budget --------------------------------------------------------------------
+    def _envelope_left(self) -> tuple[int, int]:
+        """What the envelope holds: the reserves' spend is on top of it (Q9, ruling B)."""
+        spent_e = sum(r["evals_used"] for r in self.reserved.values())
+        spent_a = sum(r["assays_used"] for r in self.reserved.values())
+        u, tot = self.used, self.totals
+        return tot["evals"] - (u["evals"] - spent_e), tot["assays"] - (u["assays"] - spent_a)
+
     def remaining(self) -> Any:
         u, tot = self.used, self.totals
+        evals_left, assays_left = self._envelope_left()
         return ns(
-            simulator_evals=tot["evals"] - u["evals"], simulator_evals_total=tot["evals"],
+            simulator_evals=evals_left, simulator_evals_total=tot["evals"],
             wall_clock_min=tot["wall"] - 0.01 * u["calls"], wall_clock_min_total=tot["wall"],
-            assay_units=tot["assays"] - u["assays"], assay_units_total=tot["assays"],
+            assay_units=assays_left, assay_units_total=tot["assays"],
             n_calls=u["calls"],
         )  # fmt: skip
 
@@ -152,16 +184,31 @@ class FakeTools:
         return self._last
 
     def _charge(self, evals: int = 0, assays: int = 0) -> None:
-        if self.used["evals"] + evals > self.totals["evals"]:
-            raise BudgetExceededError(f"{evals} evaluations do not fit")
-        if self.used["assays"] + assays > self.totals["assays"]:
-            raise BudgetExceededError(f"{assays} assay units do not fit")
+        # the reserves, as the registry keeps them (the lead's Q9 ruling B): a call tagged
+        # for a reserve draws on it, on top of the envelope; every other call is refused
+        # past the envelope, which no reserve moves. `used` counts every call's spend.
+        own = self.reserved.get(self._role) if self._role is not None else None
+        if own is not None:
+            if own["evals_used"] + evals > own["simulator_evals"]:
+                raise BudgetExceededError(f"the {self._role} reserve cannot pay {evals}")
+            if own["assays_used"] + assays > own["assay_units"]:
+                raise BudgetExceededError(f"the {self._role} reserve cannot pay {assays} units")
+            own["evals_used"] += evals
+            own["assays_used"] += assays
+        else:
+            left_e, left_a = self._envelope_left()
+            if evals > left_e:
+                raise BudgetExceededError(f"{evals} evaluations do not fit")
+            if assays > left_a:
+                raise BudgetExceededError(f"{assays} assay units do not fit")
         self.used["evals"] += evals
         self.used["assays"] += assays
 
     # -- the tools ---------------------------------------------------------------------
-    def call(self, name: str, **args: Any) -> Any:
+    def call(self, name: str, _role: str | None = None, **args: Any) -> Any:
         self.calls.append((name, args))
+        self.charged_roles.append(_role)
+        self._role = _role
         seq = self.used["calls"]
         self.used["calls"] += 1
         self._last = {"seq": seq, "args_hash": f"h{seq}", "version": "1.0", "outcome": "ok"}
@@ -170,6 +217,8 @@ class FakeTools:
         except BudgetExceededError:
             self._last["outcome"] = "budget_exceeded"
             raise
+        finally:
+            self._role = None
 
     def _describe_model(self, model: str) -> Any:
         return ns(parameter_names=PARAMS, lower=[0.25] * len(PARAMS), upper=[4.0] * len(PARAMS),

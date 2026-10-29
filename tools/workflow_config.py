@@ -771,6 +771,31 @@ class P2AgentSeeds(_Frozen):
     base: _PosInt = Field(description="The base seed of the roles' seeded calls")
 
 
+class P2VerifierBudget(_Frozen):
+    """The verifier's own registry budget (design note §3.1, Q9; §8's table, per run).
+
+    A reserve on top of the cell's envelope (the lead's ruling B of 2026-10-29), set in
+    the registry by the launcher (``tools.sandbox.apply_reserves``): the verifier's
+    ``simulate``, ``residual_diag``, ``validate`` and its named separating test draw on
+    it, refused past it; the proposers keep the whole envelope, exactly P1's.
+    """
+
+    simulator_evals: Annotated[int, Field(ge=0)] = Field(description="Evaluations per run")
+    assay_units: Annotated[int, Field(ge=0)] = Field(description="Assay units per run")
+
+
+class P2VerifierCaps(_Frozen):
+    """The verifier's own model caps (Q9; §8's table, per run), beside the proposers'.
+
+    Enforced by the agent arm's gateway per role: the verifier's turns count against
+    these, the other roles' against ``agents.caps``; the run's total is their sum.
+    """
+
+    max_requests: _PosInt
+    max_total_tokens: _PosInt
+    max_usd: _Pos
+
+
 class P2Agents(_Frozen):
     """The agent arm of P2 (``docs/p2_agents_design.md``; the lead's option A, 2026-10-26).
 
@@ -784,13 +809,14 @@ class P2Agents(_Frozen):
     roles: dict[_AgentRoles, P2AgentRole]
     prompts: dict[_AgentRoles, str] = Field(description="Each role's prompt file, beside")
     projection: P2AgentProjection
-    rounds: _PosInt = Field(description="The verifier's round limit (Q11: two)")
+    rounds: Literal[1, 2] = Field(description="The verifier's round limit (Q11: two at most)")
     seeds: P2AgentSeeds
+    verifier_budget: P2VerifierBudget
+    verifier_caps: P2VerifierCaps
     caps: P2Caps = Field(
         description="The proposers' per-run caps (the lead's Q8: USD 0.50, 200 requests, "
-        "10 M tokens for the pilot), taken by the agent arm's gateway in place of p2.yaml's "
-        "procedural caps, which the procedural freeze keeps; the verifier's own budget (Q9) "
-        "is the next step's"
+        "10 M tokens for the pilot), held by the agent arm's gateway beside the verifier's "
+        "own (verifier_caps, Q9); p2.yaml's procedural caps stay with the procedural freeze"
     )
 
     @model_validator(mode="after")
@@ -971,7 +997,10 @@ def sandbox_config(config: P0Config | P1Config | P2Config, *, live: bool = False
             # the agent arm: its roles, their prompts' texts (the digests stay on the
             # privileged side, in the gateway), the projection bound and the round limit
             agents = config.agents.model_dump(mode="json")
-            agents.pop("caps", None)  # the caps stay on the privileged side, as p2.yaml's
+            # the caps stay on the privileged side, as p2.yaml's; the verifier's registry
+            # reserve is the jail's to know (and the launcher's to set)
+            for key in ("caps", "verifier_caps"):
+                agents.pop(key, None)
             agents["prompts"] = {
                 role: p["text"] for role, p in load_p2_agent_prompts(config).items()
             }

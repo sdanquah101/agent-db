@@ -102,7 +102,7 @@ known-first-party = ["anchor", "eval", "scenarios", "sim", "state", "tools", "wo
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
-addopts = "-ra --strict-markers --strict-config -m 'not g1 and not p0_freeze'"
+addopts = "-ra --strict-markers --strict-config -m 'not g1 and not p0_freeze and not p2_freeze'"
 markers = [
     # The gate-G1 realism panel: twelve 180-day Level-0 runs plus a two-year generator
     # draw, ~3 min. Deselected by default so an ordinary PR is not slowed by it; CI runs
@@ -114,5 +114,9 @@ markers = [
     # stored golden of 3ea1dee was machine-bound and dropped, 2026-09-29). Run it, alone
     # on the machine, before any live P1 cell: `pytest -m p0_freeze`.
     "p0_freeze: the two-head P0 freeze comparison; about two hours (63 + 60 min on record), deselected unless -m p0_freeze is given",
+    # The procedural P2 freeze check: the short P2 cell of tests/test_p2_workflow.py run at
+    # the reviewed base and at the head and compared, with the agent arm as the control
+    # (tests/test_p2_freeze.py; the lead's Q9 ruling B, 2026-10-29). About half an hour.
+    "p2_freeze: the two-head procedural P2 comparison; about half an hour, deselected unless -m p2_freeze is given",
 ]
 filterwarnings = ["error::DeprecationWarning:(scenarios|sim|tools|state|eval|anchor|workflows).*"]
