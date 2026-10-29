@@ -4313,5 +4313,9 @@ PR #41, unmerged).**
   charge record's docstring, the stale "next step's" lines, the logs' shape and the USD
   apportioning stated in decisions, `cost_bound` dropped, `rounds` typed `{1, 2}`, the
   redaction's scope stated, the stub's tag keyword-only, the launcher's clear refusals.
+  Pushed as `ea4557e`; full `pytest -q` on it 891 passed, 2 skipped (the unfetched SCADA
+  file), 1 h 12 min; ruff clean. The jailed test's M4 cross-check first assumed only the
+  verifier's calls are tagged; every call carries its role's tag, and the check now
+  matches each privileged tag to the report's.
 - **Next:** the lead's Q9 ruling (carve-out or addition) and the coordinator's re-review;
   then the Q6 cells and the agent arm's own frozen record (§6).
