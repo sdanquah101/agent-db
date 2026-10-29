@@ -30,6 +30,7 @@ from tests.test_p2_live import _answer, _gateway, _request
 from tools.llm import ModelError
 from tools.p2_live import check_p2_frozen, frozen_record_sha256
 from tools.workflow_config import load_p2, sandbox_config
+from workflows.p2_multi_agent import evidence as ev
 from workflows.p2_multi_agent import workflow as wf
 
 REPO = Path(__file__).resolve().parents[1]
@@ -379,36 +380,36 @@ def test_any_valid_common_step_is_accepted_and_a_weak_channel_refused(attempt1, 
     attr = cfg["p0"]["attribution"]
     assert steps["cod_total"]["step_z"] == pytest.approx(1.4256, abs=1e-3)
     # attempt 1's answer: tan + cod_total at day 105, still refused (cod_total below threshold)
-    assert not wf.split_agrees(105.0, ["cod_total", "tan"], steps, attr)
+    assert not ev.split_agrees(105.0, ["cod_total", "tan"], steps, attr)
     # tan (105) + alkalinity (112): accepted at either day, and at any day within 30 d of both
-    assert wf.split_agrees(105.0, ["tan", "alkalinity"], steps, attr)
-    assert wf.split_agrees(112.0, ["alkalinity", "tan"], steps, attr)
-    assert wf.split_agrees(120.0, ["tan", "alkalinity"], steps, attr)
-    assert not wf.split_agrees(150.0, ["tan", "alkalinity"], steps, attr)  # 45 d from tan
+    assert ev.split_agrees(105.0, ["tan", "alkalinity"], steps, attr)
+    assert ev.split_agrees(112.0, ["alkalinity", "tan"], steps, attr)
+    assert ev.split_agrees(120.0, ["tan", "alkalinity"], steps, attr)
+    assert not ev.split_agrees(150.0, ["tan", "alkalinity"], steps, attr)  # 45 d from tan
     # R4's own earliest common step is still valid: gas_flow (15) + ph (23)
-    assert wf.split_agrees(15.0, ["gas_flow", "ph"], steps, attr)
+    assert ev.split_agrees(15.0, ["gas_flow", "ph"], steps, attr)
     # the controls: one channel, an unknown channel, a duplicate, days too far apart, no day
     # with channels, and no day with none
-    assert not wf.split_agrees(105.0, ["tan"], steps, attr)
-    assert not wf.split_agrees(105.0, ["tan", "bogus"], steps, attr)
-    assert not wf.split_agrees(105.0, ["tan", "tan"], steps, attr)
-    assert not wf.split_agrees(60.0, ["ph", "tan"], steps, attr)  # 23 and 105: 82 d apart
-    assert not wf.split_agrees(None, ["tan", "alkalinity"], steps, attr)
-    assert wf.split_agrees(None, [], steps, attr)
+    assert not ev.split_agrees(105.0, ["tan"], steps, attr)
+    assert not ev.split_agrees(105.0, ["tan", "bogus"], steps, attr)
+    assert not ev.split_agrees(105.0, ["tan", "tan"], steps, attr)
+    assert not ev.split_agrees(60.0, ["ph", "tan"], steps, attr)  # 23 and 105: 82 d apart
+    assert not ev.split_agrees(None, ["tan", "alkalinity"], steps, attr)
+    assert ev.split_agrees(None, [], steps, attr)
     # a NaN step is refused (N-2), a missing step too
     nan = {**steps, "tan": {"step_z": float("nan"), "step_day": 105.0}}
-    assert not wf.split_agrees(105.0, ["tan", "alkalinity"], nan, attr)
-    assert not wf.split_agrees(105.0, ["tan", "alkalinity"], {**steps, "tan": {}}, attr)
+    assert not ev.split_agrees(105.0, ["tan", "alkalinity"], nan, attr)
+    assert not ev.split_agrees(105.0, ["tan", "alkalinity"], {**steps, "tan": {}}, attr)
     # three channels agree in R4's own form, within the tolerance of one of their step
     # days (N-3): 100, 125 and 150 share day 125, though 100 and 150 are 50 d apart;
     # 100, 140 and 180 share no day
     three = {"a": {"step_z": 4.0, "step_day": 100.0}, "b": {"step_z": 4.0, "step_day": 125.0},
              "c": {"step_z": 4.0, "step_day": 150.0}}  # fmt: skip
-    assert wf.split_agrees(125.0, ["a", "b", "c"], three, attr)
-    assert not wf.split_agrees(100.0, ["a", "b", "c"], three, attr)  # 150 is 50 d from it
+    assert ev.split_agrees(125.0, ["a", "b", "c"], three, attr)
+    assert not ev.split_agrees(100.0, ["a", "b", "c"], three, attr)  # 150 is 50 d from it
     apart = {**three, "b": {"step_z": 4.0, "step_day": 140.0},
              "c": {"step_z": 4.0, "step_day": 180.0}}  # fmt: skip
-    assert not wf.split_agrees(140.0, ["a", "b", "c"], apart, attr)
+    assert not ev.split_agrees(140.0, ["a", "b", "c"], apart, attr)
 
 
 def test_the_split_decision_accepts_tan_and_alkalinity_and_refuses_cod_total(
@@ -451,7 +452,7 @@ def test_the_split_decision_accepts_tan_and_alkalinity_and_refuses_cod_total(
     attr = cfg["p0"]["attribution"]
 
     def earliest_only(day: Any, channels: Any, steps_: Any, attr_: Any) -> bool:
-        change = wf.common_change_point(steps_, attr_)
+        change = ev.common_change_point(steps_, attr_)
         return day is None or (change["common"] and abs(day - change["day"])
                                 <= float(attr_["step_day_tolerance_d"]))  # fmt: skip
 

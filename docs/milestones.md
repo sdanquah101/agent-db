@@ -4207,7 +4207,8 @@ the jail.** Branch `claude/p2-agents-sandbox`, a draft PR from `main`, separate 
   the entry** (the design note §2 places them in the evidence module): the harness runs
   them as the procedural arm's code steps, and moving them is a change to the entry the
   frozen procedural arm runs, so they move in a later PR on the coordinator's word (the
-  review of #40, H3).
+  review of #40, H3). *They moved on 2026-10-28, in PR #42 (the entry below), after #41
+  landed (L4).*
 - The #38 review's nits, carried: F1 `free_text_fields` flags free-keyed objects
   (`dict[str, float]`); F2 the signature-key pin sees subscript reads; F3 the configured
   `structural_channels_min` is read from `p0.yaml` in the tests, and the `need` parameter is
@@ -4274,3 +4275,31 @@ the jail.** Branch `claude/p2-agents-sandbox`, a draft PR from `main`, separate 
   entry "The agent arm's caps, seeds and conclusion rules".
 - **Next:** the coordinator's re-review; then the verifier's second round, the separating
   test and its own registry budget (Q9's caps); then the Q6 cells.
+
+
+**2026-10-28 — PR #40 merged (`4c190fe`, the lead: "merge 40"); the null rule and the
+signatures move into the evidence module (branch `claude/p2-agents-evidence-move`, a
+draft PR from `main`).** The coordinator's relay of 00:50 UTC directs the move the design
+note §2 names and the #40 review's H3 asked about.
+- `workflows/p2_multi_agent/evidence.py` now holds the null rule (the placement helpers,
+  NB / NM / NS, the failed channels, `null_table`) and the signatures (`nb_side`, the onset
+  test, the feed covariate, early/late, the change points, R3, inhibition, the S1 table),
+  with `NEVER_IN_OBJECTIVE`, `BALANCE_STATS` and `Placement`: twenty-nine definitions moved
+  out of `workflow.py`, each identical by AST to `main`'s, no other definition changed
+  (`docs/decisions.md`, 2026-10-28). The entry imports seventeen names (the fifteen moved
+  names its steps use, `Placement` and `admit`); the other thirteen moved names are not
+  imported back (L1). `tests/test_p2_workflow.py`, `test_p2_decision_fixes.py` and
+  `test_p2_live.py` import the moved names from the evidence module; its import pin admits
+  `collections`. Both freeze digests and the pilot configuration digest are unchanged.
+- **The coordinator's review of `6a1a158` (2026-10-28 15:05 UTC): PASS WITH NITS (L1–L6).**
+  PR #41 merged first (`6702b58`, the lead: "merge 41"); then `origin/main` merged into this
+  branch as a merge commit, with the two docs' conflicts resolved in date order and the nits
+  folded in: L1 the counts above (seventeen imported, thirteen not; the body and the
+  decisions entry say the same); L2 #41 changed the entry's `main()` only, not the import
+  block, so the merge touched no line in common (the earlier "import block in common" was
+  wrong); L4 the step-2a line above now notes the move; L6
+  `tests/test_p2_agents_evidence.py` checks `wf.<name> is ev.<name>` for the fifteen
+  re-imported names (and `Placement`), that the thirteen others are not in the entry, with
+  a rebinding as the control. L5 needed no action.
+- **Next:** the coordinator's check of the merge commit, the lead's "merge 42"; then
+  PR #43 (the verifier loop, on `main` once merged); then the Q6 cells.
