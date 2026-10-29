@@ -37,7 +37,14 @@ from tools.llm import (
     system_digest,
     tools_digest,
 )
-from tools.workflow_config import DECISION_POINTS, P2Config, P2Frozen, load_p2_templates
+from tools.workflow_config import (
+    DECISION_POINTS,
+    P2Caps,
+    P2Config,
+    P2Frozen,
+    load_p2_agent_prompts,
+    load_p2_templates,
+)
 
 __all__ = [
     "P2Gateway",
@@ -153,6 +160,20 @@ def p2_live_client(config: P2Config) -> OpenAIResponsesClient:
     return OpenAIResponsesClient(config.model)
 
 
+def run_caps(config: P2Config) -> P2Caps:
+    """The caps a run's gateway enforces and an approval must name.
+
+    The procedural arm's are ``p2.yaml``'s ``caps``, frozen with its decision layer. The
+    agent arm's are its own block's (``agents.caps``, the lead's Q8: 200 requests, 10 M
+    tokens, USD 0.50 for the proposers), bound by :func:`config_digest`; the procedural
+    freeze keeps ``p2.yaml``'s caps untouched (the review of PR #41, J3). The verifier's
+    own budget (Q9) is the next step's.
+    """
+    if config.agents is not None:
+        return config.agents.caps
+    return config.caps
+
+
 @dataclass
 class P2Gateway(ModelGateway):
     """P1's gateway, with P2's request check and caps projected before each request.
@@ -182,9 +203,15 @@ class P2Gateway(ModelGateway):
 
     @classmethod
     def for_config(cls, config: P2Config, client: Any, log_dir: Any) -> P2Gateway:
-        """The gateway of one P2 run, built from the frozen record (refuses an unfrozen run)."""
+        """The gateway of one P2 run, built from the frozen record (refuses an unfrozen run).
+
+        A configuration carrying the agent arm's block gets :class:`P2AgentGateway`, which
+        accepts the roles' turns instead of the decision points' requests.
+        """
         from workflows.p2_multi_agent import workflow as wf
 
+        if config.agents is not None and cls is P2Gateway:
+            return P2AgentGateway.for_config(config, client, log_dir)
         frozen = check_p2_frozen(config)
         templates = load_p2_templates(config)
         allowed = {
@@ -195,21 +222,25 @@ class P2Gateway(ModelGateway):
             )
             for p in DECISION_POINTS
         }
+        return cls(allowed=allowed, **cls._base_kwargs(config, client, log_dir))
+
+    @classmethod
+    def _base_kwargs(cls, config: P2Config, client: Any, log_dir: Any) -> dict[str, Any]:
         provenance = p2_provenance(config)
-        return cls(
-            settings=config.model,
-            client=client,
-            log_dir=log_dir,
-            max_turns=config.caps.max_requests,
-            max_total_tokens=config.caps.max_total_tokens,
-            provenance=dict(provenance),
-            max_usd=float(config.caps.max_usd),
-            input_chars_per_token=float(config.caps.input_chars_per_token),
-            allowed=allowed,
-            null_label=str(config.p0().labels.none),
-            labels=tuple(str(v) for v in config.p0().labels.model_dump().values()),
-            base_provenance=dict(provenance),
-        )
+        caps = run_caps(config)
+        return {
+            "settings": config.model,
+            "client": client,
+            "log_dir": log_dir,
+            "max_turns": caps.max_requests,
+            "max_total_tokens": caps.max_total_tokens,
+            "provenance": dict(provenance),
+            "max_usd": float(caps.max_usd),
+            "input_chars_per_token": float(caps.input_chars_per_token),
+            "null_label": str(config.p0().labels.none),
+            "labels": tuple(str(v) for v in config.p0().labels.model_dump().values()),
+            "base_provenance": dict(provenance),
+        }
 
     def decision_of(self, request: dict[str, Any]) -> tuple[str, str]:
         """The ``(point, role)`` a request is for, or a refusal.
@@ -369,6 +400,62 @@ def _ids(lines: list[int]) -> str:
     return ",".join(str(i) for i in lines)
 
 
+@dataclass
+class P2AgentGateway(P2Gateway):
+    """The agent arm's gateway (``docs/p2_agents_design.md`` §6): a role's turn, checked.
+
+    A request is accepted only when its system prompt is one of the roles' prompts (by
+    digest), its tools are exactly that role's specifications (the registry tools of its
+    allow-list, ``stored`` and its ``emit_finding``; by digest) and its messages are an
+    agent history (``check_agent_request``: user and assistant turns of text, tool uses and
+    tool results, starting with the role's brief). The caps are the run's, projected per
+    attempt as for the decision points; the role is named by the prompt the request
+    matched, never by the jail. The verifier's own budget is the next step's.
+    """
+
+    role_prompts: dict[str, str] = field(default_factory=dict)
+    """System prompt digest -> role."""
+    role_tools: dict[str, str] = field(default_factory=dict)
+    """Role -> the digest of its tool specifications."""
+
+    @classmethod
+    def for_config(cls, config: P2Config, client: Any, log_dir: Any) -> P2AgentGateway:
+        """The agent arm's gateway for one run (the frozen record checked as for every run)."""
+        from workflows.p2_multi_agent import agents
+
+        if config.agents is None:
+            raise ValueError("the configuration carries no agent arm (no agents block)")
+        check_p2_frozen(config)
+        prompts = load_p2_agent_prompts(config)
+        role_prompts = {system_digest(p["text"]): role for role, p in prompts.items()}
+        role_tools = {
+            role: tools_digest(agents.role_tool_specs(role, list(spec.tools)))
+            for role, spec in config.agents.roles.items()
+        }
+        return cls(
+            role_prompts=role_prompts,
+            role_tools=role_tools,
+            **cls._base_kwargs(config, client, log_dir),
+        )
+
+    def decision_of(self, request: dict[str, Any]) -> tuple[str, str]:
+        """The ``(point, role)`` of a role's turn, or a refusal.
+
+        Raises:
+            ModelError: The request is not a turn the agent arm produces.
+        """
+        check_agent_request(request, None, None)
+        role = self.role_prompts.get(system_digest(request.get("system", "")))
+        if role is None:
+            raise ModelError("the system prompt is not one of the agent arm's role prompts")
+        if tools_digest(list(request.get("tools") or [])) != self.role_tools[role]:
+            raise ModelError(f"{role}: the tools are not the role's frozen specifications")
+        messages = request.get("messages") or []
+        if not messages or messages[0].get("role") != "user":
+            raise ModelError(f"{role}: a turn's history starts with the role's brief")
+        return f"agent.{role}", role
+
+
 class _Guarded:
     """The client as P2's gateway hands it to P1's retry loop: each attempt checked first.
 
@@ -447,6 +534,13 @@ def config_digest(config: P2Config) -> str:
         "p2": config.model_dump(mode="json"),
         "p0": config.p0().model_dump(mode="json"),
     }
+    if config.agents is not None:
+        # the agent arm's block (excluded from the dump so the procedural digest stands)
+        # and its prompts' digests: an approval of the agent arm binds them too
+        body["agents"] = config.agents.model_dump(mode="json")
+        body["agent_prompts_sha256"] = {
+            role: p["sha256"] for role, p in load_p2_agent_prompts(config).items()
+        }
     return _sha(json.dumps(body, sort_keys=True, default=str))
 
 
@@ -543,7 +637,7 @@ def require_live_approval(
     record = yaml.safe_load(APPROVAL_FILE.read_text(encoding="utf-8")) or {}
     if record.get("digest") != approval_digest(record):
         raise ValueError("the approval record's digest does not match its content")
-    if record.get("caps") != config.caps.model_dump(mode="json"):
+    if record.get("caps") != run_caps(config).model_dump(mode="json"):
         raise ValueError("the approval names other caps than the configuration's")
     if record.get("frozen_sha256") != frozen_record_sha256():
         raise ValueError("the approval names another freeze than the committed one")

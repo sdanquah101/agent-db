@@ -1,0 +1,55 @@
+# The agent P2 (docs/p2_agents_design.md; the lead's option A of 2026-10-26): the same
+# configuration as p2.yaml, with the `agents` block that selects the agent arm. Every other
+# field, the frozen record included, is p2.yaml's (`extends`): the two arms cannot drift.
+#
+# OFFLINE unless the runner's explicit live flag is given, as for p2.yaml. Offline, the
+# roles are driven by the scripted responder in the package (no model is reachable); live,
+# each role's turns go through the privileged gateway (tools/p2_live.py) with the role's
+# frozen prompt and tools, under the caps. No live run before a new approval record.
+extends: p2.yaml
+workflow_version: "0.4-agents"
+
+agents:
+  # the one allow-list of the design note, §3.1 (it replaces p2.yaml's `roles` for the
+  # agent arm); `stored` and `emit_finding` are harness actions every role holds
+  roles:
+    data_quality:
+      tools: [data_qc, set_sensor_status, inspect_record, residual_diag, simulate, declared_background]
+      turns: 12                 # DESIGN  §3.2
+    influent:
+      tools: [inspect_record, mass_balance, feed_loads, simulate, declared_background]
+      turns: 12                 # DESIGN  §3.2
+    identifiability:
+      tools: [describe_model, gsa_morris, gsa_sobol, fisher_info, profile_likelihood, residual_diag]
+      turns: 8                  # DESIGN  §3.2
+    calibration:
+      tools: [residual_diag, simulate, fit_lsq, fit_de, fit_cmaes, bayes_mcmc, declared_background]
+      turns: 14                 # DESIGN  §3.2
+    design:
+      tools: [voi_assay, request_assay]
+      turns: 6                  # DESIGN  §3.2
+    verification:
+      tools: [inspect_record, residual_diag, simulate, declared_background, validate]
+      turns: 14                 # DESIGN  §3.2, per round
+  prompts:
+    data_quality: p2_prompts/agents/data_quality.md
+    influent: p2_prompts/agents/influent.md
+    identifiability: p2_prompts/agents/identifiability.md
+    calibration: p2_prompts/agents/calibration.md
+    design: p2_prompts/agents/design.md
+    verification: p2_prompts/agents/verification.md
+  projection:
+    max_points: 200             # DESIGN  §4 step 2: arrays in the projected log are cut here
+    preview: 12                 # DESIGN  P1's array_preview
+  rounds: 2                     # DESIGN  Q11: the verifier's round limit
+  seeds:                        # rule 4: a role's seeded call takes base + its call index
+    base: 1000                  # DESIGN  (p0.yaml's seeds are per procedural step)
+  # the proposers' caps, the lead's Q8 (docs/p2_agents_design.md §9, decision 8): taken by
+  # the agent arm's gateway in place of p2.yaml's caps, which the procedural freeze keeps
+  # (check_p2_frozen reads p2.yaml's; an approval of this arm names these, through
+  # config_digest). The verifier's own budget (Q9) is the next step's.
+  caps:
+    max_requests: 200           # DESIGN  Q8
+    max_total_tokens: 10000000  # DESIGN  Q8: 10 M tokens
+    max_usd: 0.50               # DESIGN  Q8
+    input_chars_per_token: 2.0  # DESIGN  as p2.yaml: conservative
