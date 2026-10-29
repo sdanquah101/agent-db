@@ -4203,7 +4203,11 @@ the jail.** Branch `claude/p2-agents-sandbox`, a draft PR from `main`, separate 
   `claim_allowed_in_round`), moved as units from `workflow.py`, which imports `admit` from
   the module and is otherwise unchanged (both freeze digests unchanged; the procedural arm
   runs as before). The import pin admits `workflows` for the entry; each module has its own
-  pin and passes rule 1's scanner.
+  pin and passes rule 1's scanner. **The null table and the signature functions stay in
+  the entry** (the design note §2 places them in the evidence module): the harness runs
+  them as the procedural arm's code steps, and moving them is a change to the entry the
+  frozen procedural arm runs, so they move in a later PR on the coordinator's word (the
+  review of #40, H3).
 - The #38 review's nits, carried: F1 `free_text_fields` flags free-keyed objects
   (`dict[str, float]`); F2 the signature-key pin sees subscript reads; F3 the configured
   `structural_channels_min` is read from `p0.yaml` in the tests, and the `need` parameter is
@@ -4216,3 +4220,57 @@ the jail.** Branch `claude/p2-agents-sandbox`, a draft PR from `main`, separate 
   touches the file); `package_sha256` into the run record; the harness (next PR).
 - **Next:** the coordinator's review; then the harness PR (P1's loop as package code, the
   role views with the §3.1 allow-lists, the projected log, the coordinator as code).
+
+**2026-10-27 — Step 2, the harness (branch `claude/p2-agents-harness`, a draft PR cut from
+`claude/p2-agents-package`, PR #40, which it depends on).**
+- `workflows/p2_multi_agent/agents.py`: the roles on P1's loop (copied from
+  `workflows/p1_single_agent/agent.py` at `8f78881`, named in the docstring), each with
+  the §3.1 allow-list enforced in its view, the §3.2 turn budget, a grant of evaluations
+  and assays; the projected action log with every free-text field redacted and `stored`;
+  typed findings checked by code (cited calls, produced values, registry units, the round
+  rule); the coordinator as code (QC first; the failed null case's specialists, or all on a
+  standing null; design on a conflict; the verifier), the only writer of routing entries;
+  one verifier round with the verdict checks (`admissible_alternative`, the hold-out
+  citation, D-1) and code's conclusion (§4, step 6); no model free text in `state.json`;
+  the offline scripted responder (the arm runs with no model and abstains).
+- `configs/workflows/p2_agents.yaml` (`extends: p2.yaml`, the `agents` block) and the six
+  role prompts under `configs/workflows/p2_prompts/agents/`; `tools/workflow_config.py`
+  (`P2Agents`, `extends`, the jail document's `agents`); `tools/p2_live.py`
+  (`P2AgentGateway`: a role's turn checked against its prompt and tools; `config_digest`
+  binds the agents block); the entry dispatches on `cfg["agents"]`. The procedural digest
+  and both freeze digests are unchanged.
+- `tests/test_p2_agents_harness.py`: each guard rail with its negative control, in-process
+  on scripted responders, and one jailed offline run through the runner.
+- `docs/decisions.md`: the five build choices the note left open.
+- **The #40 review's nits, carried (H1–H4), and #39's (G1–G6), since the file is touched:**
+  H1 a jailed import of every staged module of the P2 package, with a removed module as the
+  control (`tests/test_sandbox_package.py`); H2 **the launch record**: `launch.json` beside
+  the workflow's outputs, written by `tools.sandbox.launch` on the privileged side under a
+  reserved name of the output sink whenever a package was staged (the entry, its sha256,
+  `package_sha256`, the staged modules; the runner is frozen, so not `summary.json`: the
+  decisions entry), checked in the jailed runs of both P2 arms and in a probe that tries to
+  forge it; H3 the milestones line above on the null table and the signatures; H4 the test
+  reads `structural_channels_min` at `attribution.structural_channels_min`. G1 the symlink
+  check precedes the bytecode skip (a link named `x.pyc` or `__pycache__` is refused); G2
+  nothing is copied into the box, the entry included, until the package has passed every
+  check; G3 the copies never follow a link; G4 the deny list equals the forbidden modules,
+  the scanner's truth modules and `tools` by assertion; G5 the docstring says where the
+  names are checked; G6 the digest test's rename-only control.
+- **The coordinator's review of `1486cfb` (2026-10-28 01:40 UTC): FIXES NEEDED, fixed in the
+  fourth commit.** Blocking: J0 the arm's seed base (`agents.seeds.base`; `p0.seeds` is per
+  step, so every seeded handler died), with a test running every handler once through the
+  loop; J1 a silent verifier abstains the run (`abstain:no_verdict`); J2 a `fail` citing a
+  `validate` call states its hold-out result, and the D-1 test now executes; J3 the
+  proposers' caps are the agent arm's own block (Q8: 200 requests, 10 M tokens, USD 0.50),
+  taken by the gateway and the approval check, `p2.yaml`'s freeze untouched. Should-fix:
+  J4 a `pass` with no proposal over a failed null abstains (`abstain:no_proposal`); J5
+  values at five digits, the record keeps the call's value; J6 the sensor reason and the
+  bounds justification are the roles' messages in `messages.jsonl`; J7 `validate`'s output
+  hidden from every proposer's projection and `stored`; J8 the planted claim rides a fit's
+  `bounds_justification`, with the identity-redact control and a depth-3 case; J9 a real
+  extends-chain control. Nits J10–J13: the offline design plan names a catalogue assay and
+  fetches the last projected output; the test double has the registry's full output
+  shapes; grants are fixed per stage; the quarantine window is `[start, end)`. Decisions
+  entry "The agent arm's caps, seeds and conclusion rules".
+- **Next:** the coordinator's re-review; then the verifier's second round, the separating
+  test and its own registry budget (Q9's caps); then the Q6 cells.

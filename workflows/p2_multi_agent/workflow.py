@@ -2642,9 +2642,18 @@ def responder_for(cfg: dict[str, Any]) -> Responder:
 
 
 def main() -> int:
-    """Run P2 on the run the registry serves."""
+    """Run P2 on the run the registry serves.
+
+    A configuration carrying an ``agents`` block (``p2_agents.yaml``) is the agent arm
+    (``docs/p2_agents_design.md``): the package's harness runs it, with this file's steps
+    as its shared evidence. Without the block this is the procedural arm, as before.
+    """
     with open(CONFIG_FILE, encoding="utf-8") as fh:
         cfg = json.load(fh)
+    if cfg.get("agents"):
+        from workflows.p2_multi_agent.agents import main as agents_main
+
+        return agents_main(cfg)
     workflow = Workflow(cfg, responder_for(cfg))
     try:
         workflow.run()

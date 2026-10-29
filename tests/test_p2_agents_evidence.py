@@ -54,27 +54,14 @@ FROZEN_ADMIT_SHA256 = "9c7f821bd7b94959c96f6407ac36754979f321f49484894888cfa59bf
 """sha256 of ``admit``'s source as frozen in ``workflow.py`` on 2026-10-07 (moved verbatim)."""
 
 
-def _config_value(node: Any, key: str) -> Any:
-    """The one value of ``key`` anywhere in a nested mapping (the configured minimum)."""
-    hits = []
-    stack = [node]
-    while stack:
-        current = stack.pop()
-        if isinstance(current, dict):
-            for k, v in current.items():
-                if k == key:
-                    hits.append(v)
-                stack.append(v)
-        elif isinstance(current, list):
-            stack.extend(current)
-    assert len(hits) == 1, (key, hits)
-    return hits[0]
-
-
 def _need() -> int:
+    """The configured minimum, read at the exact path the pipeline reads it.
+
+    ``self.attr`` is ``p0["attribution"]`` in the entry (the review of #40, H4).
+    """
     from tools.workflow_config import load_p2
 
-    return int(_config_value(load_p2().p0().model_dump(), "structural_channels_min"))
+    return int(load_p2().p0().model_dump()["attribution"]["structural_channels_min"])
 
 
 def _table(nb: bool, nm: bool, ns: bool, failed: list[str]) -> dict[str, Any]:
@@ -519,6 +506,10 @@ def test_the_label_patterns_match_the_configured_vocabulary_and_pass_rule_ones_s
     [
         ("evidence.py", {"__future__", "typing"}),
         ("messages.py", {"__future__", "typing", "pydantic"}),
+        (
+            "agents.py",
+            {"__future__", "json", "math", "typing", "numpy", "pydantic", "tools", "workflows"},
+        ),
     ],
 )
 def test_each_module_of_the_package_imports_only_what_the_jail_has(module: str, allowed: set):

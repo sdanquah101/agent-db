@@ -565,8 +565,8 @@ def test_the_workflow_passes_rule_one_and_imports_only_what_the_jail_has():
     # option A (tools/sandbox.py, docs/decisions.md 2026-10-26); nothing else of the host
     assert imports <= {"__future__", "hashlib", "json", "math", "collections", "typing",
                        "numpy", "pydantic", "tools", "workflows"}  # fmt: skip
-    own = set(re.findall(r"^from (workflows\.[a-z0-9_.]+) import", text, flags=re.M))
-    assert own == {"workflows.p2_multi_agent.evidence"}
+    own = set(re.findall(r"^\s*from (workflows\.[a-z0-9_.]+) import", text, flags=re.M))
+    assert own == {"workflows.p2_multi_agent.evidence", "workflows.p2_multi_agent.agents"}
 
 
 # ------------------------------------------------------------------ 10. dq.trust
@@ -1006,8 +1006,16 @@ def jailed(tmp_path_factory):
 def test_the_sandboxed_run_writes_the_declared_record(jailed):
     run, root, result = jailed
     out = root / run.run_id / "workflows" / "p2"
+    # launch.json is the launcher's record of the staged package (tools/sandbox.py), written
+    # on the privileged side for any entry whose package opts in; the arm's own files are
+    # the four it wrote plus the runner's summary
     assert {p.name for p in out.iterdir()} == {"state.json", "report.json", "messages.jsonl",
-                                               "decisions.jsonl", "summary.json"}  # fmt: skip
+                                               "decisions.jsonl", "summary.json",
+                                               "launch.json"}  # fmt: skip
+    launch = json.loads((out / "launch.json").read_text())
+    assert launch["entry"] == "workflows/p2_multi_agent/workflow.py"
+    assert "workflows/p2_multi_agent/evidence.py" in launch["modules"]
+    assert re.fullmatch(r"[0-9a-f]{64}", launch["package_sha256"])
     doc = TaskState.model_validate_json((out / "state.json").read_text())
     assert doc.workflow == "p2" and doc.final.completed and result.completed
     report = json.loads((out / "report.json").read_text())

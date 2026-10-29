@@ -28,6 +28,7 @@ control:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -41,19 +42,22 @@ import pytest
 
 import tools.sandbox as sandbox_module
 from tests.conftest import REPO_ROOT
-from tests.test_truth_isolation import find_truth_references, workflow_modules
+from tests.test_truth_isolation import _TRUTH_MODULES, find_truth_references, workflow_modules
 from tools import Budget, make_registry
 from tools.sandbox import (
     FORBIDDEN_MODULES,
     JAIL_MARKER,
     JAIL_PACKAGE_MARKER,
+    LAUNCH_RECORD,
     STAGED_NAME_DENY,
     SandboxError,
     _python_chain,
     launch,
+    launch_record,
     stage,
     stage_workflow,
 )
+from tools.server import OUTPUTS_DIR
 
 P0_ENTRY = REPO_ROOT / "workflows" / "p0_scripted" / "pipeline.py"
 P1_ENTRY = REPO_ROOT / "workflows" / "p1_single_agent" / "agent.py"
@@ -165,8 +169,10 @@ def test_a_staged_package_imports_by_its_host_name_and_the_marker_is_the_only_op
 
 def test_a_package_with_a_denied_module_name_is_refused_and_a_clean_one_runs(tmp_path, monkeypatch):
     registry = _registry()
-    assert set(FORBIDDEN_MODULES) < set(STAGED_NAME_DENY)
-    assert {"truth", "truth_store", "distinguish", "tools"} <= set(STAGED_NAME_DENY)
+    # the deny list is exactly the forbidden modules, the scanner's truth modules and the
+    # stub's name: an equality, so neither list can drift from the other (G4)
+    assert set(STAGED_NAME_DENY) == set(FORBIDDEN_MODULES) | set(_TRUTH_MODULES) | {"tools"}
+    assert len(STAGED_NAME_DENY) == len(set(STAGED_NAME_DENY))
     cases = []
     for name in STAGED_NAME_DENY:  # each denied name as a module inside the package ...
         pkg = _package(tmp_path / f"module_{name}")
@@ -183,6 +189,7 @@ def test_a_package_with_a_denied_module_name_is_refused_and_a_clean_one_runs(tmp
         with pytest.raises(SandboxError, match=f"forbidden module name \\['{name}'\\]"):
             launch(pkg / "entry.py", registry, sandbox=box, timeout_s=120.0)
         assert not (box / "package").exists()
+        assert not (box / "workflow.py").exists()  # nothing was copied, the entry included (G2)
         assert not (box / JAIL_MARKER).exists()  # refused before any jail was built
     # the negative control: the clean package runs
     clean = _package(tmp_path / "clean")
@@ -240,6 +247,9 @@ def test_a_symlink_or_a_non_module_anywhere_in_the_package_is_refused(tmp_path):
         linked("dir_link", "link_dir", host / "dir"),
         linked("nested_link", "sub/link.py", host / "dir" / "note.py"),
         linked("dangling", "gone.py", host / "missing.py"),
+        # a link named like bytecode or its cache is refused, not skipped (G1)
+        linked("pyc_link", "x.pyc", host / "secret.json"),
+        linked("cache_link", "__pycache__", host / "dir"),
         inner,
     ):
         box = tmp_path / f"box_{pkg.parent.name}"
@@ -247,6 +257,7 @@ def test_a_symlink_or_a_non_module_anywhere_in_the_package_is_refused(tmp_path):
         with pytest.raises(SandboxError, match="symlink"):
             launch(pkg / "entry.py", registry, sandbox=box, timeout_s=120.0)
         assert not (box / "package").exists()
+        assert not (box / "workflow.py").exists()  # (G2)
         assert not (box / JAIL_MARKER).exists()
     # a file that is not a module enters no jail unscanned
     data = _package(tmp_path / "data")
@@ -390,6 +401,14 @@ def test_the_staged_trees_digest_is_stable_and_moves_with_any_module(tmp_path):
     box.mkdir()
     added = stage_workflow(copy / "workflow.py", box).package_sha256
     assert added not in {one, same_layout, changed}
+    # a rename alone, same bytes, moves the digest too (a bytes-only hash would not; G6)
+    (copy / "extra.py").rename(copy / "extra_renamed.py")
+    box = tmp_path / "box_renamed"
+    box.mkdir()
+    renamed = stage_workflow(copy / "workflow.py", box)
+    assert renamed.package_sha256 not in {one, same_layout, changed, added}
+    assert "p2_multi_agent/extra_renamed.py" in renamed.modules
+    assert "p2_multi_agent/extra.py" not in renamed.modules
 
 
 # ------------------------------------------------------------------ the python chain
@@ -455,3 +474,141 @@ def test_a_one_hop_venv_runs_in_the_jail_where_the_old_chain_dangled(tmp_path, m
     result = launch(script, _registry(), sandbox=box2, timeout_s=120.0)
     assert (box2 / JAIL_MARKER).exists()
     assert result.returncode == 127 and "RAN" not in result.stdout
+
+
+# ------------------------------------------------------------------ every module, in the jail
+
+
+def test_every_module_of_the_staged_p2_package_imports_in_the_jail(tmp_path):
+    """The jail reaches every staged module by its dotted name.
+
+    ``messages.py`` and ``agents.py`` included (the review of #40, H1: the arm's jailed run
+    imports them only through the entry's dispatch). A copy of the package carries the
+    probe as its entry.
+    """
+    host = tmp_path / "host" / "workflows"
+    host.mkdir(parents=True)
+    shutil.copy2(P2_ENTRY.parents[1] / "__init__.py", host / "__init__.py")
+    copy = host / "p2_multi_agent"
+    shutil.copytree(P2_ENTRY.parent, copy, ignore=shutil.ignore_patterns("__pycache__"))
+    names = sorted(p.stem for p in P2_ENTRY.parent.glob("*.py") if p.stem != "__init__")
+    assert {"workflow", "evidence", "messages", "agents"} <= set(names)
+    probe = textwrap.dedent(
+        f"""
+        import importlib, json
+        files = {{}}
+        for name in {names!r}:
+            try:
+                files[name] = importlib.import_module("workflows.p2_multi_agent." + name).__file__
+            except ImportError as exc:
+                files[name] = type(exc).__name__ + ": " + str(exc)
+        print(json.dumps(files))
+        """
+    )
+    (copy / "probe.py").write_text(probe, encoding="utf-8")
+    box = tmp_path / "box"
+    box.mkdir()
+    result = launch(copy / "probe.py", _registry(), sandbox=box, timeout_s=300.0)
+    assert result.returncode == 0, result.stderr
+    files = json.loads(result.stdout.strip().splitlines()[-1])
+    assert files == {n: f"/box/package/workflows/p2_multi_agent/{n}.py" for n in names}
+    # the negative control: a module removed from the copy is reached by nothing else (the
+    # host tree is not on the path), and what imports it fails with it
+    (copy / "messages.py").unlink()
+    box2 = tmp_path / "box2"
+    box2.mkdir()
+    result = launch(copy / "probe.py", _registry(), sandbox=box2, timeout_s=300.0)
+    assert result.returncode == 0, result.stderr
+    files = json.loads(result.stdout.strip().splitlines()[-1])
+    assert files["messages"].startswith("ModuleNotFoundError")
+    # agents.py imports messages by `from workflows.p2_multi_agent import … messages`:
+    # an ImportError naming it
+    assert files["agents"].startswith("ImportError") and "'messages'" in files["agents"]
+    assert files["evidence"] == "/box/package/workflows/p2_multi_agent/evidence.py"
+
+
+# ------------------------------------------------------------------ the launch record
+
+
+@pytest.fixture(scope="module")
+def short_run(tmp_path_factory):
+    from scenarios.schema import load_scenario
+    from sim.plants import load_plant_config
+    from sim.run.harness import generate_run
+
+    root = tmp_path_factory.mktemp("store") / "runs"
+    scenario = load_scenario(REPO_ROOT / "scenarios" / "S0-01.yaml").model_copy(
+        update={"duration_days": 20.0}
+    )
+    return generate_run(scenario, "A", plant=load_plant_config("C"), runs_root=root)
+
+
+def test_a_launch_with_a_staged_package_records_it_and_the_workflow_cannot_rewrite_the_record(
+    short_run, tmp_path
+):
+    """``launch.json`` beside the workflow's outputs is the launcher's record of the jail.
+
+    The privileged side's record of the entry and the staged tree (the review of
+    2026-10-27, F3; of #40, H2), written before the workflow starts under a reserved name;
+    the runner, which is frozen, is not involved.
+    """
+    root = short_run.paths.root
+    pkg = _package(tmp_path / "with")
+    (pkg / "probe.py").write_text(
+        textwrap.dedent(
+            f"""
+            import json
+            import tools
+            out = {{"before": list(tools.run.output_files())}}
+            out["other"] = tools.run.write_output("other.json", "{{}}")
+            try:
+                tools.run.write_output({LAUNCH_RECORD!r}, '{{"package_sha256": "forged"}}')
+                out["forged"] = "WROTE"
+            except tools.ToolError as exc:
+                out["forged"] = type(exc).__name__ + ": " + str(exc)
+            out["after"] = list(tools.run.output_files())
+            print(json.dumps(out))
+            """
+        ),
+        encoding="utf-8",
+    )
+    box = tmp_path / "box"
+    box.mkdir()
+    registry = make_registry(budget=Budget(2, 60.0, 0), seed=1, run_dir=root)
+    result = launch(
+        pkg / "probe.py", registry, sandbox=box, run_dir=root, timeout_s=120.0, workflow="probe"
+    )
+    assert result.returncode == 0, result.stderr
+    out = json.loads(result.stdout.strip().splitlines()[-1])
+    out_dir = root / OUTPUTS_DIR / "probe"
+    record = json.loads((out_dir / LAUNCH_RECORD).read_text(encoding="utf-8"))
+    again = tmp_path / "again"
+    again.mkdir()
+    assert record == launch_record(stage_workflow(pkg / "probe.py", again))
+    assert record["package_sha256"] == result.package_sha256
+    assert SHA256.match(record["package_sha256"])
+    assert record["entry"] == "probe.py"  # outside the repository: the name, never a path
+    assert record["entry_sha256"] == hashlib.sha256((pkg / "probe.py").read_bytes()).hexdigest()
+    assert record["modules"] == ["pkg/__init__.py", "pkg/entry.py", "pkg/helper.py", "pkg/probe.py"]
+    # written before the workflow started; the workflow's forgery is refused by name, and
+    # the record afterwards is the one the launcher wrote
+    assert out["before"] == [LAUNCH_RECORD]
+    assert out["forged"].startswith("ToolError: TruthAccessError"), out["forged"]
+    assert "nothing else (CLAUDE.md rule 1)" in out["forged"]  # the server's one message
+    assert out["after"] == [LAUNCH_RECORD, "other.json"]
+    assert json.loads((out_dir / LAUNCH_RECORD).read_text(encoding="utf-8")) == record
+    assert not (out_dir / (LAUNCH_RECORD + ".tmp")).exists()
+    # the negative control: an entry without a package records nothing, and its output
+    # directory holds only what it wrote (the frozen P0 and P1 records stay what they were)
+    script = tmp_path / "plain.py"
+    script.write_text(
+        'import tools\ntools.run.write_output("state.json", "{}")\nprint("RAN")\n',
+        encoding="utf-8",
+    )
+    box2 = tmp_path / "box2"
+    box2.mkdir()
+    registry = make_registry(budget=Budget(2, 60.0, 0), seed=1, run_dir=root)
+    result = launch(script, registry, sandbox=box2, run_dir=root, timeout_s=120.0, workflow="plain")
+    assert result.returncode == 0 and "RAN" in result.stdout, result.stderr
+    assert result.package_sha256 is None
+    assert sorted(p.name for p in (root / OUTPUTS_DIR / "plain").iterdir()) == ["state.json"]

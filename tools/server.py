@@ -47,11 +47,17 @@ from tools.llm import LLM_LOG_FILE, GatewayRefusal, ModelError, ModelGateway
 from tools.registry import Registry
 from tools.transport import decode_arrays, encode_arrays, read_message, write_message
 
-__all__ = ["OUTPUTS_DIR", "OutputSink", "RegistryServer"]
+__all__ = ["LAUNCH_RECORD", "OUTPUTS_DIR", "OutputSink", "RegistryServer"]
 
 
 MAX_OUTPUT_BYTES = 16 << 20
 """Largest single output file a workflow may write, bytes: a guard, not a budget."""
+
+LAUNCH_RECORD = "launch.json"
+"""The launcher's record of what it staged into the jail (the entry's digest, the staged
+package's digest and modules), written by the privileged side beside the workflow's own
+outputs when the entry's package opted in (:func:`tools.sandbox.launch`); a reserved name
+the workflow may not write."""
 
 
 class OutputSink:
@@ -129,6 +135,23 @@ class OutputSink:
         os.replace(tmp, target)
         return {"relative": relative, "bytes": len(data)}
 
+    def write_reserved(self, relative: str, content: str) -> Path:
+        """Write one of the reserved names: the privileged side's own record.
+
+        Never routed from the wire (:meth:`write` refuses every reserved name); the
+        launcher calls it for :data:`LAUNCH_RECORD` before the workflow starts.
+
+        Raises:
+            ValueError: If the name is not reserved.
+        """
+        if relative not in self._reserved:
+            raise ValueError(f"{relative!r} is not a reserved name; use write()")
+        target = self._root / relative
+        tmp = target.with_name(target.name + ".tmp")
+        tmp.write_bytes(content.encode("utf-8"))
+        os.replace(tmp, target)
+        return target
+
     def files(self) -> list[str]:
         """Every file written so far, relative to the output directory."""
         return sorted(str(p.relative_to(self._root)) for p in self._root.rglob("*") if p.is_file())
@@ -181,7 +204,7 @@ class RegistryServer:
             run_view = open_run(run_dir)
         self._view = run_view
         self._gateway = model_gateway
-        reserved = (LLM_LOG_FILE,)
+        reserved = (LLM_LOG_FILE, LAUNCH_RECORD)
         self._sink = (
             OutputSink(run_dir, workflow, reserved=reserved)
             if workflow and run_dir is not None
@@ -194,6 +217,11 @@ class RegistryServer:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self.n_requests = 0
+
+    @property
+    def sink(self) -> OutputSink | None:
+        """The workflow's output directory, when the server serves one."""
+        return self._sink
 
     # -- lifecycle ---------------------------------------------------------------
     def start(self) -> RegistryServer:
