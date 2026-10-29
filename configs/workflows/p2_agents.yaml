@@ -54,10 +54,11 @@ agents:
     max_usd: 0.50               # DESIGN  Q8
     input_chars_per_token: 2.0  # DESIGN  as p2.yaml: conservative
   # the verifier's own budget (the lead's Q9; the design note §8's table, per run, two
-  # rounds): a reserve inside the cell's envelope, set in the registry by the launcher
-  # (tools/sandbox.py apply_reserves) from this document, drawn on by the verifier's calls
-  # and its named separating test, refused past it; the proposers are refused past what
-  # the envelope holds outside it
+  # rounds): a reserve ON TOP of the cell's envelope (the lead's ruling B, 2026-10-29), set
+  # in the registry by the launcher (tools/sandbox.py apply_reserves) from this document,
+  # drawn on by the verifier's calls and its named separating test, refused past it; the
+  # proposers keep the whole envelope, exactly P1's; no reserve under the verifier-off
+  # ablation
   verifier_budget:
     simulator_evals: 80         # DESIGN  §8: 40 per round
     assay_units: 1              # DESIGN  §8: a named test that is an assay

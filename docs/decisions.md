@@ -8539,17 +8539,21 @@ record keeps the value the call produced. `set_sensor_status.reason` and
 
 ## 2026-10-28 — The verifier's own budget, the second round and the separating test (Q9, §4)
 
-**The verifier's registry budget is a reserve inside the cell's envelope, enforced in the
-registry through a role tag.** The design note (§3.1, Q9, §8) gives the verifier its own
-budget "separate from and in addition to the run's caps", with 80 simulator evaluations
+**The verifier's registry budget is a reserve on top of the cell's envelope, enforced in
+the registry through a role tag.** The design note (§3.1, Q9, §8) gives the verifier its
+own budget "separate from and in addition to the run's caps", with 80 simulator evaluations
 and 1 assay unit per run beside its model caps. Two facts shape how it is built: rule 2
 (budgets are enforced in the registry, never in a workflow) and the frozen runner, which
-opens the registry with the cell's envelope and nothing else. **Decision:**
-- `tools.registry.Registry.reserve(role, simulator_evals, assay_units)` carves a reserve
-  out of the envelope (never past it; the envelope is the same for every workflow, §7). A
-  call tagged with the role draws on its reserve and is refused past it; every other call
-  is refused past what the envelope holds outside the reserves. The refusal is logged as
-  the registry logs every refusal; the privileged charge record carries the role.
+opens the registry with the cell's envelope and nothing else. **Decision** (as built on
+2026-10-28, then corrected by the lead's ruling of 2026-10-29, below):
+- `tools.registry.Registry.reserve(role, simulator_evals, assay_units)` sets a reserve
+  **additional** to the envelope. A call tagged with the role draws on its reserve and is
+  refused past it; every other call keeps the whole envelope, which no reserve moves. While
+  a call runs the meter's limit is the caller's share: the envelope for an untagged call,
+  the reserve for a tagged one, which raises the limit past the envelope by what the
+  reserve holds and never further (M3). The refusal is logged as the registry logs every
+  refusal; the privileged charge record carries the role. With no reserve set nothing
+  changes: P0, P1 and the procedural P2 are byte-identical.
 - The tag travels as the stub's `tools.call(name, _role=..., **args)` (no tool takes an
   argument of that name) and the server's `role` field; `tools.reserves()` serves what is
   left. It is the workflow's attribution, as `by_role` has always been; the reserve bounds
@@ -8558,9 +8562,10 @@ opens the registry with the cell's envelope and nothing else. **Decision:**
   reads the jail document the runner wrote into the box (`agents.verifier_budget`) before
   any jail exists, so the numbers are the validated configuration's. The runner stays
   frozen.
-- The proposers' grants share what the envelope holds outside the reserve; the verifier's
-  grant is its reserve. The report's `spend` gives the code steps', the proposers' and
-  the verifier's spend apart, with the reserves, beside the privileged summary's own count.
+- The proposers' grants share the whole envelope, exactly what P0 and P1 get; the
+  verifier's grant is its reserve. The report's `spend` gives the code steps', the
+  proposers' and the verifier's spend apart, with the reserves, beside the privileged
+  summary's own count.
 
 The **"in addition to"** of Q9 is read for the model caps, which are not the cell's
 envelope: the gateway holds the verifier's turns to `agents.verifier_caps` and every other
@@ -8569,19 +8574,26 @@ side's USD is **apportioned by tokens**: the meter does not split input and outp
 role, so each side's share of the metered cost is its share of the tokens, an
 approximation that is exact when both sides' input/output mix is the same (N5). What an
 approval record names is the run's total (`run_caps`), the split bound by the
-configuration digest (M5). For simulator evaluations and assays the reserve is **carved
-out** of the cell's envelope, not added. **This is an open question for the lead (Q9), not
-a settled decision:** the design note's §8 table and §7(d), as the lead approved them, put
-the verifier's evaluations beside the run's, and the carve-out departs from that reading
-for two reasons the lead may or may not accept: the envelope is the same for every
-workflow (§7), and the frozen runner opens the registry with it. The coordinator is
-putting the question to the lead; until the ruling the carve-out stands as built, and the
-verifier-off ablation sets no reserve (nobody could spend it; M2). If the lead rules for
-"in addition", the change is one line of the frozen runner's envelope and the removal of
-the carve-out in `grants_for`. **Alternatives refused on either reading:** enforce the
-verifier's budget in the harness (rule 2); a second registry for the verifier (two logs,
-two meters); a global registry setting in `configs/tools/` (an arm's budget in every
-workflow's configuration).
+configuration digest (M5). For simulator evaluations and assays the first build (PR #43 at
+`e4cbd2e`) **carved the reserve out** of the cell's envelope, on the reading that the
+envelope is the same for every workflow (§7) and the frozen runner opens the registry with
+it; the review (M6) marked that the lead's to rule on, since the design note's §8 table and
+§7(d), as the lead approved them, put the verifier's evaluations beside the run's. **The
+lead's ruling, 2026-10-29, relayed by the coordinator, verbatim: "B"** — of (A) the PR's
+carve-out and (B) "on top — the verifier's simulator evaluations and assay units are
+ADDITIONAL to the cell's envelope, as the lead's Q9 words and the approved note's §7(d) and
+§8 table say". **So decided:** the proposers keep the cell's full envelope, exactly what P0
+and P1 get; the verifier's reserve (80 evaluations, 1 assay unit per run, §8) is added on
+top of it for verification-tagged calls only; the agent P2 may spend up to that much more
+than P1, and the report gives the proposers' and the verifier's spend apart. It is built in
+`tools/registry.py`, not the frozen runner: a reserve raises the meter for the tagged role
+only, untagged calls keep the full envelope, and the envelope total never moves for them.
+With the verifier off (ablation) no reserve is set, so that arm's budget is P1's exactly
+(M2). §7(d) of the design note is unchanged. **Alternatives refused on either reading:**
+enforce the verifier's budget in the harness (rule 2); a second registry for the verifier
+(two logs, two meters); a global registry setting in `configs/tools/` (an arm's budget in
+every workflow's configuration); a line in the frozen runner's envelope (the runner stays
+frozen).
 
 **What the logs carry (N3).** The design note §8 says `calls.jsonl` attributes each call to
 its role. It does not: the visible and truth-side log lines keep their frozen shape (the

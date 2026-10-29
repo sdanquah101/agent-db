@@ -4286,7 +4286,8 @@ PR #41, unmerged).**
   refused past its reserve, every other call past the envelope outside the reserves; the
   launcher sets it from the jail document (`tools.sandbox.apply_reserves`), the runner
   untouched. The proposers' grants share the envelope outside the reserve; the report's
-  `spend` gives the code steps', the proposers' and the verifier's spend apart.
+  `spend` gives the code steps', the proposers' and the verifier's spend apart. (As first
+  built; the lead's ruling of 2026-10-29, below, puts the reserve on top of the envelope.)
 - **The gateway** holds the verifier's turns to `agents.verifier_caps` (40 requests, 4 M
   tokens, USD 0.50) and the other roles' to `agents.caps`, the run's caps their sum.
 - **Round 2.** A round-1 `fail` runs the named separating test as code through the owning
@@ -4317,5 +4318,20 @@ PR #41, unmerged).**
   file), 1 h 12 min; ruff clean. The jailed test's M4 cross-check first assumed only the
   verifier's calls are tagged; every call carries its role's tag, and the check now
   matches each privileged tag to the report's.
-- **Next:** the lead's Q9 ruling (carve-out or addition) and the coordinator's re-review;
-  then the Q6 cells and the agent arm's own frozen record (§6).
+- **The lead's Q9 ruling, 2026-10-29 (relayed 01:02 UTC): "B", the reserve on top.** The
+  verifier's simulator evaluations and assay units are additional to the cell's envelope,
+  as Q9's words and the approved note's §7(d) and §8 table say. Built in the registry, not
+  the frozen runner: a reserve raises the meter for the tagged role only (`_run_capped`
+  lifts the limit by what the reserve holds while a tagged call runs); untagged calls keep
+  the full envelope, which never moves for them (`remaining()` and the refusals read the
+  envelope with the reserves' spend taken off the meter's total); `apply_reserves` no
+  longer refuses a reserve larger than the envelope; `grants_for` shares the whole
+  envelope among the proposers; the verifier-off ablation sets no reserve, so that arm's
+  budget is P1's exactly. The decisions entry quotes the ruling in place of the open
+  question (M6). Tests rewritten for the ruling with their controls (the reserve tests,
+  the grants test, the proposer-refused test; a reserve larger than the envelope accepted;
+  the envelope unchanged after a tagged spend; no reserve → the old refusals verbatim).
+  Full `pytest -q` on the ruling's commit: 891 passed, 2 skipped (the unfetched SCADA
+  file), 1 h 17 min, the P0/P1 freeze digests and the procedural P2 among them; ruff clean.
+- **Next:** the coordinator's re-review of PR #43; then the Q6 cells and the agent arm's
+  own frozen record (§6).

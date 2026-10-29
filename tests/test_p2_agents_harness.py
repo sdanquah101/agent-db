@@ -1136,10 +1136,11 @@ def test_grants_are_fixed_when_a_stage_starts(monkeypatch):
         "simulator_evals": 80, "simulator_evals_total": 80, "assay_units": 1, "assay_units_total": 1
     }  # fmt: skip
     grants = run.coordinator.grants_for(["influent", "identifiability", "calibration"])
-    # the proposers share what the envelope holds outside the verifier's reserve (Q9)
-    assert {g["evaluations"] for g in grants.values()} == {(left - 80) // 3}
+    # the proposers share the whole envelope, exactly P1's: the verifier's reserve is on
+    # top of it (Q9, the lead's ruling B)
+    assert {g["evaluations"] for g in grants.values()} == {left // 3}
     assert {g["assays"] for g in grants.values()} == {0}
-    assert run.coordinator.grants_for(["design"])["design"]["assays"] == fake.totals["assays"] - 1
+    assert run.coordinator.grants_for(["design"])["design"]["assays"] == fake.totals["assays"]
     # the verifier's grant is its reserve
     assert run.coordinator.grants_for(["verification"]) == {
         "verification": {"evaluations": 80, "assays": 1}
@@ -1330,28 +1331,33 @@ def test_a_separating_test_no_list_holds_or_the_reserve_cannot_pay_counts_as_abs
     assert report["verdict"]["rounds"] == 2 and report["label"] == "none"
 
 
-def test_a_proposer_is_refused_past_the_envelope_outside_the_reserve(monkeypatch):
-    """Rule 2 in the fake registry as in the real one: the reserve is the verifier's alone."""
+def test_a_proposer_is_refused_past_the_envelope_while_the_verifier_has_its_reserve(monkeypatch):
+    """Rule 2 in the fake registry as in the real one: the reserve is the verifier's alone.
+
+    The lead's Q9 ruling B: the proposers keep the whole envelope, and the reserve on top
+    of it pays the verifier's calls only.
+    """
     fake = FakeTools("B", "B", evals=120, offsets={"ph": 8.0})
-    _install(monkeypatch, fake)  # the reserve: 80 of the 120
+    _install(monkeypatch, fake)  # the reserve: 80, on top of the 120
     run = agents.AgentRun(_cfg())
     run.code_steps()
-    left = int(fake.remaining().simulator_evals)
-    outside = left - 80
-    assert 0 < outside < 40
+    fake.totals["evals"] = fake.used["evals"] + 10  # the envelope has 10 left
+    assert int(fake.remaining().simulator_evals) == 10
     agent = agents.RoleAgent(
         "calibration", run.ws, lambda r: None, round_=1,
         grant={"evaluations": 10**6, "assays": 0}, brief={}, turns=5,
     )  # fmt: skip
     fit = _use("fit_lsq", {"parameters": ["k_m_ac"], "n_starts": 1, "max_nfev_per_start": 40})
     result = agent.execute(fit)
-    assert result.get("is_error") and "outside the reserves" in result["content"]
+    assert result.get("is_error") and "do not fit" in result["content"]
     assert fake.reserves()["verification"]["simulator_evals"] == 80  # untouched
-    # the negative control: the verifier's view runs the same fit on the reserve
+    # the negative control: the verifier's view runs the same fit on the reserve, and the
+    # envelope does not pay for it
     view = agents.RoleView("verification", ["fit_lsq"], run.rec)
     out = run.ws.t_fit(view, {"parameters": ["k_m_ac"], "n_starts": 1, "max_nfev_per_start": 40})
     assert "call_index" in out and fake.reserves()["verification"]["simulator_evals"] == 40
     assert fake.charged_roles[-1] == "verification"
+    assert int(fake.remaining().simulator_evals) == 10
 
 
 def test_the_gateway_holds_each_side_to_its_own_caps(tmp_path):
@@ -1457,7 +1463,7 @@ def test_a_refused_fit_narrows_nothing_and_leaves_no_message(monkeypatch):
     ws = run.ws
     view = agents.RoleView("calibration", ALLOW_LIST["calibration"], run.rec)
     before = len(run.log.messages)
-    # a fit the registry refuses (its bound exceeds the envelope outside the reserve)
+    # a fit the registry refuses (its bound exceeds the envelope)
     big = {
         "parameters": ["k_m_ac"], "bounds": {"k_m_ac": [0.5, 2.0]},
         "bounds_justification": "x", "n_starts": 1, "max_nfev_per_start": 10**6,

@@ -130,11 +130,11 @@ def remaining() -> RemainingBudget:
 
 
 def reserves() -> dict[str, dict[str, int]]:
-    """Each role's reserve inside the envelope and what is left of it (``{}`` without one).
+    """Each role's reserve on top of the envelope and what is left of it (``{}`` without one).
 
     A reserve is set on the privileged side (``tools.registry.Registry.reserve``); a call
     tagged with its role (:func:`call`'s ``_role``) draws on it and is refused past it, and
-    every other call is refused past what the envelope holds outside the reserves.
+    every other call keeps the whole envelope, which no reserve moves.
     """
     return {str(k): dict(v) for k, v in dict(_connection.request({"op": "reserves"})).items()}
 

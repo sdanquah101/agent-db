@@ -34,8 +34,9 @@ every role is shown. Then:
   failed, or all of them when the null stands; the design role when two findings
   conflict; then the verifier. It is the only writer of routing entries;
 * **the verifier's own budget** (Q9): its calls and its named separating test are tagged
-  for the registry's reserve (``agents.verifier_budget``, set by the launcher) and refused
-  past it; the proposers share the envelope outside it; the report gives each side's spend;
+  for the registry's reserve (``agents.verifier_budget``, set by the launcher on top of
+  the cell's envelope: the lead's ruling B) and refused past it; the proposers keep the
+  whole envelope, exactly P1's; the report gives each side's spend;
 * **round 2** (§4, steps 3 and 5): a round-1 ``fail`` runs the named test as code through
   the owning role's view on the verifier's reserve, sends the alternative back to the
   leading proposer and its claimant roles, and the verifier judges again; a test no list
@@ -328,10 +329,14 @@ class Recorder:
         The call is tagged for the registry's reserves with ``charge_to`` (default: the
         role): the verifier's calls, and the separating test it names, draw on its own
         reserve (Q9) whichever role's view runs them; the spend is booked under the
-        charged role, the step keeps the role whose view ran it.
+        charged role, the step keeps the role whose view ran it. A call charged to a
+        reserve is booked from that reserve's drop, since the reserve is on top of the
+        envelope (the lead's ruling B) and the envelope does not move for it; every other
+        call from the envelope's.
         """
         charged = charge_to or role
         before = tools.remaining()
+        held_before = tools.reserves().get(charged)
         index = int(before.n_calls)
         record: dict[str, Any] = {
             "step": f"{role}.{step}",
@@ -369,12 +374,18 @@ class Recorder:
             use = self.by_role.setdefault(
                 charged, {"evaluations": 0, "wall_clock_s": 0.0, "assay_units": 0, "calls": 0}
             )
-            spent = int(before.simulator_evals) - int(after.simulator_evals)
+            if held_before is not None:  # the reserve paid: its drop is the spend
+                held_after = tools.reserves().get(charged, held_before)
+                spent = int(held_before["simulator_evals"]) - int(held_after["simulator_evals"])
+                assays = int(held_before["assay_units"]) - int(held_after["assay_units"])
+            else:
+                spent = int(before.simulator_evals) - int(after.simulator_evals)
+                assays = int(before.assay_units) - int(after.assay_units)
             use["evaluations"] += spent
             use["wall_clock_s"] += 60.0 * (
                 float(before.wall_clock_min) - float(after.wall_clock_min)
             )
-            use["assay_units"] += int(before.assay_units) - int(after.assay_units)
+            use["assay_units"] += assays
             use["calls"] += 1
             self.evals_charged += spent
         return out, index
@@ -979,7 +990,7 @@ class Workspace:
         return tools.reserves()
 
     def budget(self) -> dict[str, Any]:
-        """What is left of the registry's envelope, the reserves apart."""
+        """What is left of the registry's envelope, and of the reserves on top of it."""
         rem = tools.remaining()
         held = self.reserves()
         return {
@@ -2344,14 +2355,15 @@ class Coordinator:
         """
         rem = tools.remaining()
         held = tools.reserves().get(VERIFIER, {"simulator_evals": 0, "assay_units": 0})
-        # the verifier's reserve is its own (Q9): its grant is what the reserve holds, and
-        # the proposers share what the envelope holds outside it
-        outside_e = max(int(rem.simulator_evals) - int(held["simulator_evals"]), 0)
-        outside_a = max(int(rem.assay_units) - int(held["assay_units"]), 0)
+        # the verifier's reserve is its own, on top of the envelope (Q9, the lead's ruling
+        # B): its grant is what the reserve holds, and the proposers share the whole
+        # envelope, exactly what P0 and P1 get
+        evals_left = max(int(rem.simulator_evals), 0)
+        assays_left = max(int(rem.assay_units), 0)
         proposers = [r for r in roles if r != VERIFIER]
-        share = max(outside_e // max(len(proposers), 1), 0)
+        share = max(evals_left // max(len(proposers), 1), 0)
         grants = {
-            role: {"evaluations": share, "assays": outside_a if role == "design" else 0}
+            role: {"evaluations": share, "assays": assays_left if role == "design" else 0}
             for role in proposers
         }
         if VERIFIER in roles:

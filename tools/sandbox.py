@@ -647,13 +647,14 @@ def launch_record(staged: StagedWorkflow) -> dict[str, Any]:
 def apply_reserves(box: Path, registry: Registry) -> dict[str, dict[str, int]]:
     """Set the registry's reserves from the jail document the runner wrote into the box.
 
-    The agent P2's verifier draws on its own reserve inside the cell's envelope
-    (``docs/p2_agents_design.md`` Q9; ``agents.verifier_budget`` of ``p2_agents.yaml``).
-    The privileged runner that opens the registry is frozen, so the reserve reaches the
-    registry here, from the document the runner wrote into ``<box>/cwd/`` before the
-    launch: read on this side before any jail exists, it is the validated configuration,
-    not the workflow's word. Returns what was reserved (``{}`` without a document or
-    without the block).
+    The agent P2's verifier draws on its own reserve on top of the cell's envelope
+    (``docs/p2_agents_design.md`` Q9, the lead's ruling B of 2026-10-29;
+    ``agents.verifier_budget`` of ``p2_agents.yaml``). The privileged runner that opens
+    the registry is frozen, so the reserve reaches the registry here, from the document
+    the runner wrote into ``<box>/cwd/`` before the launch: read on this side before any
+    jail exists, it is the validated configuration, not the workflow's word. Returns what
+    was reserved (``{}`` without a document, without the block, or under the verifier-off
+    ablation, whose arm then has P1's budget exactly).
     """
     reserved: dict[str, dict[str, int]] = {}
     for doc_path in sorted(Path(box).glob("cwd/*_config.json")):
@@ -678,14 +679,9 @@ def apply_reserves(box: Path, registry: Registry) -> dict[str, dict[str, int]]:
         evals, units = int(budget["simulator_evals"]), int(budget["assay_units"])
         try:
             registry.reserve("verification", simulator_evals=evals, assay_units=units)
-        except ValueError as exc:
-            # a cell whose envelope cannot hold the reserve: refused before any jail
-            # exists, with the two numbers named (N9)
-            envelope = registry.budget
+        except ValueError as exc:  # a negative number: refused before any jail exists (N9)
             raise SandboxError(
-                f"the verifier's reserve ({evals} evaluations, {units} assay units) does "
-                f"not fit the cell's envelope ({envelope.simulator_evals} evaluations, "
-                f"{envelope.assay_units} assay units): {exc}; the workflow was not run"
+                f"{doc_path.name}: agents.verifier_budget refused ({exc}); the workflow was not run"
             ) from exc
         reserved["verification"] = {"simulator_evals": evals, "assay_units": units}
     return reserved

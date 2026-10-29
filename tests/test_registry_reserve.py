@@ -3,17 +3,20 @@
 ``docs/p2_agents_design.md`` §3.1 and Q9: the verifier's ``simulate``, ``residual_diag``,
 ``validate`` calls and its named separating test draw on its own budget, enforced in the
 registry (CLAUDE.md rule 2: budgets are enforced in the registry, not in workflows). The
-reserve is carved out of the cell's envelope (the same for every workflow, §7), set on the
-privileged side by the launcher from the jail document the runner wrote
-(:func:`tools.sandbox.apply_reserves`), and reached through a role tag on the stub's
-``call`` (``_role``). Four layers, each with its negative control:
+reserve is **on top of** the cell's envelope (the lead's ruling B of 2026-10-29): the
+untagged calls keep the whole envelope, exactly what P0 and P1 get, and a tagged call draws
+on the reserve and is refused past it. It is set on the privileged side by the launcher from
+the jail document the runner wrote (:func:`tools.sandbox.apply_reserves`), and reached
+through a role tag on the stub's ``call`` (``_role``). Four layers, each with its negative
+control:
 
 1. :class:`tools.registry.Registry`: a tagged call draws on its reserve and is refused past
-   it; an untagged call is refused past what the envelope holds outside the reserves; the
-   refusal is logged as ``budget_exceeded``; the charge record carries the role.
+   it; an untagged call keeps the whole envelope and is refused past it, as before; the
+   refusal is logged as ``budget_exceeded``; the charge record carries the role; with no
+   reserve nothing changes.
 2. :class:`tools.server.RegistryServer`: the ``call`` op's ``role`` and the ``reserves`` op.
 3. :func:`tools.sandbox.apply_reserves`: the box document sets the reserve; no block, no
-   reserve.
+   reserve; none under the verifier-off ablation.
 4. The jail: a probe script sees the reserve through ``tools.reserves()`` and spends it
    through ``tools.call(..., _role=...)``.
 """
@@ -38,7 +41,7 @@ def _morris(n: int) -> dict:
     return {**MORRIS, "n_trajectories": n}  # cost n x (k + 1) = 3 n
 
 
-def test_a_tagged_call_draws_on_its_reserve_and_an_untagged_one_cannot_touch_it(tmp_path):
+def test_a_tagged_call_draws_on_its_reserve_on_top_of_the_envelope(tmp_path):
     reg, run_dir, _ = registry(tmp_path, budget=Budget(20, 60.0, 0))
     reg.reserve("verification", simulator_evals=10, assay_units=0)
     assert reg.reserves_remaining() == {
@@ -49,51 +52,63 @@ def test_a_tagged_call_draws_on_its_reserve_and_an_untagged_one_cannot_touch_it(
             "assay_units_total": 0,
         }
     }
-    # an untagged call fits the envelope (12 <= 20) but not the envelope outside the
-    # reserve (10): refused before running, logged
-    with pytest.raises(BudgetExceededError, match="outside the reserves"):
-        reg.call("gsa_morris", **_morris(4))
-    assert read_calls(run_dir)[-1].outcome == "budget_exceeded"
-    assert reg.remaining().simulator_evals == 20
-    # a tagged call past its reserve is refused too (12 > 10), whatever the envelope holds
-    with pytest.raises(BudgetExceededError, match="verification reserve has 10"):
+    # an untagged call keeps the whole envelope: 12 of the 20 run, the reserve untouched
+    out = reg.call("gsa_morris", **_morris(4))
+    assert out.n_evaluations == 12 and reg.charged_calls[-1]["role"] is None
+    assert reg.remaining().simulator_evals == 8
+    assert reg.reserves_remaining()["verification"]["simulator_evals"] == 10
+    # a tagged call past its reserve is refused (12 > 10), logged, whatever the envelope holds
+    with pytest.raises(BudgetExceededError, match="verification reserve has 10 of 10"):
         reg.call("gsa_morris", role="verification", **_morris(4))
-    # the negative controls: a tagged call inside the reserve runs and the reserve pays
+    assert read_calls(run_dir)[-1].outcome == "budget_exceeded"
+    # a tagged call inside the reserve runs and the reserve pays: the envelope does not move
     out = reg.call("gsa_morris", role="verification", **_morris(3))
     assert out.n_evaluations == 9
     assert reg.reserves_remaining()["verification"]["simulator_evals"] == 1
-    assert reg.remaining().simulator_evals == 11
+    assert reg.remaining().simulator_evals == 8
+    assert reg.evaluations_used == 21  # the run spent past the envelope, by the reserve
     assert reg.charged_calls[-1]["role"] == "verification"
     assert reg.charged_calls[-1]["n_evaluations"] == 9
-    # ... and an untagged call inside the shared part runs (9 <= 11 - 1)
-    out = reg.call("gsa_morris", **_morris(3))
-    assert out.n_evaluations == 9 and reg.charged_calls[-1]["role"] is None
-    assert reg.remaining().simulator_evals == 2
-    # the shared part is now 1: an untagged single evaluation runs, a second is refused
+    # the untagged refusal is the envelope's own, worded as it always was (9 > 8)
+    with pytest.raises(BudgetExceededError, match="8 of 20 remain"):
+        reg.call("gsa_morris", **_morris(3))
+    assert read_calls(run_dir)[-1].outcome == "budget_exceeded"
+    # the envelope's last evaluations are the untagged calls' alone
+    reg.call("gsa_morris", **_morris(2))
     reg.call("simulate", model="linear")
-    with pytest.raises(BudgetExceededError, match="outside the reserves"):
+    reg.call("simulate", model="linear")
+    assert reg.remaining().simulator_evals == 0
+    with pytest.raises(BudgetExceededError, match="0 of 20 remain"):
         reg.call("simulate", model="linear")
-    # the reserve's last evaluation is the verifier's alone
+    # the reserve's last evaluation is the verifier's alone, and the envelope being spent
+    # does not refuse it
     reg.call("simulate", model="linear", role="verification")
     assert reg.reserves_remaining()["verification"]["simulator_evals"] == 0
-    # (the envelope is spent too, so the registry's own refusal may name it first)
-    with pytest.raises(BudgetExceededError, match=r"reserve has 0|0 of 20 remain"):
+    with pytest.raises(BudgetExceededError, match="reserve has 0 of 10"):
         reg.call("simulate", model="linear", role="verification")
-    # a reserve in use cannot be reset; a reserve past the envelope is refused
+    assert reg.evaluations_used == 30
+    # a tag naming no reserve is an untagged call for the budget (a proposer's own tag)
+    with pytest.raises(BudgetExceededError, match="0 of 20 remain"):
+        reg.call("simulate", model="linear", role="calibration")
+    # a reserve in use cannot be reset; a negative one is refused; a reserve larger than
+    # the envelope is accepted (it is on top of it) and the envelope is unchanged
     with pytest.raises(ValueError, match="in use"):
         reg.reserve("verification", simulator_evals=5, assay_units=0)
     fresh = make_registry(budget=Budget(20, 60.0, 1), seed=1)
-    with pytest.raises(ValueError, match="exceed the envelope"):
-        fresh.reserve("verification", simulator_evals=21, assay_units=0)
-    with pytest.raises(ValueError, match="exceed the envelope"):
-        fresh.reserve("verification", simulator_evals=1, assay_units=2)
+    with pytest.raises(ValueError, match="not negative"):
+        fresh.reserve("verification", simulator_evals=-1, assay_units=0)
+    fresh.reserve("verification", simulator_evals=21, assay_units=2)
+    assert fresh.reserves_remaining()["verification"]["simulator_evals_total"] == 21
+    assert fresh.reserves_remaining()["verification"]["assay_units_total"] == 2
+    assert fresh.remaining().simulator_evals == 20 and fresh.remaining().assay_units == 1
 
 
 def test_an_overrunning_tool_is_stopped_at_the_callers_share_not_the_envelope(tmp_path):
     """M3: the meter's limit is the caller's share while a call runs.
 
-    An untagged tool that lies about its bound cannot eat a reserve, and a tagged one
-    cannot leave its own.
+    An untagged tool that lies about its bound is stopped at the envelope and cannot eat a
+    reserve; a tagged one is stopped at its reserve, past the envelope by that much and
+    no further.
     """
     from tools.registry import ToolSpec
     from tools.schemas import SimulateInput, SimulateOutput
@@ -110,15 +125,16 @@ def test_an_overrunning_tool_is_stopped_at_the_callers_share_not_the_envelope(tm
         cost=lambda inp, ctx: 1,
     )  # fmt: skip
     reg.reserve("verification", simulator_evals=10, assay_units=0)
-    # untagged: stopped after the 10 outside the reserve; the reserve is untouched
+    # untagged: stopped after the envelope's 20; the reserve is untouched
     with pytest.raises(BudgetExceededError):
         reg.call("greedy", model="linear")
-    assert reg.remaining().simulator_evals == 10
+    assert reg.remaining().simulator_evals == 0
     assert reg.reserves_remaining()["verification"]["simulator_evals"] == 10
     assert read_calls(run_dir)[-1].outcome == "budget_exceeded"
-    # tagged: stopped after its 10; nothing else is left to it
+    # tagged: stopped after its 10, on top of the spent envelope; nothing else is left to it
     with pytest.raises(BudgetExceededError):
         reg.call("greedy", model="linear", role="verification")
+    assert reg.evaluations_used == 30
     assert reg.remaining().simulator_evals == 0
     assert reg.reserves_remaining()["verification"]["simulator_evals"] == 0
     assert reg._meter.limit == 20  # the limit is restored on every path
@@ -127,7 +143,7 @@ def test_an_overrunning_tool_is_stopped_at_the_callers_share_not_the_envelope(tm
     plain._specs["greedy"] = reg._specs["greedy"]
     with pytest.raises(BudgetExceededError):
         plain.call("greedy", model="linear")
-    assert plain.remaining().simulator_evals == 0
+    assert plain.remaining().simulator_evals == 0 and plain._meter.limit == 20
 
 
 def test_the_server_tags_a_call_and_serves_the_reserves(tmp_path):
@@ -141,12 +157,16 @@ def test_the_server_tags_a_call_and_serves_the_reserves(tmp_path):
         assert reply["ok"] and reply["result"]["outcome"] == "ok"
         assert reg.charged_calls[-1]["role"] == "verification"
         assert reg.reserves_remaining()["verification"]["simulator_evals"] == 4
-        # the negative control: no tag, no reserve: the untagged refusal (12 fits the 14
-        # left in the envelope, not the 10 outside the reserve)
+        assert server._handle({"op": "remaining"})["result"]["simulator_evals"] == 20
+        # the negative control: no tag, no reserve: the whole envelope (12 of the 20 run,
+        # the reserve's 4 untouched), then the envelope's own refusal
         reply = server._handle({"op": "call", "name": "gsa_morris", "args": _morris(4)})
-        assert reply["result"]["outcome"] == "budget_exceeded"
-        assert "outside the reserves" in reply["result"]["error"]
+        assert reply["ok"] and reply["result"]["outcome"] == "ok"
         assert reg.charged_calls[-1]["role"] is None
+        assert reg.reserves_remaining()["verification"]["simulator_evals"] == 4
+        reply = server._handle({"op": "call", "name": "gsa_morris", "args": _morris(3)})
+        assert reply["result"]["outcome"] == "budget_exceeded"
+        assert "8 of 20 remain" in reply["result"]["error"]
 
 
 def test_the_launcher_sets_the_reserve_from_the_jail_document(tmp_path):
@@ -157,6 +177,7 @@ def test_the_launcher_sets_the_reserve_from_the_jail_document(tmp_path):
     (box / "cwd" / "p2_config.json").write_text(json.dumps(doc), encoding="utf-8")
     assert apply_reserves(box, reg) == {"verification": {"simulator_evals": 80, "assay_units": 1}}
     assert reg.reserves_remaining()["verification"]["simulator_evals"] == 80
+    assert reg.remaining().simulator_evals == 100  # the envelope is unchanged (ruling B)
     # the negative controls: a document without the block, and no document
     plain = make_registry(budget=Budget(100, 60.0, 2), seed=1)
     box2 = tmp_path / "box2"
@@ -166,7 +187,7 @@ def test_the_launcher_sets_the_reserve_from_the_jail_document(tmp_path):
     box3 = tmp_path / "box3"
     box3.mkdir()
     assert apply_reserves(box3, plain) == {}
-    # the verifier-off ablation sets no reserve: nobody could spend it (M2)
+    # the verifier-off ablation sets no reserve: that arm has P1's budget exactly (M2)
     off = make_registry(budget=Budget(100, 60.0, 2), seed=1)
     box4 = tmp_path / "box4"
     (box4 / "cwd").mkdir(parents=True)
@@ -174,20 +195,26 @@ def test_the_launcher_sets_the_reserve_from_the_jail_document(tmp_path):
         json.dumps({**doc, "ablation": {"verifier": False, "roles": {}}}), encoding="utf-8"
     )
     assert apply_reserves(box4, off) == {} and off.reserves_remaining() == {}
-    # a document missing a key, or a cell whose envelope cannot hold the reserve, is
-    # refused before any jail exists, with a clear error (N9)
-    for bad, match, budget in (
-        ({"agents": {"verifier_budget": {"simulator_evals": 80}}}, "lacks", Budget(100, 60.0, 2)),
-        (doc, "does not fit the cell's envelope", Budget(50, 60.0, 2)),
-        (doc, "does not fit the cell's envelope", Budget(100, 60.0, 0)),
+    # a cell whose envelope is smaller than the reserve takes it: the reserve is on top
+    small = make_registry(budget=Budget(50, 60.0, 0), seed=1)
+    box5 = tmp_path / "box5"
+    (box5 / "cwd").mkdir(parents=True)
+    (box5 / "cwd" / "p2_config.json").write_text(json.dumps(doc), encoding="utf-8")
+    assert apply_reserves(box5, small)["verification"] == {"simulator_evals": 80, "assay_units": 1}
+    assert small.remaining().simulator_evals == 50 and small.remaining().assay_units == 0
+    # a document missing a key, or naming a negative number, is refused before any jail
+    # exists, with a clear error (N9)
+    for bad, match in (
+        ({"agents": {"verifier_budget": {"simulator_evals": 80}}}, "lacks"),
+        ({"agents": {"verifier_budget": {"simulator_evals": -1, "assay_units": 0}}}, "refused"),
     ):
-        small = make_registry(budget=budget, seed=1)
-        box5 = tmp_path / f"box_{match[:5]}_{budget.simulator_evals}_{budget.assay_units}"
-        (box5 / "cwd").mkdir(parents=True)
-        (box5 / "cwd" / "p2_config.json").write_text(json.dumps(bad), encoding="utf-8")
+        fresh = make_registry(budget=Budget(100, 60.0, 2), seed=1)
+        box6 = tmp_path / f"box_{match}"
+        (box6 / "cwd").mkdir(parents=True)
+        (box6 / "cwd" / "p2_config.json").write_text(json.dumps(bad), encoding="utf-8")
         with pytest.raises(SandboxError, match=match):
-            apply_reserves(box5, small)
-        assert small.reserves_remaining() == {}
+            apply_reserves(box6, fresh)
+        assert fresh.reserves_remaining() == {}
 
 
 def test_the_jail_sees_the_reserve_and_spends_it_through_the_stubs_role_tag(tmp_path):
@@ -199,22 +226,26 @@ def test_the_jail_sees_the_reserve_and_spends_it_through_the_stubs_role_tag(tmp_
             import json
             import tools
             out = {"before": tools.reserves()}
-            try:
-                tools.call("gsa_morris", model="linear", parameters=["a", "b"],
+            r = tools.call("gsa_morris", model="linear", parameters=["a", "b"],
                            outputs=["y"], n_trajectories=4, seed=1)
-                out["untagged_big"] = "RAN"
-            except tools.BudgetExceededError as exc:
-                out["untagged_big"] = str(exc)
+            out["untagged"] = r.n_evaluations
             r = tools.call("gsa_morris", _role="verification", model="linear",
                            parameters=["a", "b"], outputs=["y"], n_trajectories=3, seed=1)
             out["tagged"] = r.n_evaluations
             out["after"] = tools.reserves()
+            out["left"] = tools.remaining().simulator_evals
             try:
                 tools.call("gsa_morris", _role="verification", model="linear",
                            parameters=["a", "b"], outputs=["y"], n_trajectories=3, seed=1)
                 out["tagged_again"] = "RAN"
             except tools.BudgetExceededError as exc:
                 out["tagged_again"] = str(exc)
+            try:
+                tools.call("gsa_morris", model="linear", parameters=["a", "b"],
+                           outputs=["y"], n_trajectories=3, seed=1)
+                out["untagged_again"] = "RAN"
+            except tools.BudgetExceededError as exc:
+                out["untagged_again"] = str(exc)
             print(json.dumps(out))
             """
         ),
@@ -228,12 +259,16 @@ def test_the_jail_sees_the_reserve_and_spends_it_through_the_stubs_role_tag(tmp_
     assert result.returncode == 0, result.stderr
     out = json.loads(result.stdout.strip().splitlines()[-1])
     assert out["before"]["verification"]["simulator_evals"] == 10
-    assert "outside the reserves" in out["untagged_big"]
+    assert out["untagged"] == 12  # the whole envelope is the untagged calls'
     assert out["tagged"] == 9
     assert out["after"]["verification"]["simulator_evals"] == 1
+    assert out["left"] == 8  # the envelope does not pay the tagged call
     assert "reserve has 1" in out["tagged_again"]
+    assert "8 of 20 remain" in out["untagged_again"]
     assert [c["role"] for c in reg.charged_calls if c["name"] == "gsa_morris"] == [
         None,
         "verification",
         "verification",
+        None,
     ]
+    assert reg.evaluations_used == 21

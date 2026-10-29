@@ -774,10 +774,10 @@ class P2AgentSeeds(_Frozen):
 class P2VerifierBudget(_Frozen):
     """The verifier's own registry budget (design note §3.1, Q9; §8's table, per run).
 
-    A reserve inside the cell's envelope, set in the registry by the launcher
-    (``tools.sandbox.apply_reserves``): the verifier's ``simulate``, ``residual_diag``,
-    ``validate`` and its named separating test draw on it, refused past it; the proposers
-    are refused past what the envelope holds outside it.
+    A reserve on top of the cell's envelope (the lead's ruling B of 2026-10-29), set in
+    the registry by the launcher (``tools.sandbox.apply_reserves``): the verifier's
+    ``simulate``, ``residual_diag``, ``validate`` and its named separating test draw on
+    it, refused past it; the proposers keep the whole envelope, exactly P1's.
     """
 
     simulator_evals: Annotated[int, Field(ge=0)] = Field(description="Evaluations per run")

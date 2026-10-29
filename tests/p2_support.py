@@ -163,12 +163,20 @@ class FakeTools:
         }
 
     # -- the budget --------------------------------------------------------------------
+    def _envelope_left(self) -> tuple[int, int]:
+        """What the envelope holds: the reserves' spend is on top of it (Q9, ruling B)."""
+        spent_e = sum(r["evals_used"] for r in self.reserved.values())
+        spent_a = sum(r["assays_used"] for r in self.reserved.values())
+        u, tot = self.used, self.totals
+        return tot["evals"] - (u["evals"] - spent_e), tot["assays"] - (u["assays"] - spent_a)
+
     def remaining(self) -> Any:
         u, tot = self.used, self.totals
+        evals_left, assays_left = self._envelope_left()
         return ns(
-            simulator_evals=tot["evals"] - u["evals"], simulator_evals_total=tot["evals"],
+            simulator_evals=evals_left, simulator_evals_total=tot["evals"],
             wall_clock_min=tot["wall"] - 0.01 * u["calls"], wall_clock_min_total=tot["wall"],
-            assay_units=tot["assays"] - u["assays"], assay_units_total=tot["assays"],
+            assay_units=assays_left, assay_units_total=tot["assays"],
             n_calls=u["calls"],
         )  # fmt: skip
 
@@ -176,12 +184,9 @@ class FakeTools:
         return self._last
 
     def _charge(self, evals: int = 0, assays: int = 0) -> None:
-        if self.used["evals"] + evals > self.totals["evals"]:
-            raise BudgetExceededError(f"{evals} evaluations do not fit")
-        if self.used["assays"] + assays > self.totals["assays"]:
-            raise BudgetExceededError(f"{assays} assay units do not fit")
-        # the reserves, as the registry keeps them: a tagged call draws on its own, every
-        # other call is refused past what is left outside the reserves
+        # the reserves, as the registry keeps them (the lead's Q9 ruling B): a call tagged
+        # for a reserve draws on it, on top of the envelope; every other call is refused
+        # past the envelope, which no reserve moves. `used` counts every call's spend.
         own = self.reserved.get(self._role) if self._role is not None else None
         if own is not None:
             if own["evals_used"] + evals > own["simulator_evals"]:
@@ -191,16 +196,11 @@ class FakeTools:
             own["evals_used"] += evals
             own["assays_used"] += assays
         else:
-            held_e = sum(
-                max(r["simulator_evals"] - r["evals_used"], 0) for r in self.reserved.values()
-            )
-            held_a = sum(
-                max(r["assay_units"] - r["assays_used"], 0) for r in self.reserved.values()
-            )
-            if self.used["evals"] + evals > self.totals["evals"] - held_e:
-                raise BudgetExceededError(f"{evals} evaluations do not fit outside the reserves")
-            if self.used["assays"] + assays > self.totals["assays"] - held_a:
-                raise BudgetExceededError(f"{assays} assay units do not fit outside the reserves")
+            left_e, left_a = self._envelope_left()
+            if evals > left_e:
+                raise BudgetExceededError(f"{evals} evaluations do not fit")
+            if assays > left_a:
+                raise BudgetExceededError(f"{assays} assay units do not fit")
         self.used["evals"] += evals
         self.used["assays"] += assays
 
