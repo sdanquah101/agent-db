@@ -352,6 +352,48 @@ def test_the_verifier_is_refused_past_80_evaluations_and_past_1_assay_unit(tmp_p
     assert reg.remaining().assay_units == 0
 
 
+def test_the_reserves_assay_unit_is_spent_booked_and_then_refused_on_a_real_cell(tmp_path):
+    """S1 (the review of PR #43 at b998566): the reserve's assay side in the real registry.
+
+    On a generated cell whose registry serves the assay channel: a tagged ``request_assay``
+    spends the reserve's one unit; the envelope's units are untouched afterwards; a second
+    tagged assay is refused because the first was booked to the reserve. The control: an
+    untagged assay then draws on the envelope and leaves the spent reserve as it is.
+    """
+    from sim.plants import load_plant_config
+    from sim.run.harness import generate_run
+    from tests.test_tool_fitted_model import _short
+    from tools import open_registry
+
+    scenario = _short("S0-01")
+    scenario = scenario.model_copy(
+        update={"budget": scenario.budget.model_copy(update={"assay_units": 2})}
+    )
+    root = tmp_path / "runs"
+    run = generate_run(scenario, "B", plant=load_plant_config("C"), runs_root=root)
+    reg = open_registry(run.run_id, runs_root=root, scenario=scenario)
+    reg.reserve("verification", simulator_evals=80, assay_units=1)
+    assert reg.configs.assays.assays["alkalinity"].unit_cost == 1
+    # 1. the tagged assay runs and the reserve pays its unit
+    out = reg.call("request_assay", assay="alkalinity", day=20.0, role="verification")
+    assert out.unit_cost == 1 and out.results
+    assert reg.reserves_remaining()["verification"]["assay_units"] == 0
+    assert reg.charged_calls[-1]["role"] == "verification"
+    assert reg.charged_calls[-1]["assay_units"] == 1
+    # 2. the envelope's units are untouched
+    assert reg.remaining().assay_units == 2 and reg.assay_units_used == 1
+    # 3. a second tagged assay is refused: the first was booked to the reserve
+    with pytest.raises(BudgetExceededError, match="costs 1 units, the verification reserve has 0"):
+        reg.call("request_assay", assay="alkalinity", day=21.0, role="verification")
+    assert read_calls(run.paths.root)[-1].outcome == "budget_exceeded"
+    assert reg.remaining().assay_units == 2
+    # the control: an untagged assay draws on the envelope, and the reserve stays spent
+    reg.call("request_assay", assay="alkalinity", day=21.0)
+    assert reg.remaining().assay_units == 1 and reg.assay_units_used == 2
+    assert reg.reserves_remaining()["verification"]["assay_units"] == 0
+    assert reg.charged_calls[-1]["role"] is None
+
+
 def test_with_no_tagged_call_the_logs_are_byte_identical_with_and_without_a_reserve(tmp_path):
     """P0, P1 and the procedural P2 set no reserve and tag no call: their logs cannot change.
 

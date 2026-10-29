@@ -8567,9 +8567,9 @@ opens the registry with the cell's envelope and nothing else. **Decision** (as b
   proposers' and the verifier's spend apart, with the reserves, beside the privileged
   summary's own count.
 
-The **"in addition to"** of Q9 is read for the model caps, which are not the cell's
-envelope: the gateway holds the verifier's turns to `agents.verifier_caps` and every other
-role's to `agents.caps`, with the run's caps their sum (`side_usage`, `check_attempt`). A
+The model caps are additional in the same way, and were from the first build: the gateway
+holds the verifier's turns to `agents.verifier_caps` and every other role's to
+`agents.caps`, with the run's caps their sum (`side_usage`, `check_attempt`). A
 side's USD is **apportioned by tokens**: the meter does not split input and output per
 role, so each side's share of the metered cost is its share of the tokens, an
 approximation that is exact when both sides' input/output mix is the same (N5). What an
@@ -8604,6 +8604,40 @@ workflow's outputs (the reserves, the count by tag, every tagged call by `seq`);
 report's `tags` give the workflow's step beside each call's tag, so the two are
 cross-checked (M4). The frozen runner's `by_role` still attributes by step prefix.
 
+**The attribution is the harness's, and what the privileged side guarantees (N10).** The
+tag is set by the harness's own code (`Recorder.call`, `RoleView.charge_to`), never by a
+model: a role's view tags its calls with its own role, and only the separating test is
+charged to the verifier through another role's view. But the tag travels over the wire
+from the jail, so a jailed workflow *could* send `_role="verification"` on any call, and
+under ruling B a forged tag would buy evaluations beyond P1's envelope. What the
+privileged side guarantees is therefore exactly this: **untagged spend ≤ the envelope,
+tagged spend ≤ the reserve**, whoever tagged; the reserve bounds what the tag can claim
+(80 evaluations and 1 assay unit per run), and the launcher's `spend.json` records every
+tagged call for the cross-check against the report's steps (M4). The attribution of a
+tagged call to the verifier's *work* is the harness's word, as `by_role` has always been.
+
+**The self-report under B (S2, the review of `b998566`).** The frozen `eval/efficiency.py`
+sets `self_report_mismatch` when the state's `simulator_evals_used` or `assay_units_used`
+disagrees with the meter, and the meter counts the reserve's calls; `Registry.remaining()`
+is the envelope's remainder only. So the agent arm's state reports the envelope's spend
+**plus every reserve's**, read from `tools.reserves()` (`spent_in_all`), and a run where
+the verifier spends agrees with the meter (tested, with the envelope-only report as the
+control). A consequence for Family C (`docs/eval_design.md` §4): `simulator_evals_fraction`
+is the meter's evaluations over the summary's `simulator_evals_total`, which is the cell's
+envelope E (the frozen runner's), so for the agent arm it can exceed 1, up to (E + 80) / E
+(and the assay side up to (A + 1) / A). Family C reads it as it always has, spend against
+the envelope every arm is given; a value above 1 is the verifier's reserve at work, and
+the report's `spend` (and the launcher's `spend.json`) say how much of the total was the
+verifier's. The arms are compared on absolute evaluations and assay units (the meter's
+sums), not on the fraction; nothing in the frozen evaluator changes.
+
+**What a proposer sees of a verdict (M1).** A proposer's brief carries each verdict's typed
+decision (`round`, `verdict`, `alternative`, `holdout`, `separating_test`) and each
+evidence item's `label`, `rule` and `calls`, never its values or units; the verifier's own
+brief carries the full verdict. A proposer may cite the verifier's `validate` call for its
+`holdout_failed` flag only (`check_finding`), so the hold-out's numbers reach no proposer
+by any route (§4, step 8).
+
 **Round 2 and the separating test.** A round-1 `fail` sends the alternative back (§4,
 step 5): the verifier's named test runs first, as code, through the view of the role whose
 allow-list holds the tool, charged to the verifier's reserve (step 3), with the tool's own
@@ -8611,7 +8645,8 @@ schema checked and the redacted free-text fields excluded; a test no allow-list 
 (`validate`, or a judgement such as `set_sensor_status`), one that fails its schema, or one
 whose bound exceeds the reserve counts as `abstain` and is annotated. Then the leading
 proposer and the alternative's claimant roles answer (routing reason `respond`), shown the
-verdict and the test's call index in their brief, and the verifier judges again; a verdict
+verdict's typed decision, its items' labels, rules and calls and the test's call index in
+their brief, never the evidence values (M1, above), and the verifier judges again; a verdict
 must carry the round it is given in. The conclusion reads the last round's verdict; a
 round the verifier was routed in and left without a verdict abstains the run
 (`abstain:no_verdict`), whatever an earlier round said. The offline responder's verifier

@@ -416,9 +416,10 @@ class P2AgentGateway(P2Gateway):
     digest), its tools are exactly that role's specifications (the registry tools of its
     allow-list, ``stored`` and its ``emit_finding``; by digest) and its messages are an
     agent history (``check_agent_request``: user and assistant turns of text, tool uses and
-    tool results, starting with the role's brief). The caps are the run's, projected per
-    attempt as for the decision points; the role is named by the prompt the request
-    matched, never by the jail. The verifier's own budget is the next step's.
+    tool results, starting with the role's brief). The caps are projected per attempt as
+    for the decision points, the run's first and then the side's: the verifier's turns
+    against ``verifier_caps``, every other role's against ``proposer_caps`` (Q9); the role
+    is named by the prompt the request matched, never by the jail.
     """
 
     role_prompts: dict[str, str] = field(default_factory=dict)

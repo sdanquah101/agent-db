@@ -511,6 +511,22 @@ def cut_points(value: Any, max_points: int) -> Any:
     return value
 
 
+def spent_in_all(rem: Any, held: dict[str, dict[str, Any]]) -> tuple[int, int]:
+    """What the meter charged in all: the envelope's spend plus every reserve's.
+
+    ``rem`` is the registry's ``remaining()`` (the envelope's remainder, the reserves
+    apart: the lead's Q9 ruling B) and ``held`` its ``reserves()``; a reserve's spend is
+    its total less what is left of it. With no reserve this is the envelope's spend alone,
+    so the procedural arm's self-report is unchanged. Evaluations, then assay units.
+    """
+    evals = int(rem.simulator_evals_total) - int(rem.simulator_evals)
+    assays = int(rem.assay_units_total) - int(rem.assay_units)
+    for r in held.values():
+        evals += int(r["simulator_evals_total"]) - int(r["simulator_evals"])
+        assays += int(r["assay_units_total"]) - int(r["assay_units"])
+    return evals, assays
+
+
 def project(
     rec: Recorder,
     args_by_index: dict[int, dict[str, Any]],
@@ -2841,10 +2857,20 @@ class AgentRun:
 
     # -- the record ----------------------------------------------------------------------
     def build_state(self, completed: bool) -> dict[str, Any]:
-        """The shared task state (§6.6) for the agent arm: no model free text in it."""
+        """The shared task state (§6.6) for the agent arm: no model free text in it.
+
+        Its budget's ``*_used`` are what the registry's meter charged in all: the envelope's
+        spend and every reserve's (:func:`spent_in_all`), since the evaluator's
+        ``self_report_mismatch`` compares them with the meter and the meter counts the
+        reserve's calls too.
+        """
         ws = self.ws
         b = self.base
         rem = tools.remaining()
+        # the self-report is what the meter charged: the envelope's spend plus every
+        # reserve's, which is on top of the envelope (the lead's Q9 ruling B; the review
+        # of PR #43 at b998566, S2: the frozen evaluator compares this with the meter)
+        evals_used, assays_used = spent_in_all(rem, tools.reserves())
         cls = self.classification or {
             "label": ABSTAIN_LABEL,
             "secondary_labels": [],
@@ -2933,12 +2959,12 @@ class AgentRun:
             "budget": {
                 "simulator_evals": int(rem.simulator_evals),
                 "simulator_evals_total": int(rem.simulator_evals_total),
-                "simulator_evals_used": int(rem.simulator_evals_total) - int(rem.simulator_evals),
+                "simulator_evals_used": evals_used,
                 "wall_clock_min": float(rem.wall_clock_min),
                 "wall_clock_min_total": float(rem.wall_clock_min_total),
                 "assay_units": int(rem.assay_units),
                 "assay_units_total": int(rem.assay_units_total),
-                "assay_units_used": int(rem.assay_units_total) - int(rem.assay_units),
+                "assay_units_used": assays_used,
                 "n_calls": int(rem.n_calls),
             },
             "validation": ws.validation if ws is not None else None,

@@ -1394,6 +1394,43 @@ def test_the_verifier_is_refused_past_its_one_assay_unit_in_the_harness(monkeypa
     assert run.rec.by_role["design"]["assay_units"] == 1
 
 
+def test_the_self_report_counts_the_reserves_spend_as_the_meter_does(monkeypatch):
+    """S2 (the review of PR #43 at b998566): the state's ``*_used`` equal the meter's.
+
+    The frozen evaluator sets ``self_report_mismatch`` when the state disagrees with the
+    meter, and the meter counts the reserve's calls; the envelope's remainder alone would
+    leave them out. The verifier spends evaluations and an assay unit here; the control is
+    the envelope-only report, which disagrees by exactly the reserve's spend.
+    """
+    fake = FakeTools("B", "B", offsets={"ph": 8.0})
+    _install(monkeypatch, fake)  # the reserve: 80 evaluations, 1 assay unit
+    run = agents.AgentRun(_cfg())
+    run.code_steps()
+    ws = run.ws
+    verifier = agents.RoleView("verification", ["simulate"], run.rec)
+    for _ in range(3):
+        ws.handlers()["simulate"](verifier, {})
+    charged = agents.RoleView("design", ["request_assay"], run.rec, "verification")
+    args = {"assay": sorted(_cfg()["assay_catalogue"])[0], "day": float(ws.cal[0]) + 1.0}
+    ws.handlers()["request_assay"](charged, args)
+    held = fake.reserves()["verification"]
+    assert held["simulator_evals"] == 77 and held["assay_units"] == 0
+    budget = run.build_state(False)["budget"]
+    # the meter: every call's charge, the fake's `used`
+    assert budget["simulator_evals_used"] == fake.used["evals"]
+    assert budget["assay_units_used"] == fake.used["assays"]
+    assert budget["simulator_evals_total"] == fake.totals["evals"]
+    # the envelope's own numbers are still the envelope's (what the registry serves)
+    rem = fake.remaining()
+    assert budget["simulator_evals"] == int(rem.simulator_evals)
+    assert budget["assay_units"] == int(rem.assay_units)
+    # the control: the envelope-only report disagrees with the meter by the reserve's spend
+    envelope_only = int(rem.simulator_evals_total) - int(rem.simulator_evals)
+    assert envelope_only == fake.used["evals"] - 3
+    assert int(rem.assay_units_total) - int(rem.assay_units) == fake.used["assays"] - 1
+    assert agents.spent_in_all(rem, {}) == (envelope_only, fake.used["assays"] - 1)
+
+
 def test_the_gateway_holds_each_side_to_its_own_caps(tmp_path):
     """Q9: the verifier's turns against its caps, the proposers' against theirs."""
     from tools.llm import GatewayRefusal, ScriptedClient
@@ -1711,3 +1748,13 @@ def test_the_jailed_agent_arm_writes_the_declared_record(jailed_agents, tmp_path
     # procedural arm's are (never a count)
     assert summary["decider"] == "offline" and summary["llm_turns"] is None
     assert summary["model_id"] is None and summary["llm_cost_usd"] is None
+    # the self-report equals the frozen runner's count from the meter (S2): the state's
+    # `*_used` are the envelope's spend plus the reserve's, which the privileged count by
+    # tag gives apart (the offline verifier's call is tagged; it costs no evaluation)
+    assert spend["by_tag"]["verification"]["calls"] > 0
+    assert doc.budget.simulator_evals_used == summary["simulator_evals_used"]
+    assert doc.budget.assay_units_used == summary["assay_units_used"]
+    assert doc.budget.simulator_evals_used == result.simulator_evals_used
+    envelope_only = doc.budget.simulator_evals_total - doc.budget.simulator_evals
+    reserve_spent = spend["by_tag"]["verification"]["n_evaluations"]
+    assert envelope_only + reserve_spent == result.simulator_evals_used

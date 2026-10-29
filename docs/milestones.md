@@ -4350,5 +4350,25 @@ PR #41, unmerged).**
   head, back to back, the visible call projections and the verdict equal, the agent arm
   on the same cell as the control (run once here: 1 passed, 37 min). Full `pytest -q` on
   the tests' commit: 895 passed, 2 skipped, 1 h 18 min; ruff clean.
-- **Next:** the coordinator's re-review of PR #43; then the Q6 cells and the agent arm's
-  own frozen record (§6).
+- **The coordinator's review of `b998566` with `86b068d` (08:15 UTC, relayed 10:33):
+  FIXES NEEDED, one blocking.** M1–M6 and N1, N3–N9 confirmed fixed; ruling B in the
+  registry, the runner untouched, P0/P1/procedural-P2 logs byte-identical end to end.
+  **S2 (blocking):** the agent arm's state wrote `simulator_evals_used` and
+  `assay_units_used` as the envelope's total less its remainder, which under B leaves out
+  the reserve's spend, and the frozen `eval/efficiency.py` flags that as
+  `self_report_mismatch` against the meter (the reviewer's probe: 171 against 172). Fixed
+  workflow-side: `spent_in_all` adds every reserve's spend from `tools.reserves()`; a test
+  where the verifier spends three evaluations and the assay unit shows the state equal to
+  the meter, with the envelope-only report as the control; the jailed agent run asserts
+  the state's `*_used` equal the runner's summary from the meter. The decisions entry
+  records that `simulator_evals_fraction` can exceed 1 for the agent arm, up to
+  (E + 80) / E, and how Family C reads it. **S1 remainder:** a real-cell test spends the
+  reserve's assay unit with a tagged call, shows the envelope's units untouched, and a
+  second tagged assay refused because the first was booked (the control: an untagged
+  assay draws on the envelope). **Nits:** N2 the gateway docstring; N10 the attribution
+  is the harness's, a forged tag's reach and the privileged guarantee (untagged ≤
+  envelope, tagged ≤ reserve), in decisions; N11 the M1 information-flow rule in
+  decisions and the round-2 paragraph corrected; the "in addition to" sentence reworded.
+  Full `pytest -q` on the fix: 897 passed, 2 skipped, 1 h 28 min; ruff clean.
+- **Next:** the coordinator's check of this delta and the lead's "merge 43"; then the Q6
+  cells and the agent arm's own frozen record (§6).
