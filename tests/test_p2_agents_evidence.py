@@ -117,6 +117,65 @@ def test_the_frozen_admit_moved_verbatim_and_the_entry_takes_it_from_the_module(
     assert "def admit(" not in (PACKAGE / "workflow.py").read_text(encoding="utf-8")
 
 
+MOVED_AND_IMPORTED_BACK = (
+    "band_placement",
+    "candidate_onsets",
+    "common_change_point",
+    "early_late",
+    "failed_channels",
+    "feed_covariate",
+    "inhibition",
+    "nb_side",
+    "null_table",
+    "onset_test",
+    "record_statistics",
+    "s1_table",
+    "split_agrees",
+    "structured_channels",
+    "tied_change_point",
+)
+"""The fifteen moved names the entry's steps still use (the move of 2026-10-28, H3)."""
+
+MOVED_NOT_IMPORTED_BACK = (
+    "NEVER_IN_OBJECTIVE",
+    "BALANCE_STATS",
+    "place",
+    "worst_window",
+    "envelope_placement",
+    "band_envelopes",
+    "channels_of",
+    "channel_fails",
+    "n_bal",
+    "n_multi",
+    "n_single",
+    "null_partial",
+    "null_rejected",
+)
+"""The thirteen moved names used only inside the moved block."""
+
+
+def test_the_entry_takes_every_moved_name_it_uses_from_the_module(monkeypatch):
+    """L6 (the review of PR #42): the entry's names ARE the module's, like `admit`.
+
+    Each of the fifteen re-imported names is the evidence module's own object, so a
+    change to the module reaches the entry; the thirteen names used only inside the moved
+    block are not in the entry at all, and no moved definition is left in it.
+    """
+    entry = (PACKAGE / "workflow.py").read_text(encoding="utf-8")
+    for name in MOVED_AND_IMPORTED_BACK:
+        assert getattr(wf, name) is getattr(ev, name), name
+        assert f"def {name}(" not in entry, name
+    assert wf.Placement is ev.Placement
+    for name in MOVED_NOT_IMPORTED_BACK:
+        assert not hasattr(wf, name), name
+        assert hasattr(ev, name), name
+        assert f"def {name}(" not in entry and f"\n{name} = " not in entry, name
+    assert len(MOVED_AND_IMPORTED_BACK) + len(MOVED_NOT_IMPORTED_BACK) + 1 == 29  # + Placement
+    # the negative control: a rebinding in the entry would break the identity
+    monkeypatch.setattr(wf, "null_table", lambda *a, **k: None)
+    assert wf.null_table is not ev.null_table
+
+
 def test_structural_is_admitted_over_a_standing_nm_only_with_both_pieces_of_evidence():
     need = _need()
     assert need == 2  # the configured minimum (configs/workflows/p0.yaml), not a literal here
@@ -504,7 +563,7 @@ def test_the_label_patterns_match_the_configured_vocabulary_and_pass_rule_ones_s
 @pytest.mark.parametrize(
     ("module", "allowed"),
     [
-        ("evidence.py", {"__future__", "typing"}),
+        ("evidence.py", {"__future__", "collections", "typing"}),
         ("messages.py", {"__future__", "typing", "pydantic"}),
         (
             "agents.py",

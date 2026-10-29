@@ -8537,6 +8537,42 @@ record keeps the value the call produced. `set_sensor_status.reason` and
 `proposal` messages in `messages.jsonl` (free text stays out of `state.json`).
 
 
+## 2026-10-28 — The null rule and the signatures move into the evidence module (§2, H3)
+
+**Decision.** The null-rule and signature functions of `workflows/p2_multi_agent/workflow.py`
+move to `workflows/p2_multi_agent/evidence.py` as one unit, with their two constants
+(`NEVER_IN_OBJECTIVE`, `BALANCE_STATS`) and the `Placement` alias: the placement helpers
+(`place`, `worst_window`, `record_statistics`, `envelope_placement`, `band_envelopes`,
+`band_placement`), the rule (`channels_of`, `channel_fails`, `n_bal`, `failed_channels`,
+`n_multi`, `n_single`, `null_partial`, `null_rejected`, `null_table`) and the signatures
+(`nb_side`, `onset_test`, `candidate_onsets`, `feed_covariate`, `early_late`,
+`common_change_point`, `split_agrees`, `tied_change_point`, `structured_channels`,
+`inhibition`, `s1_table`). Twenty-nine definitions, each identical by AST to the one on
+`main`; no definition left in the entry changed. The entry imports seventeen names: the
+fifteen moved names its steps use, `Placement` (a type annotation) and `admit`; the other
+thirteen moved names were used only inside the moved block and are not imported back (the
+review of PR #42, L1). The tests import the moved names from the evidence module. The module's import
+pin admits `collections` (for `Sequence`) beside `__future__` and `typing`; nothing beyond
+the standard library enters it.
+
+**Reason.** The design note §2 places the null table and the code signatures in the
+evidence module, as the numbers every role is shown; the package split (PR #40) moved the
+admission only, and its review (H3) asked that the rest either move or be stated as
+staying. The coordinator's relay of 2026-10-28 00:50 UTC directs the move. It is a pure
+move: the procedural arm's behaviour, both freeze digests and the pilot configuration
+digest are unchanged (the digests cover the templates, schemas and tools, not the entry's
+text). The arithmetic helpers (`_f`, `round6`, `declared_sd`, `z_summary`) stay in the
+entry: they serve the steps' fit statistics, not the rule.
+
+**Alternatives.**
+- Leave them in the entry and import nothing (the state after PR #40): the harness already
+  reads them through the procedural `Workflow`, so nothing was broken; refused because the
+  design note names the module and the agent arm's verifier is meant to cite the evidence
+  module's functions, not the entry's.
+- Re-export the moved names from the entry for the tests (`from … import *` or a `noqa`
+  list): hides the move; the tests now name the module the functions live in.
+
+
 ## 2026-10-28 — The verifier's own budget, the second round and the separating test (Q9, §4)
 
 **The verifier's registry budget is a reserve on top of the cell's envelope, enforced in

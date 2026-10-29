@@ -42,6 +42,7 @@ from scripts import declared_background as bg
 from state.task_state import TaskState
 from tests.p2_support import FakeTools
 from tools.workflow_config import DECISION_POINTS, load_p2, sandbox_config
+from workflows.p2_multi_agent import evidence as ev
 from workflows.p2_multi_agent import workflow as wf
 
 REPO = Path(__file__).resolve().parents[1]
@@ -251,26 +252,26 @@ def test_the_admitting_change_point_is_on_failed_channels_after_the_first_hrt(cf
     hrt_end = 0.0 + float(attr["transient_d"])  # the early/late test's own boundary
     failed = ["ph", "tan"]
     # a step on the failed channels after the first HRT admits
-    tied = wf.tied_change_point(_steps(80.0), failed, attr, hrt_end)
+    tied = ev.tied_change_point(_steps(80.0), failed, attr, hrt_end)
     assert tied["common"] and tied["channels"] == ["ph", "tan"] and tied["day"] == 80.0
     # a step on channels that did not fail does not (P0's arithmetic alone would admit it)
-    off = wf.tied_change_point(_steps(80.0), ["gas_flow", "cod_total"], attr, hrt_end)
+    off = ev.tied_change_point(_steps(80.0), ["gas_flow", "cod_total"], attr, hrt_end)
     assert not off["common"] and off["off_failed"] == ["ph", "tan"]
-    assert wf.common_change_point(_steps(80.0), attr)["common"]
+    assert ev.common_change_point(_steps(80.0), attr)["common"]
     # nor a step shared by one failed and one non-failed channel: it must be common to
     # failed channels
-    assert not wf.tied_change_point(_steps(80.0), ["ph", "gas_flow"], attr, hrt_end)["common"]
+    assert not ev.tied_change_point(_steps(80.0), ["ph", "gas_flow"], attr, hrt_end)["common"]
     # a step inside the first HRT does not admit, on the failed channels too; the boundary
     # day itself is inside (the early/late test's t <= boundary)
     for day in (15.0, hrt_end):
-        early = wf.tied_change_point(_steps(day), failed, attr, hrt_end)
+        early = ev.tied_change_point(_steps(day), failed, attr, hrt_end)
         # only the channels whose step is inside are listed (the review's N-6): not one
         # with no located step, nor one whose step is later
         res = {**_steps(day), "vfa_total": {"channel": "vfa_total", "step_z": None,
                                             "step_day": None}}  # fmt: skip
-        early = wf.tied_change_point(res, failed, attr, hrt_end)
+        early = ev.tied_change_point(res, failed, attr, hrt_end)
         assert not early["common"] and early["first_hrt_excluded"] == ["ph", "tan"]
-        assert wf.common_change_point(_steps(day), attr)["common"]
+        assert ev.common_change_point(_steps(day), attr)["common"]
     # through admission: NM on the failed channels, the tied step admits, the untied not
     lab = cfg["p0"]["labels"]
     nm = _table(nm=True, failed=failed)
@@ -305,7 +306,7 @@ def test_the_workflow_ties_the_change_point_and_r3_to_the_failed_channels(monkey
                 run.placement[f"{ch}.{where}.mean_z"] = side
             run.placement[f"{ch}.after_fit.rms_z"] = side
             run.placement[f"{ch}.at_defaults.rms_z"] = 0
-        run.table = wf.null_table(run.placement)
+        run.table = ev.null_table(run.placement)
         run.residuals = residuals
         run.step_profile()
         return run
@@ -619,54 +620,54 @@ def _windows(closures: list[float | None]) -> list[dict[str, Any]]:
 def test_the_onset_test_dates_a_step_and_refuses_an_offset():
     env = (-0.138, 0.023)
     step = _windows([-0.05, -0.04, -0.25, -0.30, -0.27])
-    assert wf.onset_test(step, env, -1, 60.0, ONSET)["passes"]
-    assert wf.candidate_onsets(step, env, -1, ONSET) == [60.0]
+    assert ev.onset_test(step, env, -1, 60.0, ONSET)["passes"]
+    assert ev.candidate_onsets(step, env, -1, ONSET) == [60.0]
     # a uniform offset fails at every day, day 0 included
     offset = _windows([-0.20, -0.22, -0.19, -0.21, -0.20])
-    assert wf.candidate_onsets(offset, env, -1, ONSET) == []
-    assert wf.onset_test(offset, env, -1, 0.0, ONSET)["code"] == "too_few_windows_before"
+    assert ev.candidate_onsets(offset, env, -1, ONSET) == []
+    assert ev.onset_test(offset, env, -1, 0.0, ONSET)["code"] == "too_few_windows_before"
     # a model's day with an outside window before it is refused
-    assert wf.onset_test(step, env, -1, 90.0, ONSET)["code"] == "outside_before"
+    assert ev.onset_test(step, env, -1, 90.0, ONSET)["code"] == "outside_before"
     # fewer than two evaluable windows before the onset
-    assert wf.onset_test(step, env, -1, 30.0, ONSET)["code"] == "too_few_windows_before"
+    assert ev.onset_test(step, env, -1, 30.0, ONSET)["code"] == "too_few_windows_before"
     gap = _windows([-0.05, None, -0.25, -0.30, -0.27])
-    assert wf.onset_test(gap, env, -1, 60.0, ONSET)["code"] == "too_few_windows_before"
+    assert ev.onset_test(gap, env, -1, 60.0, ONSET)["code"] == "too_few_windows_before"
     # R1: every evaluable window after the onset outside; in, in, out, in, out fails
     mixed = _windows([-0.05, -0.04, -0.25, -0.10, -0.27])
-    assert wf.onset_test(mixed, env, -1, 60.0, ONSET)["code"] == "inside_after"
-    assert wf.onset_test(mixed, env, -1, 60.0, {**ONSET, "every_window_after": False})["passes"]
-    assert wf.onset_test(step, env, -1, None, ONSET)["code"] == "no_onset"
+    assert ev.onset_test(mixed, env, -1, 60.0, ONSET)["code"] == "inside_after"
+    assert ev.onset_test(mixed, env, -1, 60.0, {**ONSET, "every_window_after": False})["passes"]
+    assert ev.onset_test(step, env, -1, None, ONSET)["code"] == "no_onset"
     # the edge-of-envelope case: a uniform offset near the edge, some windows just inside
     # (S1-01 B/B-like: mean -0.19 against a minimum -0.138), is not dated
     edge = _windows([-0.13, -0.137, -0.19, -0.136, -0.21, -0.18])
-    assert wf.candidate_onsets(edge, env, -1, ONSET) == []
-    assert wf.onset_test(edge, env, -1, 60.0, ONSET)["code"] == "inside_after"
+    assert ev.candidate_onsets(edge, env, -1, ONSET) == []
+    assert ev.onset_test(edge, env, -1, 60.0, ONSET)["code"] == "inside_after"
 
 
 def test_the_side_nb_failed_on_is_the_one_dated():
     """``nb_side`` in every NB case (the review's F-D); a flipped sign fails here."""
-    assert wf.nb_side({"cod_closure": -1, "cod_closure_worst": -1}) == -1
-    assert wf.nb_side({"cod_closure": 1, "cod_closure_worst": 1}) == 1
+    assert ev.nb_side({"cod_closure": -1, "cod_closure_worst": -1}) == -1
+    assert ev.nb_side({"cod_closure": 1, "cod_closure_worst": 1}) == 1
     # NB on the inadmissible count only: the worst window's side, else the mean's
-    assert wf.nb_side({"n_cod_inadmissible": 1, "cod_closure_worst": 1}) == 1
-    assert wf.nb_side({"n_cod_inadmissible": 1, "cod_closure_worst": -1}) == -1
-    assert wf.nb_side({"n_cod_inadmissible": 1, "cod_closure": 1}) == 1
+    assert ev.nb_side({"n_cod_inadmissible": 1, "cod_closure_worst": 1}) == 1
+    assert ev.nb_side({"n_cod_inadmissible": 1, "cod_closure_worst": -1}) == -1
+    assert ev.nb_side({"n_cod_inadmissible": 1, "cod_closure": 1}) == 1
     # the two disagree: the worst window's side wins (the review's N-5; a swap of the
     # precedence fails here)
-    assert wf.nb_side({"n_cod_inadmissible": 1, "cod_closure": 1, "cod_closure_worst": -1}) == -1
-    assert wf.nb_side({"n_cod_inadmissible": 1, "cod_closure": -1, "cod_closure_worst": 1}) == 1
+    assert ev.nb_side({"n_cod_inadmissible": 1, "cod_closure": 1, "cod_closure_worst": -1}) == -1
+    assert ev.nb_side({"n_cod_inadmissible": 1, "cod_closure": -1, "cod_closure_worst": 1}) == 1
     # no side outside: 0, and the onset test cannot pass on it
-    assert wf.nb_side({"n_cod_inadmissible": 1, "cod_closure": 0}) == 0
+    assert ev.nb_side({"n_cod_inadmissible": 1, "cod_closure": 0}) == 0
     step = _windows([0.0, 0.01, 0.25, 0.30, 0.27])
     env = (-0.138, 0.023)
-    assert wf.onset_test(step, env, 0, 60.0, ONSET)["code"] == "no_side"
-    assert wf.candidate_onsets(step, env, 0, ONSET) == []
+    assert ev.onset_test(step, env, 0, 60.0, ONSET)["code"] == "no_side"
+    assert ev.candidate_onsets(step, env, 0, ONSET) == []
     # NB not failed: nothing to date
-    assert wf.nb_side({"cod_closure": 1, "cod_closure_worst": 0}) == 0
-    assert wf.nb_side({}) == 0
+    assert ev.nb_side({"cod_closure": 1, "cod_closure_worst": 0}) == 0
+    assert ev.nb_side({}) == 0
     # the negative control: the side the closures are on dates the step, the other does not
-    assert wf.onset_test(step, env, 1, 60.0, ONSET)["passes"]
-    assert not wf.onset_test(step, env, -1, 60.0, ONSET)["passes"]
+    assert ev.onset_test(step, env, 1, 60.0, ONSET)["passes"]
+    assert not ev.onset_test(step, env, -1, 60.0, ONSET)["passes"]
 
 
 # ------------------------------------------------------------------ 12. the templates
@@ -727,12 +728,12 @@ def test_the_workflows_null_rule_reproduces_the_frozen_counts_and_predictions():
     groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for r in sorted(bg.read_record(), key=lambda r: r["key"]):
         groups[(r["plant"], r["tier"])].append(r)
-    rules = {"NB": wf.n_bal, "NM": wf.n_multi, "NS": wf.n_single,
-             "null_rejected": wf.null_rejected, "null_partial": wf.null_partial}  # fmt: skip
+    rules = {"NB": ev.n_bal, "NM": ev.n_multi, "NS": ev.n_single,
+             "null_rejected": ev.null_rejected, "null_partial": ev.null_partial}  # fmt: skip
     counts = {name: defaultdict(int) for name in rules}
     for (plant, tier), rs in groups.items():
         for i, r in enumerate(rs):
-            p = wf.envelope_placement(r, rs[:i] + rs[i + 1 :])
+            p = ev.envelope_placement(r, rs[:i] + rs[i + 1 :])
             for name, rule in rules.items():
                 counts[name][f"{plant}/{tier}"] += int(rule(p))
     for name in rules:
@@ -741,11 +742,11 @@ def test_the_workflows_null_rule_reproduces_the_frozen_counts_and_predictions():
     placed = json.loads((REPO / "reports" / "background" / "dev_cells.json").read_text())
     outcome = {}
     for cell in placed["cells"]:
-        p = {r["statistic"]: wf.place(r["value"], r["band_min"], r["band_max"])
+        p = {r["statistic"]: ev.place(r["value"], r["band_min"], r["band_max"])
              for r in cell["rows"] if r.get("ruled", True) and r["value"] is not None
              and r["band_min"] is not None}  # fmt: skip
-        outcome[cell["cell"]] = (wf.n_bal(p), wf.n_multi(p), wf.n_single(p),
-                                 wf.failed_channels(p))  # fmt: skip
+        outcome[cell["cell"]] = (ev.n_bal(p), ev.n_multi(p), ev.n_single(p),
+                                 ev.failed_channels(p))  # fmt: skip
     assert outcome["S0-01 B/A"] == (False, False, False, [])
     assert outcome["S0-01 B/B"] == (False, False, False, [])
     assert outcome["S0-01 B/C"] == (False, True, False, ["digestate_ts", "digestate_vs"])
@@ -757,12 +758,12 @@ def test_the_band_placement_and_the_envelope_placement_agree(monkeypatch, cfg):
     fake = FakeTools()
     band = fake._declared_background("B", "B").model_dump(mode="json")
     rec = next(r for r in bg.read_record() if (r["plant"], r["tier"]) == ("B", "B"))
-    stats = wf.record_statistics(rec)
-    p = wf.band_placement(stats, band)
-    env = wf.band_envelopes(band)
+    stats = ev.record_statistics(rec)
+    p = ev.band_placement(stats, band)
+    env = ev.band_envelopes(band)
     for key, side in p.items():
         lo, hi = env[key]
-        assert side == wf.place(float(stats[key]), lo, hi)
+        assert side == ev.place(float(stats[key]), lo, hi)
     assert all(v == 0 for v in p.values())  # a clean run inside the band it helped build
 
 
@@ -786,17 +787,17 @@ def _band_path_counts(placement=None) -> dict[str, dict[str, int]]:
     a band the band driver's own ``aggregate`` builds from the other runs of its (plant,
     tier), served through the tool's output schema: the path the workflow's verifier takes.
     """
-    placement = placement or wf.band_placement
+    placement = placement or ev.band_placement
     groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for r in sorted(bg.read_record(), key=lambda r: r["key"]):
         groups[(r["plant"], r["tier"])].append(r)
-    rules = {"NB": wf.n_bal, "NM": wf.n_multi, "NS": wf.n_single,
-             "null_rejected": wf.null_rejected, "null_partial": wf.null_partial}  # fmt: skip
+    rules = {"NB": ev.n_bal, "NM": ev.n_multi, "NS": ev.n_single,
+             "null_rejected": ev.null_rejected, "null_partial": ev.null_partial}  # fmt: skip
     counts = {name: defaultdict(int) for name in rules}
     for (plant, tier), rs in groups.items():
         for i, r in enumerate(rs):
             band = bg.aggregate(rs[:i] + rs[i + 1 :])[plant][tier]
-            p = placement(wf.record_statistics(r), _served(plant, tier, band))
+            p = placement(ev.record_statistics(r), _served(plant, tier, band))
             for name, rule in rules.items():
                 counts[name][f"{plant}/{tier}"] += int(rule(p))
     return {name: dict(c) for name, c in counts.items()}
@@ -812,7 +813,7 @@ def test_the_band_path_reproduces_the_frozen_counts_and_predictions():
     # the negative control: the band path without the inadmissible count (half of NB)
     # loses NB failures the frozen rule has
     def without_inadmissible(stats, band):
-        return wf.band_placement({k: v for k, v in stats.items() if k != "n_cod_inadmissible"},
+        return ev.band_placement({k: v for k, v in stats.items() if k != "n_cod_inadmissible"},
                                  band)  # fmt: skip
 
     mutated = _band_path_counts(without_inadmissible)
@@ -828,9 +829,9 @@ def test_the_band_path_reproduces_the_frozen_counts_and_predictions():
         served = Fake()._declared_background(plant, tier).model_dump(mode="json")
         stats = {r["statistic"]: r["value"] for r in cell["rows"]
                  if r.get("ruled", True) and r["value"] is not None}  # fmt: skip
-        p = wf.band_placement(stats, served)
-        outcome[cell["cell"]] = (wf.n_bal(p), wf.n_multi(p), wf.n_single(p),
-                                 wf.failed_channels(p))  # fmt: skip
+        p = ev.band_placement(stats, served)
+        outcome[cell["cell"]] = (ev.n_bal(p), ev.n_multi(p), ev.n_single(p),
+                                 ev.failed_channels(p))  # fmt: skip
     assert outcome["S0-01 B/A"] == (False, False, False, [])
     assert outcome["S0-01 B/B"] == (False, False, False, [])
     assert outcome["S0-01 B/C"] == (False, True, False, ["digestate_ts", "digestate_vs"])
