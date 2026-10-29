@@ -195,6 +195,15 @@ def test_the_launcher_sets_the_reserve_from_the_jail_document(tmp_path):
         json.dumps({**doc, "ablation": {"verifier": False, "roles": {}}}), encoding="utf-8"
     )
     assert apply_reserves(box4, off) == {} and off.reserves_remaining() == {}
+    # ... and the control: the ablation block with the verifier on sets it
+    on = make_registry(budget=Budget(100, 60.0, 2), seed=1)
+    box4b = tmp_path / "box4b"
+    (box4b / "cwd").mkdir(parents=True)
+    (box4b / "cwd" / "p2_config.json").write_text(
+        json.dumps({**doc, "ablation": {"verifier": True, "roles": {}}}), encoding="utf-8"
+    )
+    assert apply_reserves(box4b, on)["verification"]["simulator_evals"] == 80
+    assert on.reserves_remaining()["verification"]["simulator_evals_total"] == 80
     # a cell whose envelope is smaller than the reserve takes it: the reserve is on top
     small = make_registry(budget=Budget(50, 60.0, 0), seed=1)
     box5 = tmp_path / "box5"
@@ -272,3 +281,112 @@ def test_the_jail_sees_the_reserve_and_spends_it_through_the_stubs_role_tag(tmp_
         None,
     ]
     assert reg.evaluations_used == 21
+
+
+# ---------------------------------------------- the lead's Q9 ruling B (2026-10-29)
+
+
+def test_a_proposer_spends_the_whole_p1_envelope_while_the_verifier_holds_its_reserve(tmp_path):
+    """Ruling B: the untagged calls keep the cell's full envelope, exactly as P1 does.
+
+    The same untagged sequence on a registry carrying the verifier's reserve (§8: 80
+    evaluations, 1 assay unit, larger than this cell's envelope) and on one without (P1's
+    registry) spends the same 20 evaluations and is refused the same way; the reserve is
+    untouched throughout. The control: once the envelope is spent, the reserve still pays
+    a tagged call, and P1's registry has nothing more.
+    """
+    agent, _, _ = registry(tmp_path / "agent", budget=Budget(20, 60.0, 0))
+    agent.reserve("verification", simulator_evals=80, assay_units=1)
+    p1, _, _ = registry(tmp_path / "p1", budget=Budget(20, 60.0, 0))
+    for reg in (agent, p1):
+        assert reg.call("gsa_morris", **_morris(4)).n_evaluations == 12
+        assert reg.call("gsa_morris", **_morris(2)).n_evaluations == 6
+        reg.call("simulate", model="linear")
+        reg.call("simulate", model="linear")
+        assert reg.remaining().simulator_evals == 0 and reg.evaluations_used == 20
+        with pytest.raises(BudgetExceededError, match="0 of 20 remain"):
+            reg.call("simulate", model="linear")
+    assert agent.reserves_remaining()["verification"] == {
+        "simulator_evals": 80,
+        "simulator_evals_total": 80,
+        "assay_units": 1,
+        "assay_units_total": 1,
+    }
+    # the control
+    assert agent.call("simulate", model="linear", role="verification").n_evaluations == 1
+    assert agent.reserves_remaining()["verification"]["simulator_evals"] == 79
+    assert agent.evaluations_used == 21 and agent.remaining().simulator_evals == 0
+    with pytest.raises(BudgetExceededError, match="0 of 20 remain"):
+        p1.call("simulate", model="linear", role="verification")  # no reserve: the envelope
+
+
+def test_the_verifier_is_refused_past_80_evaluations_and_past_1_assay_unit(tmp_path):
+    """Ruling B: the reserve is the verifier's whole budget; the envelope lends it nothing."""
+    from tools import ToolArgumentError
+
+    reg, run_dir, _ = registry(tmp_path, budget=Budget(100, 60.0, 0))
+    reg.reserve("verification", simulator_evals=80, assay_units=1)
+    for _ in range(6):  # 6 x 12 = 72
+        assert reg.call("gsa_morris", role="verification", **_morris(4)).n_evaluations == 12
+    assert reg.call("gsa_morris", role="verification", **_morris(2)).n_evaluations == 6
+    reg.call("simulate", model="linear", role="verification")
+    reg.call("simulate", model="linear", role="verification")
+    assert reg.reserves_remaining()["verification"]["simulator_evals"] == 0
+    assert reg.remaining().simulator_evals == 100  # the envelope is untouched
+    with pytest.raises(BudgetExceededError, match="reserve has 0 of 80"):
+        reg.call("simulate", model="linear", role="verification")
+    assert read_calls(run_dir)[-1].outcome == "budget_exceeded"
+    # the control: the envelope's 100 are still the untagged calls' to spend
+    assert reg.call("simulate", model="linear").n_evaluations == 1
+    assert reg.remaining().simulator_evals == 99 and reg.evaluations_used == 81
+    # the assay unit: a 2-unit assay is refused by the 1-unit reserve; a 1-unit assay passes
+    # the budget gate (and fails on this registry's missing truth channel, which charges
+    # nothing); the envelope holds no unit, so an untagged 1-unit assay is refused (control)
+    with pytest.raises(BudgetExceededError, match="costs 2 units, the verification reserve has 1"):
+        reg.call("request_assay", assay="cod_total", day=10.0, role="verification")
+    with pytest.raises(ToolArgumentError):
+        reg.call("request_assay", assay="alkalinity", day=10.0, role="verification")
+    assert reg.reserves_remaining()["verification"]["assay_units"] == 1
+    with pytest.raises(BudgetExceededError, match="costs 1 units, 0 of 0 remain"):
+        reg.call("request_assay", assay="alkalinity", day=10.0)
+    assert reg.remaining().assay_units == 0
+
+
+def test_with_no_tagged_call_the_logs_are_byte_identical_with_and_without_a_reserve(tmp_path):
+    """P0, P1 and the procedural P2 set no reserve and tag no call: their logs cannot change.
+
+    The same untagged sequence (two calls, then a refusal) under one injected clock, on a
+    registry carrying the verifier's reserve and on one without: the visible
+    ``calls.jsonl`` is byte-identical, and the truth-side log is identical but for its
+    wall-clock timestamps (``t_utc``, the real clock). The control: the same sequence
+    with its last call tagged, and both logs differ (the reserve runs it).
+    """
+    from tests.test_tool_registry import Clock
+
+    def logs(name: str, *, reserve: bool, tag_last: bool) -> tuple[bytes, list[dict]]:
+        clock = Clock()
+        reg, run_dir, truth_dir = registry(tmp_path / name, budget=Budget(20, 60.0, 0), clock=clock)
+        if reserve:
+            reg.reserve("verification", simulator_evals=80, assay_units=1)
+        reg.call("gsa_morris", **_morris(4))
+        clock.now += 1.0
+        reg.call("gsa_morris", **_morris(2))
+        clock.now += 1.0
+        role = "verification" if tag_last else None
+        if tag_last:
+            reg.call("gsa_morris", role=role, **_morris(1))  # 3 > 2 left: the reserve pays
+        else:
+            with pytest.raises(BudgetExceededError, match="2 of 20 remain"):
+                reg.call("gsa_morris", **_morris(1))
+        visible = (run_dir / "calls.jsonl").read_bytes()
+        truth = [
+            {k: v for k, v in json.loads(line).items() if k != "t_utc"}
+            for line in (truth_dir / "calls.jsonl").read_text("utf-8").splitlines()
+        ]
+        assert visible and truth and all("n_evaluations" in c for c in truth)
+        return visible, truth
+
+    p1 = logs("p1", reserve=False, tag_last=False)
+    agent = logs("agent", reserve=True, tag_last=False)
+    assert p1 == agent
+    assert logs("control", reserve=True, tag_last=True) != p1

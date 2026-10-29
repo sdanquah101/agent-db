@@ -4331,7 +4331,24 @@ PR #41, unmerged).**
   question (M6). Tests rewritten for the ruling with their controls (the reserve tests,
   the grants test, the proposer-refused test; a reserve larger than the envelope accepted;
   the envelope unchanged after a tagged spend; no reserve → the old refusals verbatim).
-  Full `pytest -q` on the ruling's commit: 891 passed, 2 skipped (the unfetched SCADA
-  file), 1 h 17 min, the P0/P1 freeze digests and the procedural P2 among them; ruff clean.
+  Full `pytest -q` on the ruling's commit (`b998566`): 891 passed, 2 skipped (the
+  unfetched SCADA file), 1 h 17 min, the P0/P1 freeze digests and the procedural P2 among
+  them; ruff clean.
+- **PR #41 merged (`6702b58`, the lead: "merge 41"); `origin/main` merged into this
+  branch as a merge commit (`54ce440`, no conflict, no tree change: the branch carried
+  `57fb759`); `tools/runner.py` byte-identical to `main`.** The coordinator's four named
+  tests for the ruling (relayed 02:42 UTC), each with its control: a proposer spends the
+  whole P1 envelope while the verifier holds its reserve (the same 20 evaluations and the
+  same refusal on P1's registry; the reserve then pays a tagged call); the verifier is
+  refused past 80 evaluations and past 1 assay unit (the envelope untouched; a 1-unit
+  assay passes the gate; the envelope lends no unit); verifier-off sets no reserve (the
+  ablation block with the verifier on sets it); with no tagged call the visible
+  `calls.jsonl` is byte-identical with and without a reserve and the truth-side log
+  identical but for its timestamps (a tagged call changes both), plus the harness-level
+  assay-unit test on the fake, and **`tests/test_p2_freeze.py`** (marker `p2_freeze`,
+  deselected): the procedural P2 cell of the jailed test run at `origin/main` and at the
+  head, back to back, the visible call projections and the verdict equal, the agent arm
+  on the same cell as the control (run once here: 1 passed, 37 min). Full `pytest -q` on
+  the tests' commit: 895 passed, 2 skipped, 1 h 18 min; ruff clean.
 - **Next:** the coordinator's re-review of PR #43; then the Q6 cells and the agent arm's
   own frozen record (§6).

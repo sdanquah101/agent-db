@@ -1360,6 +1360,40 @@ def test_a_proposer_is_refused_past_the_envelope_while_the_verifier_has_its_rese
     assert int(fake.remaining().simulator_evals) == 10
 
 
+def test_the_verifier_is_refused_past_its_one_assay_unit_in_the_harness(monkeypatch):
+    """Ruling B in the harness: the reserve's one assay unit is the verifier's, on top.
+
+    A call charged to the verifier (the separating test's path, through the owning role's
+    view) spends the reserve's unit and not the envelope's; a second is refused. The
+    control: the design role's own call draws on the envelope, which the reserve never
+    touched.
+    """
+    fake = FakeTools("B", "B", offsets={"ph": 8.0})
+    _install(monkeypatch, fake)  # the reserve: 80 evaluations, 1 assay unit
+    run = agents.AgentRun(_cfg())
+    run.code_steps()
+    ws = run.ws
+    args = {"assay": sorted(_cfg()["assay_catalogue"])[0], "day": float(ws.cal[0]) + 1.0}
+    envelope = int(fake.remaining().assay_units)
+    assert envelope >= 1
+    charged = agents.RoleView("design", ["request_assay"], run.rec, "verification")
+    out = ws.handlers()["request_assay"](charged, args)
+    assert "call_index" in out and fake.charged_roles[-1] == "verification"
+    assert fake.reserves()["verification"]["assay_units"] == 0
+    assert int(fake.remaining().assay_units) == envelope
+    assert run.rec.by_role["verification"]["assay_units"] == 1
+    with pytest.raises(fake.BudgetExceededError, match="reserve cannot pay 1 units"):
+        ws.handlers()["request_assay"](charged, args)
+    assert int(fake.remaining().assay_units) == envelope
+    # the control
+    own = agents.RoleView("design", ["request_assay"], run.rec)
+    out = ws.handlers()["request_assay"](own, args)
+    assert "call_index" in out and fake.charged_roles[-1] == "design"
+    assert int(fake.remaining().assay_units) == envelope - 1
+    assert fake.reserves()["verification"]["assay_units"] == 0
+    assert run.rec.by_role["design"]["assay_units"] == 1
+
+
 def test_the_gateway_holds_each_side_to_its_own_caps(tmp_path):
     """Q9: the verifier's turns against its caps, the proposers' against theirs."""
     from tools.llm import GatewayRefusal, ScriptedClient
