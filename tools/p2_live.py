@@ -54,6 +54,7 @@ __all__ = [
     "AGENT_FROZEN_SCHEMAS",
     "P2Gateway",
     "agent_frozen_digests",
+    "agent_frozen_record_sha256",
     "check_p2_agents_frozen",
     "check_p2_frozen",
     "frozen_digests",
@@ -284,6 +285,9 @@ def check_p2_agents_frozen(config: P2Config) -> P2AgentsFrozen:
                 k for k in have.model_dump() if have.model_dump()[k] != want.model_dump()[k]
             )
             raise ValueError(f"the agent {name} block is not the frozen one ({diff}): refused")
+    # the record's own model block against P1's: through check_p2_frozen the procedural
+    # check catches a changed configuration model first, so this guards the RECORD (a
+    # committed record whose model block drifted from P1's), and the direct caller
     if frozen.model != load_p1().model:
         raise ValueError(
             "the agent record's model block is not the frozen P1's (decision d): refused"
@@ -291,10 +295,19 @@ def check_p2_agents_frozen(config: P2Config) -> P2AgentsFrozen:
     return frozen
 
 
+def agent_frozen_record_sha256(config: P2Config) -> str:
+    """The digest of the agent record a run of the arm passed (its ``agents.frozen``)."""
+    if config.agents is None or config.agents.frozen is None:
+        raise ValueError("the configuration carries no agent frozen record")
+    return _sha(json.dumps(config.agents.frozen.model_dump(mode="json"), sort_keys=True))
+
+
 def p2_provenance(config: P2Config, *, live: bool = True) -> dict[str, str]:
     """What every ``llm_calls.jsonl`` line and the summary carry; refuses an unfrozen run.
 
-    An offline run names no model (the review's N-10b): none was reachable.
+    An offline run names no model (the review's N-10b): none was reachable. A run of the
+    agent arm also names the digest of the agent record it passed
+    (``agents_frozen_sha256``; the review of PR #45, N4).
     """
     from tools.runner import git_commit
 
@@ -306,6 +319,8 @@ def p2_provenance(config: P2Config, *, live: bool = True) -> dict[str, str]:
         "tools_sha256": _sha(json.dumps(now["tools"], sort_keys=True)),
         "git_commit": git_commit(),
     }
+    if config.agents is not None:
+        out["agents_frozen_sha256"] = agent_frozen_record_sha256(config)
     if live:
         out["model_id"] = config.model.model_id
     return out

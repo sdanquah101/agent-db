@@ -4419,8 +4419,9 @@ PR #41, unmerged).**
   `reports/p2_power/`. Then the pilot, only on a new approval record the lead approves.
 
 **2026-10-30 — Item A: the agent arm's own frozen record (design note §6; branch
-`claude/p2-agents-freeze`, a draft PR cut from `claude/p2-agents-milestones`, PR #44,
-pending the lead's "merge 44"; the open PR when it was cut was #44, docs only).** The
+`claude/p2-agents-freeze`, PR #45, a draft PR cut from `claude/p2-agents-milestones`, PR
+#44, since merged at `0e71b0f` and merged back in as `8031afa`; the open PR when it was
+cut was #44, docs only).** The
 lead's "Yes to all three" (11:03 UTC): the record first, the prompts as they stand after
 #43.
 - `configs/workflows/p2_agents.yaml` gains `agents.frozen` (dated 2026-10-30, the lead's
@@ -4436,7 +4437,8 @@ lead's "Yes to all three" (11:03 UTC): the record first, the prompts as they sta
   approval and `cf59bcbb…f404` unchanged; the procedural record's digest `c58306b4…40a0`
   unchanged).
 - `tests/test_p2_agents_freeze.py`: the committed record passes and names every item; the
-  procedural digest, the pilot approval and the procedural configuration digest unchanged;
+  procedural freeze digest, the pilot approval and its pilot configuration digest
+  (`cf59bcbb…f404`) and the procedural configuration's own digest (`def3c42b…`) unchanged;
   each configuration item changed is refused on a copy (prompt, allow-list, turn budget,
   round limit, projection bound, each cap block), and the copy's own edited record is
   refused as not the committed one; a missing record and the procedural arm; a schema, a
@@ -4444,4 +4446,18 @@ lead's "Yes to all three" (11:03 UTC): the record first, the prompts as they sta
   check; the runner refuses before any launch, offline. `docs/decisions.md`: the entry.
 - No frozen file touched: `p2.yaml`, `tools/runner.py`, `tools/llm.py`, `tools/impl/`,
   `sim/`, `scenarios/`, `eval/`, P0 and P1 as they were.
-- **Next:** the coordinator's review; then item B, the Q6 cells.
+- **The coordinator's review of `8031afa` (19:32 UTC): PASS WITH NITS, nothing blocks.**
+  Every §6 item recorded and recomputed; the prompt digests equal the files at `01d78ac`;
+  every item trips the freeze; the procedural digests unchanged; an agent approval binds
+  the agent freeze and the total caps. Fixed in one commit: S1 a test that the set of
+  frozen schemas is itself frozen (one dropped, one added, each refused); S2 a `preview`
+  case beside `max_points`; N1 the agent-side model check tested directly and its reason
+  noted (through `check_p2_frozen` the procedural check fires first); N2 the digests named
+  rightly (`cf59bcbb…f404` is the pilot configuration's, `def3c42b…` the procedural
+  configuration's own, both unchanged and pinned); N3 this entry's #44 line; N4 a run of
+  the arm records `agents_frozen_sha256` in its provenance; N5 the agent configuration
+  digest's move stated. Held for the lead: whether the freeze also covers the
+  coordinator-as-code rule tables (`CLAIMS_FOR_LABEL`, `ROUND_TWO_ONLY_CLAIMS`, the
+  `SPECIALISTS` order); not built until the lead's word.
+- **Next:** the coordinator's check of the delta and the lead's word; then item B, the
+  Q6 cells.

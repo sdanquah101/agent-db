@@ -26,9 +26,12 @@ from tools import p2_live
 from tools.p2_live import (
     AGENT_FROZEN_SCHEMAS,
     agent_frozen_digests,
+    agent_frozen_record_sha256,
     check_p2_agents_frozen,
     check_p2_frozen,
+    config_digest,
     frozen_record_sha256,
+    p2_provenance,
 )
 from tools.workflow_config import load_p1, load_p2, sandbox_config
 from workflows.p2_multi_agent import agents, messages
@@ -37,6 +40,9 @@ REPO = Path(__file__).resolve().parents[1]
 COMMITTED_AGENT_FROZEN_SHA256 = "2089b2e2f6378b8b3bd88bab3431ff1bf483afe209da329d2a1c4f27885ba77b"
 """The digest of both committed records an approval of the agent arm names (the procedural
 ``frozen`` and ``agents.frozen``): a new agent freeze edits it, the procedural one stands."""
+PROCEDURAL_CONFIG_SHA256 = "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36"
+"""``config_digest(load_p2())``, the procedural configuration's own digest (not the pilot's
+``cf59bcbb…f404``, which is the pilot copy's): the agent record must not move it."""
 ROLES = ("data_quality", "influent", "identifiability", "calibration", "design", "verification")
 
 
@@ -80,7 +86,11 @@ def test_the_procedural_freeze_its_digest_and_the_pilot_approval_are_unchanged()
     # the procedural digest, with or without a configuration, is what it was (B-4)
     assert frozen_record_sha256() == COMMITTED_FROZEN_SHA256
     assert frozen_record_sha256(load_p2()) == COMMITTED_FROZEN_SHA256
+    # the pilot configuration's digest (the approval's config_sha256) and the procedural
+    # configuration's own digest are both unchanged (the review of PR #45, N2)
     assert pilot_config_digest() == PILOT_CONFIG_SHA256
+    assert config_digest(load_p2()) == PROCEDURAL_CONFIG_SHA256
+    assert config_digest(arm) not in (PILOT_CONFIG_SHA256, PROCEDURAL_CONFIG_SHA256)
     # the agent arm's digest names both records; it is pinned, and it is not the procedural one
     assert frozen_record_sha256(arm) == COMMITTED_AGENT_FROZEN_SHA256 != COMMITTED_FROZEN_SHA256
     # the committed approval of the procedural pilot still names the committed freeze and
@@ -132,6 +142,11 @@ def _prompt_file(path: Path, role: str) -> Path:
                 path, lambda r: r["agents"]["projection"].update(max_points=100)
             ),
             r"agent projection rule is not the frozen one \(\['max_points'\]\)",
+        ),
+        (
+            "preview",
+            lambda path: _edit_yaml(path, lambda r: r["agents"]["projection"].update(preview=8)),
+            r"agent projection rule is not the frozen one \(\['preview'\]\)",
         ),
         (
             "caps",
@@ -219,14 +234,49 @@ def test_a_schema_a_tool_or_the_redaction_rule_changed_in_the_code_is_refused(mo
         with pytest.raises(ValueError, match=r"projection rule is not the frozen one"):
             check_p2_frozen(arm)
         monkeypatch.undo()
-    # the record's model block against the frozen P1's (decision d)
+    # the record's model block against the frozen P1's (decision d): through
+    # check_p2_frozen the procedural check fires first, so the agent-side check is the
+    # direct caller's guard of the record itself (N1); both messages are checked
     p1 = load_p1()
     other = p1.model_copy(update={"model": p1.model.model_copy(update={"effort": "low"})})
     monkeypatch.setattr("tools.workflow_config.load_p1", lambda *a, **k: other)
-    with pytest.raises(ValueError, match="frozen P1's"):
+    with pytest.raises(ValueError, match="agent record's model block is not the frozen P1's"):
         check_p2_agents_frozen(arm)
+    with pytest.raises(ValueError, match=r"^the model block is not the frozen P1's"):
+        check_p2_frozen(arm)
     monkeypatch.undo()
     assert check_p2_agents_frozen(arm).date  # restored, it passes again
+
+
+def test_the_set_of_frozen_schemas_is_itself_frozen(monkeypatch):
+    """S1: a schema dropped from, or added to, the frozen set trips the freeze."""
+    arm = load_p2(AGENTS_YAML)
+    assert check_p2_agents_frozen(arm).date  # the negative control: the full set passes
+    monkeypatch.setattr(p2_live, "AGENT_FROZEN_SCHEMAS", AGENT_FROZEN_SCHEMAS[:-1])
+    with pytest.raises(ValueError, match=r"frozen agent schemas must name exactly"):
+        check_p2_frozen(arm)
+    monkeypatch.setattr(p2_live, "AGENT_FROZEN_SCHEMAS", (*AGENT_FROZEN_SCHEMAS, "_Msg"))
+    with pytest.raises(ValueError, match=r"frozen agent schemas must name exactly"):
+        check_p2_frozen(arm)
+    monkeypatch.undo()
+    assert check_p2_agents_frozen(arm).date
+
+
+def test_the_provenance_of_an_agent_run_names_the_record_it_passed(monkeypatch):
+    """N4: ``llm_calls.jsonl`` and the summary carry the agent record's digest."""
+    monkeypatch.setattr("tools.runner.git_commit", lambda: "test")
+    arm = load_p2(AGENTS_YAML)
+    record = arm.agents.frozen.model_dump(mode="json")
+    expected = __import__("hashlib").sha256(json.dumps(record, sort_keys=True).encode()).hexdigest()
+    assert agent_frozen_record_sha256(arm) == expected
+    assert p2_provenance(arm, live=False)["agents_frozen_sha256"] == expected
+    assert p2_provenance(arm, live=True)["agents_frozen_sha256"] == expected
+    # the digest is the record's alone, not the approval's (both records) and not the
+    # procedural freeze's; the procedural arm's provenance carries no such key (control)
+    assert expected not in (frozen_record_sha256(arm), frozen_record_sha256())
+    assert "agents_frozen_sha256" not in p2_provenance(load_p2(), live=False)
+    with pytest.raises(ValueError, match="no agent frozen record"):
+        agent_frozen_record_sha256(load_p2())
 
 
 def test_the_runner_refuses_an_unfrozen_agent_arm_before_any_launch(tmp_path, monkeypatch):

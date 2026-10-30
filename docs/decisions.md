@@ -8715,9 +8715,13 @@ rule, the model and cap blocks whole, and the record's model block against the f
 runner, which calls `check_p2_frozen` before every P2 run offline included, needs no
 change. `frozen_record_sha256(config)` names both committed records for the agent arm, so
 an approval of the arm binds its own freeze; without the arm it is the procedural record's
-digest as it always was (`c58306b4…40a0`), so the pilot's approval record and the
-procedural configuration digest (`cf59bcbb…f404`) are unchanged. The jail document carries
-neither the record nor the caps.
+digest as it always was (`c58306b4…40a0`), so the pilot's approval record, the pilot
+configuration's digest it names (`cf59bcbb…f404`, `pilot_config_digest`) and the procedural
+configuration's own digest (`config_digest(load_p2())`, `def3c42b…ba36`) are unchanged.
+The agent configuration's digest moves (`daad2992…` to `32c812c8…cebc9`), since the agents
+block now dumps the record; no committed approval names it. A run of the arm also records
+the digest of the record it passed (`agents_frozen_sha256` in `llm_calls.jsonl` and the
+summary, N4). The jail document carries neither the record nor the caps.
 
 **Reason.** §6 lists what is frozen anew before any live run, and the pilot's rule (B-3)
 is that an approval names a freeze: before this record an approval of the agent arm could
