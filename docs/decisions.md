@@ -8687,3 +8687,48 @@ must carry the round it is given in. The conclusion reads the last round's verdi
 round the verifier was routed in and left without a verdict abstains the run
 (`abstain:no_verdict`), whatever an earlier round said. The offline responder's verifier
 abstains in round 1, so the offline arm never reaches round 2; the scripted tests do.
+
+
+## 2026-10-30 — The agent arm's own frozen record (design note §6)
+
+**The lead's word, 2026-10-30, relayed by the coordinator at 11:03 UTC, verbatim: "Yes to
+all three"** — to the three questions put on PR #44's proposal: (1) the order is A then B,
+the agent arm's frozen record before the Q6 cells; (2) the prompts are frozen as they stand
+after PR #43 (merged at `01d78ac`), with no prompt change before the freeze; (3) "merge 44"
+once the milestones line matches. **Decision:** `configs/workflows/p2_agents.yaml` carries
+`agents.frozen`, the arm's own record, cut on that word and dated 2026-10-30. It names, by
+sha256 where the item is text: each role's prompt and the verifier's; the twelve message
+and finding schemas of `messages.py` (§3.3: `EvidenceRef`, the five findings, `ParamEstimate`,
+`AssayPlan`, `HoldoutResult`, `SeparatingTest`, `Verdict`, `Grant`, `RoutingEntry`), as their
+JSON schemas; each role's tool specifications as the gateway checks a request against them
+(the registry tools of its allow-list, `stored` and its `emit_finding`); and, as values, the
+allow-list (§3.1), the turn budgets, the round limit, the projection rule (its size bound
+and the digest of the redaction rule: the token pattern, the declared free-text fields,
+the mark and the tools hidden from every proposer), P1's frozen model block (decision d)
+and the three cap blocks (the proposers' caps, the verifier's caps, the verifier's registry
+budget). `tools.p2_live.check_p2_agents_frozen` recomputes every item and refuses a run on
+the first difference: the record must be the **committed** `p2_agents.yaml`'s (a copied
+configuration cannot carry its own edited record, as for `p2.yaml`'s), then the prompts,
+the schemas, the allow-list, the tools, the turn budgets, the round limit, the projection
+rule, the model and cap blocks whole, and the record's model block against the frozen P1's.
+`check_p2_frozen` calls it for every configuration that carries the arm, so the frozen
+runner, which calls `check_p2_frozen` before every P2 run offline included, needs no
+change. `frozen_record_sha256(config)` names both committed records for the agent arm, so
+an approval of the arm binds its own freeze; without the arm it is the procedural record's
+digest as it always was (`c58306b4…40a0`), so the pilot's approval record and the
+procedural configuration digest (`cf59bcbb…f404`) are unchanged. The jail document carries
+neither the record nor the caps.
+
+**Reason.** §6 lists what is frozen anew before any live run, and the pilot's rule (B-3)
+is that an approval names a freeze: before this record an approval of the agent arm could
+bind only the procedural freeze and the configuration digest, which does not cover the
+schemas, the tool specifications or the redaction rule the code defines. A changed prompt,
+schema, tool, list, budget or cap is a new freeze, on the lead's word, as the procedural
+decision layer's is.
+
+**Alternatives.** Folding the agent items into `p2.yaml`'s record (refused: the procedural
+freeze and its pilot record would move for a change that does not touch the procedural
+arm); freezing the harness's source by digest (refused: a refactor that changes no rule
+would trip it, and what the design names is the rule, which the record states); checking
+the record in the harness (refused: rule 3 and the frozen runner's path through
+`check_p2_frozen` keep the check on the privileged side, before any jail exists).

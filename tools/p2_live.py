@@ -15,7 +15,10 @@ registry server hands the request to :class:`P2Gateway`, which:
 :func:`check_p2_frozen` is the template freeze: every template's text, every decision's
 output schema and tool, and the model settings, against ``p2.yaml``'s ``frozen`` record.
 The runner calls it before every P2 run, offline included, and refuses a run on any
-difference.
+difference. For the agent arm it also checks the arm's own record
+(:func:`check_p2_agents_frozen`, ``p2_agents.yaml``'s ``agents.frozen``; design note §6):
+each role's prompt, the message and finding schemas, each role's tool specifications, the
+allow-list, the turn budgets, the round limit, the projection rule and the caps.
 """
 
 from __future__ import annotations
@@ -39,6 +42,7 @@ from tools.llm import (
 )
 from tools.workflow_config import (
     DECISION_POINTS,
+    P2AgentsFrozen,
     P2Caps,
     P2Config,
     P2Frozen,
@@ -47,7 +51,10 @@ from tools.workflow_config import (
 )
 
 __all__ = [
+    "AGENT_FROZEN_SCHEMAS",
     "P2Gateway",
+    "agent_frozen_digests",
+    "check_p2_agents_frozen",
     "check_p2_frozen",
     "frozen_digests",
     "p2_live_client",
@@ -57,6 +64,27 @@ __all__ = [
 
 COMMITTED_P2 = Path(__file__).resolve().parents[1] / "configs" / "workflows" / "p2.yaml"
 """The committed configuration whose ``frozen`` record every P2 run is checked against."""
+
+COMMITTED_P2_AGENTS = COMMITTED_P2.parent / "p2_agents.yaml"
+"""The committed agent-arm configuration whose ``agents.frozen`` record every run of the
+arm is checked against (design note §6)."""
+
+AGENT_FROZEN_SCHEMAS: tuple[str, ...] = (
+    "EvidenceRef",
+    "SensorFinding",
+    "InfluentFinding",
+    "IdentFinding",
+    "ParamEstimate",
+    "CalFinding",
+    "AssayPlan",
+    "HoldoutResult",
+    "SeparatingTest",
+    "Verdict",
+    "Grant",
+    "RoutingEntry",
+)
+"""The message and finding schemas the agent record freezes (design note §3.3), by their
+names in ``workflows/p2_multi_agent/messages.py``."""
 
 
 def _sha(text: str) -> str:
@@ -130,6 +158,136 @@ def check_p2_frozen(config: P2Config) -> P2Frozen:
             raise ValueError(f"the {name} block is not the frozen one ({diff}): refused")
     if config.model != load_p1().model:
         raise ValueError("the model block is not the frozen P1's (decision d): refused")
+    if config.agents is not None:
+        check_p2_agents_frozen(config)
+    return frozen
+
+
+def agent_frozen_digests(config: P2Config) -> dict[str, Any]:
+    """What the agent arm's record freezes, recomputed from the files and the code.
+
+    By role: the prompt's text (``prompts_sha256``), the tool specifications the gateway
+    checks a request against (``tools_sha256``: the registry tools of the allow-list,
+    ``stored`` and ``emit_finding`` with the role's finding schema), the allow-list and
+    the turn budget; by name, the message and finding schemas (``schemas_sha256``); the
+    round limit; and the projection rule (its size bound and the digest of the redaction
+    rule: the token pattern, the declared free-text fields, the mark and the tools hidden
+    from every proposer).
+
+    Raises:
+        ValueError: If the configuration carries no agent arm.
+    """
+    from workflows.p2_multi_agent import agents, messages
+    from workflows.p2_multi_agent import workflow as wf
+
+    if config.agents is None:
+        raise ValueError("the configuration carries no agent arm (no agents block)")
+    block = config.agents
+    redaction = {
+        "token_pattern": messages.TOKEN_PATTERN,
+        "redacted": {tool: sorted(fields) for tool, fields in agents.REDACTED.items()},
+        "mark": agents.REDACTED_MARK,
+        "hidden": list(agents.HIDDEN_FROM_PROPOSERS),
+    }
+    return {
+        "prompts_sha256": {r: p["sha256"] for r, p in load_p2_agent_prompts(config).items()},
+        "schemas_sha256": {
+            name: wf.schema_sha256(getattr(messages, name)) for name in AGENT_FROZEN_SCHEMAS
+        },
+        "tools_sha256": {
+            role: tools_digest(agents.role_tool_specs(role, list(spec.tools)))
+            for role, spec in block.roles.items()
+        },
+        "allow_list": {role: tuple(spec.tools) for role, spec in block.roles.items()},
+        "turns": {role: int(spec.turns) for role, spec in block.roles.items()},
+        "rounds": int(block.rounds),
+        "projection": {
+            "max_points": int(block.projection.max_points),
+            "preview": int(block.projection.preview),
+            "redaction_sha256": _sha(json.dumps(redaction, sort_keys=True)),
+        },
+    }
+
+
+def check_p2_agents_frozen(config: P2Config) -> P2AgentsFrozen:
+    """Refuse a run of the agent arm whose agent layer is not the frozen one (§6).
+
+    Checked, in order: the record exists and is the **committed** one
+    (``p2_agents.yaml``'s; a copied configuration cannot carry its own edited record);
+    every prompt, every schema and every role's tools against it, by digest; the
+    allow-list, the turn budgets, the round limit and the projection rule; the model
+    block and the three cap blocks, whole; and the record's model block against the
+    frozen P1's (decision d). :func:`check_p2_frozen` calls it for every configuration
+    that carries the arm, so the frozen runner needs no change.
+
+    Returns:
+        The agent record, when everything matches.
+
+    Raises:
+        ValueError: Naming the first difference.
+    """
+    from tools.workflow_config import load_p1, load_p2
+
+    if config.agents is None:
+        raise ValueError("the configuration carries no agent arm (no agents block)")
+    frozen = config.agents.frozen
+    if frozen is None:
+        raise ValueError(
+            f"{COMMITTED_P2_AGENTS.name} has no agents.frozen record: the agent arm is not frozen"
+        )
+    committed = load_p2(COMMITTED_P2_AGENTS).agents
+    if committed is None or frozen != committed.frozen:
+        raise ValueError(
+            "the configuration's agent frozen record is not the committed one "
+            f"({COMMITTED_P2_AGENTS.name}): refused"
+        )
+    now = agent_frozen_digests(config)
+    for kind, label in (
+        ("prompts_sha256", "prompt"),
+        ("schemas_sha256", "schema"),
+        ("allow_list", "allow-list"),
+        ("tools_sha256", "tools"),
+        ("turns", "turn budget"),
+    ):
+        recorded, current = getattr(frozen, kind), now[kind]
+        if set(recorded) != set(current):
+            raise ValueError(
+                f"the frozen agent {label}s must name exactly {sorted(current)}: refused"
+            )
+        for key in current:
+            if current[key] != recorded[key]:
+                have, want = str(current[key]), str(recorded[key])
+                if kind.endswith("sha256"):
+                    have, want = f"{have[:12]}…", f"{want[:12]}…"
+                raise ValueError(
+                    f"the agent {label} of {key!r} is not the frozen one "
+                    f"({have} vs {want}): refused"
+                )
+    if now["rounds"] != frozen.rounds:
+        raise ValueError(
+            f"the agent round limit is not the frozen one ({now['rounds']} vs {frozen.rounds}): "
+            "refused"
+        )
+    if now["projection"] != frozen.projection.model_dump(mode="json"):
+        diff = sorted(
+            k for k, v in now["projection"].items() if v != frozen.projection.model_dump()[k]
+        )
+        raise ValueError(f"the agent projection rule is not the frozen one ({diff}): refused")
+    for name, have, want in (
+        ("model", config.model, frozen.model),
+        ("caps", config.agents.caps, frozen.caps),
+        ("verifier_caps", config.agents.verifier_caps, frozen.verifier_caps),
+        ("verifier_budget", config.agents.verifier_budget, frozen.verifier_budget),
+    ):
+        if have != want:
+            diff = sorted(
+                k for k in have.model_dump() if have.model_dump()[k] != want.model_dump()[k]
+            )
+            raise ValueError(f"the agent {name} block is not the frozen one ({diff}): refused")
+    if frozen.model != load_p1().model:
+        raise ValueError(
+            "the agent record's model block is not the frozen P1's (decision d): refused"
+        )
     return frozen
 
 
@@ -617,13 +775,26 @@ def config_digest(config: P2Config) -> str:
     return _sha(json.dumps(body, sort_keys=True, default=str))
 
 
-def frozen_record_sha256() -> str:
-    """The digest of the committed configuration's ``frozen`` record."""
+def frozen_record_sha256(config: P2Config | None = None) -> str:
+    """The digest of the committed ``frozen`` record an approval names.
+
+    For the procedural arm (no ``config``, or one without the agents block) it is the
+    digest of ``p2.yaml``'s record, as it has always been, so the pilot's approval stands.
+    For the agent arm it is the digest of both committed records, ``p2.yaml``'s and
+    ``p2_agents.yaml``'s ``agents.frozen``: an approval of the arm binds its own freeze.
+    """
     from tools.workflow_config import load_p2
 
     frozen = load_p2(COMMITTED_P2).frozen
-    return _sha(json.dumps(None if frozen is None else frozen.model_dump(mode="json"),
-                           sort_keys=True))  # fmt: skip
+    body: Any = None if frozen is None else frozen.model_dump(mode="json")
+    if config is not None and config.agents is not None:
+        committed = load_p2(COMMITTED_P2_AGENTS).agents
+        record = None if committed is None else committed.frozen
+        body = {
+            "p2": body,
+            "agents": None if record is None else record.model_dump(mode="json"),
+        }
+    return _sha(json.dumps(body, sort_keys=True))
 
 
 def _git_clean(path: Path, repo: Path | None = None) -> tuple[bool, str]:
@@ -712,7 +883,7 @@ def require_live_approval(
         raise ValueError("the approval record's digest does not match its content")
     if record.get("caps") != run_caps(config).model_dump(mode="json"):
         raise ValueError("the approval names other caps than the configuration's")
-    if record.get("frozen_sha256") != frozen_record_sha256():
+    if record.get("frozen_sha256") != frozen_record_sha256(config):
         raise ValueError("the approval names another freeze than the committed one")
     if record.get("config_sha256") != config_digest(config):
         raise ValueError("the approval names another configuration than the one this run uses")

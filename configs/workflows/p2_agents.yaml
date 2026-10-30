@@ -68,3 +68,124 @@ agents:
     max_requests: 40            # DESIGN  §8: 20 per round
     max_total_tokens: 4000000   # DESIGN  §8: 2 M per round
     max_usd: 0.50               # DESIGN  §8: 0.25 per round
+  # The agent arm's own frozen record (docs/p2_agents_design.md section 6; the lead's word
+  # of 2026-10-30, "Yes to all three"): each role's prompt and the verifier's, the message
+  # and finding schemas (messages.py), each role's tool specifications as the gateway checks
+  # them, by sha256; the allow-list, the turn budgets and the round limit; the projection
+  # rule and its size bound (the redaction rule's digest); P1's frozen model block
+  # (decision d) and the caps. tools/p2_live.py::check_p2_agents_frozen recomputes every
+  # item before EVERY run of the arm, offline included, and refuses the run on any
+  # difference; frozen_record_sha256(config) names both records to an approval. A changed
+  # prompt, schema, tool, list, budget or cap is a new freeze, on the lead's word.
+  frozen:
+    date: '2026-10-30'
+    word: 'The lead''s word of 2026-10-30 ("Yes to all three", relayed by the coordinator at 11:03 UTC):
+      the agent arm''s own record is cut first (design note section 6), the prompts frozen as they stand
+      after PR #43 (merged at 01d78ac: the verifier''s own budget under ruling B, the second round and the
+      separating test), then the Q6 cells. First frozen 2026-10-30.'
+    prompts_sha256:
+      data_quality: bb2efc24e0915e2db3ffd9b155d57633f6cf8fc29644524eb499f972b981513e
+      influent: f4daf255603808f8f5fad5677223f64a3e0de0379360c2d50c44df6ea4452d94
+      identifiability: bae09446ab9c6c27b352d1f341f10047360f4885074f26c77c15a1b64b96b181
+      calibration: fb80ce489fb4c97aed9f52de93abfd4fddad4715bb3e0bf04672a06be0cfa93c
+      design: 2be03c7457b7ca66a36e16b26f02a46125819319cc3da2cfbfe33560ad629ecb
+      verification: 8010b221a7bef1220f70549d1f4b30541cde5b11b9d479f4b24befae88f38d9d
+    schemas_sha256:
+      EvidenceRef: 79cb80a2b5207388ad690cb49f7e17861fb4e7e9c62ae646c214430190d03cdd
+      SensorFinding: 927a05ceb2d502c251ccd26b2a9c66f500aaba74f504a192cd9833abc058c9e5
+      InfluentFinding: 184d1569c4624b561e23e476f7e8a31ae07be8ca65276d37638a89ab7bbc5322
+      IdentFinding: fa65d38461b512c4e877a83e1695ffc98a60501ae27569befaba3ce66ac5a0d7
+      ParamEstimate: 293a002488cd745bc4f917ce0aa74a8a7785bac7b3844b8f3b97b93191058d19
+      CalFinding: d3d8a44d741a9a561620dab6f26447cbe605a094eac86ceb537fd4acd5b0373a
+      AssayPlan: 7ad0447b11801ba50907db0085c9c72c68862f357f7eb0e52d48dd73fae7a74e
+      HoldoutResult: bd1f285f2b8f3a727188fa91eb27d96804954f5ab702bd1843e801af5f6c68c6
+      SeparatingTest: 27e2f21a669661eccd082e60fd918959f0194e00f34a7438a343296571df116f
+      Verdict: e27464c6e3f9ab768335b2740e52c069bb08ae100d33ca0490be05e03468a72d
+      Grant: 25cada76ffe19b5cde32eba3979b9e4a0615c9ad636d9c46f571252f7a555b68
+      RoutingEntry: 403559e4cf17f41cb883562afe3781b83cd42354ddfed20c053ee177559cb43b
+    tools_sha256:
+      data_quality: d9818323fb8e9d2ce2b613a730eef10c3b8c18ee0fe68332644259029a269c30
+      influent: 2a2ebc3671c5e6ff9afd7664076278e580a1f5652652ec8569d0a45eed5e2a24
+      identifiability: ec7334d50c57db013a926fb3c6c02c100c285e64c938e3eaa67b05986fa70e88
+      calibration: 8cd3d70b687be5fc2f8882e3dd5a8de6c6ed5a495c4ef121cdc279fe7af21239
+      design: 29f07e2604af41820b7ed4ce3b83c033d806c666a320c9368f234ed537cf25e1
+      verification: b128de8b4c70aa8e833af62f92516158b73fe3a3936ec648a8dbf3e5f8e96d98
+    allow_list:
+      data_quality:
+      - data_qc
+      - set_sensor_status
+      - inspect_record
+      - residual_diag
+      - simulate
+      - declared_background
+      influent:
+      - inspect_record
+      - mass_balance
+      - feed_loads
+      - simulate
+      - declared_background
+      identifiability:
+      - describe_model
+      - gsa_morris
+      - gsa_sobol
+      - fisher_info
+      - profile_likelihood
+      - residual_diag
+      calibration:
+      - residual_diag
+      - simulate
+      - fit_lsq
+      - fit_de
+      - fit_cmaes
+      - bayes_mcmc
+      - declared_background
+      design:
+      - voi_assay
+      - request_assay
+      verification:
+      - inspect_record
+      - residual_diag
+      - simulate
+      - declared_background
+      - validate
+    turns:
+      data_quality: 12
+      influent: 12
+      identifiability: 8
+      calibration: 14
+      design: 6
+      verification: 14
+    rounds: 2
+    projection:
+      max_points: 200
+      preview: 12
+      redaction_sha256: a2a82eb12a8694ae1a8cb1e87b9dd5839c1a61a3d2a8010b604c380fce8d1f29
+    model:
+      provider: openai
+      model_id: gpt-5.6-luna
+      max_tokens: 16000
+      temperature: null
+      effort: high
+      prompt_caching: true
+      request_timeout_s: 600.0
+      retry:
+        max_attempts: 4
+        backoff_s: 2.0
+        max_backoff_s: 30.0
+      pricing_usd_per_mtok:
+        input: 0.2
+        output: 1.2
+        cache_write: 0.2
+        cache_read: 0.02
+    caps:
+      max_requests: 200
+      max_total_tokens: 10000000
+      max_usd: 0.5
+      input_chars_per_token: 2.0
+    verifier_caps:
+      max_requests: 40
+      max_total_tokens: 4000000
+      max_usd: 0.5
+    verifier_budget:
+      simulator_evals: 80
+      assay_units: 1

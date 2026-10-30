@@ -4417,3 +4417,31 @@ PR #41, unmerged).**
   #44 merges. (2) The Q6 development cells (S7-01 at B/A, B/B, B/C; S7-02 at A/C; two
   seeds each) registered as the H4 development cells with their code-only floor beside
   `reports/p2_power/`. Then the pilot, only on a new approval record the lead approves.
+
+**2026-10-30 — Item A: the agent arm's own frozen record (design note §6; branch
+`claude/p2-agents-freeze`, a draft PR cut from `claude/p2-agents-milestones`, PR #44,
+pending the lead's "merge 44"; the open PR when it was cut was #44, docs only).** The
+lead's "Yes to all three" (11:03 UTC): the record first, the prompts as they stand after
+#43.
+- `configs/workflows/p2_agents.yaml` gains `agents.frozen` (dated 2026-10-30, the lead's
+  word quoted): each role's prompt, the twelve message and finding schemas and each role's
+  tool specifications by sha256; the allow-list, the turn budgets, the round limit, the
+  projection rule (its bound and the redaction rule's digest), P1's model block and the
+  three cap blocks. `tools/workflow_config.py`: `P2AgentsFrozen`; the jail document drops
+  the record as it drops the caps.
+- `tools/p2_live.py`: `agent_frozen_digests`, `check_p2_agents_frozen` (the committed
+  record, then every item in order), called from `check_p2_frozen` for any configuration
+  with the arm, so the frozen runner is untouched; `frozen_record_sha256(config)` names
+  both records for the agent arm and the procedural record alone otherwise (the pilot's
+  approval and `cf59bcbb…f404` unchanged; the procedural record's digest `c58306b4…40a0`
+  unchanged).
+- `tests/test_p2_agents_freeze.py`: the committed record passes and names every item; the
+  procedural digest, the pilot approval and the procedural configuration digest unchanged;
+  each configuration item changed is refused on a copy (prompt, allow-list, turn budget,
+  round limit, projection bound, each cap block), and the copy's own edited record is
+  refused as not the committed one; a missing record and the procedural arm; a schema, a
+  tool specification and each part of the redaction rule changed in the code; the P1 model
+  check; the runner refuses before any launch, offline. `docs/decisions.md`: the entry.
+- No frozen file touched: `p2.yaml`, `tools/runner.py`, `tools/llm.py`, `tools/impl/`,
+  `sim/`, `scenarios/`, `eval/`, P0 and P1 as they were.
+- **Next:** the coordinator's review; then item B, the Q6 cells.
