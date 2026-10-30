@@ -4405,9 +4405,15 @@ PR #41, unmerged).**
   208 passed). **PR #43 merged at `01d78ac` (the lead: "merge 43", 23:20 UTC).** `main`
   now carries the verifier's own budget under ruling B, the second round and the
   separating test.
-- **Next:** the proposed order, for the coordinator to confirm with the lead: (1) the Q6
-  development cells (S7-01 at B/A, B/B, B/C; S7-02 at A/C; two seeds each) registered as
-  development cells and their code-only floor in `reports/p2_power/`; (2) the agent arm's
-  own frozen record (§6) before any live run, with `check_p2_frozen` covering it and an
-  approval record naming its digest. Then the pilot, only on a new approval record the
-  lead approves.
+- **The lead's answers on PR #44's proposal, 2026-10-30 (relayed 11:03 UTC), verbatim:
+  "Yes to all three".** (1) The order is A then B: the agent arm's frozen record first,
+  then the Q6 cells. (2) The prompts are frozen as they stand after #43; no prompt change
+  before the freeze. (3) "merge 44" once this line matches the order.
+- **Next:** (1) the agent arm's own frozen record (§6) before any live run: the `frozen`
+  block in `configs/workflows/p2_agents.yaml`, `check_p2_frozen` and
+  `frozen_record_sha256` covering it, a test per frozen item with its control, the
+  procedural digest `cf59bcbb…f404` and the pilot approval unchanged, a decisions entry
+  quoting the lead's word and date; no frozen file touched; a draft PR from `main` once
+  #44 merges. (2) The Q6 development cells (S7-01 at B/A, B/B, B/C; S7-02 at A/C; two
+  seeds each) registered as the H4 development cells with their code-only floor beside
+  `reports/p2_power/`. Then the pilot, only on a new approval record the lead approves.
