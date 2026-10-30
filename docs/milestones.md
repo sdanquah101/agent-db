@@ -4398,5 +4398,22 @@ PR #41, unmerged).**
   envelope, tagged ≤ reserve), in decisions; N11 the M1 information-flow rule in
   decisions and the round-2 paragraph corrected; the "in addition to" sentence reworded.
   Full `pytest -q` on the fix: 897 passed, 2 skipped, 1 h 28 min; ruff clean.
-- **Next:** the coordinator's check of this delta and the lead's "merge 43"; then the Q6
-  cells and the agent arm's own frozen record (§6).
+- **`c785d43` PASSES review** (the coordinator, 19:45 UTC: S2 and S1 fixed, every mutation
+  killed, the nits done). PR #42 merged (`e3eafd8`, the lead: "merge 42"); `origin/main`
+  merged into the branch as a merge commit (`8815179`, the two docs' conflicts resolved in
+  date order, nothing else changed; the P2, harness, reserve, sandbox and isolation suites
+  208 passed). **PR #43 merged at `01d78ac` (the lead: "merge 43", 23:20 UTC).** `main`
+  now carries the verifier's own budget under ruling B, the second round and the
+  separating test.
+- **The lead's answers on PR #44's proposal, 2026-10-30 (relayed 11:03 UTC), verbatim:
+  "Yes to all three".** (1) The order is A then B: the agent arm's frozen record first,
+  then the Q6 cells. (2) The prompts are frozen as they stand after #43; no prompt change
+  before the freeze. (3) "merge 44" once this line matches the order.
+- **Next:** (1) the agent arm's own frozen record (§6) before any live run: the `frozen`
+  block in `configs/workflows/p2_agents.yaml`, `check_p2_frozen` and
+  `frozen_record_sha256` covering it, a test per frozen item with its control, the
+  procedural digest `cf59bcbb…f404` and the pilot approval unchanged, a decisions entry
+  quoting the lead's word and date; no frozen file touched; a draft PR from `main` once
+  #44 merges. (2) The Q6 development cells (S7-01 at B/A, B/B, B/C; S7-02 at A/C; two
+  seeds each) registered as the H4 development cells with their code-only floor beside
+  `reports/p2_power/`. Then the pilot, only on a new approval record the lead approves.
