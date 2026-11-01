@@ -796,6 +796,45 @@ class P2VerifierCaps(_Frozen):
     max_usd: _Pos
 
 
+class P2AgentFrozenProjection(_Frozen):
+    """The projection rule as frozen: its size bound and the redaction rule's digest."""
+
+    max_points: _PosInt
+    preview: _PosInt
+    redaction_sha256: str = Field(
+        description="The digest of the redaction rule: the token pattern, the declared "
+        "free-text fields, the mark, and the tools hidden from every proposer"
+    )
+
+
+class P2AgentsFrozen(_Frozen):
+    """The agent arm's own frozen record (design note §6), checked before every run.
+
+    Cut on the lead's word of 2026-10-30 ("Yes to all three": the record first, the
+    prompts frozen as they stand after PR #43). Each role's prompt and the verifier's, the
+    message and finding schemas (§3.3) and each role's tool specifications as the gateway
+    checks them, by sha256; the allow-list (§3.1), the turn budgets and the round limit;
+    the projection rule and its size bound; P1's frozen model block (decision d) and the
+    caps: the proposers', the verifier's, and the verifier's registry budget.
+    :func:`tools.p2_live.check_p2_agents_frozen` recomputes every item and refuses a run
+    on any difference, offline included; an approval record names its digest.
+    """
+
+    date: str
+    word: str
+    prompts_sha256: dict[str, str]
+    schemas_sha256: dict[str, str]
+    tools_sha256: dict[str, str]
+    allow_list: dict[str, tuple[str, ...]]
+    turns: dict[str, int]
+    rounds: int
+    projection: P2AgentFrozenProjection
+    model: ModelSettings
+    caps: P2Caps
+    verifier_caps: P2VerifierCaps
+    verifier_budget: P2VerifierBudget
+
+
 class P2Agents(_Frozen):
     """The agent arm of P2 (``docs/p2_agents_design.md``; the lead's option A, 2026-10-26).
 
@@ -817,6 +856,11 @@ class P2Agents(_Frozen):
         description="The proposers' per-run caps (the lead's Q8: USD 0.50, 200 requests, "
         "10 M tokens for the pilot), held by the agent arm's gateway beside the verifier's "
         "own (verifier_caps, Q9); p2.yaml's procedural caps stay with the procedural freeze"
+    )
+    frozen: P2AgentsFrozen | None = Field(
+        default=None,
+        description="The agent arm's own frozen record (design note §6); absent, no run "
+        "of the arm passes tools.p2_live.check_p2_frozen",
     )
 
     @model_validator(mode="after")
@@ -997,9 +1041,9 @@ def sandbox_config(config: P0Config | P1Config | P2Config, *, live: bool = False
             # the agent arm: its roles, their prompts' texts (the digests stay on the
             # privileged side, in the gateway), the projection bound and the round limit
             agents = config.agents.model_dump(mode="json")
-            # the caps stay on the privileged side, as p2.yaml's; the verifier's registry
-            # reserve is the jail's to know (and the launcher's to set)
-            for key in ("caps", "verifier_caps"):
+            # the caps and the frozen record stay on the privileged side, as p2.yaml's; the
+            # verifier's registry reserve is the jail's to know (and the launcher's to set)
+            for key in ("caps", "verifier_caps", "frozen"):
                 agents.pop(key, None)
             agents["prompts"] = {
                 role: p["text"] for role, p in load_p2_agent_prompts(config).items()

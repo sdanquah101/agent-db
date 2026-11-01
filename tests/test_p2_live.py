@@ -549,7 +549,7 @@ def _record(
     caps: dict[str, Any], runs: list[dict[str, Any]], config: Any = None, runs_root: Any = None
 ) -> dict:
     rec = {"ruling_date": "2026-10-12", "word": "test only", "runs": runs, "caps": caps,
-           "frozen_sha256": frozen_record_sha256(),
+           "frozen_sha256": frozen_record_sha256(config or load_p2()),
            "config_sha256": p2_live.config_digest(config or load_p2()),
            "runs_root": None if runs_root is None else str(Path(runs_root).resolve())}  # fmt: skip
     rec["digest"] = p2_live.approval_digest(rec)
