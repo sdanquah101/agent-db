@@ -124,6 +124,11 @@ CLAIMS_FOR_LABEL: dict[str, tuple[str, ...]] = {
 }
 """Which role may claim each label (§3.2)."""
 
+CONFIDENCE_ORDER: dict[str, int] = {"high": 0, "medium": 1, "low": 2}
+"""The leading claim's first key: a finding's stated confidence, highest first; the label's
+place in P0's order breaks a tie (:meth:`AgentRun.leading`). Frozen with the other rule
+tables (the lead's "yes to the rule tables", 2026-11-01)."""
+
 _TOKEN = TypeAdapter(messages.Token)
 _NAME = TypeAdapter(messages.Name)
 
@@ -2732,7 +2737,7 @@ class AgentRun:
         if b.table is None and not b.signatures:
             return None, None, []
         admitted = evidence.admit_agent(self.lab, b.table, b.signatures)["admitted"]
-        order = {"high": 0, "medium": 1, "low": 2}
+        order = CONFIDENCE_ORDER
         candidates = []
         for role, f in self.findings.items():
             claim = _claim_of(f)

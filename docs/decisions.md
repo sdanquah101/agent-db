@@ -8736,3 +8736,51 @@ arm); freezing the harness's source by digest (refused: a refactor that changes 
 would trip it, and what the design names is the rule, which the record states); checking
 the record in the harness (refused: rule 3 and the frozen runner's path through
 `check_p2_frozen` keep the check on the privileged side, before any jail exists).
+
+
+## 2026-11-01 — The coordinator's rule tables join the agent arm's frozen record
+
+**The lead's word, 2026-11-01, relayed by the coordinator at 22:35 UTC, verbatim: "merge 45,
+and yes to the rule tables"** — to the coordinator's question, raised in the review of PR #45,
+whether the agent record should also bind the coordinator-as-code rule tables, so that an
+offline development run is bound to them as a live run is. **Decision:** `agents.frozen`
+gains `rules_sha256`, the digest of `tools.p2_live.agent_rule_tables()`, which
+`check_p2_agents_frozen` recomputes from the code before every run of the arm and compares,
+after the projection rule. The record is re-dated 2026-11-01; its `word` keeps "first
+frozen 2026-10-30" and adds this word. **Included**, each because it decides the label or
+the admission:
+- `CLAIMS_FOR_LABEL` (which role may claim each label; the leading claim and the round-2
+  routing read it) and `ROUND_TWO_ONLY_CLAIMS` (the claims a finding may carry in round 2
+  only), as the lead named;
+- `SPECIALISTS` in its order (the coordinator's routing order) and `VERIFIER` (the role the
+  reserve and the verdicts key on);
+- `CONFIDENCE_ORDER`, the leading claim's first key, until now an inline literal in
+  `AgentRun.leading`, moved to a module constant with no change of value so it can be frozen;
+- `P0_ORDER` (`workflow.py`), the leading claim's tie-break;
+- `ABSTAIN_LABEL` and `RULE`, the label an abstaining run writes and the rule name the
+  arm's classifications carry;
+- `NEVER_IN_OBJECTIVE` and `BALANCE_STATS` (`evidence.py`), the null rule's two constants,
+  which decide which channels count and which balance statistics are placed, hence the
+  null table every admission reads.
+
+**Not included, and why.** The admission (`admit`, the amended `structural_case` of Q13
+and Q14, `admit_agent`, `admissible_alternative`) and the conclusion (`conclude`) hold no
+table: the Q13/Q14 threshold is `p0.yaml`'s `structural_channels_min`, frozen with P0, and
+the frozen `admit`'s source is pinned by test; the conclusion's reasons are literals in the
+code that writes them. The claim and label patterns and the collection bounds are in the
+schemas the record already freezes (`schemas_sha256`); the redaction tables are in the
+projection rule's digest; file names and the harness actions decide no label.
+
+**Digests.** `frozen_record_sha256(arm)`, what an approval of the arm names, moves from
+`2089b2e2…a77b` to `b373dfaf…4a82` (`COMMITTED_AGENT_FROZEN_SHA256` updated; the first value
+is kept in the test as the record before the rule tables). The agent configuration digest
+moves too (`32c812c8…` to `bb94a670…04c7`). The procedural record `c58306b4…40a0`, the pilot
+configuration `cf59bcbb…f404` and the procedural configuration's own `def3c42b…ba36` are
+unchanged (tested); no committed approval names an agent digest.
+
+**Alternatives.** A digest of the harness's source (refused, as for the first record: a
+refactor that changes no rule would trip it, and what binds a run is the rule); one digest
+per table in the record (refused: twelve lines where one digest and a named list in the code
+say the same, and the check names every table on refusal); leaving the tables to the
+configuration digest (refused: offline runs check the freeze, not an approval, and the
+tables live in the code, not the configuration).

@@ -4459,5 +4459,24 @@ lead's "Yes to all three" (11:03 UTC): the record first, the prompts as they sta
   digest's move stated. Held for the lead: whether the freeze also covers the
   coordinator-as-code rule tables (`CLAIMS_FOR_LABEL`, `ROUND_TWO_ONLY_CLAIMS`, the
   `SPECIALISTS` order); not built until the lead's word.
-- **Next:** the coordinator's check of the delta and the lead's word; then item B, the
-  Q6 cells.
+- **PR #45 merged at `49df0dc` (the lead, 2026-11-01: "merge 45, and yes to the rule
+  tables").**
+
+**2026-11-01 — The coordinator's rule tables join the agent record (branch
+`claude/p2-agents-rule-freeze`, a draft PR from `main` at `49df0dc`; no other P2 PR open).**
+- `agents.frozen.rules_sha256`: the digest of `tools.p2_live.agent_rule_tables()`, checked
+  by `check_p2_agents_frozen` before every run of the arm, offline included: `CLAIMS_FOR_LABEL`,
+  `ROUND_TWO_ONLY_CLAIMS`, `SPECIALISTS` in order, `VERIFIER`, `CONFIDENCE_ORDER` (moved
+  from an inline literal, same value), `P0_ORDER`, `ABSTAIN_LABEL`, `RULE`, and the null
+  rule's `NEVER_IN_OBJECTIVE` and `BALANCE_STATS`. The admission and conclusion functions
+  hold no table (the Q13/Q14 threshold is `p0.yaml`'s, frozen with P0); the patterns and
+  bounds are in the frozen schemas. The record is re-dated 2026-11-01.
+- `frozen_record_sha256(arm)` moves `2089b2e2…` → `b373dfaf…`; the procedural
+  `c58306b4…`, the pilot `cf59bcbb…` and the procedural configuration's `def3c42b…`
+  unchanged (tested).
+- Tests: the tables named and their digest in the committed record; each table changed in
+  the code refused, with the committed code as the control and restored passing; P0's
+  order and the null rule's constants likewise, the procedural arm unaffected.
+  `docs/decisions.md`: the entry with what is in, what is not and why. Full `pytest -q`:
+  927 passed, 2 skipped (the unfetched SCADA file), 1 h 40 min; ruff clean.
+- **Next:** the coordinator's review; then item B, the Q6 cells, in its own PR.

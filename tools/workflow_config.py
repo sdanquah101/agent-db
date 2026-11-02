@@ -829,6 +829,11 @@ class P2AgentsFrozen(_Frozen):
     turns: dict[str, int]
     rounds: int
     projection: P2AgentFrozenProjection
+    rules_sha256: str = Field(
+        description="The digest of the coordinator-as-code rule tables that decide the "
+        "label and the admission (the lead's 'yes to the rule tables', 2026-11-01): "
+        "tools.p2_live.agent_rule_tables names them"
+    )
     model: ModelSettings
     caps: P2Caps
     verifier_caps: P2VerifierCaps

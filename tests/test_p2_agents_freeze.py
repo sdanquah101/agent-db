@@ -27,6 +27,7 @@ from tools.p2_live import (
     AGENT_FROZEN_SCHEMAS,
     agent_frozen_digests,
     agent_frozen_record_sha256,
+    agent_rule_tables,
     check_p2_agents_frozen,
     check_p2_frozen,
     config_digest,
@@ -37,9 +38,12 @@ from tools.workflow_config import load_p1, load_p2, sandbox_config
 from workflows.p2_multi_agent import agents, messages
 
 REPO = Path(__file__).resolve().parents[1]
-COMMITTED_AGENT_FROZEN_SHA256 = "2089b2e2f6378b8b3bd88bab3431ff1bf483afe209da329d2a1c4f27885ba77b"
+COMMITTED_AGENT_FROZEN_SHA256 = "b373dfaf01636999d0a80ff2b211108a3c9ab94f786a2a208342eb8333f34a82"
 """The digest of both committed records an approval of the agent arm names (the procedural
-``frozen`` and ``agents.frozen``): a new agent freeze edits it, the procedural one stands."""
+``frozen`` and ``agents.frozen``): a new agent freeze edits it, the procedural one stands.
+It moved from ``2089b2e2…a77b`` when the rule tables joined the record (2026-11-01)."""
+FIRST_AGENT_FROZEN_SHA256 = "2089b2e2f6378b8b3bd88bab3431ff1bf483afe209da329d2a1c4f27885ba77b"
+"""The digest of the record as first cut on 2026-10-30, before the rule tables."""
 PROCEDURAL_CONFIG_SHA256 = "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36"
 """``config_digest(load_p2())``, the procedural configuration's own digest (not the pilot's
 ``cf59bcbb…f404``, which is the pilot copy's): the agent record must not move it."""
@@ -57,7 +61,8 @@ def test_the_committed_record_passes_and_freezes_every_item_the_design_names():
     procedural = check_p2_frozen(arm)  # the procedural record, checked first, as before
     assert procedural.date == "2026-10-19"
     record = check_p2_agents_frozen(arm)
-    assert record.date == "2026-10-30" and "Yes to all three" in record.word
+    assert record.date == "2026-11-01" and "Yes to all three" in record.word
+    assert "First frozen 2026-10-30" in record.word and "yes to the rule tables" in record.word
     assert "01d78ac" in record.word  # the prompts as they stand after PR #43
     for part in (record.prompts_sha256, record.tools_sha256, record.allow_list, record.turns):
         assert set(part) == set(ROLES)
@@ -93,6 +98,7 @@ def test_the_procedural_freeze_its_digest_and_the_pilot_approval_are_unchanged()
     assert config_digest(arm) not in (PILOT_CONFIG_SHA256, PROCEDURAL_CONFIG_SHA256)
     # the agent arm's digest names both records; it is pinned, and it is not the procedural one
     assert frozen_record_sha256(arm) == COMMITTED_AGENT_FROZEN_SHA256 != COMMITTED_FROZEN_SHA256
+    assert COMMITTED_AGENT_FROZEN_SHA256 != FIRST_AGENT_FROZEN_SHA256  # the rule tables moved it
     # the committed approval of the procedural pilot still names the committed freeze and
     # its own digest; an approval of the agent arm would have to name the agent digest
     approval = yaml.safe_load(p2_live.APPROVAL_FILE.read_text(encoding="utf-8"))
@@ -293,3 +299,75 @@ def test_the_runner_refuses_an_unfrozen_agent_arm_before_any_launch(tmp_path, mo
     monkeypatch.setattr(runner, "open_registry", never)
     with pytest.raises(ValueError, match=r"agent prompt of 'verification' is not the frozen one"):
         runner.run_workflow("run_x", "p2", config_path=path, runs_root=tmp_path / "runs")
+
+
+# ---------------------------------------------- the rule tables (the lead's word, 2026-11-01)
+
+
+def test_the_rule_tables_are_named_and_their_digest_is_in_the_committed_record():
+    """The lead's "yes to the rule tables": the record binds them, offline as live."""
+    arm = load_p2(AGENTS_YAML)
+    tables = agent_rule_tables()
+    assert set(tables) == {
+        "claims_for_label", "round_two_only_claims", "specialists", "verifier",
+        "confidence_order", "p0_order", "abstain_label", "rule", "never_in_objective",
+        "balance_stats",
+    }  # fmt: skip
+    assert tables["claims_for_label"]["structural"] == ["calibration"]
+    assert tables["round_two_only_claims"] == ["structural"]
+    assert tables["specialists"][0] == "data_quality" and tables["abstain_label"] == "abstain"
+    digest = __import__("hashlib").sha256(json.dumps(tables, sort_keys=True).encode()).hexdigest()
+    assert arm.agents.frozen.rules_sha256 == digest == agent_frozen_digests(arm)["rules_sha256"]
+    assert check_p2_agents_frozen(arm).rules_sha256 == digest  # the committed record passes
+
+
+def _swap_routing_order(seq: tuple[str, ...]) -> tuple[str, ...]:
+    return (seq[1], seq[0], *seq[2:])
+
+
+RULE_TABLE_CHANGES = [
+    ("CLAIMS_FOR_LABEL", agents, lambda v: {**v, "structural": ("calibration", "influent")}),
+    ("CLAIMS_FOR_LABEL", agents, lambda v: {k: x for k, x in v.items() if k != "sensor"}),
+    ("ROUND_TWO_ONLY_CLAIMS", messages, lambda v: frozenset()),
+    ("ROUND_TWO_ONLY_CLAIMS", messages, lambda v: frozenset({*v, "parameter"})),
+    ("SPECIALISTS", agents, _swap_routing_order),
+    ("VERIFIER", agents, lambda v: "verifier"),
+    ("CONFIDENCE_ORDER", agents, lambda v: {"low": 0, "medium": 1, "high": 2}),
+    ("ABSTAIN_LABEL", agents, lambda v: "none"),
+    ("RULE", agents, lambda v: "agents_v2"),
+]
+
+
+@pytest.mark.parametrize(("attr", "module", "change"), RULE_TABLE_CHANGES)
+def test_each_rule_table_changed_in_the_code_is_refused(monkeypatch, attr, module, change):
+    arm = load_p2(AGENTS_YAML)
+    assert check_p2_frozen(arm).date  # the negative control: the code as committed passes
+    monkeypatch.setattr(module, attr, change(getattr(module, attr)))
+    with pytest.raises(ValueError, match=r"coordinator's rule tables are not the frozen ones"):
+        check_p2_frozen(arm)
+    monkeypatch.undo()
+    assert check_p2_agents_frozen(arm).date  # restored, it passes again
+
+
+@pytest.mark.parametrize(
+    ("attr", "module_name", "change"),
+    [
+        ("P0_ORDER", "workflow", lambda v: tuple(reversed(v))),
+        ("NEVER_IN_OBJECTIVE", "evidence", lambda v: ()),
+        ("BALANCE_STATS", "evidence", lambda v: v[:-1]),
+    ],
+)
+def test_the_shared_tables_that_decide_the_label_are_frozen_too(
+    monkeypatch, attr, module_name, change
+):
+    """P0's order (the leading claim's tie-break) and the null rule's two constants."""
+    import importlib
+
+    module = importlib.import_module(f"workflows.p2_multi_agent.{module_name}")
+    arm = load_p2(AGENTS_YAML)
+    assert check_p2_frozen(arm).date
+    monkeypatch.setattr(module, attr, change(getattr(module, attr)))
+    with pytest.raises(ValueError, match=r"coordinator's rule tables are not the frozen ones"):
+        check_p2_frozen(arm)
+    # the procedural arm carries no agent record: its freeze does not read the agent tables
+    assert check_p2_frozen(load_p2()).date
