@@ -2750,6 +2750,8 @@ class AgentRun:
                 continue
             candidates.append(
                 (
+                    # a finding's confidence is pattern-checked to low|medium|high, so the
+                    # fallback is never taken; it orders an impossible value last
                     order.get(f.confidence, 3),
                     procedural.P0_ORDER.index(
                         next((k for k, v in self.lab.items() if v == claim), "none")

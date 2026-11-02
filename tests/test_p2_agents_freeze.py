@@ -44,6 +44,9 @@ COMMITTED_AGENT_FROZEN_SHA256 = "b373dfaf01636999d0a80ff2b211108a3c9ab94f786a2a2
 It moved from ``2089b2e2…a77b`` when the rule tables joined the record (2026-11-01)."""
 FIRST_AGENT_FROZEN_SHA256 = "2089b2e2f6378b8b3bd88bab3431ff1bf483afe209da329d2a1c4f27885ba77b"
 """The digest of the record as first cut on 2026-10-30, before the rule tables."""
+COMMITTED_AGENT_CONFIG_SHA256 = "85a608b89b23b6c0bc44c3e8275c6b2eecdfeb3d8265b9abd24e0fcfb73e1ec7"
+"""``config_digest`` of the committed ``p2_agents.yaml`` (the review of PR #46 at 9f5ffed):
+any edit to the agent configuration, its record included, moves it."""
 PROCEDURAL_CONFIG_SHA256 = "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36"
 """``config_digest(load_p2())``, the procedural configuration's own digest (not the pilot's
 ``cf59bcbb…f404``, which is the pilot copy's): the agent record must not move it."""
@@ -96,6 +99,8 @@ def test_the_procedural_freeze_its_digest_and_the_pilot_approval_are_unchanged()
     assert pilot_config_digest() == PILOT_CONFIG_SHA256
     assert config_digest(load_p2()) == PROCEDURAL_CONFIG_SHA256
     assert config_digest(arm) not in (PILOT_CONFIG_SHA256, PROCEDURAL_CONFIG_SHA256)
+    # the agent configuration's own digest is pinned, as the record's is
+    assert config_digest(arm) == COMMITTED_AGENT_CONFIG_SHA256
     # the agent arm's digest names both records; it is pinned, and it is not the procedural one
     assert frozen_record_sha256(arm) == COMMITTED_AGENT_FROZEN_SHA256 != COMMITTED_FROZEN_SHA256
     assert COMMITTED_AGENT_FROZEN_SHA256 != FIRST_AGENT_FROZEN_SHA256  # the rule tables moved it

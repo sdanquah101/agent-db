@@ -8774,7 +8774,8 @@ projection rule's digest; file names and the harness actions decide no label.
 **Digests.** `frozen_record_sha256(arm)`, what an approval of the arm names, moves from
 `2089b2e2…a77b` to `b373dfaf…4a82` (`COMMITTED_AGENT_FROZEN_SHA256` updated; the first value
 is kept in the test as the record before the rule tables). The agent configuration digest
-moves too (`32c812c8…` to `bb94a670…04c7`). The procedural record `c58306b4…40a0`, the pilot
+moves too (`32c812c8…` to `85a608b8…1ec7`, now pinned by test; an earlier draft of this
+entry gave `bb94a670…04c7`, the value before the record was re-dated 2026-11-01). The procedural record `c58306b4…40a0`, the pilot
 configuration `cf59bcbb…f404` and the procedural configuration's own `def3c42b…ba36` are
 unchanged (tested); no committed approval names an agent digest.
 

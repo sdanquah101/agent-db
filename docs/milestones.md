@@ -4479,4 +4479,9 @@ lead's "Yes to all three" (11:03 UTC): the record first, the prompts as they sta
   order and the null rule's constants likewise, the procedural arm unaffected.
   `docs/decisions.md`: the entry with what is in, what is not and why. Full `pytest -q`:
   927 passed, 2 skipped (the unfetched SCADA file), 1 h 40 min; ruff clean.
-- **Next:** the coordinator's review; then item B, the Q6 cells, in its own PR.
+- **The review of `9f5ffed` (2026-11-02, after main came in with the CI fix): fixed.**
+  The decisions entry gave the agent configuration digest as `bb94a670…`, the value before
+  the record was re-dated; it is `85a608b8…1ec7`, now pinned by test. The record's class
+  docstring and the design note §6 name the rule tables. Held for the lead: whether the
+  coordinator's round-1 routing and the related inline rules join the frozen tables.
+- **Next:** the lead's word on the routing rules; then item B, the Q6 cells, in its own PR.
