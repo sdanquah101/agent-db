@@ -63,6 +63,40 @@ jobs:
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           fi
           unshare --user --map-root-user --mount --pid --fork true
+      - name: Make pivot_root available at /sbin/pivot_root (the sandbox jail calls it there)
+        # The jail script in tools/sandbox.py calls /sbin/pivot_root by its absolute path.
+        # The ubuntu-latest image changed between the nightlies of 2026-10-31 and
+        # 2026-11-01 and the binary was no longer there, so every jailed test failed to
+        # build its jail. This step prints what the image has, installs or links the
+        # binary to /sbin/pivot_root, and fails loudly if it is still missing
+        # (docs/decisions.md, 2026-11-02). tools/sandbox.py is unchanged.
+        run: |
+          echo "--- diagnostics"
+          cat /etc/os-release || true
+          ls -ld /sbin || true
+          ls -l /sbin/pivot_root /usr/sbin/pivot_root /bin/pivot_root /usr/bin/pivot_root 2>&1 || true
+          command -v pivot_root || true
+          dpkg -S pivot_root 2>&1 || true
+          echo "--- fix"
+          if [ ! -x /sbin/pivot_root ]; then
+            found="$(command -v pivot_root || true)"
+            for p in /usr/sbin/pivot_root /usr/bin/pivot_root /bin/pivot_root; do
+              [ -z "$found" ] && [ -x "$p" ] && found="$p"
+            done
+            if [ -z "$found" ]; then
+              sudo apt-get update -qq
+              sudo apt-get install -y -qq util-linux-extra || sudo apt-get install -y -qq util-linux
+              found="$(command -v pivot_root || true)"
+              for p in /usr/sbin/pivot_root /usr/bin/pivot_root /bin/pivot_root; do
+                [ -z "$found" ] && [ -x "$p" ] && found="$p"
+              done
+            fi
+            if [ ! -x /sbin/pivot_root ] && [ -n "$found" ]; then
+              sudo ln -sf "$found" /sbin/pivot_root
+            fi
+          fi
+          ls -l /sbin/pivot_root
+          test -x /sbin/pivot_root
       - name: pytest
         run: pytest -q
 

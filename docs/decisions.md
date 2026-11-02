@@ -8736,3 +8736,26 @@ arm); freezing the harness's source by digest (refused: a refactor that changes 
 would trip it, and what the design names is the rule, which the record states); checking
 the record in the harness (refused: rule 3 and the frozen runner's path through
 `check_p2_frozen` keep the check on the privileged side, before any jail exists).
+
+
+## 2026-11-02 — CI: the runner image lost `/sbin/pivot_root`; a CI-only fix
+
+**What happened.** The GitHub `ubuntu-latest` runner image changed between the nightly CI
+runs of 2026-10-31 (green on `0e71b0f`) and 2026-11-01 (red on the same commit). Every
+jailed test then failed before its workflow ran, building the jail: `jail.sh: 7:
+/sbin/pivot_root: not found` (28 failed and 19 errors per pytest job; the `unshare` check
+still passed). No code changed; the full suite passes locally with `pivot_root` present.
+
+**Decision (the coordinator, 2026-11-02).** A CI-only fix in `.github/workflows/ci.yml`: a
+step before `pytest` in the pytest job prints what the image has (`/etc/os-release`,
+`/sbin`, where `pivot_root` is, which package owns it), installs the package that provides
+`pivot_root` if it is absent (`util-linux-extra`, else `util-linux`), links it to
+`/sbin/pivot_root` if it is present only elsewhere, and ends with `test -x /sbin/pivot_root`
+so the step fails loudly and early if the fix stops working. `tools/sandbox.py` is unchanged.
+No test is skipped, marked or deselected.
+
+**Alternative rejected.** Resolving `pivot_root`'s path in `tools/sandbox.py` (finding it
+on the privileged side and passing it into the jail script). Refused: the jail script is
+the isolation boundary every workflow runs inside, and it changes only through a reviewed
+PR that proves P0's and P1's `calls.jsonl` byte-identical; the failure is the runner's, so
+the fix belongs to the runner's setup.
