@@ -350,7 +350,9 @@ def h4_run(store: Path, part: str = "0/1") -> None:
         sid, plant_id, tier = cell
         plant = load_plant_config(plant_id)
         scenario = at_plant_horizon(load_scenario(REPO / "scenarios" / f"{sid}.yaml"), plant)
-        root = store / "runs"
+        # each arm its own run store: a run's id is keyed on its cell and seed, so two arms
+        # in one store would share a run directory and write over each other's outputs
+        root = store / arm / "runs"
         job = f"{key(cell)} {arm}"
         prior = orphans.get((job, rep), [])
         run_ids: list[str] = [str(p["run_id"]) for p in prior]
