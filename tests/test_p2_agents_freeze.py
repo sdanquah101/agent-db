@@ -27,6 +27,7 @@ from tools.p2_live import (
     AGENT_FROZEN_SCHEMAS,
     agent_frozen_digests,
     agent_frozen_record_sha256,
+    agent_rule_tables,
     check_p2_agents_frozen,
     check_p2_frozen,
     config_digest,
@@ -37,9 +38,21 @@ from tools.workflow_config import load_p1, load_p2, sandbox_config
 from workflows.p2_multi_agent import agents, messages
 
 REPO = Path(__file__).resolve().parents[1]
-COMMITTED_AGENT_FROZEN_SHA256 = "2089b2e2f6378b8b3bd88bab3431ff1bf483afe209da329d2a1c4f27885ba77b"
+COMMITTED_AGENT_FROZEN_SHA256 = "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
 """The digest of both committed records an approval of the agent arm names (the procedural
-``frozen`` and ``agents.frozen``): a new agent freeze edits it, the procedural one stands."""
+``frozen`` and ``agents.frozen``): a new agent freeze edits it, the procedural one stands.
+It moved from ``2089b2e2…a77b`` when the rule tables joined the record (2026-11-01), and
+from ``b373dfaf…4a82`` when the routing rules joined them (the lead's "a", 2026-11-03,
+first ``2ed56ecf…9ead``, then this value with the leading claim's label tie-break)."""
+RULE_TABLES_AGENT_FROZEN_SHA256 = "b373dfaf01636999d0a80ff2b211108a3c9ab94f786a2a208342eb8333f34a82"
+"""The digest of the record with the rule tables of 2026-11-01, before the routing rules."""
+FIRST_AGENT_FROZEN_SHA256 = "2089b2e2f6378b8b3bd88bab3431ff1bf483afe209da329d2a1c4f27885ba77b"
+"""The digest of the record as first cut on 2026-10-30, before the rule tables."""
+COMMITTED_AGENT_CONFIG_SHA256 = "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8"
+"""``config_digest`` of the committed ``p2_agents.yaml`` (the review of PR #46 at 9f5ffed):
+any edit to the agent configuration, its record included, moves it. It was ``85a608b8…``
+before the routing rules joined the record, then ``ba8efb16…`` before the label
+tie-break did (both 2026-11-03)."""
 PROCEDURAL_CONFIG_SHA256 = "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36"
 """``config_digest(load_p2())``, the procedural configuration's own digest (not the pilot's
 ``cf59bcbb…f404``, which is the pilot copy's): the agent record must not move it."""
@@ -57,7 +70,9 @@ def test_the_committed_record_passes_and_freezes_every_item_the_design_names():
     procedural = check_p2_frozen(arm)  # the procedural record, checked first, as before
     assert procedural.date == "2026-10-19"
     record = check_p2_agents_frozen(arm)
-    assert record.date == "2026-10-30" and "Yes to all three" in record.word
+    assert record.date == "2026-11-03" and "Yes to all three" in record.word
+    assert "lead's word of 2026-11-03" in record.word  # the routing rules (the lead's "a")
+    assert "First frozen 2026-10-30" in record.word and "yes to the rule tables" in record.word
     assert "01d78ac" in record.word  # the prompts as they stand after PR #43
     for part in (record.prompts_sha256, record.tools_sha256, record.allow_list, record.turns):
         assert set(part) == set(ROLES)
@@ -91,8 +106,12 @@ def test_the_procedural_freeze_its_digest_and_the_pilot_approval_are_unchanged()
     assert pilot_config_digest() == PILOT_CONFIG_SHA256
     assert config_digest(load_p2()) == PROCEDURAL_CONFIG_SHA256
     assert config_digest(arm) not in (PILOT_CONFIG_SHA256, PROCEDURAL_CONFIG_SHA256)
+    # the agent configuration's own digest is pinned, as the record's is
+    assert config_digest(arm) == COMMITTED_AGENT_CONFIG_SHA256
     # the agent arm's digest names both records; it is pinned, and it is not the procedural one
     assert frozen_record_sha256(arm) == COMMITTED_AGENT_FROZEN_SHA256 != COMMITTED_FROZEN_SHA256
+    assert COMMITTED_AGENT_FROZEN_SHA256 != FIRST_AGENT_FROZEN_SHA256  # the rule tables moved it
+    assert COMMITTED_AGENT_FROZEN_SHA256 != RULE_TABLES_AGENT_FROZEN_SHA256  # and the routing
     # the committed approval of the procedural pilot still names the committed freeze and
     # its own digest; an approval of the agent arm would have to name the agent digest
     approval = yaml.safe_load(p2_live.APPROVAL_FILE.read_text(encoding="utf-8"))
@@ -293,3 +312,185 @@ def test_the_runner_refuses_an_unfrozen_agent_arm_before_any_launch(tmp_path, mo
     monkeypatch.setattr(runner, "open_registry", never)
     with pytest.raises(ValueError, match=r"agent prompt of 'verification' is not the frozen one"):
         runner.run_workflow("run_x", "p2", config_path=path, runs_root=tmp_path / "runs")
+
+
+# ---------------------------------------------- the rule tables (the lead's word, 2026-11-01)
+
+
+def test_the_rule_tables_are_named_and_their_digest_is_in_the_committed_record():
+    """The lead's "yes to the rule tables": the record binds them, offline as live."""
+    arm = load_p2(AGENTS_YAML)
+    tables = agent_rule_tables()
+    assert set(tables) == {
+        "claims_for_label", "round_two_only_claims", "specialists", "verifier",
+        "confidence_order", "p0_order", "abstain_label", "rule", "never_in_objective",
+        "balance_stats", "qc_first", "round_one_order", "null_case_routes",
+        "design_on_conflict", "conflict_min_distinct_claims", "not_responders",
+        "assay_holder", "operator_notes_roles", "not_a_separating_test", "label_tie_break",
+    }  # fmt: skip
+    assert tables["claims_for_label"]["structural"] == ["calibration"]
+    assert tables["round_two_only_claims"] == ["structural"]
+    assert tables["specialists"][0] == "data_quality" and tables["abstain_label"] == "abstain"
+    digest = __import__("hashlib").sha256(json.dumps(tables, sort_keys=True).encode()).hexdigest()
+    assert arm.agents.frozen.rules_sha256 == digest == agent_frozen_digests(arm)["rules_sha256"]
+    assert check_p2_agents_frozen(arm).rules_sha256 == digest  # the committed record passes
+
+
+def _swap_routing_order(seq: tuple[str, ...]) -> tuple[str, ...]:
+    return (seq[1], seq[0], *seq[2:])
+
+
+RULE_TABLE_CHANGES = [
+    ("CLAIMS_FOR_LABEL", agents, lambda v: {**v, "structural": ("calibration", "influent")}),
+    ("CLAIMS_FOR_LABEL", agents, lambda v: {k: x for k, x in v.items() if k != "sensor"}),
+    ("ROUND_TWO_ONLY_CLAIMS", messages, lambda v: frozenset()),
+    ("ROUND_TWO_ONLY_CLAIMS", messages, lambda v: frozenset({*v, "parameter"})),
+    ("SPECIALISTS", agents, _swap_routing_order),
+    ("VERIFIER", agents, lambda v: "verifier"),
+    ("CONFIDENCE_ORDER", agents, lambda v: {"low": 0, "medium": 1, "high": 2}),
+    ("ABSTAIN_LABEL", agents, lambda v: "none"),
+    ("RULE", agents, lambda v: "agents_v2"),
+]
+
+
+@pytest.mark.parametrize(("attr", "module", "change"), RULE_TABLE_CHANGES)
+def test_each_rule_table_changed_in_the_code_is_refused(monkeypatch, attr, module, change):
+    arm = load_p2(AGENTS_YAML)
+    assert check_p2_frozen(arm).date  # the negative control: the code as committed passes
+    monkeypatch.setattr(module, attr, change(getattr(module, attr)))
+    with pytest.raises(ValueError, match=r"coordinator's rule tables are not the frozen ones"):
+        check_p2_frozen(arm)
+    monkeypatch.undo()
+    assert check_p2_agents_frozen(arm).date  # restored, it passes again
+
+
+SHARED_TABLE_CHANGES = [
+    ("P0_ORDER", "workflow", lambda v: tuple(reversed(v))),
+    ("NEVER_IN_OBJECTIVE", "evidence", lambda v: ()),
+    ("BALANCE_STATS", "evidence", lambda v: v[:-1]),
+]
+
+
+@pytest.mark.parametrize(("attr", "module_name", "change"), SHARED_TABLE_CHANGES)
+def test_the_shared_tables_that_decide_the_label_are_frozen_too(
+    monkeypatch, attr, module_name, change
+):
+    """P0's order (the leading claim's tie-break) and the null rule's two constants."""
+    import importlib
+
+    module = importlib.import_module(f"workflows.p2_multi_agent.{module_name}")
+    arm = load_p2(AGENTS_YAML)
+    assert check_p2_frozen(arm).date
+    monkeypatch.setattr(module, attr, change(getattr(module, attr)))
+    with pytest.raises(ValueError, match=r"coordinator's rule tables are not the frozen ones"):
+        check_p2_frozen(arm)
+    # the procedural arm carries no agent record: its freeze does not read the agent tables
+    assert check_p2_frozen(load_p2()).date
+
+
+# ------------------------------- the routing rules (the lead's "a", 2026-11-03)
+
+
+ROUTING_CHANGES = [
+    ("QC_FIRST", lambda v: "influent"),
+    ("ROUND_ONE_ORDER", lambda v: tuple(reversed(v))),
+    ("ROUND_ONE_ORDER", lambda v: tuple(r for r in v if r != "identifiability")),
+    ("NULL_CASE_ROUTES", lambda v: ((("NB",), "calibration", ("calibration",)), *v[1:])),
+    ("NULL_CASE_ROUTES", lambda v: (v[0], (("NM", "NS"), "calibration", ("calibration",)))),
+    ("DESIGN_ON_CONFLICT", lambda v: "calibration"),
+    ("CONFLICT_MIN_DISTINCT_CLAIMS", lambda v: 3),
+    ("NOT_RESPONDERS", lambda v: frozenset()),
+    ("ASSAY_HOLDER", lambda v: "calibration"),
+    ("OPERATOR_NOTES_ROLES", lambda v: ("data_quality",)),
+    ("NOT_A_SEPARATING_TEST", lambda v: frozenset()),
+    ("LABEL_TIE_BREAK", lambda v: ("none", *v[:-1])),
+    ("LABEL_TIE_BREAK", lambda v: tuple(reversed(v[:-1])) + v[-1:]),
+]
+
+
+@pytest.mark.parametrize(("attr", "change"), ROUTING_CHANGES)
+def test_each_routing_rule_changed_in_the_code_is_refused(monkeypatch, attr, change):
+    """The lead's "a": every routing constant is in the rule tables' digest."""
+    arm = load_p2(AGENTS_YAML)
+    assert check_p2_agents_frozen(arm).date  # the negative control: the committed rules pass
+    monkeypatch.setattr(agents, attr, change(getattr(agents, attr)))
+    with pytest.raises(ValueError, match=r"coordinator's rule tables are not the frozen ones"):
+        check_p2_agents_frozen(arm)
+    monkeypatch.undo()
+    assert check_p2_agents_frozen(arm).date  # restored, it passes again
+
+
+def test_every_rule_table_has_a_mutation_test():
+    """Every table ``agent_rule_tables()`` names has a test that changing it is refused.
+
+    The set is derived from the tables' keys (the review of 0f11477, N6): a table added
+    without its own mutation test fails here. Each key names its constant (upper case).
+    """
+    mutated = (
+        {attr for attr, _, _ in RULE_TABLE_CHANGES}
+        | {attr for attr, _, _ in SHARED_TABLE_CHANGES}
+        | {attr for attr, _ in ROUTING_CHANGES}
+    )
+    wanted = {key.upper() for key in agent_rule_tables()}
+    assert wanted <= mutated, sorted(wanted - mutated)
+    assert mutated <= wanted, sorted(mutated - wanted)  # no test of a table not frozen
+    # the control: a table the code named but no test mutated would be caught
+    assert {*wanted, "SOME_NEW_TABLE"} - mutated == {"SOME_NEW_TABLE"}
+
+
+def test_the_design_role_never_answers_a_fail(monkeypatch):
+    """The exclusion in ``responders_for`` matters (the one mutation no test caught).
+
+    Design claims no label, so it can join the responders only through the claimants of
+    the alternative; this makes it one (for ``parameter``) and shows the exclusion keeps it
+    out, with the exclusion emptied as the control.
+    """
+    from tests.test_p2_agents_harness import FakeTools, _cfg, _install
+
+    fake = FakeTools("B", "B", offsets={"ph": 8.0})
+    _install(monkeypatch, fake)
+    run = agents.AgentRun(_cfg())
+    run.code_steps()
+    claims = {**agents.CLAIMS_FOR_LABEL, "parameter": ("calibration", "design")}
+    monkeypatch.setattr(agents, "CLAIMS_FOR_LABEL", claims)
+    verdict = type("V", (), {"alternative": run.lab["parameter"]})()
+    responders = run.responders_for(verdict)
+    assert "calibration" in responders and "design" not in responders
+    # the control: with no role excluded, the same verdict routes design too
+    monkeypatch.setattr(agents, "NOT_RESPONDERS", frozenset())
+    assert "design" in run.responders_for(verdict)
+
+
+def test_the_label_tie_break_is_p0s_order_then_none_and_a_label_leads_none(monkeypatch):
+    """B3 (the review of 0f11477): at equal confidence a label claim leads a ``none`` claim.
+
+    The leading claim decides the label written on a pass. With the frozen tie-break the
+    label leads and is written; with ``none`` moved first (the control) ``none`` leads and
+    is written. The tie-break's head is P0's label order.
+    """
+    from workflows.p2_multi_agent import workflow as wf
+
+    assert (*wf.P0_ORDER, "none") == agents.LABEL_TIE_BREAK
+    from tests.test_p2_agents_harness import FakeTools, _admit_everything, _cfg, _install
+
+    fake = FakeTools("B", "B", offsets={"ph": 8.0})
+    _install(monkeypatch, fake)
+    _admit_everything(monkeypatch)
+    run = agents.AgentRun(_cfg())
+    run.code_steps()
+    run.findings = {
+        "influent": messages.InfluentFinding.model_construct(claim="influent", confidence="high"),
+        "data_quality": messages.SensorFinding.model_construct(claim="none", confidence="high"),
+    }
+    passed = messages.Verdict.model_construct(verdict="pass", round=1, alternative=None)
+
+    def written() -> tuple[str | None, str]:
+        run.verdicts, run.verdict, run.verifier_rounds = [passed], {}, 1
+        run.abstentions = []
+        run.conclude()
+        return run.leading()[0], run.classification["label"]
+
+    assert written() == ("influent", "influent")
+    # the control: none ranked first leads, and is what a pass writes
+    monkeypatch.setattr(agents, "LABEL_TIE_BREAK", ("none", *wf.P0_ORDER))
+    assert written() == ("none", "none")

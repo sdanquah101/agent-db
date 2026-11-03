@@ -55,6 +55,7 @@ __all__ = [
     "P2Gateway",
     "agent_frozen_digests",
     "agent_frozen_record_sha256",
+    "agent_rule_tables",
     "check_p2_agents_frozen",
     "check_p2_frozen",
     "frozen_digests",
@@ -164,6 +165,79 @@ def check_p2_frozen(config: P2Config) -> P2Frozen:
     return frozen
 
 
+def agent_rule_tables() -> dict[str, Any]:
+    """The coordinator-as-code rule tables that decide the label, the admission and the routing.
+
+    Frozen by digest in ``agents.frozen.rules_sha256`` (the lead's "yes to the rule
+    tables", 2026-11-01, and "a" to freezing the routing rules, 2026-11-03), so an offline
+    development run is bound to them as a live run is:
+
+    - ``claims_for_label``: which role may claim each label (§3.2), read by the leading
+      claim and by the round-2 routing;
+    - ``round_two_only_claims``: the claims a finding may carry in round 2 only (§3.3, F1);
+    - ``specialists``: the specialist roles, in the order the round-2 responders are taken
+      and a separating test's owner is found (not the round-1 routing order);
+    - ``qc_first``: the role routed first (data quality's QC);
+    - ``round_one_order``: the round-1 specialists in routing order, all when the null
+      stands;
+    - ``null_case_routes``: over a failed null, which null cases route which roles, and
+      the gate role each route needs;
+    - ``design_on_conflict`` and ``conflict_min_distinct_claims``: the role routed when
+      findings conflict, and how many distinct claims make a conflict;
+    - ``not_responders``: the roles never routed to answer a round-1 ``fail``;
+    - ``assay_holder``: the role that holds the stage's assay units and sees the catalogue;
+    - ``operator_notes_roles``: the roles whose brief carries the operator notes;
+    - ``not_a_separating_test``: the tools a verdict may never name as its test;
+    - ``verifier``: the verifier's role name (what the reserve and the verdicts key on);
+    - ``confidence_order``: the leading claim's first key;
+    - ``p0_order``: P0's label order, the procedural arm's and the head of the tie-break;
+    - ``label_tie_break``: the leading claim's second key, P0's label order then ``none``,
+      so at equal confidence a label claim leads a ``none`` claim;
+    - ``abstain_label`` and ``rule``: the label an abstaining run writes and the rule name
+      the arm's classifications carry;
+    - ``never_in_objective`` and ``balance_stats``: the two constants of the null rule
+      (`evidence.py`) that decide which channels count and which balance statistics are
+      placed, hence the null table every admission reads.
+
+    The admission itself (``admit``, the amended ``structural_case`` of Q13 and Q14,
+    ``admit_agent``, ``admissible_alternative``) and the conclusion (``conclude``) are code
+    with no table: their thresholds come from ``p0.yaml`` (P0's frozen configuration) and
+    the frozen ``admit``'s source is pinned by test. The equal-share grant is arithmetic,
+    not data. The second round's trigger is the verdict schema's ``fail`` and the frozen
+    round limit; the role-name tie-break in the leading claim decides only which role
+    leads between equal claims (same label, same confidence), never the label. The
+    schema-level bounds and patterns, the routing reasons included, are in
+    ``schemas_sha256``, the redaction tables in the projection's digest.
+    """
+    from workflows.p2_multi_agent import agents, evidence, messages
+    from workflows.p2_multi_agent import workflow as wf
+
+    return {
+        "claims_for_label": {k: list(v) for k, v in agents.CLAIMS_FOR_LABEL.items()},
+        "round_two_only_claims": sorted(messages.ROUND_TWO_ONLY_CLAIMS),
+        "specialists": list(agents.SPECIALISTS),
+        "verifier": agents.VERIFIER,
+        "confidence_order": dict(agents.CONFIDENCE_ORDER),
+        "p0_order": list(wf.P0_ORDER),
+        "label_tie_break": list(agents.LABEL_TIE_BREAK),
+        "abstain_label": agents.ABSTAIN_LABEL,
+        "rule": agents.RULE,
+        "never_in_objective": list(evidence.NEVER_IN_OBJECTIVE),
+        "balance_stats": list(evidence.BALANCE_STATS),
+        "qc_first": agents.QC_FIRST,
+        "round_one_order": list(agents.ROUND_ONE_ORDER),
+        "null_case_routes": [
+            [list(cases), gate, list(roles)] for cases, gate, roles in agents.NULL_CASE_ROUTES
+        ],
+        "design_on_conflict": agents.DESIGN_ON_CONFLICT,
+        "conflict_min_distinct_claims": agents.CONFLICT_MIN_DISTINCT_CLAIMS,
+        "not_responders": sorted(agents.NOT_RESPONDERS),
+        "assay_holder": agents.ASSAY_HOLDER,
+        "operator_notes_roles": list(agents.OPERATOR_NOTES_ROLES),
+        "not_a_separating_test": sorted(agents.NOT_A_SEPARATING_TEST),
+    }
+
+
 def agent_frozen_digests(config: P2Config) -> dict[str, Any]:
     """What the agent arm's record freezes, recomputed from the files and the code.
 
@@ -207,6 +281,7 @@ def agent_frozen_digests(config: P2Config) -> dict[str, Any]:
             "preview": int(block.projection.preview),
             "redaction_sha256": _sha(json.dumps(redaction, sort_keys=True)),
         },
+        "rules_sha256": _sha(json.dumps(agent_rule_tables(), sort_keys=True)),
     }
 
 
@@ -216,9 +291,10 @@ def check_p2_agents_frozen(config: P2Config) -> P2AgentsFrozen:
     Checked, in order: the record exists and is the **committed** one
     (``p2_agents.yaml``'s; a copied configuration cannot carry its own edited record);
     every prompt, every schema and every role's tools against it, by digest; the
-    allow-list, the turn budgets, the round limit and the projection rule; the model
-    block and the three cap blocks, whole; and the record's model block against the
-    frozen P1's (decision d). :func:`check_p2_frozen` calls it for every configuration
+    allow-list, the turn budgets, the round limit and the projection rule; the
+    coordinator's rule tables (:func:`agent_rule_tables`, by digest); the model block and
+    the three cap blocks, whole; and the record's model block against the frozen P1's
+    (decision d). :func:`check_p2_frozen` calls it for every configuration
     that carries the arm, so the frozen runner needs no change.
 
     Returns:
@@ -274,6 +350,13 @@ def check_p2_agents_frozen(config: P2Config) -> P2AgentsFrozen:
             k for k, v in now["projection"].items() if v != frozen.projection.model_dump()[k]
         )
         raise ValueError(f"the agent projection rule is not the frozen one ({diff}): refused")
+    if now["rules_sha256"] != frozen.rules_sha256:
+        tables = agent_rule_tables()
+        raise ValueError(
+            "the coordinator's rule tables are not the frozen ones "
+            f"({now['rules_sha256'][:12]}… vs {frozen.rules_sha256[:12]}…; the tables: "
+            f"{sorted(tables)}): refused"
+        )
     for name, have, want in (
         ("model", config.model, frozen.model),
         ("caps", config.agents.caps, frozen.caps),

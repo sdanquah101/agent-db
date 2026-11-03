@@ -814,8 +814,10 @@ class P2AgentsFrozen(_Frozen):
     prompts frozen as they stand after PR #43). Each role's prompt and the verifier's, the
     message and finding schemas (§3.3) and each role's tool specifications as the gateway
     checks them, by sha256; the allow-list (§3.1), the turn budgets and the round limit;
-    the projection rule and its size bound; P1's frozen model block (decision d) and the
-    caps: the proposers', the verifier's, and the verifier's registry budget.
+    the projection rule and its size bound; the coordinator-as-code rule tables, by digest
+    (``rules_sha256``; the lead's "yes to the rule tables", 2026-11-01); P1's frozen model
+    block (decision d) and the caps: the proposers', the verifier's, and the verifier's
+    registry budget.
     :func:`tools.p2_live.check_p2_agents_frozen` recomputes every item and refuses a run
     on any difference, offline included; an approval record names its digest.
     """
@@ -829,6 +831,11 @@ class P2AgentsFrozen(_Frozen):
     turns: dict[str, int]
     rounds: int
     projection: P2AgentFrozenProjection
+    rules_sha256: str = Field(
+        description="The digest of the coordinator-as-code rule tables that decide the "
+        "label and the admission (the lead's 'yes to the rule tables', 2026-11-01): "
+        "tools.p2_live.agent_rule_tables names them"
+    )
     model: ModelSettings
     caps: P2Caps
     verifier_caps: P2VerifierCaps

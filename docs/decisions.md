@@ -8738,6 +8738,57 @@ the record in the harness (refused: rule 3 and the frozen runner's path through
 `check_p2_frozen` keep the check on the privileged side, before any jail exists).
 
 
+## 2026-11-01 — The coordinator's rule tables join the agent arm's frozen record
+
+**The lead's word, 2026-11-01, relayed by the coordinator at 22:35 UTC, verbatim: "merge 45,
+and yes to the rule tables"** — to the coordinator's question, raised in the review of PR #45,
+whether the agent record should also bind the coordinator-as-code rule tables, so that an
+offline development run is bound to them as a live run is. **Decision:** `agents.frozen`
+gains `rules_sha256`, the digest of `tools.p2_live.agent_rule_tables()`, which
+`check_p2_agents_frozen` recomputes from the code before every run of the arm and compares,
+after the projection rule. The record is re-dated 2026-11-01; its `word` keeps "first
+frozen 2026-10-30" and adds this word. **Included**, each because it decides the label or
+the admission:
+- `CLAIMS_FOR_LABEL` (which role may claim each label; the leading claim and the round-2
+  routing read it) and `ROUND_TWO_ONLY_CLAIMS` (the claims a finding may carry in round 2
+  only), as the lead named;
+- `SPECIALISTS` in its order (the order the round-2 responders are taken and a separating
+  test's owner is found; not the round-1 routing order, which joined the tables on
+  2026-11-03, entry below) and `VERIFIER` (the role the
+  reserve and the verdicts key on);
+- `CONFIDENCE_ORDER`, the leading claim's first key, until now an inline literal in
+  `AgentRun.leading`, moved to a module constant with no change of value so it can be frozen;
+- `P0_ORDER` (`workflow.py`), the leading claim's tie-break;
+- `ABSTAIN_LABEL` and `RULE`, the label an abstaining run writes and the rule name the
+  arm's classifications carry;
+- `NEVER_IN_OBJECTIVE` and `BALANCE_STATS` (`evidence.py`), the null rule's two constants,
+  which decide which channels count and which balance statistics are placed, hence the
+  null table every admission reads.
+
+**Not included, and why.** The admission (`admit`, the amended `structural_case` of Q13
+and Q14, `admit_agent`, `admissible_alternative`) and the conclusion (`conclude`) hold no
+table: the Q13/Q14 threshold is `p0.yaml`'s `structural_channels_min`, frozen with P0, and
+the frozen `admit`'s source is pinned by test; the conclusion's reasons are literals in the
+code that writes them. The claim and label patterns and the collection bounds are in the
+schemas the record already freezes (`schemas_sha256`); the redaction tables are in the
+projection rule's digest; file names and the harness actions decide no label.
+
+**Digests.** `frozen_record_sha256(arm)`, what an approval of the arm names, moves from
+`2089b2e2…a77b` to `b373dfaf…4a82` (`COMMITTED_AGENT_FROZEN_SHA256` updated; the first value
+is kept in the test as the record before the rule tables). The agent configuration digest
+moves too (`32c812c8…` to `85a608b8…1ec7`, now pinned by test; an earlier draft of this
+entry gave `bb94a670…04c7`, the value before the record was re-dated 2026-11-01). The procedural record `c58306b4…40a0`, the pilot
+configuration `cf59bcbb…f404` and the procedural configuration's own `def3c42b…ba36` are
+unchanged (tested); no committed approval names an agent digest.
+
+**Alternatives.** A digest of the harness's source (refused, as for the first record: a
+refactor that changes no rule would trip it, and what binds a run is the rule); one digest
+per table in the record (refused: twelve lines where one digest and a named list in the code
+say the same, and the check names every table on refusal); leaving the tables to the
+configuration digest (refused: offline runs check the freeze, not an approval, and the
+tables live in the code, not the configuration).
+
+
 ## 2026-11-02 — CI: the runner image lost `/sbin/pivot_root`; a CI-only fix
 
 **What happened.** The GitHub `ubuntu-latest` runner image changed between the nightly CI
@@ -8759,3 +8810,85 @@ on the privileged side and passing it into the jail script). Refused: the jail s
 the isolation boundary every workflow runs inside, and it changes only through a reviewed
 PR that proves P0's and P1's `calls.jsonl` byte-identical; the failure is the runner's, so
 the fix belongs to the runner's setup.
+
+
+## 2026-11-03 — The coordinator's routing rules join the frozen rule tables
+
+**The lead's word, 2026-11-03, relayed by the coordinator at 00:30 UTC, verbatim: "a"** — to
+the review of PR #46 at `9f5ffed`, finding B1: round-1 routing was not in the freeze. The
+round-1 order and the null-case route map were inline literals in
+`Coordinator.specialists_for` that read neither `SPECIALISTS` nor any frozen table, so
+reversing the tuple, dropping identifiability or routing NB to calibration passed
+`check_p2_agents_frozen` and every freeze test; data quality first, design on conflict, the
+design exclusion in `responders_for` (a mutation no test caught), the assay holder, the
+conflict rule and the `set_sensor_status` exclusion were unbound too, and the 2026-11-01
+entry and the rule-table docstring called `SPECIALISTS` "the coordinator's routing order",
+which it is not. Option (a), freeze them, was put to the lead against (b), say so and list
+them as not frozen. **Decision:** each rule is a named module constant in
+`workflows/p2_multi_agent/agents.py`, read where the inline literal was, with behaviour
+unchanged (every existing harness test passes unchanged), and each is in
+`tools.p2_live.agent_rule_tables()`, so `rules_sha256` covers it:
+- `QC_FIRST` (`data_quality`): the role routed first;
+- `ROUND_ONE_ORDER` (`influent`, `identifiability`, `calibration`): the round-1 specialists
+  in routing order, all when the null stands;
+- `NULL_CASE_ROUTES`: over a failed null, NB routes influent (gated on influent), NM or NS
+  route identifiability and calibration (gated on calibration: identifiability joins only
+  beside calibration, as before);
+- `DESIGN_ON_CONFLICT` (`design`) and `CONFLICT_MIN_DISTINCT_CLAIMS` (2): the role routed
+  when findings conflict, and how many distinct claims make a conflict (the two smallest,
+  sorted, are reported: ordering, not data);
+- `NOT_RESPONDERS` (`design`): never routed to answer a round-1 `fail`;
+- `ASSAY_HOLDER` (`design`): holds the stage's assay units and sees the assay catalogue;
+- `OPERATOR_NOTES_ROLES` (`data_quality`, `influent`): the roles whose brief carries the
+  operator notes and the feed log's extent;
+- `NOT_A_SEPARATING_TEST` (`set_sensor_status`): never a verdict's separating test.
+
+`SPECIALISTS` is described as what it is: the order the round-2 responders are taken and
+a separating test's owner is found. **Left out, and why:** the equal-share grant is
+arithmetic (`floor(evaluations left / proposers)`), not data; the routing reasons are the
+`RoutingEntry` schema's literals, frozen in `schemas_sha256`; the role-keyed checks in
+`check_finding` validate a role's own finding fields (its sensors, parameters, assay) and
+route nothing; the offline responder's scripted plans drive the no-model arm only and
+decide no label; the report's role keys name fields.
+
+**Digests** (computed from the committed tree after the record was re-dated 2026-11-03):
+`frozen_record_sha256(arm)` moves `b373dfaf…4a82` → `2ed56ecf…9ead`
+(`COMMITTED_AGENT_FROZEN_SHA256`); `config_digest(arm)` moves `85a608b8…1ec7` →
+`ba8efb16…a3e2` (`COMMITTED_AGENT_CONFIG_SHA256`); `rules_sha256` is `0f3efa64…9854`. The
+procedural record `c58306b4…40a0`, the pilot configuration `cf59bcbb…f404` and the
+procedural configuration's own `def3c42b…ba36` are unchanged (tested). No committed approval
+names an agent digest.
+
+**Tests:** one mutation per routing constant (two for `ROUND_ONE_ORDER` and two for
+`NULL_CASE_ROUTES`), each refused, with the committed rules as the control and the restored
+rules passing; a test that every routing constant has its mutation test; and a behavioural
+test of the design exclusion in `responders_for`: with design made a claimant of the
+alternative, it is still not routed, and with the exclusion emptied (the control) it is.
+
+**Alternative refused:** (b), correcting the docstring and the decisions entry and listing
+the routing functions under "not frozen". Refused by the lead: the routing decides which
+roles see the case and in what order, as much as the claim tables decide who may claim, and
+an offline development run should be bound to it as a live run is.
+
+**Addendum, the review of `0f11477` (2026-11-03): the leading claim's label tie-break.**
+`AgentRun.leading` ranked a `none` claim after every label at equal confidence through an
+inline `len(P0_ORDER)`; changing it to rank `none` first flips the leading claim, and so
+the label a pass writes, from a label to `none`, and no freeze check or test noticed. It
+decides the label, so it falls under the lead's word of 2026-11-01. It is now
+`LABEL_TIE_BREAK = (*P0_ORDER, "none")` in `agents.py`, read where the inline rule was
+(behaviour unchanged: the harness and evidence tests pass unchanged), and in
+`agent_rule_tables()` as `label_tie_break`; two mutation tests (`none` first; the label
+order reversed) and a behavioural test with a control (at equal confidence an `influent`
+claim leads a `none` claim and is the label written; with `none` ranked first, `none` leads
+and is written). The coverage test now derives the tables from `agent_rule_tables()`'s keys,
+so a table added without a mutation test fails it. **Also left out, and why:** the second
+round's trigger is the verdict schema's `fail` (frozen in `schemas_sha256`) and the frozen
+round limit; the role-name tie-break in the leading claim decides only which role leads
+between equal claims (same label, same confidence), never the label. **Final digests,**
+from the committed tree (the record keeps its 2026-11-03 date; its `word` names the
+tie-break): `frozen_record_sha256(arm)` `2ed56ecf…9ead` → **`501893b3…1fa4`**;
+`config_digest(arm)` `ba8efb16…a3e2` → **`618f4825…6dd8`**; `rules_sha256`
+`0f3efa64…9854` → **`0aadaf43…5c6c`**. Over the whole of 2026-11-03 the agent freeze moved
+`b373dfaf…4a82` → `501893b3…1fa4` and the agent configuration `85a608b8…1ec7` →
+`618f4825…6dd8`. The procedural `c58306b4…40a0`, `cf59bcbb…f404` and `def3c42b…ba36` are
+unchanged (tested).

@@ -276,6 +276,9 @@ No role sees another role's assessment. The hold-out is visible only to the veri
   - the allow-list (§3.1);
   - turn budgets and the round limit;
   - the projection rule and its size bound;
+  - the coordinator-as-code rule tables that decide the label, the admission and the
+    routing, by digest (added on the lead's words of 2026-11-01 and 2026-11-03;
+    `tools/p2_live.py` `agent_rule_tables` names them);
   - P1's frozen model block (decision d), and the caps.
 
   `check_p2_frozen` checks the record on every run. A new approval record names its digest.

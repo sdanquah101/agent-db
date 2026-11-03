@@ -72,17 +72,18 @@ agents:
   # of 2026-10-30, "Yes to all three"): each role's prompt and the verifier's, the message
   # and finding schemas (messages.py), each role's tool specifications as the gateway checks
   # them, by sha256; the allow-list, the turn budgets and the round limit; the projection
-  # rule and its size bound (the redaction rule's digest); P1's frozen model block
+  # rule and its size bound (the redaction rule's digest); the coordinator-as-code rule
+  # tables (rules_sha256; the lead's "yes to the rule tables", 2026-11-01); P1's frozen model block
   # (decision d) and the caps. tools/p2_live.py::check_p2_agents_frozen recomputes every
   # item before EVERY run of the arm, offline included, and refuses the run on any
   # difference; frozen_record_sha256(config) names both records to an approval. A changed
   # prompt, schema, tool, list, budget or cap is a new freeze, on the lead's word.
   frozen:
-    date: '2026-10-30'
+    date: '2026-11-03'
     word: 'The lead''s word of 2026-10-30 ("Yes to all three", relayed by the coordinator at 11:03 UTC):
       the agent arm''s own record is cut first (design note section 6), the prompts frozen as they stand
       after PR #43 (merged at 01d78ac: the verifier''s own budget under ruling B, the second round and the
-      separating test), then the Q6 cells. First frozen 2026-10-30.'
+      separating test), then the Q6 cells. First frozen 2026-10-30; the coordinator''s rule tables added on the lead''s word of 2026-11-01 ("merge 45, and yes to the rule tables"); the coordinator''s routing rules added on the lead''s word of 2026-11-03 ("a"), with the leading claim''s label tie-break (the review of 0f11477).'
     prompts_sha256:
       data_quality: bb2efc24e0915e2db3ffd9b155d57633f6cf8fc29644524eb499f972b981513e
       influent: f4daf255603808f8f5fad5677223f64a3e0de0379360c2d50c44df6ea4452d94
@@ -160,6 +161,7 @@ agents:
       max_points: 200
       preview: 12
       redaction_sha256: a2a82eb12a8694ae1a8cb1e87b9dd5839c1a61a3d2a8010b604c380fce8d1f29
+    rules_sha256: 0aadaf432263b4de8f105c363b7248d558f6d79d9885ad13b64cbe05d95a5c6c
     model:
       provider: openai
       model_id: gpt-5.6-luna

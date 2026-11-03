@@ -4459,5 +4459,46 @@ lead's "Yes to all three" (11:03 UTC): the record first, the prompts as they sta
   digest's move stated. Held for the lead: whether the freeze also covers the
   coordinator-as-code rule tables (`CLAIMS_FOR_LABEL`, `ROUND_TWO_ONLY_CLAIMS`, the
   `SPECIALISTS` order); not built until the lead's word.
-- **Next:** the coordinator's check of the delta and the lead's word; then item B, the
-  Q6 cells.
+- **PR #45 merged at `49df0dc` (the lead, 2026-11-01: "merge 45, and yes to the rule
+  tables").**
+
+**2026-11-01 — The coordinator's rule tables join the agent record (branch
+`claude/p2-agents-rule-freeze`, a draft PR from `main` at `49df0dc`; no other P2 PR open).**
+- `agents.frozen.rules_sha256`: the digest of `tools.p2_live.agent_rule_tables()`, checked
+  by `check_p2_agents_frozen` before every run of the arm, offline included: `CLAIMS_FOR_LABEL`,
+  `ROUND_TWO_ONLY_CLAIMS`, `SPECIALISTS` in order, `VERIFIER`, `CONFIDENCE_ORDER` (moved
+  from an inline literal, same value), `P0_ORDER`, `ABSTAIN_LABEL`, `RULE`, and the null
+  rule's `NEVER_IN_OBJECTIVE` and `BALANCE_STATS`. The admission and conclusion functions
+  hold no table (the Q13/Q14 threshold is `p0.yaml`'s, frozen with P0); the patterns and
+  bounds are in the frozen schemas. The record is re-dated 2026-11-01.
+- `frozen_record_sha256(arm)` moves `2089b2e2…` → `b373dfaf…`; the procedural
+  `c58306b4…`, the pilot `cf59bcbb…` and the procedural configuration's `def3c42b…`
+  unchanged (tested).
+- Tests: the tables named and their digest in the committed record; each table changed in
+  the code refused, with the committed code as the control and restored passing; P0's
+  order and the null rule's constants likewise, the procedural arm unaffected.
+  `docs/decisions.md`: the entry with what is in, what is not and why. Full `pytest -q`:
+  927 passed, 2 skipped (the unfetched SCADA file), 1 h 40 min; ruff clean.
+- **The review of `9f5ffed` (2026-11-02, after main came in with the CI fix): fixed.**
+  The decisions entry gave the agent configuration digest as `bb94a670…`, the value before
+  the record was re-dated; it is `85a608b8…1ec7`, now pinned by test. The record's class
+  docstring and the design note §6 name the rule tables. Held for the lead: whether the
+  coordinator's round-1 routing and the related inline rules join the frozen tables.
+- **The lead's word on the routing rules, 2026-11-03: "a", freeze them.** The coordinator's
+  round-1 order, the null-case routes (with their gate role), data quality first, design on
+  conflict and the conflict's minimum, the round-2 responder exclusion of design, the assay
+  holder, the operator-notes roles and the tools never a separating test are named
+  constants in `agents.py` (behaviour unchanged: the harness tests pass unchanged) and in
+  `agent_rule_tables()`. `SPECIALISTS` is described as the round-2 responder and
+  test-owner order. The record is re-dated 2026-11-03; `frozen_record_sha256(arm)`
+  `b373dfaf…` → `2ed56ecf…`, `config_digest(arm)` `85a608b8…` → `ba8efb16…`; the
+  procedural digests unchanged. A mutation test per constant, and a behavioural test of
+  the design exclusion in `responders_for`. `docs/decisions.md`: the entry.
+- **The review of `0f11477` (2026-11-03): B3 fixed.** The leading claim's label tie-break
+  (a `none` claim after every label at equal confidence) was an inline rule that decides
+  the label; it is `LABEL_TIE_BREAK = (*P0_ORDER, "none")`, in the rule tables, with two
+  mutation tests and a behavioural test. The coverage test derives the tables from
+  `agent_rule_tables()`. The design note §6 says routing. Final digests:
+  `frozen_record_sha256(arm)` `501893b3…`, `config_digest(arm)` `618f4825…`,
+  `rules_sha256` `0aadaf43…`; the procedural ones unchanged.
+- **Next:** the coordinator's check of this commit; then item B, the Q6 cells, in its own PR.
