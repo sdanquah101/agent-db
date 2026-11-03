@@ -8897,3 +8897,49 @@ tie-break): `frozen_record_sha256(arm)` `2ed56ecf…9ead` → **`501893b3…1fa4
 `b373dfaf…4a82` → `501893b3…1fa4` and the agent configuration `85a608b8…1ec7` →
 `618f4825…6dd8`. The procedural `c58306b4…40a0`, `cf59bcbb…f404` and `def3c42b…ba36` are
 unchanged (tested).
+
+## 2026-11-03 — The Q6 (H4) development cells, offline floor (item B)
+
+**Decision.** The four H4 cells the lead decided (Q6; the lead's "Yes to both", 2026-10-25:
+S7-01 at B/A, B/B and B/C, and S7-02 at **A/C**, its defined tier; two seeds each) are
+registered in `scripts/p2_power.py` as `H4_CELLS`, apart from the power run's `CELLS`, and
+run **offline in both arms**: the procedural P2 (`p2.yaml`) and the agent arm
+(`p2_agents.yaml` as committed). The order was the lead's 2026-10-30 "Yes to all three"
+(A, the agent freeze, then B, these cells); the coordinator's relay of 2026-11-03 started
+it. No model is reachable in either arm, no frozen file is touched, and neither record moves.
+The output is `reports/p2_power/h4_cells.json` and `h4_summary.md`; `cells.json` and
+`summary.md` stay as they are.
+
+**Interpretations proposed (the design note is silent on them), for the coordinator:**
+1. *Both arms, not the agent arm alone.* The relay asks for the arm offline; the design note
+   §7 says any agent result is read against the code-only floor, the procedural P2 with
+   every decision at its fallback. The floor of a new cell therefore needs the procedural
+   arm too; the agent arm's offline run is the plumbing and determinism check (its scripted
+   verifier abstains by construction, so its outcome is `abstain`, never a diagnosis).
+2. *Two seeds are replicates 0 and 1* of `generate_run` (the cell's own seed and its first
+   replicate), as the pilot's (`scripts/p2_pilot.py`).
+3. *A hit on a two-fault truth* is the outcome naming **either** fault: a run writes one
+   label. Which true faults the admission let through is reported beside it
+   (`truth_admitted`), so "found one, missed the other" is visible. Descriptive only (§7).
+4. *Each arm has its own run store.* A run's id is keyed on its cell and seed, so two arms
+   in one store would share a run directory and write over each other's outputs (found on
+   the first launch, stopped within a minute, relaunched clean). Both arms of a cell and
+   seed see byte-identical observations; the report checks it.
+
+**Reproducibility and the frozen check (tests, `tests/test_p2_h4_cells.py`).** Each cell
+regenerated from its seed in a fresh store gives the observations the committed record
+names, and its two seeds differ (the control). Every committed run names the frozen digests
+the driver checked before it (`frozen_record_sha256` `c58306b4…40a0` procedural,
+`501893b3…1fa4` the arm; `config_sha256` `def3c42b…ba36` and `618f4825…6dd8`; the arm's
+`agents_frozen_sha256` `8a8ab73d…c951`), ran offline and made no model turn; the check
+refuses a moved agent record (the control: the unedited copy passes). The agent arm, jailed
+and offline on a shortened S7-01 B/B (50 days, 60 evaluations), writes the same
+`calls.jsonl` (clock fields out) and report twice from one seed. Each label of the two
+truths is a P0 label with a role that may claim it. No test reads the truth store; a
+run's truth is the scenario file's label.
+
+**Alternatives.** The agent arm alone (rejected: no floor to read it against); the
+procedural arm alone, as PR #44 first scoped it (rejected: the relay asks for the arm); one
+run store with the arms' outputs under different names (rejected: the runner's output name
+is the workflow's, and a shared directory is a collision waiting to happen).
+
