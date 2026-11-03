@@ -4484,4 +4484,14 @@ lead's "Yes to all three" (11:03 UTC): the record first, the prompts as they sta
   the record was re-dated; it is `85a608b8…1ec7`, now pinned by test. The record's class
   docstring and the design note §6 name the rule tables. Held for the lead: whether the
   coordinator's round-1 routing and the related inline rules join the frozen tables.
-- **Next:** the lead's word on the routing rules; then item B, the Q6 cells, in its own PR.
+- **The lead's word on the routing rules, 2026-11-03: "a", freeze them.** The coordinator's
+  round-1 order, the null-case routes (with their gate role), data quality first, design on
+  conflict and the conflict's minimum, the round-2 responder exclusion of design, the assay
+  holder, the operator-notes roles and the tools never a separating test are named
+  constants in `agents.py` (behaviour unchanged: the harness tests pass unchanged) and in
+  `agent_rule_tables()`. `SPECIALISTS` is described as the round-2 responder and
+  test-owner order. The record is re-dated 2026-11-03; `frozen_record_sha256(arm)`
+  `b373dfaf…` → `2ed56ecf…`, `config_digest(arm)` `85a608b8…` → `ba8efb16…`; the
+  procedural digests unchanged. A mutation test per constant, and a behavioural test of
+  the design exclusion in `responders_for`. `docs/decisions.md`: the entry.
+- **Next:** the coordinator's check of this commit; then item B, the Q6 cells, in its own PR.

@@ -8752,7 +8752,9 @@ the admission:
 - `CLAIMS_FOR_LABEL` (which role may claim each label; the leading claim and the round-2
   routing read it) and `ROUND_TWO_ONLY_CLAIMS` (the claims a finding may carry in round 2
   only), as the lead named;
-- `SPECIALISTS` in its order (the coordinator's routing order) and `VERIFIER` (the role the
+- `SPECIALISTS` in its order (the order the round-2 responders are taken and a separating
+  test's owner is found; not the round-1 routing order, which joined the tables on
+  2026-11-03, entry below) and `VERIFIER` (the role the
   reserve and the verdicts key on);
 - `CONFIDENCE_ORDER`, the leading claim's first key, until now an inline literal in
   `AgentRun.leading`, moved to a module constant with no change of value so it can be frozen;
@@ -8808,3 +8810,62 @@ on the privileged side and passing it into the jail script). Refused: the jail s
 the isolation boundary every workflow runs inside, and it changes only through a reviewed
 PR that proves P0's and P1's `calls.jsonl` byte-identical; the failure is the runner's, so
 the fix belongs to the runner's setup.
+
+
+## 2026-11-03 — The coordinator's routing rules join the frozen rule tables
+
+**The lead's word, 2026-11-03, relayed by the coordinator at 00:30 UTC, verbatim: "a"** — to
+the review of PR #46 at `9f5ffed`, finding B1: round-1 routing was not in the freeze. The
+round-1 order and the null-case route map were inline literals in
+`Coordinator.specialists_for` that read neither `SPECIALISTS` nor any frozen table, so
+reversing the tuple, dropping identifiability or routing NB to calibration passed
+`check_p2_agents_frozen` and every freeze test; data quality first, design on conflict, the
+design exclusion in `responders_for` (a mutation no test caught), the assay holder, the
+conflict rule and the `set_sensor_status` exclusion were unbound too, and the 2026-11-01
+entry and the rule-table docstring called `SPECIALISTS` "the coordinator's routing order",
+which it is not. Option (a), freeze them, was put to the lead against (b), say so and list
+them as not frozen. **Decision:** each rule is a named module constant in
+`workflows/p2_multi_agent/agents.py`, read where the inline literal was, with behaviour
+unchanged (every existing harness test passes unchanged), and each is in
+`tools.p2_live.agent_rule_tables()`, so `rules_sha256` covers it:
+- `QC_FIRST` (`data_quality`): the role routed first;
+- `ROUND_ONE_ORDER` (`influent`, `identifiability`, `calibration`): the round-1 specialists
+  in routing order, all when the null stands;
+- `NULL_CASE_ROUTES`: over a failed null, NB routes influent (gated on influent), NM or NS
+  route identifiability and calibration (gated on calibration: identifiability joins only
+  beside calibration, as before);
+- `DESIGN_ON_CONFLICT` (`design`) and `CONFLICT_MIN_DISTINCT_CLAIMS` (2): the role routed
+  when findings conflict, and how many distinct claims make a conflict (the two smallest,
+  sorted, are reported: ordering, not data);
+- `NOT_RESPONDERS` (`design`): never routed to answer a round-1 `fail`;
+- `ASSAY_HOLDER` (`design`): holds the stage's assay units and sees the assay catalogue;
+- `OPERATOR_NOTES_ROLES` (`data_quality`, `influent`): the roles whose brief carries the
+  operator notes and the feed log's extent;
+- `NOT_A_SEPARATING_TEST` (`set_sensor_status`): never a verdict's separating test.
+
+`SPECIALISTS` is described as what it is: the order the round-2 responders are taken and
+a separating test's owner is found. **Left out, and why:** the equal-share grant is
+arithmetic (`floor(evaluations left / proposers)`), not data; the routing reasons are the
+`RoutingEntry` schema's literals, frozen in `schemas_sha256`; the role-keyed checks in
+`check_finding` validate a role's own finding fields (its sensors, parameters, assay) and
+route nothing; the offline responder's scripted plans drive the no-model arm only and
+decide no label; the report's role keys name fields.
+
+**Digests** (computed from the committed tree after the record was re-dated 2026-11-03):
+`frozen_record_sha256(arm)` moves `b373dfaf…4a82` → `2ed56ecf…9ead`
+(`COMMITTED_AGENT_FROZEN_SHA256`); `config_digest(arm)` moves `85a608b8…1ec7` →
+`ba8efb16…a3e2` (`COMMITTED_AGENT_CONFIG_SHA256`); `rules_sha256` is `0f3efa64…9854`. The
+procedural record `c58306b4…40a0`, the pilot configuration `cf59bcbb…f404` and the
+procedural configuration's own `def3c42b…ba36` are unchanged (tested). No committed approval
+names an agent digest.
+
+**Tests:** one mutation per routing constant (two for `ROUND_ONE_ORDER` and two for
+`NULL_CASE_ROUTES`), each refused, with the committed rules as the control and the restored
+rules passing; a test that every routing constant has its mutation test; and a behavioural
+test of the design exclusion in `responders_for`: with design made a claimant of the
+alternative, it is still not routed, and with the exclusion emptied (the control) it is.
+
+**Alternative refused:** (b), correcting the docstring and the decisions entry and listing
+the routing functions under "not frozen". Refused by the lead: the routing decides which
+roles see the case and in what order, as much as the claim tables decide who may claim, and
+an offline development run should be bound to it as a live run is.

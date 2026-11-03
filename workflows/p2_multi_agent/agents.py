@@ -94,6 +94,10 @@ SPECIALISTS: tuple[str, ...] = (
     "calibration",
     "design",
 )
+"""The specialist roles, in the order the round-2 responders are taken and the owner of a
+separating test is found (the first that holds the tool); round 1 routes by
+:data:`QC_FIRST`, :data:`ROUND_ONE_ORDER`, :data:`NULL_CASE_ROUTES` and
+:data:`DESIGN_ON_CONFLICT`, not by this order."""
 VERIFIER = "verification"
 COORDINATOR = "coordination"
 ROLES: tuple[str, ...] = (*SPECIALISTS, VERIFIER)
@@ -123,6 +127,38 @@ CLAIMS_FOR_LABEL: dict[str, tuple[str, ...]] = {
     "structural": ("calibration",),
 }
 """Which role may claim each label (§3.2)."""
+
+QC_FIRST = "data_quality"
+"""The role routed first, before any specialist: data quality's QC (§4, step 1)."""
+
+ROUND_ONE_ORDER: tuple[str, ...] = ("influent", "identifiability", "calibration")
+"""The round-1 specialists in routing order, all of them when the null stands (§4, step 2)."""
+
+NULL_CASE_ROUTES: tuple[tuple[tuple[str, ...], str, tuple[str, ...]], ...] = (
+    (("NB",), "influent", ("influent",)),
+    (("NM", "NS"), "calibration", ("identifiability", "calibration")),
+)
+"""Round 1 over a failed null: ``(null cases, gate role, roles)`` in order. When any of the
+cases failed and the gate role is on, the roles that are on are routed (identifiability joins
+an NM/NS stage only beside calibration, its gate)."""
+
+DESIGN_ON_CONFLICT = "design"
+"""The role routed when two findings claim different causes (§4, step 2)."""
+
+CONFLICT_MIN_DISTINCT_CLAIMS = 2
+"""How many distinct claimed labels make a conflict (the two smallest, sorted, are reported)."""
+
+NOT_RESPONDERS: frozenset[str] = frozenset({"design"})
+"""Roles never routed to answer a round-1 ``fail`` (§4, step 5)."""
+
+ASSAY_HOLDER = "design"
+"""The role that holds the stage's assay units and is shown the assay catalogue."""
+
+OPERATOR_NOTES_ROLES: tuple[str, ...] = ("data_quality", "influent")
+"""The roles whose brief carries the operator notes and the feed log's extent."""
+
+NOT_A_SEPARATING_TEST: frozenset[str] = frozenset({"set_sensor_status"})
+"""Tools a verdict may never name as its separating test: a judgement, not a test."""
 
 CONFIDENCE_ORDER: dict[str, int] = {"high": 0, "medium": 1, "low": 2}
 """The leading claim's first key: a finding's stated confidence, highest first; the label's
@@ -2355,16 +2391,13 @@ class Coordinator:
         """The specialists of this stage: those whose null case failed, or all when it stands."""
         on = self.run.on
         table = self.run.base.table
-        ordered = [r for r in ("influent", "identifiability", "calibration") if on.get(r, True)]
+        ordered = [r for r in ROUND_ONE_ORDER if on.get(r, True)]
         if not table or not table.get("null_rejected"):
             return ordered
         wanted: list[str] = []
-        if table.get("NB") and on.get("influent", True):
-            wanted.append("influent")
-        if (table.get("NM") or table.get("NS")) and on.get("calibration", True):
-            if on.get("identifiability", True):
-                wanted.append("identifiability")
-            wanted.append("calibration")
+        for cases, gate, roles in NULL_CASE_ROUTES:
+            if any(table.get(c) for c in cases) and on.get(gate, True):
+                wanted.extend(r for r in roles if on.get(r, True) and r not in wanted)
         return wanted or ordered
 
     def grants_for(self, roles: list[str]) -> dict[str, dict[str, int]]:
@@ -2384,7 +2417,7 @@ class Coordinator:
         proposers = [r for r in roles if r != VERIFIER]
         share = max(evals_left // max(len(proposers), 1), 0)
         grants = {
-            role: {"evaluations": share, "assays": assays_left if role == "design" else 0}
+            role: {"evaluations": share, "assays": assays_left if role == ASSAY_HOLDER else 0}
             for role in proposers
         }
         if VERIFIER in roles:
@@ -2398,7 +2431,7 @@ class Coordinator:
         """Two findings claiming different causes, if any (the design role's trigger)."""
         claims = {r: _claim_of(f) for r, f in findings.items() if _claim_of(f) in self.run.labels}
         distinct = sorted(set(claims.values()))
-        if len(distinct) >= 2:
+        if len(distinct) >= CONFLICT_MIN_DISTINCT_CLAIMS:
             return distinct[0], distinct[1]
         return None
 
@@ -2528,13 +2561,13 @@ class AgentRun:
             "turns": turns,
             "labels": self.labels,
         }
-        if role in ("data_quality", "influent"):
+        if role in OPERATOR_NOTES_ROLES:
             brief["operator_notes"] = [
                 {"day": n.get("day"), "author": n.get("author"), "text": n.get("text")}
                 for n in ws.notes
             ]
             brief["feed_log_days"] = {n: int(np.asarray(v).size) for n, v in ws.feed_log.items()}
-        if role == "design":
+        if role == ASSAY_HOLDER:
             brief["assay_catalogue"] = self.cfg.get("assay_catalogue", {})
         return brief
 
@@ -2591,18 +2624,21 @@ class AgentRun:
             self.code_steps()
             round_ = 1
             stage = self.coordinator.grants_for
-            if self.on.get("data_quality", True):
-                self.run_role(
-                    "data_quality", round_, "qc_first", stage(["data_quality"])["data_quality"]
-                )
+            if self.on.get(QC_FIRST, True):
+                self.run_role(QC_FIRST, round_, "qc_first", stage([QC_FIRST])[QC_FIRST])
             table = self.base.table
             reason = "null_failed" if table and table.get("null_rejected") else "null_stands"
             roles = self.coordinator.specialists_for()
             grants = stage(roles)  # one share each, fixed when the stage starts (J12)
             for role in roles:
                 self.run_role(role, round_, reason, grants[role])
-            if self.on.get("design", True) and self.coordinator.conflict(self.findings):
-                self.run_role("design", round_, "conflict", stage(["design"])["design"])
+            if self.on.get(DESIGN_ON_CONFLICT, True) and self.coordinator.conflict(self.findings):
+                self.run_role(
+                    DESIGN_ON_CONFLICT,
+                    round_,
+                    "conflict",
+                    stage([DESIGN_ON_CONFLICT])[DESIGN_ON_CONFLICT],
+                )
             if self.switch.get("verifier", True):
                 verdict = self.run_role(VERIFIER, round_, "verify", stage([VERIFIER])[VERIFIER])
                 rounds = int(self.agents_cfg.get("rounds", 1))
@@ -2649,7 +2685,11 @@ class AgentRun:
         _, leading_role, _ = self.leading()
         key = next((k for k, v in self.lab.items() if v == verdict.alternative), None)
         wanted = {leading_role, *CLAIMS_FOR_LABEL.get(key or "", ())}
-        roles = [r for r in SPECIALISTS if r in wanted and r != "design" and self.on.get(r, True)]
+        roles = [
+            r
+            for r in SPECIALISTS
+            if r in wanted and r not in NOT_RESPONDERS and self.on.get(r, True)
+        ]
         return roles or self.coordinator.specialists_for()
 
     def run_separating_test(self, test: Any) -> bool:
@@ -2673,7 +2713,7 @@ class AgentRun:
             ),
             None,
         )
-        if owner is None or tool not in specs or tool == "set_sensor_status":
+        if owner is None or tool not in specs or tool in NOT_A_SEPARATING_TEST:
             self.annotations.append(f"separating test {tool!r}: no role's allow-list holds it")
             return False
         redacted = REDACTED.get(tool, frozenset())
