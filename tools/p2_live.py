@@ -190,7 +190,9 @@ def agent_rule_tables() -> dict[str, Any]:
     - ``not_a_separating_test``: the tools a verdict may never name as its test;
     - ``verifier``: the verifier's role name (what the reserve and the verdicts key on);
     - ``confidence_order``: the leading claim's first key;
-    - ``p0_order``: P0's label order, the leading claim's tie-break;
+    - ``p0_order``: P0's label order, the procedural arm's and the head of the tie-break;
+    - ``label_tie_break``: the leading claim's second key, P0's label order then ``none``,
+      so at equal confidence a label claim leads a ``none`` claim;
     - ``abstain_label`` and ``rule``: the label an abstaining run writes and the rule name
       the arm's classifications carry;
     - ``never_in_objective`` and ``balance_stats``: the two constants of the null rule
@@ -201,7 +203,10 @@ def agent_rule_tables() -> dict[str, Any]:
     ``admit_agent``, ``admissible_alternative``) and the conclusion (``conclude``) are code
     with no table: their thresholds come from ``p0.yaml`` (P0's frozen configuration) and
     the frozen ``admit``'s source is pinned by test. The equal-share grant is arithmetic,
-    not data. The schema-level bounds and patterns, the routing reasons included, are in
+    not data. The second round's trigger is the verdict schema's ``fail`` and the frozen
+    round limit; the role-name tie-break in the leading claim decides only which role
+    leads between equal claims (same label, same confidence), never the label. The
+    schema-level bounds and patterns, the routing reasons included, are in
     ``schemas_sha256``, the redaction tables in the projection's digest.
     """
     from workflows.p2_multi_agent import agents, evidence, messages
@@ -214,6 +219,7 @@ def agent_rule_tables() -> dict[str, Any]:
         "verifier": agents.VERIFIER,
         "confidence_order": dict(agents.CONFIDENCE_ORDER),
         "p0_order": list(wf.P0_ORDER),
+        "label_tie_break": list(agents.LABEL_TIE_BREAK),
         "abstain_label": agents.ABSTAIN_LABEL,
         "rule": agents.RULE,
         "never_in_objective": list(evidence.NEVER_IN_OBJECTIVE),

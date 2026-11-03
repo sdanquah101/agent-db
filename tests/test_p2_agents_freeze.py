@@ -38,19 +38,21 @@ from tools.workflow_config import load_p1, load_p2, sandbox_config
 from workflows.p2_multi_agent import agents, messages
 
 REPO = Path(__file__).resolve().parents[1]
-COMMITTED_AGENT_FROZEN_SHA256 = "2ed56ecffa0ddcc39a53fb0e9486be762a2c58f46e507895d32808ed5e319ead"
+COMMITTED_AGENT_FROZEN_SHA256 = "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
 """The digest of both committed records an approval of the agent arm names (the procedural
 ``frozen`` and ``agents.frozen``): a new agent freeze edits it, the procedural one stands.
 It moved from ``2089b2e2…a77b`` when the rule tables joined the record (2026-11-01), and
-from ``b373dfaf…4a82`` when the routing rules joined them (the lead's "a", 2026-11-03)."""
+from ``b373dfaf…4a82`` when the routing rules joined them (the lead's "a", 2026-11-03,
+first ``2ed56ecf…9ead``, then this value with the leading claim's label tie-break)."""
 RULE_TABLES_AGENT_FROZEN_SHA256 = "b373dfaf01636999d0a80ff2b211108a3c9ab94f786a2a208342eb8333f34a82"
 """The digest of the record with the rule tables of 2026-11-01, before the routing rules."""
 FIRST_AGENT_FROZEN_SHA256 = "2089b2e2f6378b8b3bd88bab3431ff1bf483afe209da329d2a1c4f27885ba77b"
 """The digest of the record as first cut on 2026-10-30, before the rule tables."""
-COMMITTED_AGENT_CONFIG_SHA256 = "ba8efb16c2772df925af382b941be1b60bb66df9fa5444804a4716b79bd6a3e2"
+COMMITTED_AGENT_CONFIG_SHA256 = "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8"
 """``config_digest`` of the committed ``p2_agents.yaml`` (the review of PR #46 at 9f5ffed):
 any edit to the agent configuration, its record included, moves it. It was ``85a608b8…``
-before the routing rules joined the record (2026-11-03)."""
+before the routing rules joined the record, then ``ba8efb16…`` before the label
+tie-break did (both 2026-11-03)."""
 PROCEDURAL_CONFIG_SHA256 = "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36"
 """``config_digest(load_p2())``, the procedural configuration's own digest (not the pilot's
 ``cf59bcbb…f404``, which is the pilot copy's): the agent record must not move it."""
@@ -324,7 +326,7 @@ def test_the_rule_tables_are_named_and_their_digest_is_in_the_committed_record()
         "confidence_order", "p0_order", "abstain_label", "rule", "never_in_objective",
         "balance_stats", "qc_first", "round_one_order", "null_case_routes",
         "design_on_conflict", "conflict_min_distinct_claims", "not_responders",
-        "assay_holder", "operator_notes_roles", "not_a_separating_test",
+        "assay_holder", "operator_notes_roles", "not_a_separating_test", "label_tie_break",
     }  # fmt: skip
     assert tables["claims_for_label"]["structural"] == ["calibration"]
     assert tables["round_two_only_claims"] == ["structural"]
@@ -362,14 +364,14 @@ def test_each_rule_table_changed_in_the_code_is_refused(monkeypatch, attr, modul
     assert check_p2_agents_frozen(arm).date  # restored, it passes again
 
 
-@pytest.mark.parametrize(
-    ("attr", "module_name", "change"),
-    [
-        ("P0_ORDER", "workflow", lambda v: tuple(reversed(v))),
-        ("NEVER_IN_OBJECTIVE", "evidence", lambda v: ()),
-        ("BALANCE_STATS", "evidence", lambda v: v[:-1]),
-    ],
-)
+SHARED_TABLE_CHANGES = [
+    ("P0_ORDER", "workflow", lambda v: tuple(reversed(v))),
+    ("NEVER_IN_OBJECTIVE", "evidence", lambda v: ()),
+    ("BALANCE_STATS", "evidence", lambda v: v[:-1]),
+]
+
+
+@pytest.mark.parametrize(("attr", "module_name", "change"), SHARED_TABLE_CHANGES)
 def test_the_shared_tables_that_decide_the_label_are_frozen_too(
     monkeypatch, attr, module_name, change
 ):
@@ -401,6 +403,8 @@ ROUTING_CHANGES = [
     ("ASSAY_HOLDER", lambda v: "calibration"),
     ("OPERATOR_NOTES_ROLES", lambda v: ("data_quality",)),
     ("NOT_A_SEPARATING_TEST", lambda v: frozenset()),
+    ("LABEL_TIE_BREAK", lambda v: ("none", *v[:-1])),
+    ("LABEL_TIE_BREAK", lambda v: tuple(reversed(v[:-1])) + v[-1:]),
 ]
 
 
@@ -416,16 +420,22 @@ def test_each_routing_rule_changed_in_the_code_is_refused(monkeypatch, attr, cha
     assert check_p2_agents_frozen(arm).date  # restored, it passes again
 
 
-def test_every_routing_constant_has_a_mutation_test():
-    """No routing constant is in the tables without a test that changing it is refused."""
-    tested = {attr for attr, _ in ROUTING_CHANGES}
-    assert tested == {
-        "QC_FIRST", "ROUND_ONE_ORDER", "NULL_CASE_ROUTES", "DESIGN_ON_CONFLICT",
-        "CONFLICT_MIN_DISTINCT_CLAIMS", "NOT_RESPONDERS", "ASSAY_HOLDER",
-        "OPERATOR_NOTES_ROLES", "NOT_A_SEPARATING_TEST",
-    }  # fmt: skip
-    for attr in tested:
-        assert hasattr(agents, attr), attr
+def test_every_rule_table_has_a_mutation_test():
+    """Every table ``agent_rule_tables()`` names has a test that changing it is refused.
+
+    The set is derived from the tables' keys (the review of 0f11477, N6): a table added
+    without its own mutation test fails here. Each key names its constant (upper case).
+    """
+    mutated = (
+        {attr for attr, _, _ in RULE_TABLE_CHANGES}
+        | {attr for attr, _, _ in SHARED_TABLE_CHANGES}
+        | {attr for attr, _ in ROUTING_CHANGES}
+    )
+    wanted = {key.upper() for key in agent_rule_tables()}
+    assert wanted <= mutated, sorted(wanted - mutated)
+    assert mutated <= wanted, sorted(mutated - wanted)  # no test of a table not frozen
+    # the control: a table the code named but no test mutated would be caught
+    assert {*wanted, "SOME_NEW_TABLE"} - mutated == {"SOME_NEW_TABLE"}
 
 
 def test_the_design_role_never_answers_a_fail(monkeypatch):
@@ -449,3 +459,38 @@ def test_the_design_role_never_answers_a_fail(monkeypatch):
     # the control: with no role excluded, the same verdict routes design too
     monkeypatch.setattr(agents, "NOT_RESPONDERS", frozenset())
     assert "design" in run.responders_for(verdict)
+
+
+def test_the_label_tie_break_is_p0s_order_then_none_and_a_label_leads_none(monkeypatch):
+    """B3 (the review of 0f11477): at equal confidence a label claim leads a ``none`` claim.
+
+    The leading claim decides the label written on a pass. With the frozen tie-break the
+    label leads and is written; with ``none`` moved first (the control) ``none`` leads and
+    is written. The tie-break's head is P0's label order.
+    """
+    from workflows.p2_multi_agent import workflow as wf
+
+    assert (*wf.P0_ORDER, "none") == agents.LABEL_TIE_BREAK
+    from tests.test_p2_agents_harness import FakeTools, _admit_everything, _cfg, _install
+
+    fake = FakeTools("B", "B", offsets={"ph": 8.0})
+    _install(monkeypatch, fake)
+    _admit_everything(monkeypatch)
+    run = agents.AgentRun(_cfg())
+    run.code_steps()
+    run.findings = {
+        "influent": messages.InfluentFinding.model_construct(claim="influent", confidence="high"),
+        "data_quality": messages.SensorFinding.model_construct(claim="none", confidence="high"),
+    }
+    passed = messages.Verdict.model_construct(verdict="pass", round=1, alternative=None)
+
+    def written() -> tuple[str | None, str]:
+        run.verdicts, run.verdict, run.verifier_rounds = [passed], {}, 1
+        run.abstentions = []
+        run.conclude()
+        return run.leading()[0], run.classification["label"]
+
+    assert written() == ("influent", "influent")
+    # the control: none ranked first leads, and is what a pass writes
+    monkeypatch.setattr(agents, "LABEL_TIE_BREAK", ("none", *wf.P0_ORDER))
+    assert written() == ("none", "none")

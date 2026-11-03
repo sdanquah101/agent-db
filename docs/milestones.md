@@ -4494,4 +4494,11 @@ lead's "Yes to all three" (11:03 UTC): the record first, the prompts as they sta
   `b373dfaf…` → `2ed56ecf…`, `config_digest(arm)` `85a608b8…` → `ba8efb16…`; the
   procedural digests unchanged. A mutation test per constant, and a behavioural test of
   the design exclusion in `responders_for`. `docs/decisions.md`: the entry.
+- **The review of `0f11477` (2026-11-03): B3 fixed.** The leading claim's label tie-break
+  (a `none` claim after every label at equal confidence) was an inline rule that decides
+  the label; it is `LABEL_TIE_BREAK = (*P0_ORDER, "none")`, in the rule tables, with two
+  mutation tests and a behavioural test. The coverage test derives the tables from
+  `agent_rule_tables()`. The design note §6 says routing. Final digests:
+  `frozen_record_sha256(arm)` `501893b3…`, `config_digest(arm)` `618f4825…`,
+  `rules_sha256` `0aadaf43…`; the procedural ones unchanged.
 - **Next:** the coordinator's check of this commit; then item B, the Q6 cells, in its own PR.

@@ -8869,3 +8869,26 @@ alternative, it is still not routed, and with the exclusion emptied (the control
 the routing functions under "not frozen". Refused by the lead: the routing decides which
 roles see the case and in what order, as much as the claim tables decide who may claim, and
 an offline development run should be bound to it as a live run is.
+
+**Addendum, the review of `0f11477` (2026-11-03): the leading claim's label tie-break.**
+`AgentRun.leading` ranked a `none` claim after every label at equal confidence through an
+inline `len(P0_ORDER)`; changing it to rank `none` first flips the leading claim, and so
+the label a pass writes, from a label to `none`, and no freeze check or test noticed. It
+decides the label, so it falls under the lead's word of 2026-11-01. It is now
+`LABEL_TIE_BREAK = (*P0_ORDER, "none")` in `agents.py`, read where the inline rule was
+(behaviour unchanged: the harness and evidence tests pass unchanged), and in
+`agent_rule_tables()` as `label_tie_break`; two mutation tests (`none` first; the label
+order reversed) and a behavioural test with a control (at equal confidence an `influent`
+claim leads a `none` claim and is the label written; with `none` ranked first, `none` leads
+and is written). The coverage test now derives the tables from `agent_rule_tables()`'s keys,
+so a table added without a mutation test fails it. **Also left out, and why:** the second
+round's trigger is the verdict schema's `fail` (frozen in `schemas_sha256`) and the frozen
+round limit; the role-name tie-break in the leading claim decides only which role leads
+between equal claims (same label, same confidence), never the label. **Final digests,**
+from the committed tree (the record keeps its 2026-11-03 date; its `word` names the
+tie-break): `frozen_record_sha256(arm)` `2ed56ecf…9ead` → **`501893b3…1fa4`**;
+`config_digest(arm)` `ba8efb16…a3e2` → **`618f4825…6dd8`**; `rules_sha256`
+`0f3efa64…9854` → **`0aadaf43…5c6c`**. Over the whole of 2026-11-03 the agent freeze moved
+`b373dfaf…4a82` → `501893b3…1fa4` and the agent configuration `85a608b8…1ec7` →
+`618f4825…6dd8`. The procedural `c58306b4…40a0`, `cf59bcbb…f404` and `def3c42b…ba36` are
+unchanged (tested).

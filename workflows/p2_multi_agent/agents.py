@@ -160,6 +160,11 @@ OPERATOR_NOTES_ROLES: tuple[str, ...] = ("data_quality", "influent")
 NOT_A_SEPARATING_TEST: frozenset[str] = frozenset({"set_sensor_status"})
 """Tools a verdict may never name as its separating test: a judgement, not a test."""
 
+LABEL_TIE_BREAK: tuple[str, ...] = (*procedural.P0_ORDER, "none")
+"""The leading claim's second key, by the label vocabulary's keys: P0's label order, then
+``none``, so at equal confidence a label claim leads a ``none`` claim (a test pins the head
+to ``P0_ORDER``)."""
+
 CONFIDENCE_ORDER: dict[str, int] = {"high": 0, "medium": 1, "low": 2}
 """The leading claim's first key: a finding's stated confidence, highest first; the label's
 place in P0's order breaks a tie (:meth:`AgentRun.leading`). Frozen with the other rule
@@ -2793,11 +2798,9 @@ class AgentRun:
                     # a finding's confidence is pattern-checked to low|medium|high, so the
                     # fallback is never taken; it orders an impossible value last
                     order.get(f.confidence, 3),
-                    procedural.P0_ORDER.index(
-                        next((k for k, v in self.lab.items() if v == claim), "none")
-                    )
-                    if claim != self.lab["none"]
-                    else len(procedural.P0_ORDER),
+                    LABEL_TIE_BREAK.index(key),
+                    # the role's name breaks a tie only between equal claims (same label,
+                    # same confidence): it picks which role leads, never the label
                     role,
                     claim,
                 )
