@@ -8938,6 +8938,19 @@ and offline on a shortened S7-01 B/B (50 days, 60 evaluations), writes the same
 truths is a P0 label with a role that may claim it. No test reads the truth store; a
 run's truth is the scenario file's label.
 
+**Outcomes (16 runs, none unfinished, no rerun; `reports/p2_power/h4_summary.md`).** The
+procedural floor hits **0 of 8**: `none` on 6 (the null stands on 5, among them both S7-02
+seeds and every seed-1 run; on S7-01 B/A seed 0 the null fails on `ph` alone, unexplained),
+and **`parameter` on S7-01 B/B and B/C seed 0** (NM, `ch4_fraction` and `ph` failed, plus
+`vfa_total` at C), a wrong label: neither true fault (`sensor`, `influent`) is admitted in
+any run. The agent arm abstains on all 8 (the offline verifier), with the same null tables
+and admissions as the procedural arm on the same observations. Spend: 187–288 of 750
+evaluations on S7-01, 232–242 of 375 on S7-02; 46–74 min per S7-01 run and 107–109 min per
+S7-02 run. **Read:** the code-only floor of the H4 cells is zero, and where it does
+conclude it absorbs the compound fault into a kinetic parameter, the failure S7-01's notes
+name. On seed 1, and on S7-02 at both seeds, the null test itself does not reject the
+null, so nothing downstream sees a fault at all.
+
 **Alternatives.** The agent arm alone (rejected: no floor to read it against); the
 procedural arm alone, as PR #44 first scoped it (rejected: the relay asks for the arm); one
 run store with the arms' outputs under different names (rejected: the runner's output name

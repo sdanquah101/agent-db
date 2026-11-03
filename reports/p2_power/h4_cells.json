@@ -1,0 +1,764 @@
+{
+ "what": "the Q6 (H4) development cells offline: no model in either arm",
+ "counting": "on the outcome (verdict and completion), never on the label alone",
+ "descriptive_only": true,
+ "cells": [
+  {
+   "cell": "S7-01 B/A",
+   "replicate": 0,
+   "arm": "agents",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "abstain",
+   "outcome": "abstain",
+   "rule": "abstain:verifier_abstain",
+   "excluded": true,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": true,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "ph"
+   ],
+   "routing": [
+    "data_quality",
+    "identifiability",
+    "calibration",
+    "verification"
+   ],
+   "evaluations": "196/750",
+   "wall_min": 48.5,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
+    "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
+    "frozen_record_sha256": "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
+   },
+   "observations_sha256": "dea8ef38badf3ce45923cbee4d8aaf40ddaccb89c1de3f3ef2a8f47ab7b5dd0c",
+   "calls_sha256": "c6eb0eb2b8677ed5d39f778e6675a8db3c27e36c4a5bfd195f817a96c139772e",
+   "calls_lines": 24,
+   "run_id": "run_11e50f94dedd"
+  },
+  {
+   "cell": "S7-01 B/A",
+   "replicate": 0,
+   "arm": "procedural",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "rule": "null_failed_unexplained",
+   "excluded": false,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": true,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "ph"
+   ],
+   "routing": [],
+   "evaluations": "195/750",
+   "wall_min": 48.4,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
+    "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
+   },
+   "observations_sha256": "dea8ef38badf3ce45923cbee4d8aaf40ddaccb89c1de3f3ef2a8f47ab7b5dd0c",
+   "calls_sha256": "b5b3774d55fb2517740fb6d42eb5a17dc5875170f1f6ad5e7054bde2f0defbce",
+   "calls_lines": 24,
+   "run_id": "run_45a60c6487cc"
+  },
+  {
+   "cell": "S7-01 B/A",
+   "replicate": 1,
+   "arm": "agents",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "abstain",
+   "outcome": "abstain",
+   "rule": "abstain:verifier_abstain",
+   "excluded": true,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [
+    "data_quality",
+    "influent",
+    "identifiability",
+    "calibration",
+    "verification"
+   ],
+   "evaluations": "188/750",
+   "wall_min": 46.4,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
+    "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
+    "frozen_record_sha256": "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
+   },
+   "observations_sha256": "6a76ef09c175f6a38e7db25f5ae9f3760acce0abe71712ca90f2a55bd84d6d9f",
+   "calls_sha256": "225381b2e43a7da57a5a39fe16fe08f5d188e23fe3efcaa24194a3abb0d206d0",
+   "calls_lines": 24,
+   "run_id": "run_2d7c105ed64d"
+  },
+  {
+   "cell": "S7-01 B/A",
+   "replicate": 1,
+   "arm": "procedural",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "rule": "null_stands",
+   "excluded": false,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [],
+   "evaluations": "187/750",
+   "wall_min": 46.9,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
+    "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
+   },
+   "observations_sha256": "6a76ef09c175f6a38e7db25f5ae9f3760acce0abe71712ca90f2a55bd84d6d9f",
+   "calls_sha256": "26a8df35563e4bbd39f99676ce7888ae5e35514eb6c97092ccaf27e338c1011b",
+   "calls_lines": 23,
+   "run_id": "run_f7e2b37fe949"
+  },
+  {
+   "cell": "S7-01 B/B",
+   "replicate": 0,
+   "arm": "agents",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "abstain",
+   "outcome": "abstain",
+   "rule": "abstain:verifier_abstain",
+   "excluded": true,
+   "hit": false,
+   "admitted": [
+    "parameter"
+   ],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": true,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "ch4_fraction",
+    "ph"
+   ],
+   "routing": [
+    "data_quality",
+    "identifiability",
+    "calibration",
+    "verification"
+   ],
+   "evaluations": "232/750",
+   "wall_min": 59.5,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
+    "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
+    "frozen_record_sha256": "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
+   },
+   "observations_sha256": "664b34b1d49f0216fead53dd0e8320ca4895e0796c595e14648fa4c42159c7b5",
+   "calls_sha256": "4419bc2826fbc73b98e2fc627f88fec85ee61ee3cbcc765b56eab7a62e945bcf",
+   "calls_lines": 31,
+   "run_id": "run_01ac276f94dc"
+  },
+  {
+   "cell": "S7-01 B/B",
+   "replicate": 0,
+   "arm": "procedural",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "parameter",
+   "outcome": "parameter",
+   "rule": "NM+parameter",
+   "excluded": false,
+   "hit": false,
+   "admitted": [
+    "parameter"
+   ],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": true,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "ch4_fraction",
+    "ph"
+   ],
+   "routing": [],
+   "evaluations": "231/750",
+   "wall_min": 59.5,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
+    "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
+   },
+   "observations_sha256": "664b34b1d49f0216fead53dd0e8320ca4895e0796c595e14648fa4c42159c7b5",
+   "calls_sha256": "19ce29839af6565deefb2e05374abf01088ff0528a542bd678df570274ab3b51",
+   "calls_lines": 31,
+   "run_id": "run_c91cc8e22810"
+  },
+  {
+   "cell": "S7-01 B/B",
+   "replicate": 1,
+   "arm": "agents",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "abstain",
+   "outcome": "abstain",
+   "rule": "abstain:verifier_abstain",
+   "excluded": true,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [
+    "data_quality",
+    "influent",
+    "identifiability",
+    "calibration",
+    "verification"
+   ],
+   "evaluations": "211/750",
+   "wall_min": 54.7,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
+    "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
+    "frozen_record_sha256": "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
+   },
+   "observations_sha256": "8d1c50f3c40d77c1232aa29fdc8d984b111528b4e3ee923f714aa9b9c0054b40",
+   "calls_sha256": "ebe1196a4a10159bc25450ef097469566157e55f580979da7f1ff83f70b5d75a",
+   "calls_lines": 30,
+   "run_id": "run_e38c5021312e"
+  },
+  {
+   "cell": "S7-01 B/B",
+   "replicate": 1,
+   "arm": "procedural",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "rule": "null_stands",
+   "excluded": false,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [],
+   "evaluations": "210/750",
+   "wall_min": 54.8,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
+    "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
+   },
+   "observations_sha256": "8d1c50f3c40d77c1232aa29fdc8d984b111528b4e3ee923f714aa9b9c0054b40",
+   "calls_sha256": "a5952414724c33152e9e60dc83f68dd4ccd4bcb249e8cf931ac0d8e45d6d9405",
+   "calls_lines": 29,
+   "run_id": "run_9fdb451acb2b"
+  },
+  {
+   "cell": "S7-01 B/C",
+   "replicate": 0,
+   "arm": "agents",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "abstain",
+   "outcome": "abstain",
+   "rule": "abstain:verifier_abstain",
+   "excluded": true,
+   "hit": false,
+   "admitted": [
+    "parameter"
+   ],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": true,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "ch4_fraction",
+    "ph",
+    "vfa_total"
+   ],
+   "routing": [
+    "data_quality",
+    "identifiability",
+    "calibration",
+    "verification"
+   ],
+   "evaluations": "288/750",
+   "wall_min": 73.6,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
+    "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
+    "frozen_record_sha256": "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
+   },
+   "observations_sha256": "6c4dbe08982671e7faa26cca1953af4f2aaeb28ebb0b2f4ec30de867a3a8ebe7",
+   "calls_sha256": "a2b4065b123894d8ffead3ca4e52ec85babe84348bdefe6149cf60499438d611",
+   "calls_lines": 36,
+   "run_id": "run_072ef8d784ab"
+  },
+  {
+   "cell": "S7-01 B/C",
+   "replicate": 0,
+   "arm": "procedural",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "parameter",
+   "outcome": "parameter",
+   "rule": "NM+parameter",
+   "excluded": false,
+   "hit": false,
+   "admitted": [
+    "parameter"
+   ],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": true,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "ch4_fraction",
+    "ph",
+    "vfa_total"
+   ],
+   "routing": [],
+   "evaluations": "287/750",
+   "wall_min": 73.6,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
+    "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
+   },
+   "observations_sha256": "6c4dbe08982671e7faa26cca1953af4f2aaeb28ebb0b2f4ec30de867a3a8ebe7",
+   "calls_sha256": "fc84d52d63e8d0a1a4f6b27c1090a5b0fd618d2f0c641cd0d57280e32b931e55",
+   "calls_lines": 36,
+   "run_id": "run_452bf2af6190"
+  },
+  {
+   "cell": "S7-01 B/C",
+   "replicate": 1,
+   "arm": "agents",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "abstain",
+   "outcome": "abstain",
+   "rule": "abstain:verifier_abstain",
+   "excluded": true,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [
+    "data_quality",
+    "influent",
+    "identifiability",
+    "calibration",
+    "verification"
+   ],
+   "evaluations": "245/750",
+   "wall_min": 63.2,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
+    "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
+    "frozen_record_sha256": "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
+   },
+   "observations_sha256": "ff216f132c2ec767f6651f5423e8341e7d14d6a91d7f986ddb8656e554a72baf",
+   "calls_sha256": "22ba599a6f286c031547868e4ee301082727077063c29cf0890ef695c6e6ef55",
+   "calls_lines": 37,
+   "run_id": "run_2ab5d6cbd26f"
+  },
+  {
+   "cell": "S7-01 B/C",
+   "replicate": 1,
+   "arm": "procedural",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "rule": "null_stands",
+   "excluded": false,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [],
+   "evaluations": "244/750",
+   "wall_min": 63.2,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
+    "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
+   },
+   "observations_sha256": "ff216f132c2ec767f6651f5423e8341e7d14d6a91d7f986ddb8656e554a72baf",
+   "calls_sha256": "c664098ded171fbf56115f427ac18b9d47af09b3a67104fe43ada6adddf2bd11",
+   "calls_lines": 36,
+   "run_id": "run_1838d0ae6926"
+  },
+  {
+   "cell": "S7-02 A/C",
+   "replicate": 0,
+   "arm": "agents",
+   "truth": [
+    "structural",
+    "parameter"
+   ],
+   "label": "abstain",
+   "outcome": "abstain",
+   "rule": "abstain:verifier_abstain",
+   "excluded": true,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [
+    "data_quality",
+    "influent",
+    "identifiability",
+    "calibration",
+    "verification"
+   ],
+   "evaluations": "233/375",
+   "wall_min": 107.1,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
+    "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
+    "frozen_record_sha256": "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
+   },
+   "observations_sha256": "71e9849121d23775d82e59c4b1f9cba82aaf89c9f41d4e772bf063844428c9b5",
+   "calls_sha256": "da23bf5ab162ab6918d2a82e51b0754af1a5e28ac89d6ed4a633c1ae1264e73c",
+   "calls_lines": 39,
+   "run_id": "run_6b405e371ba9"
+  },
+  {
+   "cell": "S7-02 A/C",
+   "replicate": 0,
+   "arm": "procedural",
+   "truth": [
+    "structural",
+    "parameter"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "rule": "null_stands",
+   "excluded": false,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [],
+   "evaluations": "232/375",
+   "wall_min": 106.6,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
+    "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
+   },
+   "observations_sha256": "71e9849121d23775d82e59c4b1f9cba82aaf89c9f41d4e772bf063844428c9b5",
+   "calls_sha256": "1f75e9f8194757218cb4b0bcafec1464c0b8dfb9203e6269e2c6be13414a32fb",
+   "calls_lines": 38,
+   "run_id": "run_8187e708b914"
+  },
+  {
+   "cell": "S7-02 A/C",
+   "replicate": 1,
+   "arm": "agents",
+   "truth": [
+    "structural",
+    "parameter"
+   ],
+   "label": "abstain",
+   "outcome": "abstain",
+   "rule": "abstain:verifier_abstain",
+   "excluded": true,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [
+    "data_quality",
+    "influent",
+    "identifiability",
+    "calibration",
+    "verification"
+   ],
+   "evaluations": "242/375",
+   "wall_min": 108.5,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
+    "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
+    "frozen_record_sha256": "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
+   },
+   "observations_sha256": "56fa056424c50ca220d4f43a7a75a9d279dd6eac27b3d948828bfa212114f452",
+   "calls_sha256": "70ddeaafc1b1c31ff6251b7cd422cd1312d054e9ff95e7c5ddb834ac77e05d76",
+   "calls_lines": 36,
+   "run_id": "run_20b6d20ecb7a"
+  },
+  {
+   "cell": "S7-02 A/C",
+   "replicate": 1,
+   "arm": "procedural",
+   "truth": [
+    "structural",
+    "parameter"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "rule": "null_stands",
+   "excluded": false,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [],
+   "evaluations": "241/375",
+   "wall_min": 109.3,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
+    "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
+   },
+   "observations_sha256": "56fa056424c50ca220d4f43a7a75a9d279dd6eac27b3d948828bfa212114f452",
+   "calls_sha256": "92fd549e6da3dce5a2f1a1c46ea3fd364fa39b5d44927c782df20cfa20847bc9",
+   "calls_lines": 35,
+   "run_id": "run_0a3dbcb77f2f"
+  }
+ ],
+ "arms": {
+  "procedural": {
+   "runs": 8,
+   "hits": "0 of 8 scored",
+   "excluded": {
+    "abstain": 0,
+    "pending": 0
+   },
+   "both_faults_admitted": 0
+  },
+  "agents": {
+   "runs": 8,
+   "hits": "0 of 0 scored",
+   "excluded": {
+    "abstain": 8,
+    "pending": 0
+   },
+   "both_faults_admitted": 0
+  }
+ },
+ "seed_checks": {
+  "S7-01 B/A r0": {
+   "arms_see_the_same_observations": true,
+   "arms": [
+    "agents",
+    "procedural"
+   ]
+  },
+  "S7-01 B/A r1": {
+   "arms_see_the_same_observations": true,
+   "arms": [
+    "agents",
+    "procedural"
+   ]
+  },
+  "S7-01 B/B r0": {
+   "arms_see_the_same_observations": true,
+   "arms": [
+    "agents",
+    "procedural"
+   ]
+  },
+  "S7-01 B/B r1": {
+   "arms_see_the_same_observations": true,
+   "arms": [
+    "agents",
+    "procedural"
+   ]
+  },
+  "S7-01 B/C r0": {
+   "arms_see_the_same_observations": true,
+   "arms": [
+    "agents",
+    "procedural"
+   ]
+  },
+  "S7-01 B/C r1": {
+   "arms_see_the_same_observations": true,
+   "arms": [
+    "agents",
+    "procedural"
+   ]
+  },
+  "S7-02 A/C r0": {
+   "arms_see_the_same_observations": true,
+   "arms": [
+    "agents",
+    "procedural"
+   ]
+  },
+  "S7-02 A/C r1": {
+   "arms_see_the_same_observations": true,
+   "arms": [
+    "agents",
+    "procedural"
+   ]
+  }
+ },
+ "seeds_differ_within_a_cell": {
+  "S7-01 B/A": true,
+  "S7-01 B/B": true,
+  "S7-01 B/C": true,
+  "S7-02 A/C": true
+ },
+ "unfinished": [],
+ "reruns": []
+}
