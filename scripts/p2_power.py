@@ -144,6 +144,76 @@ def observations_digest(run_dir: Path) -> str:
     return h.hexdigest()
 
 
+H4_FINGERPRINT_RTOL = 1e-4
+"""The relative tolerance a regenerated cell's numeric fingerprint is held to on another
+machine. A generated run is machine-bound to the last bits (``tests/test_p0_freeze.py``
+says the same of P0's golden): the stiff ADM1 integration runs at the solver's ``rtol``
+1e-6 (``configs/adm1/solver.yaml``) and a different BLAS or SciPy build moves the low
+digits. 1e-4 is a hundred times the solver's tolerance; two seeds differ by far more."""
+
+
+def observations_fingerprint(run_dir: Path) -> dict[str, Any]:
+    """A machine-portable summary of a run's observations, keyed by sensor and file.
+
+    For each sensor: its channel and unit, the number of reports, how many are missing or
+    flagged, and the sum and absolute sum of its reported values; for each CSV: its rows
+    and the sum of each numeric column; the operator notes' days. Counts, flags and text
+    compare exactly; sums within :data:`H4_FINGERPRINT_RTOL`.
+    """
+    import csv
+    import math
+
+    base = run_dir / "observations"
+    doc = json.loads((base / "sensors.json").read_text(encoding="utf-8"))
+    sensors = {}
+    for name, ch in sorted(doc["sensors"].items()):
+        values = [float(v) for v in ch["value"] if v is not None and math.isfinite(float(v))]
+        sensors[name] = {
+            "channel": ch.get("channel"),
+            "unit": ch.get("unit"),
+            "n": len(ch["value"]),
+            "n_values": len(values),
+            **{f"n_{flag}": sum(bool(x) for x in ch.get(flag) or [])
+               for flag in ("missing", "flatlined", "fouled", "saturated")},
+            "sum": math.fsum(values),
+            "abs_sum": math.fsum(abs(v) for v in values),
+        }  # fmt: skip
+    tables = {}
+    for path in sorted(base.glob("*.csv")):
+        with path.open(encoding="utf-8", newline="") as f:
+            rows = list(csv.DictReader(f))
+        sums: dict[str, float] = {}
+        for col in rows[0] if rows else []:
+            try:
+                sums[col] = math.fsum(float(r[col]) for r in rows)
+            except ValueError:
+                continue  # a text column (an assay's name, a unit)
+        tables[path.name] = {"rows": len(rows), "sums": sums}
+    notes_path = base / "operator_notes.json"
+    notes = json.loads(notes_path.read_text(encoding="utf-8")) if notes_path.is_file() else {}
+    return {
+        "tier": doc.get("tier"),
+        "horizon_d": doc.get("horizon_d"),
+        "sensors": sensors,
+        "tables": tables,
+        "note_days": [e.get("day") for e in notes.get("entries", [])],
+    }
+
+
+def fingerprint_mismatches(
+    got: Any, want: Any, rtol: float = H4_FINGERPRINT_RTOL, at: str = ""
+) -> list[str]:
+    """Where two fingerprints disagree: floats beyond ``rtol``, anything else at all."""
+    if isinstance(want, dict) and isinstance(got, dict):
+        if sorted(got) != sorted(want):
+            return [f"{at}: keys {sorted(got)} != {sorted(want)}"]
+        return [m for k in want for m in fingerprint_mismatches(got[k], want[k], rtol, f"{at}.{k}")]
+    if isinstance(want, float) and isinstance(got, float):
+        scale = max(abs(want), abs(got), 1e-12)
+        return [] if abs(got - want) <= rtol * scale else [f"{at}: {got!r} != {want!r}"]
+    return [] if got == want else [f"{at}: {got!r} != {want!r}"]
+
+
 def run(store: Path, part: str = "0/1") -> None:
     """Generate and run every cell of this part that has no result yet."""
     from scenarios.schema import load_scenario
@@ -642,6 +712,7 @@ def h4_summarise(records: list[dict[str, Any]]) -> dict[str, Any]:
             "llm_turns": r.get("llm_turns"),
             "frozen": r.get("frozen"),
             "observations_sha256": r.get("observations_sha256"),
+            "observations_fingerprint": r.get("observations_fingerprint"),
             "calls_sha256": r.get("calls_sha256"),
             "calls_lines": r.get("calls_lines"),
             "run_id": r.get("run_id"),
@@ -685,7 +756,12 @@ def h4_report(store: Path) -> dict[str, Any]:
 
     records = [json.loads(p.read_text(encoding="utf-8"))
                for p in sorted((store / "results").glob("*.json"))]  # fmt: skip
+    for r in records:  # read from the stored run (its observations, never the truth store)
+        r["observations_fingerprint"] = observations_fingerprint(
+            store / r["arm"] / "runs" / r["run_id"]
+        )
     out = h4_summarise(records)
+    out["fingerprint_rtol"] = H4_FINGERPRINT_RTOL
     out["unfinished"] = read_unfinished(list((store / "unfinished").glob("*.json")))
     paths = sorted(store.glob("in_flight.*.jsonl"))
     if paths:

@@ -4521,7 +4521,9 @@ coordinator's relay of 05:20 UTC, on the lead's 2026-10-30 "Yes to all three" (A
   claimants, the hit counted on the outcome, the seed checks (with a control), the calls
   digest (with a control), the frozen check for each arm and its refusal of a moved
   record (with a control), every committed run frozen and offline, each cell regenerated
-  from its seed to the committed observations (the other seed differs), and the jailed
+  from its seed to the committed observation fingerprint (sums within 1e-4: a generated
+  run is machine-bound to the last bits, as CI's first run showed; the other seed is
+  outside it), one seed generated twice to identical bytes on one machine, and the jailed
   agent arm twice from one seed on a shortened S7-01 B/B.
 - N8 (the review of #46): the role-name tie-break routes a round-2 `fail` between equal
   `none` claims; wording fixed in `tools/p2_live.py` and the 2026-11-03 decisions entry,

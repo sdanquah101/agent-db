@@ -8926,9 +8926,17 @@ The output is `reports/p2_power/h4_cells.json` and `h4_summary.md`; `cells.json`
    the first launch, stopped within a minute, relaunched clean). Both arms of a cell and
    seed see byte-identical observations; the report checks it.
 
-**Reproducibility and the frozen check (tests, `tests/test_p2_h4_cells.py`).** Each cell
-regenerated from its seed in a fresh store gives the observations the committed record
-names, and its two seeds differ (the control). Every committed run names the frozen digests
+**Reproducibility and the frozen check (tests, `tests/test_p2_h4_cells.py`).** A generated
+run is machine-bound to the last bits, as P0's golden is (`tests/test_p0_freeze.py`): CI's
+first run of this PR regenerated S7-01 B/A seed 0 to a different byte digest than this
+container's. So the committed record carries each run's **observation fingerprint** (per
+sensor: channel, unit, counts, missing and flagged counts, the sum and absolute sum of its
+values; per CSV: rows and column sums; the operator notes' days), and each cell regenerated
+from its seed in a fresh store must give its counts, flags and text exactly and its sums
+within `H4_FINGERPRINT_RTOL` = 1e-4 (a hundred times the solver's `rtol` 1e-6); the other
+seed must fall outside it (the control). Byte identity is checked on one machine: both
+arms of each seed were generated in two stores to identical bytes, and a test generates
+S7-01 B/B seed 0 twice to identical bytes (seed 1 differs, the control). Every committed run names the frozen digests
 the driver checked before it (`frozen_record_sha256` `c58306b4…40a0` procedural,
 `501893b3…1fa4` the arm; `config_sha256` `def3c42b…ba36` and `618f4825…6dd8`; the arm's
 `agents_frozen_sha256` `8a8ab73d…c951`), ran offline and made no model turn; the check

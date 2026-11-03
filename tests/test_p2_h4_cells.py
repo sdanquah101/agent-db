@@ -6,8 +6,9 @@ tests pin:
 * the cells, seeds and arms are the ones the lead decided (Q6, 2026-10-25);
 * each fault of a two-fault truth is a label of the vocabulary, with a role that may
   claim it, and a run's hit is counted on its outcome, never its label alone;
-* the cells are reproducible from their seeds: regenerated, each gives the observations
-  the committed record names, and its two seeds differ;
+* the cells are reproducible from their seeds: regenerated, each gives the committed
+  record's observation fingerprint (exactly on one machine, its sums within a stated
+  tolerance on another), and its two seeds differ;
 * the frozen check passes for each arm, refuses a moved record (the control), and every
   committed run names the frozen digests and reached no model;
 * the agent arm, jailed and offline on a shortened S7-01 B/B, writes the same
@@ -29,12 +30,15 @@ from scripts import p2_power
 from scripts.p2_power import (
     H4_ARMS,
     H4_CELLS,
+    H4_FINGERPRINT_RTOL,
     H4_REPLICATES,
     calls_digest,
+    fingerprint_mismatches,
     h4_frozen,
     h4_jobs,
     h4_summarise,
     observations_digest,
+    observations_fingerprint,
 )
 from tests.test_p2_agents_freeze import (
     COMMITTED_AGENT_CONFIG_SHA256,
@@ -224,27 +228,64 @@ def test_every_committed_run_passed_the_frozen_check_offline_and_reached_no_mode
 def test_each_cell_regenerates_from_its_seed_to_the_committed_observations(tmp_path):
     """Each cell is reproducible from its seed, and its two seeds differ.
 
-    A fresh store (a new salt, so new run ids) gives the observations each committed run
-    saw. The control: the other seed gives others.
+    A generated run is machine-bound to the last bits (``tests/test_p0_freeze.py``), so the
+    committed record is matched through its numeric fingerprint: a fresh store (a new
+    salt, so new run ids) gives each committed run's counts, flags and text exactly and
+    its sums within ``H4_FINGERPRINT_RTOL``. The control: the other seed's fingerprint is
+    outside it. Exact byte identity is checked on one machine: the committed runs (both
+    arms of each seed, generated in two stores) and the test below.
     """
     from sim.plants import load_plant_config
     from sim.run.harness import generate_run
     from sim.run.matrix import at_plant_horizon
 
     committed = {
-        (x["cell"], x["replicate"]): x["observations_sha256"] for x in _committed()["cells"]
+        (x["cell"], x["replicate"]): x["observations_fingerprint"] for x in _committed()["cells"]
     }
     for cell in H4_CELLS:
         sid, plant_id, tier = cell
         plant = load_plant_config(plant_id)
         scenario = at_plant_horizon(_scenario(sid), plant)
-        got = {}
         for rep in H4_REPLICATES:
             root = tmp_path / f"{sid}-{plant_id}-{tier}-r{rep}" / "runs"
             art = generate_run(scenario, tier, plant=plant, replicate=rep, runs_root=root)
-            got[rep] = observations_digest(root / art.run_id)
-            assert got[rep] == committed[(p2_power.key(cell), rep)], (cell, rep)
-        assert got[0] != got[1], cell
+            got = observations_fingerprint(root / art.run_id)
+            want = committed[(p2_power.key(cell), rep)]
+            assert not fingerprint_mismatches(got, want), (cell, rep)
+            other = committed[(p2_power.key(cell), 1 - rep)]
+            assert fingerprint_mismatches(got, other), (cell, rep)  # the control
+
+
+def test_one_seed_generates_byte_identical_observations_on_one_machine(tmp_path):
+    from sim.plants import load_plant_config
+    from sim.run.harness import generate_run
+    from sim.run.matrix import at_plant_horizon
+
+    plant = load_plant_config("B")
+    scenario = at_plant_horizon(_scenario("S7-01"), plant)
+    digests = []
+    for name, rep in (("one", 0), ("two", 0), ("other", 1)):
+        root = tmp_path / name / "runs"
+        art = generate_run(scenario, "B", plant=plant, replicate=rep, runs_root=root)
+        digests.append(observations_digest(root / art.run_id))
+    assert digests[0] == digests[1]
+    assert digests[2] != digests[0]  # the control: the other seed
+
+
+def test_the_fingerprint_comparison_holds_floats_to_the_tolerance_and_the_rest_exactly():
+    want = {"sensors": {"ph": {"n": 3, "sum": 21.0, "unit": "pH units"}}}
+    near = {
+        "sensors": {"ph": {"n": 3, "sum": 21.0 * (1 + H4_FINGERPRINT_RTOL / 2), "unit": "pH units"}}
+    }
+    assert not fingerprint_mismatches(near, want)
+    far = {
+        "sensors": {"ph": {"n": 3, "sum": 21.0 * (1 + 2 * H4_FINGERPRINT_RTOL), "unit": "pH units"}}
+    }
+    assert fingerprint_mismatches(far, want)
+    assert fingerprint_mismatches(
+        {"sensors": {"ph": {"n": 4, "sum": 21.0, "unit": "pH units"}}}, want
+    )
+    assert fingerprint_mismatches({"sensors": {}}, want)
 
 
 # ------------------------------------------------------------------ the jailed arm
