@@ -204,8 +204,11 @@ def agent_rule_tables() -> dict[str, Any]:
     with no table: their thresholds come from ``p0.yaml`` (P0's frozen configuration) and
     the frozen ``admit``'s source is pinned by test. The equal-share grant is arithmetic,
     not data. The second round's trigger is the verdict schema's ``fail`` and the frozen
-    round limit; the role-name tie-break in the leading claim decides only which role
-    leads between equal claims (same label, same confidence), never the label. The
+    round limit. The role-name tie-break in the leading claim picks which role leads
+    between equal claims (same label, same confidence) and never the label, but it does
+    route: the leading role answers a round-2 ``fail`` (``responders_for``), so between
+    two equal ``none`` claims it decides whether ``data_quality`` or ``influent`` answers
+    (the review of #46, N8; left out as a role-name order, not a rule table). The
     schema-level bounds and patterns, the routing reasons included, are in
     ``schemas_sha256``, the redaction tables in the projection's digest.
     """

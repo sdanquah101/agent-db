@@ -8884,7 +8884,12 @@ and is written). The coverage test now derives the tables from `agent_rule_table
 so a table added without a mutation test fails it. **Also left out, and why:** the second
 round's trigger is the verdict schema's `fail` (frozen in `schemas_sha256`) and the frozen
 round limit; the role-name tie-break in the leading claim decides only which role leads
-between equal claims (same label, same confidence), never the label. **Final digests,**
+between equal claims (same label, same confidence), never the label. *(Corrected
+2026-11-03, the review of #46, N8: never the label, but it routes. The leading role answers
+a round-2 `fail` (`responders_for`), so between two equal `none` claims the name decides
+whether `data_quality` or `influent` answers: `['data_quality', 'calibration']` as frozen,
+`['influent', 'calibration']` when `influent` leads. A behavioural test with a control pins
+it; the order is not extracted as a table, so no digest moves.)* **Final digests,**
 from the committed tree (the record keeps its 2026-11-03 date; its `word` names the
 tie-break): `frozen_record_sha256(arm)` `2ed56ecf…9ead` → **`501893b3…1fa4`**;
 `config_digest(arm)` `ba8efb16…a3e2` → **`618f4825…6dd8`**; `rules_sha256`
