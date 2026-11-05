@@ -2242,6 +2242,11 @@ The full chronology is in `docs/decisions.md`. These are the reversals a reader 
 
   The jail builds in this container: unprivileged user namespaces and `/sbin/pivot_root` are present.
 
-**Full-suite result:** still running when this version was committed; the result is added in the next commit.
+**Full-suite result (2026-11-05, serial, this container):** 941 passed, 4 skipped, 15 deselected in 6 595 s (1 h 50 min); exit code 0.
+
+- The 15 deselected tests are the `g1`, `p0_freeze` and `p2_freeze` markers, which `pyproject.toml` deselects by default (`addopts`). They were not run for this report.
+- Two of the four skips need the git-ignored Muscatine SCADA file (`tests/test_observation.py:519`, `:532`).
+- The other two skips need the `anthropic` package, which is not installed here (`tests/test_p1_anthropic_arm.py:387`, `:426`).
+- Compared with the run of 2026-11-01 (927 passed, 2 skipped, 1 h 40 min), there are 14 more passing tests and the two `anthropic` skips are new.
 
 
