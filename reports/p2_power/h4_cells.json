@@ -1,0 +1,3365 @@
+{
+ "what": "the Q6 (H4) development cells offline: no model in either arm",
+ "counting": "on the outcome (verdict and completion), never on the label alone",
+ "descriptive_only": true,
+ "cells": [
+  {
+   "cell": "S7-01 B/A",
+   "replicate": 0,
+   "arm": "agents",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "abstain",
+   "outcome": "abstain",
+   "rule": "abstain:verifier_abstain",
+   "excluded": true,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": true,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "ph"
+   ],
+   "routing": [
+    "data_quality",
+    "identifiability",
+    "calibration",
+    "verification"
+   ],
+   "evaluations": "196/750",
+   "wall_min": 48.5,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
+    "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
+    "frozen_record_sha256": "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
+   },
+   "observations_sha256": "dea8ef38badf3ce45923cbee4d8aaf40ddaccb89c1de3f3ef2a8f47ab7b5dd0c",
+   "observations_fingerprint": {
+    "tier": "A",
+    "horizon_d": 200.0,
+    "sensors": {
+     "gas_flow": {
+      "channel": "q_gas_stp_dry",
+      "unit": "m3/d",
+      "n": 201,
+      "n_values": 186,
+      "n_missing": 15,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 487487.55072425446,
+      "abs_sum": 487487.55072425446
+     },
+     "ph": {
+      "channel": "pH",
+      "unit": "pH units",
+      "n": 201,
+      "n_values": 171,
+      "n_missing": 30,
+      "n_flatlined": 0,
+      "n_fouled": 8,
+      "n_saturated": 0,
+      "sum": 1182.0041369948858,
+      "abs_sum": 1182.0041369948858
+     },
+     "temperature": {
+      "channel": "temperature",
+      "unit": "K",
+      "n": 201,
+      "n_values": 169,
+      "n_missing": 32,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 52118.58492140844,
+      "abs_sum": 52118.58492140844
+     }
+    },
+    "tables": {
+     "feed_assays.csv": {
+      "rows": 1020,
+      "sums": {
+       "report_day_d": 101808.0,
+       "sample_day_d": 100788.0,
+       "value": 432.6310483
+      }
+     },
+     "feed_log.csv": {
+      "rows": 200,
+      "sums": {
+       "day_d": 19900.0,
+       "fog_kg_wet_per_d": 5183466.43,
+       "high_strength_waste_kg_wet_per_d": 5221665.41,
+       "primary_sludge_kg_wet_per_d": 6022123.41,
+       "thickened_was_kg_wet_per_d": 4483479.58
+      }
+     }
+    },
+    "note_days": [
+     17,
+     24,
+     46,
+     52,
+     69,
+     83,
+     95,
+     142,
+     172,
+     183,
+     186,
+     187
+    ]
+   },
+   "calls_sha256": "c6eb0eb2b8677ed5d39f778e6675a8db3c27e36c4a5bfd195f817a96c139772e",
+   "calls_lines": 24,
+   "run_id": "run_11e50f94dedd"
+  },
+  {
+   "cell": "S7-01 B/A",
+   "replicate": 0,
+   "arm": "procedural",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "rule": "null_failed_unexplained",
+   "excluded": false,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": true,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "ph"
+   ],
+   "routing": [],
+   "evaluations": "195/750",
+   "wall_min": 48.4,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
+    "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
+   },
+   "observations_sha256": "dea8ef38badf3ce45923cbee4d8aaf40ddaccb89c1de3f3ef2a8f47ab7b5dd0c",
+   "observations_fingerprint": {
+    "tier": "A",
+    "horizon_d": 200.0,
+    "sensors": {
+     "gas_flow": {
+      "channel": "q_gas_stp_dry",
+      "unit": "m3/d",
+      "n": 201,
+      "n_values": 186,
+      "n_missing": 15,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 487487.55072425446,
+      "abs_sum": 487487.55072425446
+     },
+     "ph": {
+      "channel": "pH",
+      "unit": "pH units",
+      "n": 201,
+      "n_values": 171,
+      "n_missing": 30,
+      "n_flatlined": 0,
+      "n_fouled": 8,
+      "n_saturated": 0,
+      "sum": 1182.0041369948858,
+      "abs_sum": 1182.0041369948858
+     },
+     "temperature": {
+      "channel": "temperature",
+      "unit": "K",
+      "n": 201,
+      "n_values": 169,
+      "n_missing": 32,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 52118.58492140844,
+      "abs_sum": 52118.58492140844
+     }
+    },
+    "tables": {
+     "feed_assays.csv": {
+      "rows": 1020,
+      "sums": {
+       "report_day_d": 101808.0,
+       "sample_day_d": 100788.0,
+       "value": 432.6310483
+      }
+     },
+     "feed_log.csv": {
+      "rows": 200,
+      "sums": {
+       "day_d": 19900.0,
+       "fog_kg_wet_per_d": 5183466.43,
+       "high_strength_waste_kg_wet_per_d": 5221665.41,
+       "primary_sludge_kg_wet_per_d": 6022123.41,
+       "thickened_was_kg_wet_per_d": 4483479.58
+      }
+     }
+    },
+    "note_days": [
+     17,
+     24,
+     46,
+     52,
+     69,
+     83,
+     95,
+     142,
+     172,
+     183,
+     186,
+     187
+    ]
+   },
+   "calls_sha256": "b5b3774d55fb2517740fb6d42eb5a17dc5875170f1f6ad5e7054bde2f0defbce",
+   "calls_lines": 24,
+   "run_id": "run_45a60c6487cc"
+  },
+  {
+   "cell": "S7-01 B/A",
+   "replicate": 1,
+   "arm": "agents",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "abstain",
+   "outcome": "abstain",
+   "rule": "abstain:verifier_abstain",
+   "excluded": true,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [
+    "data_quality",
+    "influent",
+    "identifiability",
+    "calibration",
+    "verification"
+   ],
+   "evaluations": "188/750",
+   "wall_min": 46.4,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
+    "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
+    "frozen_record_sha256": "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
+   },
+   "observations_sha256": "6a76ef09c175f6a38e7db25f5ae9f3760acce0abe71712ca90f2a55bd84d6d9f",
+   "observations_fingerprint": {
+    "tier": "A",
+    "horizon_d": 200.0,
+    "sensors": {
+     "gas_flow": {
+      "channel": "q_gas_stp_dry",
+      "unit": "m3/d",
+      "n": 201,
+      "n_values": 172,
+      "n_missing": 29,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 432442.374469856,
+      "abs_sum": 432442.374469856
+     },
+     "ph": {
+      "channel": "pH",
+      "unit": "pH units",
+      "n": 201,
+      "n_values": 169,
+      "n_missing": 32,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 1200.9153096110415,
+      "abs_sum": 1200.9153096110415
+     },
+     "temperature": {
+      "channel": "temperature",
+      "unit": "K",
+      "n": 201,
+      "n_values": 174,
+      "n_missing": 27,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 53681.97343742294,
+      "abs_sum": 53681.97343742294
+     }
+    },
+    "tables": {
+     "feed_assays.csv": {
+      "rows": 968,
+      "sums": {
+       "report_day_d": 98848.0,
+       "sample_day_d": 97880.0,
+       "value": 408.36798342
+      }
+     },
+     "feed_log.csv": {
+      "rows": 200,
+      "sums": {
+       "day_d": 19900.0,
+       "fog_kg_wet_per_d": 4664736.81,
+       "high_strength_waste_kg_wet_per_d": 4739407.31,
+       "primary_sludge_kg_wet_per_d": 6602129.09,
+       "thickened_was_kg_wet_per_d": 4222762.24
+      }
+     }
+    },
+    "note_days": [
+     10,
+     23,
+     40,
+     46,
+     64,
+     80,
+     86,
+     131,
+     138,
+     140,
+     149,
+     151
+    ]
+   },
+   "calls_sha256": "225381b2e43a7da57a5a39fe16fe08f5d188e23fe3efcaa24194a3abb0d206d0",
+   "calls_lines": 24,
+   "run_id": "run_2d7c105ed64d"
+  },
+  {
+   "cell": "S7-01 B/A",
+   "replicate": 1,
+   "arm": "procedural",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "rule": "null_stands",
+   "excluded": false,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [],
+   "evaluations": "187/750",
+   "wall_min": 46.9,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
+    "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
+   },
+   "observations_sha256": "6a76ef09c175f6a38e7db25f5ae9f3760acce0abe71712ca90f2a55bd84d6d9f",
+   "observations_fingerprint": {
+    "tier": "A",
+    "horizon_d": 200.0,
+    "sensors": {
+     "gas_flow": {
+      "channel": "q_gas_stp_dry",
+      "unit": "m3/d",
+      "n": 201,
+      "n_values": 172,
+      "n_missing": 29,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 432442.374469856,
+      "abs_sum": 432442.374469856
+     },
+     "ph": {
+      "channel": "pH",
+      "unit": "pH units",
+      "n": 201,
+      "n_values": 169,
+      "n_missing": 32,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 1200.9153096110415,
+      "abs_sum": 1200.9153096110415
+     },
+     "temperature": {
+      "channel": "temperature",
+      "unit": "K",
+      "n": 201,
+      "n_values": 174,
+      "n_missing": 27,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 53681.97343742294,
+      "abs_sum": 53681.97343742294
+     }
+    },
+    "tables": {
+     "feed_assays.csv": {
+      "rows": 968,
+      "sums": {
+       "report_day_d": 98848.0,
+       "sample_day_d": 97880.0,
+       "value": 408.36798342
+      }
+     },
+     "feed_log.csv": {
+      "rows": 200,
+      "sums": {
+       "day_d": 19900.0,
+       "fog_kg_wet_per_d": 4664736.81,
+       "high_strength_waste_kg_wet_per_d": 4739407.31,
+       "primary_sludge_kg_wet_per_d": 6602129.09,
+       "thickened_was_kg_wet_per_d": 4222762.24
+      }
+     }
+    },
+    "note_days": [
+     10,
+     23,
+     40,
+     46,
+     64,
+     80,
+     86,
+     131,
+     138,
+     140,
+     149,
+     151
+    ]
+   },
+   "calls_sha256": "26a8df35563e4bbd39f99676ce7888ae5e35514eb6c97092ccaf27e338c1011b",
+   "calls_lines": 23,
+   "run_id": "run_f7e2b37fe949"
+  },
+  {
+   "cell": "S7-01 B/B",
+   "replicate": 0,
+   "arm": "agents",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "abstain",
+   "outcome": "abstain",
+   "rule": "abstain:verifier_abstain",
+   "excluded": true,
+   "hit": false,
+   "admitted": [
+    "parameter"
+   ],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": true,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "ch4_fraction",
+    "ph"
+   ],
+   "routing": [
+    "data_quality",
+    "identifiability",
+    "calibration",
+    "verification"
+   ],
+   "evaluations": "232/750",
+   "wall_min": 59.5,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
+    "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
+    "frozen_record_sha256": "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
+   },
+   "observations_sha256": "664b34b1d49f0216fead53dd0e8320ca4895e0796c595e14648fa4c42159c7b5",
+   "observations_fingerprint": {
+    "tier": "B",
+    "horizon_d": 200.0,
+    "sensors": {
+     "alkalinity": {
+      "channel": "alkalinity_total",
+      "unit": "kg CaCO3/m3",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 143.21738587763738,
+      "abs_sum": 143.21738587763738
+     },
+     "ch4_fraction": {
+      "channel": "ch4_fraction",
+      "unit": "- (mole fraction of dry gas)",
+      "n": 201,
+      "n_values": 190,
+      "n_missing": 11,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 124.89118521501629,
+      "abs_sum": 124.89118521501629
+     },
+     "cod_total": {
+      "channel": "cod_total",
+      "unit": "kg COD/m3",
+      "n": 29,
+      "n_values": 26,
+      "n_missing": 3,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 556.48895236269,
+      "abs_sum": 556.48895236269
+     },
+     "gas_flow": {
+      "channel": "q_gas_stp_dry",
+      "unit": "m3/d",
+      "n": 201,
+      "n_values": 190,
+      "n_missing": 11,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 497621.0312538784,
+      "abs_sum": 497621.0312538784
+     },
+     "ph": {
+      "channel": "pH",
+      "unit": "pH units",
+      "n": 201,
+      "n_values": 184,
+      "n_missing": 17,
+      "n_flatlined": 0,
+      "n_fouled": 9,
+      "n_saturated": 0,
+      "sum": 1302.8490441801014,
+      "abs_sum": 1302.8490441801014
+     },
+     "tan": {
+      "channel": "tan",
+      "unit": "kg N/m3",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 13.837721887755666,
+      "abs_sum": 13.837721887755666
+     },
+     "temperature": {
+      "channel": "temperature",
+      "unit": "K",
+      "n": 201,
+      "n_values": 187,
+      "n_missing": 14,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 57670.01606161615,
+      "abs_sum": 57670.01606161615
+     },
+     "vfa_total": {
+      "channel": "vfa_titrimetric",
+      "unit": "kg/m3 as acetic acid (titrimetric FOS; see the channel's own unit string)",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 20.50897810578265,
+      "abs_sum": 20.50897810578265
+     }
+    },
+    "tables": {
+     "feed_assays.csv": {
+      "rows": 2496,
+      "sums": {
+       "report_day_d": 251244.0,
+       "sample_day_d": 246762.0,
+       "value": 37623.14122196
+      }
+     },
+     "feed_log.csv": {
+      "rows": 200,
+      "sums": {
+       "day_d": 19900.0,
+       "fog_kg_wet_per_d": 5183466.43,
+       "high_strength_waste_kg_wet_per_d": 5221665.41,
+       "primary_sludge_kg_wet_per_d": 6022123.41,
+       "thickened_was_kg_wet_per_d": 4483479.58
+      }
+     }
+    },
+    "note_days": [
+     17,
+     24,
+     46,
+     52,
+     69,
+     83,
+     95,
+     142,
+     172,
+     183,
+     186,
+     187
+    ]
+   },
+   "calls_sha256": "4419bc2826fbc73b98e2fc627f88fec85ee61ee3cbcc765b56eab7a62e945bcf",
+   "calls_lines": 31,
+   "run_id": "run_01ac276f94dc"
+  },
+  {
+   "cell": "S7-01 B/B",
+   "replicate": 0,
+   "arm": "procedural",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "parameter",
+   "outcome": "parameter",
+   "rule": "NM+parameter",
+   "excluded": false,
+   "hit": false,
+   "admitted": [
+    "parameter"
+   ],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": true,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "ch4_fraction",
+    "ph"
+   ],
+   "routing": [],
+   "evaluations": "231/750",
+   "wall_min": 59.5,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
+    "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
+   },
+   "observations_sha256": "664b34b1d49f0216fead53dd0e8320ca4895e0796c595e14648fa4c42159c7b5",
+   "observations_fingerprint": {
+    "tier": "B",
+    "horizon_d": 200.0,
+    "sensors": {
+     "alkalinity": {
+      "channel": "alkalinity_total",
+      "unit": "kg CaCO3/m3",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 143.21738587763738,
+      "abs_sum": 143.21738587763738
+     },
+     "ch4_fraction": {
+      "channel": "ch4_fraction",
+      "unit": "- (mole fraction of dry gas)",
+      "n": 201,
+      "n_values": 190,
+      "n_missing": 11,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 124.89118521501629,
+      "abs_sum": 124.89118521501629
+     },
+     "cod_total": {
+      "channel": "cod_total",
+      "unit": "kg COD/m3",
+      "n": 29,
+      "n_values": 26,
+      "n_missing": 3,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 556.48895236269,
+      "abs_sum": 556.48895236269
+     },
+     "gas_flow": {
+      "channel": "q_gas_stp_dry",
+      "unit": "m3/d",
+      "n": 201,
+      "n_values": 190,
+      "n_missing": 11,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 497621.0312538784,
+      "abs_sum": 497621.0312538784
+     },
+     "ph": {
+      "channel": "pH",
+      "unit": "pH units",
+      "n": 201,
+      "n_values": 184,
+      "n_missing": 17,
+      "n_flatlined": 0,
+      "n_fouled": 9,
+      "n_saturated": 0,
+      "sum": 1302.8490441801014,
+      "abs_sum": 1302.8490441801014
+     },
+     "tan": {
+      "channel": "tan",
+      "unit": "kg N/m3",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 13.837721887755666,
+      "abs_sum": 13.837721887755666
+     },
+     "temperature": {
+      "channel": "temperature",
+      "unit": "K",
+      "n": 201,
+      "n_values": 187,
+      "n_missing": 14,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 57670.01606161615,
+      "abs_sum": 57670.01606161615
+     },
+     "vfa_total": {
+      "channel": "vfa_titrimetric",
+      "unit": "kg/m3 as acetic acid (titrimetric FOS; see the channel's own unit string)",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 20.50897810578265,
+      "abs_sum": 20.50897810578265
+     }
+    },
+    "tables": {
+     "feed_assays.csv": {
+      "rows": 2496,
+      "sums": {
+       "report_day_d": 251244.0,
+       "sample_day_d": 246762.0,
+       "value": 37623.14122196
+      }
+     },
+     "feed_log.csv": {
+      "rows": 200,
+      "sums": {
+       "day_d": 19900.0,
+       "fog_kg_wet_per_d": 5183466.43,
+       "high_strength_waste_kg_wet_per_d": 5221665.41,
+       "primary_sludge_kg_wet_per_d": 6022123.41,
+       "thickened_was_kg_wet_per_d": 4483479.58
+      }
+     }
+    },
+    "note_days": [
+     17,
+     24,
+     46,
+     52,
+     69,
+     83,
+     95,
+     142,
+     172,
+     183,
+     186,
+     187
+    ]
+   },
+   "calls_sha256": "19ce29839af6565deefb2e05374abf01088ff0528a542bd678df570274ab3b51",
+   "calls_lines": 31,
+   "run_id": "run_c91cc8e22810"
+  },
+  {
+   "cell": "S7-01 B/B",
+   "replicate": 1,
+   "arm": "agents",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "abstain",
+   "outcome": "abstain",
+   "rule": "abstain:verifier_abstain",
+   "excluded": true,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [
+    "data_quality",
+    "influent",
+    "identifiability",
+    "calibration",
+    "verification"
+   ],
+   "evaluations": "211/750",
+   "wall_min": 54.7,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
+    "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
+    "frozen_record_sha256": "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
+   },
+   "observations_sha256": "8d1c50f3c40d77c1232aa29fdc8d984b111528b4e3ee923f714aa9b9c0054b40",
+   "observations_fingerprint": {
+    "tier": "B",
+    "horizon_d": 200.0,
+    "sensors": {
+     "alkalinity": {
+      "channel": "alkalinity_total",
+      "unit": "kg CaCO3/m3",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 159.65307847618467,
+      "abs_sum": 159.65307847618467
+     },
+     "ch4_fraction": {
+      "channel": "ch4_fraction",
+      "unit": "- (mole fraction of dry gas)",
+      "n": 201,
+      "n_values": 183,
+      "n_missing": 18,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 124.20947208647166,
+      "abs_sum": 124.20947208647166
+     },
+     "cod_total": {
+      "channel": "cod_total",
+      "unit": "kg COD/m3",
+      "n": 29,
+      "n_values": 26,
+      "n_missing": 3,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 533.2775135503288,
+      "abs_sum": 533.2775135503288
+     },
+     "gas_flow": {
+      "channel": "q_gas_stp_dry",
+      "unit": "m3/d",
+      "n": 201,
+      "n_values": 184,
+      "n_missing": 17,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 464372.46191555867,
+      "abs_sum": 464372.46191555867
+     },
+     "ph": {
+      "channel": "pH",
+      "unit": "pH units",
+      "n": 201,
+      "n_values": 184,
+      "n_missing": 17,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 1324.4517172554715,
+      "abs_sum": 1324.4517172554715
+     },
+     "tan": {
+      "channel": "tan",
+      "unit": "kg N/m3",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 21.749705176523623,
+      "abs_sum": 21.749705176523623
+     },
+     "temperature": {
+      "channel": "temperature",
+      "unit": "K",
+      "n": 201,
+      "n_values": 190,
+      "n_missing": 11,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 58618.33349525331,
+      "abs_sum": 58618.33349525331
+     },
+     "vfa_total": {
+      "channel": "vfa_titrimetric",
+      "unit": "kg/m3 as acetic acid (titrimetric FOS; see the channel's own unit string)",
+      "n": 29,
+      "n_values": 27,
+      "n_missing": 2,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 23.553772517971844,
+      "abs_sum": 23.553772517971844
+     }
+    },
+    "tables": {
+     "feed_assays.csv": {
+      "rows": 2362,
+      "sums": {
+       "report_day_d": 243256.0,
+       "sample_day_d": 239016.0,
+       "value": 33069.26673665
+      }
+     },
+     "feed_log.csv": {
+      "rows": 200,
+      "sums": {
+       "day_d": 19900.0,
+       "fog_kg_wet_per_d": 4664736.81,
+       "high_strength_waste_kg_wet_per_d": 4739407.31,
+       "primary_sludge_kg_wet_per_d": 6602129.09,
+       "thickened_was_kg_wet_per_d": 4222762.24
+      }
+     }
+    },
+    "note_days": [
+     10,
+     23,
+     40,
+     46,
+     64,
+     80,
+     86,
+     131,
+     138,
+     140,
+     149,
+     151
+    ]
+   },
+   "calls_sha256": "ebe1196a4a10159bc25450ef097469566157e55f580979da7f1ff83f70b5d75a",
+   "calls_lines": 30,
+   "run_id": "run_e38c5021312e"
+  },
+  {
+   "cell": "S7-01 B/B",
+   "replicate": 1,
+   "arm": "procedural",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "rule": "null_stands",
+   "excluded": false,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [],
+   "evaluations": "210/750",
+   "wall_min": 54.8,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
+    "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
+   },
+   "observations_sha256": "8d1c50f3c40d77c1232aa29fdc8d984b111528b4e3ee923f714aa9b9c0054b40",
+   "observations_fingerprint": {
+    "tier": "B",
+    "horizon_d": 200.0,
+    "sensors": {
+     "alkalinity": {
+      "channel": "alkalinity_total",
+      "unit": "kg CaCO3/m3",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 159.65307847618467,
+      "abs_sum": 159.65307847618467
+     },
+     "ch4_fraction": {
+      "channel": "ch4_fraction",
+      "unit": "- (mole fraction of dry gas)",
+      "n": 201,
+      "n_values": 183,
+      "n_missing": 18,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 124.20947208647166,
+      "abs_sum": 124.20947208647166
+     },
+     "cod_total": {
+      "channel": "cod_total",
+      "unit": "kg COD/m3",
+      "n": 29,
+      "n_values": 26,
+      "n_missing": 3,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 533.2775135503288,
+      "abs_sum": 533.2775135503288
+     },
+     "gas_flow": {
+      "channel": "q_gas_stp_dry",
+      "unit": "m3/d",
+      "n": 201,
+      "n_values": 184,
+      "n_missing": 17,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 464372.46191555867,
+      "abs_sum": 464372.46191555867
+     },
+     "ph": {
+      "channel": "pH",
+      "unit": "pH units",
+      "n": 201,
+      "n_values": 184,
+      "n_missing": 17,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 1324.4517172554715,
+      "abs_sum": 1324.4517172554715
+     },
+     "tan": {
+      "channel": "tan",
+      "unit": "kg N/m3",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 21.749705176523623,
+      "abs_sum": 21.749705176523623
+     },
+     "temperature": {
+      "channel": "temperature",
+      "unit": "K",
+      "n": 201,
+      "n_values": 190,
+      "n_missing": 11,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 58618.33349525331,
+      "abs_sum": 58618.33349525331
+     },
+     "vfa_total": {
+      "channel": "vfa_titrimetric",
+      "unit": "kg/m3 as acetic acid (titrimetric FOS; see the channel's own unit string)",
+      "n": 29,
+      "n_values": 27,
+      "n_missing": 2,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 23.553772517971844,
+      "abs_sum": 23.553772517971844
+     }
+    },
+    "tables": {
+     "feed_assays.csv": {
+      "rows": 2362,
+      "sums": {
+       "report_day_d": 243256.0,
+       "sample_day_d": 239016.0,
+       "value": 33069.26673665
+      }
+     },
+     "feed_log.csv": {
+      "rows": 200,
+      "sums": {
+       "day_d": 19900.0,
+       "fog_kg_wet_per_d": 4664736.81,
+       "high_strength_waste_kg_wet_per_d": 4739407.31,
+       "primary_sludge_kg_wet_per_d": 6602129.09,
+       "thickened_was_kg_wet_per_d": 4222762.24
+      }
+     }
+    },
+    "note_days": [
+     10,
+     23,
+     40,
+     46,
+     64,
+     80,
+     86,
+     131,
+     138,
+     140,
+     149,
+     151
+    ]
+   },
+   "calls_sha256": "a5952414724c33152e9e60dc83f68dd4ccd4bcb249e8cf931ac0d8e45d6d9405",
+   "calls_lines": 29,
+   "run_id": "run_9fdb451acb2b"
+  },
+  {
+   "cell": "S7-01 B/C",
+   "replicate": 0,
+   "arm": "agents",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "abstain",
+   "outcome": "abstain",
+   "rule": "abstain:verifier_abstain",
+   "excluded": true,
+   "hit": false,
+   "admitted": [
+    "parameter"
+   ],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": true,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "ch4_fraction",
+    "ph",
+    "vfa_total"
+   ],
+   "routing": [
+    "data_quality",
+    "identifiability",
+    "calibration",
+    "verification"
+   ],
+   "evaluations": "288/750",
+   "wall_min": 73.6,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
+    "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
+    "frozen_record_sha256": "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
+   },
+   "observations_sha256": "6c4dbe08982671e7faa26cca1953af4f2aaeb28ebb0b2f4ec30de867a3a8ebe7",
+   "observations_fingerprint": {
+    "tier": "C",
+    "horizon_d": 200.0,
+    "sensors": {
+     "alkalinity": {
+      "channel": "alkalinity_total",
+      "unit": "kg CaCO3/m3",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 143.21738587763738,
+      "abs_sum": 143.21738587763738
+     },
+     "ch4_fraction": {
+      "channel": "ch4_fraction",
+      "unit": "- (mole fraction of dry gas)",
+      "n": 201,
+      "n_values": 195,
+      "n_missing": 6,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 128.23059359369043,
+      "abs_sum": 128.23059359369043
+     },
+     "cod_total": {
+      "channel": "cod_total",
+      "unit": "kg COD/m3",
+      "n": 29,
+      "n_values": 27,
+      "n_missing": 2,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 579.9177894411463,
+      "abs_sum": 579.9177894411463
+     },
+     "digestate_ts": {
+      "channel": "ts",
+      "unit": "kg TS/m3",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 611.9916055720194,
+      "abs_sum": 611.9916055720194
+     },
+     "digestate_vs": {
+      "channel": "vs",
+      "unit": "kg VS/m3",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 401.1100578584594,
+      "abs_sum": 401.1100578584594
+     },
+     "gas_flow": {
+      "channel": "q_gas_stp_dry",
+      "unit": "m3/d",
+      "n": 201,
+      "n_values": 196,
+      "n_missing": 5,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 531436.8633807306,
+      "abs_sum": 531436.8633807306
+     },
+     "h2_offgas": {
+      "channel": "h2_ppm",
+      "unit": "ppm by volume of dry gas",
+      "n": 201,
+      "n_values": 192,
+      "n_missing": 9,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 2963.5348974182853,
+      "abs_sum": 2963.5348974182853
+     },
+     "ph": {
+      "channel": "pH",
+      "unit": "pH units",
+      "n": 201,
+      "n_values": 192,
+      "n_missing": 9,
+      "n_flatlined": 0,
+      "n_fouled": 10,
+      "n_saturated": 0,
+      "sum": 1359.5936467319164,
+      "abs_sum": 1359.5936467319164
+     },
+     "tan": {
+      "channel": "tan",
+      "unit": "kg N/m3",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 14.280399103906435,
+      "abs_sum": 14.280399103906435
+     },
+     "temperature": {
+      "channel": "temperature",
+      "unit": "K",
+      "n": 201,
+      "n_values": 193,
+      "n_missing": 8,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 59520.37349740864,
+      "abs_sum": 59520.37349740864
+     },
+     "vfa_ac": {
+      "channel": "vfa_ac",
+      "unit": "kg/m3 as acetic acid",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.961985571189333,
+      "abs_sum": 0.961985571189333
+     },
+     "vfa_bu": {
+      "channel": "vfa_bu",
+      "unit": "kg/m3 as butyric acid",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.19532935537290821,
+      "abs_sum": 0.19532935537290821
+     },
+     "vfa_pro": {
+      "channel": "vfa_pro",
+      "unit": "kg/m3 as propionic acid",
+      "n": 29,
+      "n_values": 27,
+      "n_missing": 2,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.27124217150821084,
+      "abs_sum": 0.27124217150821084
+     },
+     "vfa_total": {
+      "channel": "vfa_titrimetric",
+      "unit": "kg/m3 as acetic acid (titrimetric FOS; see the channel's own unit string)",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 20.50897810578265,
+      "abs_sum": 20.50897810578265
+     },
+     "vfa_va": {
+      "channel": "vfa_va",
+      "unit": "kg/m3 as valeric acid",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": -0.17176608255828016,
+      "abs_sum": 1.1065416578105434
+     }
+    },
+    "tables": {
+     "feed_assays.csv": {
+      "rows": 3489,
+      "sums": {
+       "report_day_d": 349428.0,
+       "sample_day_d": 344946.0,
+       "value": 43483.57550196
+      }
+     },
+     "feed_log.csv": {
+      "rows": 200,
+      "sums": {
+       "day_d": 19900.0,
+       "fog_kg_wet_per_d": 5183466.43,
+       "high_strength_waste_kg_wet_per_d": 5221665.41,
+       "primary_sludge_kg_wet_per_d": 6022123.41,
+       "thickened_was_kg_wet_per_d": 4483479.58
+      }
+     }
+    },
+    "note_days": [
+     17,
+     24,
+     46,
+     52,
+     69,
+     83,
+     95,
+     142,
+     172,
+     183,
+     186,
+     187
+    ]
+   },
+   "calls_sha256": "a2b4065b123894d8ffead3ca4e52ec85babe84348bdefe6149cf60499438d611",
+   "calls_lines": 36,
+   "run_id": "run_072ef8d784ab"
+  },
+  {
+   "cell": "S7-01 B/C",
+   "replicate": 0,
+   "arm": "procedural",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "parameter",
+   "outcome": "parameter",
+   "rule": "NM+parameter",
+   "excluded": false,
+   "hit": false,
+   "admitted": [
+    "parameter"
+   ],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": true,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": true
+   },
+   "failed_channels": [
+    "ch4_fraction",
+    "ph",
+    "vfa_total"
+   ],
+   "routing": [],
+   "evaluations": "287/750",
+   "wall_min": 73.6,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
+    "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
+   },
+   "observations_sha256": "6c4dbe08982671e7faa26cca1953af4f2aaeb28ebb0b2f4ec30de867a3a8ebe7",
+   "observations_fingerprint": {
+    "tier": "C",
+    "horizon_d": 200.0,
+    "sensors": {
+     "alkalinity": {
+      "channel": "alkalinity_total",
+      "unit": "kg CaCO3/m3",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 143.21738587763738,
+      "abs_sum": 143.21738587763738
+     },
+     "ch4_fraction": {
+      "channel": "ch4_fraction",
+      "unit": "- (mole fraction of dry gas)",
+      "n": 201,
+      "n_values": 195,
+      "n_missing": 6,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 128.23059359369043,
+      "abs_sum": 128.23059359369043
+     },
+     "cod_total": {
+      "channel": "cod_total",
+      "unit": "kg COD/m3",
+      "n": 29,
+      "n_values": 27,
+      "n_missing": 2,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 579.9177894411463,
+      "abs_sum": 579.9177894411463
+     },
+     "digestate_ts": {
+      "channel": "ts",
+      "unit": "kg TS/m3",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 611.9916055720194,
+      "abs_sum": 611.9916055720194
+     },
+     "digestate_vs": {
+      "channel": "vs",
+      "unit": "kg VS/m3",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 401.1100578584594,
+      "abs_sum": 401.1100578584594
+     },
+     "gas_flow": {
+      "channel": "q_gas_stp_dry",
+      "unit": "m3/d",
+      "n": 201,
+      "n_values": 196,
+      "n_missing": 5,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 531436.8633807306,
+      "abs_sum": 531436.8633807306
+     },
+     "h2_offgas": {
+      "channel": "h2_ppm",
+      "unit": "ppm by volume of dry gas",
+      "n": 201,
+      "n_values": 192,
+      "n_missing": 9,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 2963.5348974182853,
+      "abs_sum": 2963.5348974182853
+     },
+     "ph": {
+      "channel": "pH",
+      "unit": "pH units",
+      "n": 201,
+      "n_values": 192,
+      "n_missing": 9,
+      "n_flatlined": 0,
+      "n_fouled": 10,
+      "n_saturated": 0,
+      "sum": 1359.5936467319164,
+      "abs_sum": 1359.5936467319164
+     },
+     "tan": {
+      "channel": "tan",
+      "unit": "kg N/m3",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 14.280399103906435,
+      "abs_sum": 14.280399103906435
+     },
+     "temperature": {
+      "channel": "temperature",
+      "unit": "K",
+      "n": 201,
+      "n_values": 193,
+      "n_missing": 8,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 59520.37349740864,
+      "abs_sum": 59520.37349740864
+     },
+     "vfa_ac": {
+      "channel": "vfa_ac",
+      "unit": "kg/m3 as acetic acid",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.961985571189333,
+      "abs_sum": 0.961985571189333
+     },
+     "vfa_bu": {
+      "channel": "vfa_bu",
+      "unit": "kg/m3 as butyric acid",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.19532935537290821,
+      "abs_sum": 0.19532935537290821
+     },
+     "vfa_pro": {
+      "channel": "vfa_pro",
+      "unit": "kg/m3 as propionic acid",
+      "n": 29,
+      "n_values": 27,
+      "n_missing": 2,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.27124217150821084,
+      "abs_sum": 0.27124217150821084
+     },
+     "vfa_total": {
+      "channel": "vfa_titrimetric",
+      "unit": "kg/m3 as acetic acid (titrimetric FOS; see the channel's own unit string)",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 20.50897810578265,
+      "abs_sum": 20.50897810578265
+     },
+     "vfa_va": {
+      "channel": "vfa_va",
+      "unit": "kg/m3 as valeric acid",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": -0.17176608255828016,
+      "abs_sum": 1.1065416578105434
+     }
+    },
+    "tables": {
+     "feed_assays.csv": {
+      "rows": 3489,
+      "sums": {
+       "report_day_d": 349428.0,
+       "sample_day_d": 344946.0,
+       "value": 43483.57550196
+      }
+     },
+     "feed_log.csv": {
+      "rows": 200,
+      "sums": {
+       "day_d": 19900.0,
+       "fog_kg_wet_per_d": 5183466.43,
+       "high_strength_waste_kg_wet_per_d": 5221665.41,
+       "primary_sludge_kg_wet_per_d": 6022123.41,
+       "thickened_was_kg_wet_per_d": 4483479.58
+      }
+     }
+    },
+    "note_days": [
+     17,
+     24,
+     46,
+     52,
+     69,
+     83,
+     95,
+     142,
+     172,
+     183,
+     186,
+     187
+    ]
+   },
+   "calls_sha256": "fc84d52d63e8d0a1a4f6b27c1090a5b0fd618d2f0c641cd0d57280e32b931e55",
+   "calls_lines": 36,
+   "run_id": "run_452bf2af6190"
+  },
+  {
+   "cell": "S7-01 B/C",
+   "replicate": 1,
+   "arm": "agents",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "abstain",
+   "outcome": "abstain",
+   "rule": "abstain:verifier_abstain",
+   "excluded": true,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [
+    "data_quality",
+    "influent",
+    "identifiability",
+    "calibration",
+    "verification"
+   ],
+   "evaluations": "245/750",
+   "wall_min": 63.2,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
+    "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
+    "frozen_record_sha256": "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
+   },
+   "observations_sha256": "ff216f132c2ec767f6651f5423e8341e7d14d6a91d7f986ddb8656e554a72baf",
+   "observations_fingerprint": {
+    "tier": "C",
+    "horizon_d": 200.0,
+    "sensors": {
+     "alkalinity": {
+      "channel": "alkalinity_total",
+      "unit": "kg CaCO3/m3",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 159.65307847618467,
+      "abs_sum": 159.65307847618467
+     },
+     "ch4_fraction": {
+      "channel": "ch4_fraction",
+      "unit": "- (mole fraction of dry gas)",
+      "n": 201,
+      "n_values": 191,
+      "n_missing": 10,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 129.67929203453042,
+      "abs_sum": 129.67929203453042
+     },
+     "cod_total": {
+      "channel": "cod_total",
+      "unit": "kg COD/m3",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 592.0908775722538,
+      "abs_sum": 592.0908775722538
+     },
+     "digestate_ts": {
+      "channel": "ts",
+      "unit": "kg TS/m3",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 584.0211470102437,
+      "abs_sum": 584.0211470102437
+     },
+     "digestate_vs": {
+      "channel": "vs",
+      "unit": "kg VS/m3",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 370.5709416884017,
+      "abs_sum": 370.5709416884017
+     },
+     "gas_flow": {
+      "channel": "q_gas_stp_dry",
+      "unit": "m3/d",
+      "n": 201,
+      "n_values": 194,
+      "n_missing": 7,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 501638.38105745177,
+      "abs_sum": 501638.38105745177
+     },
+     "h2_offgas": {
+      "channel": "h2_ppm",
+      "unit": "ppm by volume of dry gas",
+      "n": 201,
+      "n_values": 194,
+      "n_missing": 7,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 2777.2565075154553,
+      "abs_sum": 2777.2565075154553
+     },
+     "ph": {
+      "channel": "pH",
+      "unit": "pH units",
+      "n": 201,
+      "n_values": 194,
+      "n_missing": 7,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 1395.7528991249144,
+      "abs_sum": 1395.7528991249144
+     },
+     "tan": {
+      "channel": "tan",
+      "unit": "kg N/m3",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 21.749705176523623,
+      "abs_sum": 21.749705176523623
+     },
+     "temperature": {
+      "channel": "temperature",
+      "unit": "K",
+      "n": 201,
+      "n_values": 198,
+      "n_missing": 3,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 61086.32309666783,
+      "abs_sum": 61086.32309666783
+     },
+     "vfa_ac": {
+      "channel": "vfa_ac",
+      "unit": "kg/m3 as acetic acid",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 1.292038576666937,
+      "abs_sum": 1.292038576666937
+     },
+     "vfa_bu": {
+      "channel": "vfa_bu",
+      "unit": "kg/m3 as butyric acid",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.2283529223042008,
+      "abs_sum": 0.2283529223042008
+     },
+     "vfa_pro": {
+      "channel": "vfa_pro",
+      "unit": "kg/m3 as propionic acid",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.32226281402600643,
+      "abs_sum": 0.32226281402600643
+     },
+     "vfa_total": {
+      "channel": "vfa_titrimetric",
+      "unit": "kg/m3 as acetic acid (titrimetric FOS; see the channel's own unit string)",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 25.345943247321927,
+      "abs_sum": 25.345943247321927
+     },
+     "vfa_va": {
+      "channel": "vfa_va",
+      "unit": "kg/m3 as valeric acid",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.061810452005848775,
+      "abs_sum": 0.8231636873209549
+     }
+    },
+    "tables": {
+     "feed_assays.csv": {
+      "rows": 3301,
+      "sums": {
+       "report_day_d": 338294.0,
+       "sample_day_d": 334054.0,
+       "value": 38562.26103665
+      }
+     },
+     "feed_log.csv": {
+      "rows": 200,
+      "sums": {
+       "day_d": 19900.0,
+       "fog_kg_wet_per_d": 4664736.81,
+       "high_strength_waste_kg_wet_per_d": 4739407.31,
+       "primary_sludge_kg_wet_per_d": 6602129.09,
+       "thickened_was_kg_wet_per_d": 4222762.24
+      }
+     }
+    },
+    "note_days": [
+     10,
+     23,
+     40,
+     46,
+     64,
+     80,
+     86,
+     131,
+     138,
+     140,
+     149,
+     151
+    ]
+   },
+   "calls_sha256": "22ba599a6f286c031547868e4ee301082727077063c29cf0890ef695c6e6ef55",
+   "calls_lines": 37,
+   "run_id": "run_2ab5d6cbd26f"
+  },
+  {
+   "cell": "S7-01 B/C",
+   "replicate": 1,
+   "arm": "procedural",
+   "truth": [
+    "sensor",
+    "influent"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "rule": "null_stands",
+   "excluded": false,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [],
+   "evaluations": "244/750",
+   "wall_min": 63.2,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
+    "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
+   },
+   "observations_sha256": "ff216f132c2ec767f6651f5423e8341e7d14d6a91d7f986ddb8656e554a72baf",
+   "observations_fingerprint": {
+    "tier": "C",
+    "horizon_d": 200.0,
+    "sensors": {
+     "alkalinity": {
+      "channel": "alkalinity_total",
+      "unit": "kg CaCO3/m3",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 159.65307847618467,
+      "abs_sum": 159.65307847618467
+     },
+     "ch4_fraction": {
+      "channel": "ch4_fraction",
+      "unit": "- (mole fraction of dry gas)",
+      "n": 201,
+      "n_values": 191,
+      "n_missing": 10,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 129.67929203453042,
+      "abs_sum": 129.67929203453042
+     },
+     "cod_total": {
+      "channel": "cod_total",
+      "unit": "kg COD/m3",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 592.0908775722538,
+      "abs_sum": 592.0908775722538
+     },
+     "digestate_ts": {
+      "channel": "ts",
+      "unit": "kg TS/m3",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 584.0211470102437,
+      "abs_sum": 584.0211470102437
+     },
+     "digestate_vs": {
+      "channel": "vs",
+      "unit": "kg VS/m3",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 370.5709416884017,
+      "abs_sum": 370.5709416884017
+     },
+     "gas_flow": {
+      "channel": "q_gas_stp_dry",
+      "unit": "m3/d",
+      "n": 201,
+      "n_values": 194,
+      "n_missing": 7,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 501638.38105745177,
+      "abs_sum": 501638.38105745177
+     },
+     "h2_offgas": {
+      "channel": "h2_ppm",
+      "unit": "ppm by volume of dry gas",
+      "n": 201,
+      "n_values": 194,
+      "n_missing": 7,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 2777.2565075154553,
+      "abs_sum": 2777.2565075154553
+     },
+     "ph": {
+      "channel": "pH",
+      "unit": "pH units",
+      "n": 201,
+      "n_values": 194,
+      "n_missing": 7,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 1395.7528991249144,
+      "abs_sum": 1395.7528991249144
+     },
+     "tan": {
+      "channel": "tan",
+      "unit": "kg N/m3",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 21.749705176523623,
+      "abs_sum": 21.749705176523623
+     },
+     "temperature": {
+      "channel": "temperature",
+      "unit": "K",
+      "n": 201,
+      "n_values": 198,
+      "n_missing": 3,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 61086.32309666783,
+      "abs_sum": 61086.32309666783
+     },
+     "vfa_ac": {
+      "channel": "vfa_ac",
+      "unit": "kg/m3 as acetic acid",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 1.292038576666937,
+      "abs_sum": 1.292038576666937
+     },
+     "vfa_bu": {
+      "channel": "vfa_bu",
+      "unit": "kg/m3 as butyric acid",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.2283529223042008,
+      "abs_sum": 0.2283529223042008
+     },
+     "vfa_pro": {
+      "channel": "vfa_pro",
+      "unit": "kg/m3 as propionic acid",
+      "n": 29,
+      "n_values": 28,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.32226281402600643,
+      "abs_sum": 0.32226281402600643
+     },
+     "vfa_total": {
+      "channel": "vfa_titrimetric",
+      "unit": "kg/m3 as acetic acid (titrimetric FOS; see the channel's own unit string)",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 25.345943247321927,
+      "abs_sum": 25.345943247321927
+     },
+     "vfa_va": {
+      "channel": "vfa_va",
+      "unit": "kg/m3 as valeric acid",
+      "n": 29,
+      "n_values": 29,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.061810452005848775,
+      "abs_sum": 0.8231636873209549
+     }
+    },
+    "tables": {
+     "feed_assays.csv": {
+      "rows": 3301,
+      "sums": {
+       "report_day_d": 338294.0,
+       "sample_day_d": 334054.0,
+       "value": 38562.26103665
+      }
+     },
+     "feed_log.csv": {
+      "rows": 200,
+      "sums": {
+       "day_d": 19900.0,
+       "fog_kg_wet_per_d": 4664736.81,
+       "high_strength_waste_kg_wet_per_d": 4739407.31,
+       "primary_sludge_kg_wet_per_d": 6602129.09,
+       "thickened_was_kg_wet_per_d": 4222762.24
+      }
+     }
+    },
+    "note_days": [
+     10,
+     23,
+     40,
+     46,
+     64,
+     80,
+     86,
+     131,
+     138,
+     140,
+     149,
+     151
+    ]
+   },
+   "calls_sha256": "c664098ded171fbf56115f427ac18b9d47af09b3a67104fe43ada6adddf2bd11",
+   "calls_lines": 36,
+   "run_id": "run_1838d0ae6926"
+  },
+  {
+   "cell": "S7-02 A/C",
+   "replicate": 0,
+   "arm": "agents",
+   "truth": [
+    "structural",
+    "parameter"
+   ],
+   "label": "abstain",
+   "outcome": "abstain",
+   "rule": "abstain:verifier_abstain",
+   "excluded": true,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [
+    "data_quality",
+    "influent",
+    "identifiability",
+    "calibration",
+    "verification"
+   ],
+   "evaluations": "233/375",
+   "wall_min": 107.1,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
+    "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
+    "frozen_record_sha256": "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
+   },
+   "observations_sha256": "71e9849121d23775d82e59c4b1f9cba82aaf89c9f41d4e772bf063844428c9b5",
+   "observations_fingerprint": {
+    "tier": "C",
+    "horizon_d": 365.0,
+    "sensors": {
+     "alkalinity": {
+      "channel": "alkalinity_total",
+      "unit": "kg CaCO3/m3",
+      "n": 53,
+      "n_values": 53,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 827.5822365045385,
+      "abs_sum": 827.5822365045385
+     },
+     "ch4_fraction": {
+      "channel": "ch4_fraction",
+      "unit": "- (mole fraction of dry gas)",
+      "n": 366,
+      "n_values": 356,
+      "n_missing": 10,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 217.89598743529356,
+      "abs_sum": 217.89598743529356
+     },
+     "cod_total": {
+      "channel": "cod_total",
+      "unit": "kg COD/m3",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 1871.454054092679,
+      "abs_sum": 1871.454054092679
+     },
+     "digestate_ts": {
+      "channel": "ts",
+      "unit": "kg TS/m3",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 2457.4836897213772,
+      "abs_sum": 2457.4836897213772
+     },
+     "digestate_vs": {
+      "channel": "vs",
+      "unit": "kg VS/m3",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 1526.7566175671557,
+      "abs_sum": 1526.7566175671557
+     },
+     "gas_flow": {
+      "channel": "q_gas_stp_dry",
+      "unit": "m3/d",
+      "n": 366,
+      "n_values": 357,
+      "n_missing": 9,
+      "n_flatlined": 1,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 169061.41352961946,
+      "abs_sum": 169061.41352961946
+     },
+     "h2_offgas": {
+      "channel": "h2_ppm",
+      "unit": "ppm by volume of dry gas",
+      "n": 366,
+      "n_values": 357,
+      "n_missing": 9,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 4426.337684404218,
+      "abs_sum": 4426.337684404218
+     },
+     "ph": {
+      "channel": "pH",
+      "unit": "pH units",
+      "n": 366,
+      "n_values": 357,
+      "n_missing": 9,
+      "n_flatlined": 0,
+      "n_fouled": 14,
+      "n_saturated": 0,
+      "sum": 2741.8254156254197,
+      "abs_sum": 2741.8254156254197
+     },
+     "tan": {
+      "channel": "tan",
+      "unit": "kg N/m3",
+      "n": 53,
+      "n_values": 53,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 192.94574443581993,
+      "abs_sum": 192.94574443581993
+     },
+     "temperature": {
+      "channel": "temperature",
+      "unit": "K",
+      "n": 366,
+      "n_values": 362,
+      "n_missing": 4,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 113720.38507013164,
+      "abs_sum": 113720.38507013164
+     },
+     "vfa_ac": {
+      "channel": "vfa_ac",
+      "unit": "kg/m3 as acetic acid",
+      "n": 53,
+      "n_values": 51,
+      "n_missing": 2,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 30.401013313609486,
+      "abs_sum": 30.401013313609486
+     },
+     "vfa_bu": {
+      "channel": "vfa_bu",
+      "unit": "kg/m3 as butyric acid",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.20086837536107288,
+      "abs_sum": 0.20086837536107288
+     },
+     "vfa_pro": {
+      "channel": "vfa_pro",
+      "unit": "kg/m3 as propionic acid",
+      "n": 53,
+      "n_values": 53,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.2611625597778503,
+      "abs_sum": 0.2611625597778503
+     },
+     "vfa_total": {
+      "channel": "vfa_titrimetric",
+      "unit": "kg/m3 as acetic acid (titrimetric FOS; see the channel's own unit string)",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 141.6721670208164,
+      "abs_sum": 141.6721670208164
+     },
+     "vfa_va": {
+      "channel": "vfa_va",
+      "unit": "kg/m3 as valeric acid",
+      "n": 53,
+      "n_values": 53,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.3652495040485969,
+      "abs_sum": 2.367569274719075
+     }
+    },
+    "tables": {
+     "feed_assays.csv": {
+      "rows": 689,
+      "sums": {
+       "report_day_d": 126352.0,
+       "sample_day_d": 125398.0,
+       "value": 17851.138307
+      }
+     },
+     "feed_log.csv": {
+      "rows": 365,
+      "sums": {
+       "day_d": 66430.0,
+       "cattle_slurry_kg_wet_per_d": 5459937.16,
+       "grass_silage_kg_wet_per_d": 524260.47
+      }
+     }
+    },
+    "note_days": [
+     26,
+     44,
+     55,
+     61,
+     69,
+     72,
+     78,
+     115,
+     121,
+     124,
+     132,
+     154
+    ]
+   },
+   "calls_sha256": "da23bf5ab162ab6918d2a82e51b0754af1a5e28ac89d6ed4a633c1ae1264e73c",
+   "calls_lines": 39,
+   "run_id": "run_6b405e371ba9"
+  },
+  {
+   "cell": "S7-02 A/C",
+   "replicate": 0,
+   "arm": "procedural",
+   "truth": [
+    "structural",
+    "parameter"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "rule": "null_stands",
+   "excluded": false,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [],
+   "evaluations": "232/375",
+   "wall_min": 106.6,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
+    "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
+   },
+   "observations_sha256": "71e9849121d23775d82e59c4b1f9cba82aaf89c9f41d4e772bf063844428c9b5",
+   "observations_fingerprint": {
+    "tier": "C",
+    "horizon_d": 365.0,
+    "sensors": {
+     "alkalinity": {
+      "channel": "alkalinity_total",
+      "unit": "kg CaCO3/m3",
+      "n": 53,
+      "n_values": 53,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 827.5822365045385,
+      "abs_sum": 827.5822365045385
+     },
+     "ch4_fraction": {
+      "channel": "ch4_fraction",
+      "unit": "- (mole fraction of dry gas)",
+      "n": 366,
+      "n_values": 356,
+      "n_missing": 10,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 217.89598743529356,
+      "abs_sum": 217.89598743529356
+     },
+     "cod_total": {
+      "channel": "cod_total",
+      "unit": "kg COD/m3",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 1871.454054092679,
+      "abs_sum": 1871.454054092679
+     },
+     "digestate_ts": {
+      "channel": "ts",
+      "unit": "kg TS/m3",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 2457.4836897213772,
+      "abs_sum": 2457.4836897213772
+     },
+     "digestate_vs": {
+      "channel": "vs",
+      "unit": "kg VS/m3",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 1526.7566175671557,
+      "abs_sum": 1526.7566175671557
+     },
+     "gas_flow": {
+      "channel": "q_gas_stp_dry",
+      "unit": "m3/d",
+      "n": 366,
+      "n_values": 357,
+      "n_missing": 9,
+      "n_flatlined": 1,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 169061.41352961946,
+      "abs_sum": 169061.41352961946
+     },
+     "h2_offgas": {
+      "channel": "h2_ppm",
+      "unit": "ppm by volume of dry gas",
+      "n": 366,
+      "n_values": 357,
+      "n_missing": 9,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 4426.337684404218,
+      "abs_sum": 4426.337684404218
+     },
+     "ph": {
+      "channel": "pH",
+      "unit": "pH units",
+      "n": 366,
+      "n_values": 357,
+      "n_missing": 9,
+      "n_flatlined": 0,
+      "n_fouled": 14,
+      "n_saturated": 0,
+      "sum": 2741.8254156254197,
+      "abs_sum": 2741.8254156254197
+     },
+     "tan": {
+      "channel": "tan",
+      "unit": "kg N/m3",
+      "n": 53,
+      "n_values": 53,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 192.94574443581993,
+      "abs_sum": 192.94574443581993
+     },
+     "temperature": {
+      "channel": "temperature",
+      "unit": "K",
+      "n": 366,
+      "n_values": 362,
+      "n_missing": 4,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 113720.38507013164,
+      "abs_sum": 113720.38507013164
+     },
+     "vfa_ac": {
+      "channel": "vfa_ac",
+      "unit": "kg/m3 as acetic acid",
+      "n": 53,
+      "n_values": 51,
+      "n_missing": 2,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 30.401013313609486,
+      "abs_sum": 30.401013313609486
+     },
+     "vfa_bu": {
+      "channel": "vfa_bu",
+      "unit": "kg/m3 as butyric acid",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.20086837536107288,
+      "abs_sum": 0.20086837536107288
+     },
+     "vfa_pro": {
+      "channel": "vfa_pro",
+      "unit": "kg/m3 as propionic acid",
+      "n": 53,
+      "n_values": 53,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.2611625597778503,
+      "abs_sum": 0.2611625597778503
+     },
+     "vfa_total": {
+      "channel": "vfa_titrimetric",
+      "unit": "kg/m3 as acetic acid (titrimetric FOS; see the channel's own unit string)",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 141.6721670208164,
+      "abs_sum": 141.6721670208164
+     },
+     "vfa_va": {
+      "channel": "vfa_va",
+      "unit": "kg/m3 as valeric acid",
+      "n": 53,
+      "n_values": 53,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.3652495040485969,
+      "abs_sum": 2.367569274719075
+     }
+    },
+    "tables": {
+     "feed_assays.csv": {
+      "rows": 689,
+      "sums": {
+       "report_day_d": 126352.0,
+       "sample_day_d": 125398.0,
+       "value": 17851.138307
+      }
+     },
+     "feed_log.csv": {
+      "rows": 365,
+      "sums": {
+       "day_d": 66430.0,
+       "cattle_slurry_kg_wet_per_d": 5459937.16,
+       "grass_silage_kg_wet_per_d": 524260.47
+      }
+     }
+    },
+    "note_days": [
+     26,
+     44,
+     55,
+     61,
+     69,
+     72,
+     78,
+     115,
+     121,
+     124,
+     132,
+     154
+    ]
+   },
+   "calls_sha256": "1f75e9f8194757218cb4b0bcafec1464c0b8dfb9203e6269e2c6be13414a32fb",
+   "calls_lines": 38,
+   "run_id": "run_8187e708b914"
+  },
+  {
+   "cell": "S7-02 A/C",
+   "replicate": 1,
+   "arm": "agents",
+   "truth": [
+    "structural",
+    "parameter"
+   ],
+   "label": "abstain",
+   "outcome": "abstain",
+   "rule": "abstain:verifier_abstain",
+   "excluded": true,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [
+    "data_quality",
+    "influent",
+    "identifiability",
+    "calibration",
+    "verification"
+   ],
+   "evaluations": "242/375",
+   "wall_min": 108.5,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
+    "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
+    "frozen_record_sha256": "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
+   },
+   "observations_sha256": "56fa056424c50ca220d4f43a7a75a9d279dd6eac27b3d948828bfa212114f452",
+   "observations_fingerprint": {
+    "tier": "C",
+    "horizon_d": 365.0,
+    "sensors": {
+     "alkalinity": {
+      "channel": "alkalinity_total",
+      "unit": "kg CaCO3/m3",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 756.146563218378,
+      "abs_sum": 756.146563218378
+     },
+     "ch4_fraction": {
+      "channel": "ch4_fraction",
+      "unit": "- (mole fraction of dry gas)",
+      "n": 366,
+      "n_values": 352,
+      "n_missing": 14,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 222.56199258684515,
+      "abs_sum": 222.56199258684515
+     },
+     "cod_total": {
+      "channel": "cod_total",
+      "unit": "kg COD/m3",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 1951.0492615745097,
+      "abs_sum": 1951.0492615745097
+     },
+     "digestate_ts": {
+      "channel": "ts",
+      "unit": "kg TS/m3",
+      "n": 53,
+      "n_values": 53,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 2504.8424904001668,
+      "abs_sum": 2504.8424904001668
+     },
+     "digestate_vs": {
+      "channel": "vs",
+      "unit": "kg VS/m3",
+      "n": 53,
+      "n_values": 51,
+      "n_missing": 2,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 1542.7216488239922,
+      "abs_sum": 1542.7216488239922
+     },
+     "gas_flow": {
+      "channel": "q_gas_stp_dry",
+      "unit": "m3/d",
+      "n": 366,
+      "n_values": 357,
+      "n_missing": 9,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 158873.04771810165,
+      "abs_sum": 158873.04771810165
+     },
+     "h2_offgas": {
+      "channel": "h2_ppm",
+      "unit": "ppm by volume of dry gas",
+      "n": 366,
+      "n_values": 356,
+      "n_missing": 10,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 4240.78647880641,
+      "abs_sum": 4240.78647880641
+     },
+     "ph": {
+      "channel": "pH",
+      "unit": "pH units",
+      "n": 366,
+      "n_values": 358,
+      "n_missing": 8,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 2749.756003740086,
+      "abs_sum": 2749.756003740086
+     },
+     "tan": {
+      "channel": "tan",
+      "unit": "kg N/m3",
+      "n": 53,
+      "n_values": 51,
+      "n_missing": 2,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 166.5470495780658,
+      "abs_sum": 166.5470495780658
+     },
+     "temperature": {
+      "channel": "temperature",
+      "unit": "K",
+      "n": 366,
+      "n_values": 358,
+      "n_missing": 8,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 112453.67287537086,
+      "abs_sum": 112453.67287537086
+     },
+     "vfa_ac": {
+      "channel": "vfa_ac",
+      "unit": "kg/m3 as acetic acid",
+      "n": 53,
+      "n_values": 51,
+      "n_missing": 2,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 19.389671789260856,
+      "abs_sum": 19.389671789260856
+     },
+     "vfa_bu": {
+      "channel": "vfa_bu",
+      "unit": "kg/m3 as butyric acid",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.19423111273293361,
+      "abs_sum": 0.19423111273293361
+     },
+     "vfa_pro": {
+      "channel": "vfa_pro",
+      "unit": "kg/m3 as propionic acid",
+      "n": 53,
+      "n_values": 53,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.23772221517714193,
+      "abs_sum": 0.23772221517714193
+     },
+     "vfa_total": {
+      "channel": "vfa_titrimetric",
+      "unit": "kg/m3 as acetic acid (titrimetric FOS; see the channel's own unit string)",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 124.4067117883262,
+      "abs_sum": 124.4067117883262
+     },
+     "vfa_va": {
+      "channel": "vfa_va",
+      "unit": "kg/m3 as valeric acid",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.16746638146175202,
+      "abs_sum": 1.9951350850071838
+     }
+    },
+    "tables": {
+     "feed_assays.csv": {
+      "rows": 689,
+      "sums": {
+       "report_day_d": 126352.0,
+       "sample_day_d": 125398.0,
+       "value": 17185.984679
+      }
+     },
+     "feed_log.csv": {
+      "rows": 365,
+      "sums": {
+       "day_d": 66430.0,
+       "cattle_slurry_kg_wet_per_d": 5416791.17,
+       "grass_silage_kg_wet_per_d": 520708.52
+      }
+     }
+    },
+    "note_days": [
+     5,
+     91,
+     106,
+     110,
+     116,
+     140,
+     179,
+     180,
+     185,
+     188,
+     213,
+     220
+    ]
+   },
+   "calls_sha256": "70ddeaafc1b1c31ff6251b7cd422cd1312d054e9ff95e7c5ddb834ac77e05d76",
+   "calls_lines": 36,
+   "run_id": "run_20b6d20ecb7a"
+  },
+  {
+   "cell": "S7-02 A/C",
+   "replicate": 1,
+   "arm": "procedural",
+   "truth": [
+    "structural",
+    "parameter"
+   ],
+   "label": "none",
+   "outcome": "none",
+   "rule": "null_stands",
+   "excluded": false,
+   "hit": false,
+   "admitted": [],
+   "truth_admitted": [],
+   "null": {
+    "NB": false,
+    "NM": false,
+    "NS": false,
+    "null_partial": false,
+    "null_rejected": false
+   },
+   "failed_channels": [],
+   "routing": [],
+   "evaluations": "241/375",
+   "wall_min": 109.3,
+   "decider": "offline",
+   "llm_turns": null,
+   "frozen": {
+    "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
+    "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
+   },
+   "observations_sha256": "56fa056424c50ca220d4f43a7a75a9d279dd6eac27b3d948828bfa212114f452",
+   "observations_fingerprint": {
+    "tier": "C",
+    "horizon_d": 365.0,
+    "sensors": {
+     "alkalinity": {
+      "channel": "alkalinity_total",
+      "unit": "kg CaCO3/m3",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 756.146563218378,
+      "abs_sum": 756.146563218378
+     },
+     "ch4_fraction": {
+      "channel": "ch4_fraction",
+      "unit": "- (mole fraction of dry gas)",
+      "n": 366,
+      "n_values": 352,
+      "n_missing": 14,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 222.56199258684515,
+      "abs_sum": 222.56199258684515
+     },
+     "cod_total": {
+      "channel": "cod_total",
+      "unit": "kg COD/m3",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 1951.0492615745097,
+      "abs_sum": 1951.0492615745097
+     },
+     "digestate_ts": {
+      "channel": "ts",
+      "unit": "kg TS/m3",
+      "n": 53,
+      "n_values": 53,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 2504.8424904001668,
+      "abs_sum": 2504.8424904001668
+     },
+     "digestate_vs": {
+      "channel": "vs",
+      "unit": "kg VS/m3",
+      "n": 53,
+      "n_values": 51,
+      "n_missing": 2,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 1542.7216488239922,
+      "abs_sum": 1542.7216488239922
+     },
+     "gas_flow": {
+      "channel": "q_gas_stp_dry",
+      "unit": "m3/d",
+      "n": 366,
+      "n_values": 357,
+      "n_missing": 9,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 158873.04771810165,
+      "abs_sum": 158873.04771810165
+     },
+     "h2_offgas": {
+      "channel": "h2_ppm",
+      "unit": "ppm by volume of dry gas",
+      "n": 366,
+      "n_values": 356,
+      "n_missing": 10,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 4240.78647880641,
+      "abs_sum": 4240.78647880641
+     },
+     "ph": {
+      "channel": "pH",
+      "unit": "pH units",
+      "n": 366,
+      "n_values": 358,
+      "n_missing": 8,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 2749.756003740086,
+      "abs_sum": 2749.756003740086
+     },
+     "tan": {
+      "channel": "tan",
+      "unit": "kg N/m3",
+      "n": 53,
+      "n_values": 51,
+      "n_missing": 2,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 166.5470495780658,
+      "abs_sum": 166.5470495780658
+     },
+     "temperature": {
+      "channel": "temperature",
+      "unit": "K",
+      "n": 366,
+      "n_values": 358,
+      "n_missing": 8,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 112453.67287537086,
+      "abs_sum": 112453.67287537086
+     },
+     "vfa_ac": {
+      "channel": "vfa_ac",
+      "unit": "kg/m3 as acetic acid",
+      "n": 53,
+      "n_values": 51,
+      "n_missing": 2,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 19.389671789260856,
+      "abs_sum": 19.389671789260856
+     },
+     "vfa_bu": {
+      "channel": "vfa_bu",
+      "unit": "kg/m3 as butyric acid",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.19423111273293361,
+      "abs_sum": 0.19423111273293361
+     },
+     "vfa_pro": {
+      "channel": "vfa_pro",
+      "unit": "kg/m3 as propionic acid",
+      "n": 53,
+      "n_values": 53,
+      "n_missing": 0,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.23772221517714193,
+      "abs_sum": 0.23772221517714193
+     },
+     "vfa_total": {
+      "channel": "vfa_titrimetric",
+      "unit": "kg/m3 as acetic acid (titrimetric FOS; see the channel's own unit string)",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 124.4067117883262,
+      "abs_sum": 124.4067117883262
+     },
+     "vfa_va": {
+      "channel": "vfa_va",
+      "unit": "kg/m3 as valeric acid",
+      "n": 53,
+      "n_values": 52,
+      "n_missing": 1,
+      "n_flatlined": 0,
+      "n_fouled": 0,
+      "n_saturated": 0,
+      "sum": 0.16746638146175202,
+      "abs_sum": 1.9951350850071838
+     }
+    },
+    "tables": {
+     "feed_assays.csv": {
+      "rows": 689,
+      "sums": {
+       "report_day_d": 126352.0,
+       "sample_day_d": 125398.0,
+       "value": 17185.984679
+      }
+     },
+     "feed_log.csv": {
+      "rows": 365,
+      "sums": {
+       "day_d": 66430.0,
+       "cattle_slurry_kg_wet_per_d": 5416791.17,
+       "grass_silage_kg_wet_per_d": 520708.52
+      }
+     }
+    },
+    "note_days": [
+     5,
+     91,
+     106,
+     110,
+     116,
+     140,
+     179,
+     180,
+     185,
+     188,
+     213,
+     220
+    ]
+   },
+   "calls_sha256": "92fd549e6da3dce5a2f1a1c46ea3fd364fa39b5d44927c782df20cfa20847bc9",
+   "calls_lines": 35,
+   "run_id": "run_0a3dbcb77f2f"
+  }
+ ],
+ "arms": {
+  "procedural": {
+   "runs": 8,
+   "hits": "0 of 8 scored",
+   "excluded": {
+    "abstain": 0,
+    "pending": 0
+   },
+   "both_faults_admitted": 0
+  },
+  "agents": {
+   "runs": 8,
+   "hits": "0 of 0 scored",
+   "excluded": {
+    "abstain": 8,
+    "pending": 0
+   },
+   "both_faults_admitted": 0
+  }
+ },
+ "seed_checks": {
+  "S7-01 B/A r0": {
+   "arms_see_the_same_observations": true,
+   "arms": [
+    "agents",
+    "procedural"
+   ]
+  },
+  "S7-01 B/A r1": {
+   "arms_see_the_same_observations": true,
+   "arms": [
+    "agents",
+    "procedural"
+   ]
+  },
+  "S7-01 B/B r0": {
+   "arms_see_the_same_observations": true,
+   "arms": [
+    "agents",
+    "procedural"
+   ]
+  },
+  "S7-01 B/B r1": {
+   "arms_see_the_same_observations": true,
+   "arms": [
+    "agents",
+    "procedural"
+   ]
+  },
+  "S7-01 B/C r0": {
+   "arms_see_the_same_observations": true,
+   "arms": [
+    "agents",
+    "procedural"
+   ]
+  },
+  "S7-01 B/C r1": {
+   "arms_see_the_same_observations": true,
+   "arms": [
+    "agents",
+    "procedural"
+   ]
+  },
+  "S7-02 A/C r0": {
+   "arms_see_the_same_observations": true,
+   "arms": [
+    "agents",
+    "procedural"
+   ]
+  },
+  "S7-02 A/C r1": {
+   "arms_see_the_same_observations": true,
+   "arms": [
+    "agents",
+    "procedural"
+   ]
+  }
+ },
+ "seeds_differ_within_a_cell": {
+  "S7-01 B/A": true,
+  "S7-01 B/B": true,
+  "S7-01 B/C": true,
+  "S7-02 A/C": true
+ },
+ "fingerprint_rtol": 0.0001,
+ "unfinished": [],
+ "reruns": []
+}

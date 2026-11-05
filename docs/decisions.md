@@ -8884,7 +8884,12 @@ and is written). The coverage test now derives the tables from `agent_rule_table
 so a table added without a mutation test fails it. **Also left out, and why:** the second
 round's trigger is the verdict schema's `fail` (frozen in `schemas_sha256`) and the frozen
 round limit; the role-name tie-break in the leading claim decides only which role leads
-between equal claims (same label, same confidence), never the label. **Final digests,**
+between equal claims (same label, same confidence), never the label. *(Corrected
+2026-11-03, the review of #46, N8: never the label, but it routes. The leading role answers
+a round-2 `fail` (`responders_for`), so between two equal `none` claims the name decides
+whether `data_quality` or `influent` answers: `['data_quality', 'calibration']` as frozen,
+`['influent', 'calibration']` when `influent` leads. A behavioural test with a control pins
+it; the order is not extracted as a table, so no digest moves.)* **Final digests,**
 from the committed tree (the record keeps its 2026-11-03 date; its `word` names the
 tie-break): `frozen_record_sha256(arm)` `2ed56ecf…9ead` → **`501893b3…1fa4`**;
 `config_digest(arm)` `ba8efb16…a3e2` → **`618f4825…6dd8`**; `rules_sha256`
@@ -8892,3 +8897,70 @@ tie-break): `frozen_record_sha256(arm)` `2ed56ecf…9ead` → **`501893b3…1fa4
 `b373dfaf…4a82` → `501893b3…1fa4` and the agent configuration `85a608b8…1ec7` →
 `618f4825…6dd8`. The procedural `c58306b4…40a0`, `cf59bcbb…f404` and `def3c42b…ba36` are
 unchanged (tested).
+
+## 2026-11-03 — The Q6 (H4) development cells, offline floor (item B)
+
+**Decision.** The four H4 cells the lead decided (Q6; the lead's "Yes to both", 2026-10-25:
+S7-01 at B/A, B/B and B/C, and S7-02 at **A/C**, its defined tier; two seeds each) are
+registered in `scripts/p2_power.py` as `H4_CELLS`, apart from the power run's `CELLS`, and
+run **offline in both arms**: the procedural P2 (`p2.yaml`) and the agent arm
+(`p2_agents.yaml` as committed). The order was the lead's 2026-10-30 "Yes to all three"
+(A, the agent freeze, then B, these cells); the coordinator's relay of 2026-11-03 started
+it. No model is reachable in either arm, no frozen file is touched, and neither record moves.
+The output is `reports/p2_power/h4_cells.json` and `h4_summary.md`; `cells.json` and
+`summary.md` stay as they are.
+
+**Interpretations proposed (the design note is silent on them), for the coordinator:**
+1. *Both arms, not the agent arm alone.* The relay asks for the arm offline; the design note
+   §7 says any agent result is read against the code-only floor, the procedural P2 with
+   every decision at its fallback. The floor of a new cell therefore needs the procedural
+   arm too; the agent arm's offline run is the plumbing and determinism check (its scripted
+   verifier abstains by construction, so its outcome is `abstain`, never a diagnosis).
+2. *Two seeds are replicates 0 and 1* of `generate_run` (the cell's own seed and its first
+   replicate), as the pilot's (`scripts/p2_pilot.py`).
+3. *A hit on a two-fault truth* is the outcome naming **either** fault: a run writes one
+   label. Which true faults the admission let through is reported beside it
+   (`truth_admitted`), so "found one, missed the other" is visible. Descriptive only (§7).
+4. *Each arm has its own run store.* A run's id is keyed on its cell and seed, so two arms
+   in one store would share a run directory and write over each other's outputs (found on
+   the first launch, stopped within a minute, relaunched clean). Both arms of a cell and
+   seed see byte-identical observations; the report checks it.
+
+**Reproducibility and the frozen check (tests, `tests/test_p2_h4_cells.py`).** A generated
+run is machine-bound to the last bits, as P0's golden is (`tests/test_p0_freeze.py`): CI's
+first run of this PR regenerated S7-01 B/A seed 0 to a different byte digest than this
+container's. So the committed record carries each run's **observation fingerprint** (per
+sensor: channel, unit, counts, missing and flagged counts, the sum and absolute sum of its
+values; per CSV: rows and column sums; the operator notes' days), and each cell regenerated
+from its seed in a fresh store must give its counts, flags and text exactly and its sums
+within `H4_FINGERPRINT_RTOL` = 1e-4 (a hundred times the solver's `rtol` 1e-6); the other
+seed must fall outside it (the control). Byte identity is checked on one machine: both
+arms of each seed were generated in two stores to identical bytes, and a test generates
+S7-01 B/B seed 0 twice to identical bytes (seed 1 differs, the control). Every committed run names the frozen digests
+the driver checked before it (`frozen_record_sha256` `c58306b4…40a0` procedural,
+`501893b3…1fa4` the arm; `config_sha256` `def3c42b…ba36` and `618f4825…6dd8`; the arm's
+`agents_frozen_sha256` `8a8ab73d…c951`), ran offline and made no model turn; the check
+refuses a moved agent record (the control: the unedited copy passes). The agent arm, jailed
+and offline on a shortened S7-01 B/B (50 days, 60 evaluations), writes the same
+`calls.jsonl` (clock fields out) and report twice from one seed. Each label of the two
+truths is a P0 label with a role that may claim it. No test reads the truth store; a
+run's truth is the scenario file's label.
+
+**Outcomes (16 runs, none unfinished, no rerun; `reports/p2_power/h4_summary.md`).** The
+procedural floor hits **0 of 8**: `none` on 6 (the null stands on 5, among them both S7-02
+seeds and every seed-1 run; on S7-01 B/A seed 0 the null fails on `ph` alone, unexplained),
+and **`parameter` on S7-01 B/B and B/C seed 0** (NM, `ch4_fraction` and `ph` failed, plus
+`vfa_total` at C), a wrong label: neither true fault (`sensor`, `influent`) is admitted in
+any run. The agent arm abstains on all 8 (the offline verifier), with the same null tables
+and admissions as the procedural arm on the same observations. Spend: 187–288 of 750
+evaluations on S7-01, 232–242 of 375 on S7-02; 46–74 min per S7-01 run and 107–109 min per
+S7-02 run. **Read:** the code-only floor of the H4 cells is zero, and where it does
+conclude it absorbs the compound fault into a kinetic parameter, the failure S7-01's notes
+name. On seed 1, and on S7-02 at both seeds, the null test itself does not reject the
+null, so nothing downstream sees a fault at all.
+
+**Alternatives.** The agent arm alone (rejected: no floor to read it against); the
+procedural arm alone, as PR #44 first scoped it (rejected: the relay asks for the arm); one
+run store with the arms' outputs under different names (rejected: the runner's output name
+is the workflow's, and a shared directory is a collision waiting to happen).
+

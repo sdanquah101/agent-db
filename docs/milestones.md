@@ -4502,3 +4502,33 @@ lead's "Yes to all three" (11:03 UTC): the record first, the prompts as they sta
   `frozen_record_sha256(arm)` `501893b3…`, `config_digest(arm)` `618f4825…`,
   `rules_sha256` `0aadaf43…`; the procedural ones unchanged.
 - **Next:** the coordinator's check of this commit; then item B, the Q6 cells, in its own PR.
+
+**2026-11-03 — Item B: the Q6 (H4) development cells, offline (branch `claude/p2-q6-cells`,
+a draft PR cut from `main` at `f72fb9e`, #46's merge; no open PR when it was cut).** The
+coordinator's relay of 05:20 UTC, on the lead's 2026-10-30 "Yes to all three" (A then B).
+- `scripts/p2_power.py`: `H4_CELLS` (S7-01 at B/A, B/B, B/C; S7-02 at A/C), replicates 0
+  and 1, both arms offline (`h4-run`, `h4-report`), each arm in its own run store; the
+  records name the frozen digests checked before each run, the observations' digest and
+  `calls.jsonl`'s (clock out). `reports/p2_power/h4_cells.json` and `h4_summary.md`;
+  `cells.json` and `summary.md` unchanged. No frozen file touched; no digest moved; no
+  model call.
+- Outcomes: the procedural floor 0 of 8 (`none` 6, `parameter` 2 on S7-01 B/B and B/C
+  seed 0, wrong); the agent arm `abstain` 8 of 8 (its offline verifier); neither true
+  fault admitted in any run; the null stands on 10 of 16 runs (every seed-1 run and both
+  S7-02 seeds, both arms). Seeds: both arms saw byte-identical observations; the two seeds
+  of each cell differ.
+- Tests (`tests/test_p2_h4_cells.py`): the cells, the two-fault labels and their
+  claimants, the hit counted on the outcome, the seed checks (with a control), the calls
+  digest (with a control), the frozen check for each arm and its refusal of a moved
+  record (with a control), every committed run frozen and offline, each cell regenerated
+  from its seed to the committed observation fingerprint (sums within 1e-4: a generated
+  run is machine-bound to the last bits, as CI's first run showed; the other seed is
+  outside it), one seed generated twice to identical bytes on one machine, and the jailed
+  agent arm twice from one seed on a shortened S7-01 B/B.
+- N8 (the review of #46): the role-name tie-break routes a round-2 `fail` between equal
+  `none` claims; wording fixed in `tools/p2_live.py` and the 2026-11-03 decisions entry,
+  a behavioural test with a control; no digest moves.
+- Proposed to the coordinator (decisions entry): both arms as the floor; replicates 0/1 as
+  the two seeds; a hit is either fault, with `truth_admitted` beside it.
+- **Next:** the coordinator's review of this PR; then the agent pilot, only on a new
+  approval record the lead approves.

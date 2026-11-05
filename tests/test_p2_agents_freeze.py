@@ -494,3 +494,39 @@ def test_the_label_tie_break_is_p0s_order_then_none_and_a_label_leads_none(monke
     # the control: none ranked first leads, and is what a pass writes
     monkeypatch.setattr(agents, "LABEL_TIE_BREAK", ("none", *wf.P0_ORDER))
     assert written() == ("none", "none")
+
+
+def test_the_role_name_tie_break_routes_a_fail_between_equal_none_claims(monkeypatch):
+    """N8 (the review of #46): the role-name tie-break never decides the label, but routes.
+
+    Between two equal ``none`` claims (same label, same confidence) the role's name picks
+    the leading role, and the leading role is one of the responders to a round-2 ``fail``.
+    The label is ``none`` either way. The control: with ``influent`` leading instead (the
+    ``data_quality`` claim one step less confident), the same ``fail`` routes ``influent``.
+    """
+    from tests.test_p2_agents_harness import FakeTools, _cfg, _install
+
+    fake = FakeTools("B", "B", offsets={"ph": 8.0})
+    _install(monkeypatch, fake)
+    run = agents.AgentRun(_cfg())
+    run.code_steps()
+    none = run.lab["none"]
+
+    def findings(dq_confidence: str) -> dict[str, Any]:
+        return {
+            "influent": messages.InfluentFinding.model_construct(claim=none, confidence="high"),
+            "data_quality": messages.SensorFinding.model_construct(
+                claim=none, confidence=dq_confidence
+            ),
+        }
+
+    verdict = type("V", (), {"alternative": run.lab["parameter"]})()
+    run.findings = findings("high")
+    claim, role, _ = run.leading()
+    assert (claim, role) == (none, "data_quality")  # the name breaks the tie
+    assert run.responders_for(verdict) == ["data_quality", "calibration"]
+    # the control: influent leads, the label is still none, and the route changes
+    run.findings = findings("medium")
+    claim, role, _ = run.leading()
+    assert (claim, role) == (none, "influent")
+    assert run.responders_for(verdict) == ["influent", "calibration"]
