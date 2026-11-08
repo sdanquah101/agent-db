@@ -209,6 +209,10 @@ def agent_rule_tables() -> dict[str, Any]:
     route: the leading role answers a round-2 ``fail`` (``responders_for``), so between
     two equal ``none`` claims it decides whether ``data_quality`` or ``influent`` answers
     (the review of #46, N8; left out as a role-name order, not a rule table). The
+    secondary labels (Q-H4, the lead's "a", 2026-11-05) are a derivation, not a table:
+    the other admitted claims (``admitted_claims``, which reads ``claims_for_label`` and
+    the admission) less the label, in ``label_tie_break`` order; every table it reads is
+    frozen here, and the code that derives them is the staged package's (``launch.json``). The
     schema-level bounds and patterns, the routing reasons included, are in
     ``schemas_sha256``, the redaction tables in the projection's digest.
     """

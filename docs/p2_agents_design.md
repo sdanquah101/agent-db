@@ -278,7 +278,10 @@ No role sees another role's assessment. The hold-out is visible only to the veri
   - the projection rule and its size bound;
   - the coordinator-as-code rule tables that decide the label, the admission and the
     routing, by digest (added on the lead's words of 2026-11-01 and 2026-11-03;
-    `tools/p2_live.py` `agent_rule_tables` names them);
+    `tools/p2_live.py` `agent_rule_tables` names them). The secondary labels (Q-H4, the
+    lead's "a", 2026-11-05: the arm may name both faults) are the other admitted claims,
+    written by code by the procedural arm's rule; a derivation from these tables, not a
+    table (`docs/decisions.md`, 2026-11-08);
   - P1's frozen model block (decision d), and the caps.
 
   `check_p2_frozen` checks the record on every run. A new approval record names its digest.

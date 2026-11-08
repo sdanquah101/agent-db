@@ -359,6 +359,7 @@ def h4_record(
     summary = _json_or_empty(out / "summary.json")
     digest, n_lines = calls_digest(run_dir / "calls.jsonl")
     return {
+        **run_outputs(run_dir),
         "cell": key(cell),
         "replicate": replicate,
         "arm": arm,
@@ -390,6 +391,23 @@ def h4_record(
         "observations_sha256": observations_digest(run_dir),
         "calls_sha256": digest,
         "calls_lines": n_lines,
+    }
+
+
+def run_outputs(run_dir: Path) -> dict[str, Any]:
+    """What a stored run's own outputs say, read again at report time (never the truth store).
+
+    ``secondary_labels``: the classification's, from ``state.json`` (Q-H4, the lead's "a":
+    the agent arm may name both faults; a record written before the report carried them
+    reads them from the state). ``llm_calls_jsonl``: whether the run left a model log,
+    which an offline run must not (the review of PR #48, N3).
+    """
+    out = run_dir / "workflows" / "p2"
+    state = _json_or_empty(out / "state.json")
+    cls = state.get("classification") or {}
+    return {
+        "secondary_labels": list(cls.get("secondary_labels") or []),
+        "llm_calls_jsonl": (out / "llm_calls.jsonl").is_file(),
     }
 
 
@@ -690,17 +708,26 @@ def h4_summarise(records: list[dict[str, Any]]) -> dict[str, Any]:
         t = r.get("null_table") or {}
         out = outcome_of(r)
         admitted = (r.get("verdict") or {}).get("admitted") or []
+        secondary = list(r.get("secondary_labels") or [])
+        # eval's two scores (eval/attribution.py), by their names (the review of PR #48,
+        # N1): `primary_in_truth`, the label names one of the faults; `attribution_exact`,
+        # the label set (the label and its secondary labels, which both arms write by the
+        # same rule since Q-H4 "a") equals the truth. Both on the outcome: an abstaining or
+        # unfinished run scores neither.
+        label_set = sorted({str(r["label"]), *secondary}) if out not in EXCLUDED else []
         rows.append({
             "cell": r["cell"],
             "replicate": r["replicate"],
             "arm": r["arm"],
             "truth": r["truth"],
             "label": r["label"],
+            "secondary_labels": secondary,
+            "label_set": label_set,
             "outcome": out,
             "rule": r.get("rule"),
             "excluded": out in EXCLUDED,
-            # a run writes one label: a hit names one of the two faults, never both
-            "hit": out not in EXCLUDED and out in r["truth"],
+            "primary_in_truth": out not in EXCLUDED and out in r["truth"],
+            "attribution_exact": out not in EXCLUDED and set(label_set) == set(r["truth"]),
             "admitted": admitted,
             "truth_admitted": sorted(set(admitted) & set(r["truth"])),
             "null": {k: t.get(k) for k in ("NB", "NM", "NS", "null_partial", "null_rejected")},
@@ -710,6 +737,8 @@ def h4_summarise(records: list[dict[str, Any]]) -> dict[str, Any]:
             "wall_min": round(r["wall_s"] / 60.0, 1),
             "decider": r.get("decider"),
             "llm_turns": r.get("llm_turns"),
+            "llm_calls_jsonl": r.get("llm_calls_jsonl"),
+            "git_commit": (r.get("provenance") or {}).get("git_commit"),
             "frozen": r.get("frozen"),
             "observations_sha256": r.get("observations_sha256"),
             "observations_fingerprint": r.get("observations_fingerprint"),
@@ -735,7 +764,10 @@ def h4_summarise(records: list[dict[str, Any]]) -> dict[str, Any]:
         scored = [x for x in mine if not x["excluded"]]
         arms[arm] = {
             "runs": len(mine),
-            "hits": f"{sum(x['hit'] for x in scored)} of {len(scored)} scored",
+            "primary_in_truth": f"{sum(x['primary_in_truth'] for x in scored)} of "
+            f"{len(scored)} scored",
+            "attribution_exact": f"{sum(x['attribution_exact'] for x in scored)} of "
+            f"{len(scored)} scored",
             "excluded": {k: sum(1 for x in mine if x["outcome"] == k) for k in EXCLUDED},
             "both_faults_admitted": sum(len(x["truth_admitted"]) == 2 for x in mine),
         }
@@ -756,10 +788,10 @@ def h4_report(store: Path) -> dict[str, Any]:
 
     records = [json.loads(p.read_text(encoding="utf-8"))
                for p in sorted((store / "results").glob("*.json"))]  # fmt: skip
-    for r in records:  # read from the stored run (its observations, never the truth store)
-        r["observations_fingerprint"] = observations_fingerprint(
-            store / r["arm"] / "runs" / r["run_id"]
-        )
+    for r in records:  # read from the stored run (its outputs, never the truth store)
+        run_dir = store / r["arm"] / "runs" / r["run_id"]
+        r["observations_fingerprint"] = observations_fingerprint(run_dir)
+        r.update(run_outputs(run_dir))
     out = h4_summarise(records)
     out["fingerprint_rtol"] = H4_FINGERPRINT_RTOL
     out["unfinished"] = read_unfinished(list((store / "unfinished").glob("*.json")))
@@ -778,11 +810,15 @@ def h4_report(store: Path) -> dict[str, Any]:
         "run by both arms with every decision at its offline fallback: the procedural P2",
         "(`p2.yaml`, the code-only floor) and the agent arm (`p2_agents.yaml` as committed,",
         "its frozen record checked before every run, its roles at their scripted plans).",
-        "Descriptive only (design note §7). A run writes one label, so a hit names one of",
-        "the two faults; `truth admitted` shows which of them the admission let through.",
-        "Every count keys on the outcome; an abstaining or unfinished run is excluded.",
+        "Descriptive only (design note §7). The scores are eval's (`eval/attribution.py`):",
+        "`primary in truth`, the label names one of the two faults; `exact`, the label set",
+        "(the label and the secondary labels both arms write by one rule, the other admitted",
+        "labels, since Q-H4 \"a\") equals the truth. `truth admitted` shows which of the",
+        "faults the admission let through. Every count keys on the outcome; an abstaining",
+        "or unfinished run is excluded.",
         "",
-        *[f"- {arm}: hits {v['hits']}; excluded "
+        *[f"- {arm}: primary in truth {v['primary_in_truth']}; exact "
+          f"{v['attribution_exact']}; excluded "
           f"{', '.join(f'{k} {n}' for k, n in v['excluded'].items())}; both faults admitted "
           f"in {v['both_faults_admitted']} of {v['runs']} runs"
           for arm, v in out["arms"].items()],
@@ -793,15 +829,17 @@ def h4_report(store: Path) -> dict[str, Any]:
         *[f"Rerun once, completed: {x['cell']} r{x['replicate']} {x['arm']} ({x['run_id']})"
           for x in out["reruns"]],
         "",
-        "| cell | seed | arm | truth | outcome | rule | truth admitted | NB | NM | NS "
-        "| failed channels | evaluations | wall min |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "| cell | seed | arm | truth | outcome | label set | primary in truth | exact | rule "
+        "| truth admitted | NB | NM | NS | failed channels | evaluations | wall min |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]  # fmt: skip
     for x in out["cells"]:
         n = x["null"]
         lines.append(
             f"| {x['cell']} | {x['replicate']} | {x['arm']} | {','.join(x['truth'])} | "
-            f"{x['outcome']} | {x['rule']} | {','.join(x['truth_admitted']) or '-'} | "
+            f"{x['outcome']} | {','.join(x['label_set']) or '-'} | {x['primary_in_truth']} | "
+            f"{x['attribution_exact']} | {x['rule']} | "
+            f"{','.join(x['truth_admitted']) or '-'} | "
             f"{n.get('NB')} | {n.get('NM')} | {n.get('NS')} | {x['failed_channels']} | "
             f"{x['evaluations']} | {x['wall_min']} |"
         )
