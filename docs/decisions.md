@@ -8975,9 +8975,9 @@ is the workflow's, and a shared directory is a collision waiting to happen).
 **The lead's word.** On merging PR #48 (5 Nov, ~17:14 UTC): **"merge 48, and a"** — Q-H4
 answer **"a": the agent arm may name both faults.** Relayed by the coordinator on 2026-11-08.
 
-**Decision.** `AgentRun.conclude` writes `secondary_labels` by the procedural arm's rule
-(`workflow.py`, `conclude`: `secondary = admitted − {label}`), read for the agent arm as the
-**other admitted claims**: a claim a permitted role made (`CLAIMS_FOR_LABEL`; a round-1
+**Decision.** `AgentRun.conclude` writes `secondary_labels` as the procedural arm writes
+them **on a pass of a claim** (`workflow.py`, `conclude`: `secondary = admitted − {label}`),
+read for the agent arm as the **other admitted claims**: a claim a permitted role made (`CLAIMS_FOR_LABEL`; a round-1
 finding never carries a round-2-only claim, `claim_allowed_in_round` refused it) whose
 label the code's admission admits (`admit_agent`), less the label and `none`, in
 `LABEL_TIE_BREAK` order (`AgentRun.secondary_labels`, over `admitted_claims`, the ranking
@@ -8987,6 +8987,14 @@ verifier's alternative was `none`) or an abstention. Code writes them, never a m
 message schema gains a field, and the report carries them beside the label. Before this
 the arm wrote `[]` always, so on a two-fault truth eval's `attribution_exact` (the label set
 equal to the truth) could never hold for it while the procedural arm could be exact.
+
+**Where the arms differ (the review of PR #49, N-a).** "The procedural arm's rule"
+over-states it. `workflow.py` writes its secondary line unconditionally, so a live
+procedural `none` pass over admitted labels carries them as secondaries; the agent arm
+writes `[]` on `none`. The arms are identical on a pass of a claim and differ on a `none`
+pass. The agent arm's choice is right: a `none` pass means the null stood or the verifier's
+alternative was `none`, so no fault is being named and no second fault can be named beside
+it; a secondary under `none` would score as a fault the arm did not conclude.
 
 **Not a table.** The rule is a derivation from tables already in `rules_sha256`
 (`claims_for_label`, `label_tie_break`) and the frozen admission, so nothing joins
@@ -9016,9 +9024,21 @@ label set per row; **N2** each row's `git_commit`; **N3** each row's `llm_calls_
 (absent in every offline run, asserted). Outcomes unchanged: the floor 0 of 8 on either
 score; the arm 8 abstentions.
 
-**Alternatives.** Secondaries from the admission alone, as the procedural arm (rejected:
-the agent arm's labels enter through the roles' claims; code naming a fault no role
-claimed would be code diagnosing); a frozen boolean "secondaries need a claim" in the
-tables (rejected: it would freeze a reading of a rule, not data the rule reads); re-running
-the eight agent cells for the new record (rejected as not needed: no record can change).
+**Alternatives.** Q-H4 option **(b)**, refused by the lead: keep the single label and
+score H4 on `primary_in_truth` alone, stating the asymmetry (the procedural arm writes
+secondaries and can be `attribution_exact` on a two-fault truth, the agent arm never can).
+Refused because H4 is the hypothesis the arm exists to test: a gain on two simultaneous
+faults is a gain in naming both, which `primary_in_truth` cannot see, and the asymmetry
+would have put the arm's score below the floor's by construction. Secondaries from the
+admission alone, as the procedural arm (rejected: the agent arm's labels enter through the
+roles' claims; code naming a fault no role claimed would be code diagnosing); a frozen
+boolean "secondaries need a claim" in the tables (rejected: it would freeze a reading of a
+rule, not data the rule reads); re-running the eight agent cells for the new record
+(rejected as not needed: no record can change).
+
+**Known differences, not changed here (the review of PR #49, N-d; put to the lead by the
+coordinator).** With several admitted claims the agent arm writes the confidence
+`attribution.confidence.single` where `workflow.py` writes `multiple` for several admitted
+labels. That is behaviour, so it waits on the lead's word; the arm's confidence is not a
+score eval reads for H4.
 
