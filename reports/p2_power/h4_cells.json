@@ -12,10 +12,13 @@
     "influent"
    ],
    "label": "abstain",
+   "secondary_labels": [],
+   "label_set": [],
    "outcome": "abstain",
    "rule": "abstain:verifier_abstain",
    "excluded": true,
-   "hit": false,
+   "primary_in_truth": false,
+   "attribution_exact": false,
    "admitted": [],
    "truth_admitted": [],
    "null": {
@@ -38,6 +41,8 @@
    "wall_min": 48.5,
    "decider": "offline",
    "llm_turns": null,
+   "llm_calls_jsonl": false,
+   "git_commit": "61f4888e710aea903d2b8d14d6c00fc3c3236fb5",
    "frozen": {
     "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
     "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
@@ -133,10 +138,15 @@
     "influent"
    ],
    "label": "none",
+   "secondary_labels": [],
+   "label_set": [
+    "none"
+   ],
    "outcome": "none",
    "rule": "null_failed_unexplained",
    "excluded": false,
-   "hit": false,
+   "primary_in_truth": false,
+   "attribution_exact": false,
    "admitted": [],
    "truth_admitted": [],
    "null": {
@@ -154,6 +164,8 @@
    "wall_min": 48.4,
    "decider": "offline",
    "llm_turns": null,
+   "llm_calls_jsonl": false,
+   "git_commit": "61f4888e710aea903d2b8d14d6c00fc3c3236fb5",
    "frozen": {
     "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
     "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
@@ -248,10 +260,13 @@
     "influent"
    ],
    "label": "abstain",
+   "secondary_labels": [],
+   "label_set": [],
    "outcome": "abstain",
    "rule": "abstain:verifier_abstain",
    "excluded": true,
-   "hit": false,
+   "primary_in_truth": false,
+   "attribution_exact": false,
    "admitted": [],
    "truth_admitted": [],
    "null": {
@@ -273,6 +288,8 @@
    "wall_min": 46.4,
    "decider": "offline",
    "llm_turns": null,
+   "llm_calls_jsonl": false,
+   "git_commit": "61f4888e710aea903d2b8d14d6c00fc3c3236fb5",
    "frozen": {
     "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
     "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
@@ -368,10 +385,15 @@
     "influent"
    ],
    "label": "none",
+   "secondary_labels": [],
+   "label_set": [
+    "none"
+   ],
    "outcome": "none",
    "rule": "null_stands",
    "excluded": false,
-   "hit": false,
+   "primary_in_truth": false,
+   "attribution_exact": false,
    "admitted": [],
    "truth_admitted": [],
    "null": {
@@ -387,6 +409,8 @@
    "wall_min": 46.9,
    "decider": "offline",
    "llm_turns": null,
+   "llm_calls_jsonl": false,
+   "git_commit": "61f4888e710aea903d2b8d14d6c00fc3c3236fb5",
    "frozen": {
     "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
     "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
@@ -481,10 +505,13 @@
     "influent"
    ],
    "label": "abstain",
+   "secondary_labels": [],
+   "label_set": [],
    "outcome": "abstain",
    "rule": "abstain:verifier_abstain",
    "excluded": true,
-   "hit": false,
+   "primary_in_truth": false,
+   "attribution_exact": false,
    "admitted": [
     "parameter"
    ],
@@ -510,6 +537,8 @@
    "wall_min": 59.5,
    "decider": "offline",
    "llm_turns": null,
+   "llm_calls_jsonl": false,
+   "git_commit": "47a785fce24948e34a5949bf4512110c93a08e7f",
    "frozen": {
     "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
     "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
@@ -665,10 +694,15 @@
     "influent"
    ],
    "label": "parameter",
+   "secondary_labels": [],
+   "label_set": [
+    "parameter"
+   ],
    "outcome": "parameter",
    "rule": "NM+parameter",
    "excluded": false,
-   "hit": false,
+   "primary_in_truth": false,
+   "attribution_exact": false,
    "admitted": [
     "parameter"
    ],
@@ -689,6 +723,8 @@
    "wall_min": 59.5,
    "decider": "offline",
    "llm_turns": null,
+   "llm_calls_jsonl": false,
+   "git_commit": "47a785fce24948e34a5949bf4512110c93a08e7f",
    "frozen": {
     "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
     "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
@@ -843,10 +879,13 @@
     "influent"
    ],
    "label": "abstain",
+   "secondary_labels": [],
+   "label_set": [],
    "outcome": "abstain",
    "rule": "abstain:verifier_abstain",
    "excluded": true,
-   "hit": false,
+   "primary_in_truth": false,
+   "attribution_exact": false,
    "admitted": [],
    "truth_admitted": [],
    "null": {
@@ -868,6 +907,8 @@
    "wall_min": 54.7,
    "decider": "offline",
    "llm_turns": null,
+   "llm_calls_jsonl": false,
+   "git_commit": "47a785fce24948e34a5949bf4512110c93a08e7f",
    "frozen": {
     "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
     "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
@@ -1023,10 +1064,15 @@
     "influent"
    ],
    "label": "none",
+   "secondary_labels": [],
+   "label_set": [
+    "none"
+   ],
    "outcome": "none",
    "rule": "null_stands",
    "excluded": false,
-   "hit": false,
+   "primary_in_truth": false,
+   "attribution_exact": false,
    "admitted": [],
    "truth_admitted": [],
    "null": {
@@ -1042,6 +1088,8 @@
    "wall_min": 54.8,
    "decider": "offline",
    "llm_turns": null,
+   "llm_calls_jsonl": false,
+   "git_commit": "47a785fce24948e34a5949bf4512110c93a08e7f",
    "frozen": {
     "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
     "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
@@ -1196,10 +1244,13 @@
     "influent"
    ],
    "label": "abstain",
+   "secondary_labels": [],
+   "label_set": [],
    "outcome": "abstain",
    "rule": "abstain:verifier_abstain",
    "excluded": true,
-   "hit": false,
+   "primary_in_truth": false,
+   "attribution_exact": false,
    "admitted": [
     "parameter"
    ],
@@ -1226,6 +1277,8 @@
    "wall_min": 73.6,
    "decider": "offline",
    "llm_turns": null,
+   "llm_calls_jsonl": false,
+   "git_commit": "47a785fce24948e34a5949bf4512110c93a08e7f",
    "frozen": {
     "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
     "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
@@ -1465,10 +1518,15 @@
     "influent"
    ],
    "label": "parameter",
+   "secondary_labels": [],
+   "label_set": [
+    "parameter"
+   ],
    "outcome": "parameter",
    "rule": "NM+parameter",
    "excluded": false,
-   "hit": false,
+   "primary_in_truth": false,
+   "attribution_exact": false,
    "admitted": [
     "parameter"
    ],
@@ -1490,6 +1548,8 @@
    "wall_min": 73.6,
    "decider": "offline",
    "llm_turns": null,
+   "llm_calls_jsonl": false,
+   "git_commit": "47a785fce24948e34a5949bf4512110c93a08e7f",
    "frozen": {
     "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
     "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
@@ -1728,10 +1788,13 @@
     "influent"
    ],
    "label": "abstain",
+   "secondary_labels": [],
+   "label_set": [],
    "outcome": "abstain",
    "rule": "abstain:verifier_abstain",
    "excluded": true,
-   "hit": false,
+   "primary_in_truth": false,
+   "attribution_exact": false,
    "admitted": [],
    "truth_admitted": [],
    "null": {
@@ -1753,6 +1816,8 @@
    "wall_min": 63.2,
    "decider": "offline",
    "llm_turns": null,
+   "llm_calls_jsonl": false,
+   "git_commit": "47a785fce24948e34a5949bf4512110c93a08e7f",
    "frozen": {
     "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
     "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
@@ -1992,10 +2057,15 @@
     "influent"
    ],
    "label": "none",
+   "secondary_labels": [],
+   "label_set": [
+    "none"
+   ],
    "outcome": "none",
    "rule": "null_stands",
    "excluded": false,
-   "hit": false,
+   "primary_in_truth": false,
+   "attribution_exact": false,
    "admitted": [],
    "truth_admitted": [],
    "null": {
@@ -2011,6 +2081,8 @@
    "wall_min": 63.2,
    "decider": "offline",
    "llm_turns": null,
+   "llm_calls_jsonl": false,
+   "git_commit": "47a785fce24948e34a5949bf4512110c93a08e7f",
    "frozen": {
     "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
     "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
@@ -2249,10 +2321,13 @@
     "parameter"
    ],
    "label": "abstain",
+   "secondary_labels": [],
+   "label_set": [],
    "outcome": "abstain",
    "rule": "abstain:verifier_abstain",
    "excluded": true,
-   "hit": false,
+   "primary_in_truth": false,
+   "attribution_exact": false,
    "admitted": [],
    "truth_admitted": [],
    "null": {
@@ -2274,6 +2349,8 @@
    "wall_min": 107.1,
    "decider": "offline",
    "llm_turns": null,
+   "llm_calls_jsonl": false,
+   "git_commit": "47a785fce24948e34a5949bf4512110c93a08e7f",
    "frozen": {
     "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
     "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
@@ -2511,10 +2588,15 @@
     "parameter"
    ],
    "label": "none",
+   "secondary_labels": [],
+   "label_set": [
+    "none"
+   ],
    "outcome": "none",
    "rule": "null_stands",
    "excluded": false,
-   "hit": false,
+   "primary_in_truth": false,
+   "attribution_exact": false,
    "admitted": [],
    "truth_admitted": [],
    "null": {
@@ -2530,6 +2612,8 @@
    "wall_min": 106.6,
    "decider": "offline",
    "llm_turns": null,
+   "llm_calls_jsonl": false,
+   "git_commit": "47a785fce24948e34a5949bf4512110c93a08e7f",
    "frozen": {
     "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
     "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
@@ -2766,10 +2850,13 @@
     "parameter"
    ],
    "label": "abstain",
+   "secondary_labels": [],
+   "label_set": [],
    "outcome": "abstain",
    "rule": "abstain:verifier_abstain",
    "excluded": true,
-   "hit": false,
+   "primary_in_truth": false,
+   "attribution_exact": false,
    "admitted": [],
    "truth_admitted": [],
    "null": {
@@ -2791,6 +2878,8 @@
    "wall_min": 108.5,
    "decider": "offline",
    "llm_turns": null,
+   "llm_calls_jsonl": false,
+   "git_commit": "47a785fce24948e34a5949bf4512110c93a08e7f",
    "frozen": {
     "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
     "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
@@ -3028,10 +3117,15 @@
     "parameter"
    ],
    "label": "none",
+   "secondary_labels": [],
+   "label_set": [
+    "none"
+   ],
    "outcome": "none",
    "rule": "null_stands",
    "excluded": false,
-   "hit": false,
+   "primary_in_truth": false,
+   "attribution_exact": false,
    "admitted": [],
    "truth_admitted": [],
    "null": {
@@ -3047,6 +3141,8 @@
    "wall_min": 109.3,
    "decider": "offline",
    "llm_turns": null,
+   "llm_calls_jsonl": false,
+   "git_commit": "47a785fce24948e34a5949bf4512110c93a08e7f",
    "frozen": {
     "config_sha256": "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36",
     "frozen_record_sha256": "c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0"
@@ -3278,7 +3374,8 @@
  "arms": {
   "procedural": {
    "runs": 8,
-   "hits": "0 of 8 scored",
+   "primary_in_truth": "0 of 8 scored",
+   "attribution_exact": "0 of 8 scored",
    "excluded": {
     "abstain": 0,
     "pending": 0
@@ -3287,7 +3384,8 @@
   },
   "agents": {
    "runs": 8,
-   "hits": "0 of 0 scored",
+   "primary_in_truth": "0 of 0 scored",
+   "attribution_exact": "0 of 0 scored",
    "excluded": {
     "abstain": 8,
     "pending": 0

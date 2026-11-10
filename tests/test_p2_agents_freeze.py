@@ -38,21 +38,27 @@ from tools.workflow_config import load_p1, load_p2, sandbox_config
 from workflows.p2_multi_agent import agents, messages
 
 REPO = Path(__file__).resolve().parents[1]
-COMMITTED_AGENT_FROZEN_SHA256 = "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
+COMMITTED_AGENT_FROZEN_SHA256 = "b02f19c73d09794ad8edf7317c55b3b4731de1b3227281cd23d51f2bc01d95ba"
 """The digest of both committed records an approval of the agent arm names (the procedural
 ``frozen`` and ``agents.frozen``): a new agent freeze edits it, the procedural one stands.
-It moved from ``2089b2e2…a77b`` when the rule tables joined the record (2026-11-01), and
-from ``b373dfaf…4a82`` when the routing rules joined them (the lead's "a", 2026-11-03,
-first ``2ed56ecf…9ead``, then this value with the leading claim's label tie-break)."""
+It moved from ``2089b2e2…a77b`` when the rule tables joined the record (2026-11-01), from
+``b373dfaf…4a82`` when the routing rules joined them (the lead's "a", 2026-11-03, first
+``2ed56ecf…9ead``, then ``501893b3…1fa4`` with the leading claim's label tie-break), and
+from ``501893b3…1fa4`` when the record was re-dated 2026-11-08 for the secondary labels
+(Q-H4, the lead's "a", 2026-11-05)."""
+H4_CELLS_AGENT_FROZEN_SHA256 = "501893b3ff1902bf800115f3af3e09f00aed16fe04d37da34c6b0f75fc4b1fa4"
+"""The digest of the record the committed H4 offline cells passed (PR #48), before the
+secondary labels re-dated it."""
 RULE_TABLES_AGENT_FROZEN_SHA256 = "b373dfaf01636999d0a80ff2b211108a3c9ab94f786a2a208342eb8333f34a82"
 """The digest of the record with the rule tables of 2026-11-01, before the routing rules."""
 FIRST_AGENT_FROZEN_SHA256 = "2089b2e2f6378b8b3bd88bab3431ff1bf483afe209da329d2a1c4f27885ba77b"
 """The digest of the record as first cut on 2026-10-30, before the rule tables."""
-COMMITTED_AGENT_CONFIG_SHA256 = "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8"
+COMMITTED_AGENT_CONFIG_SHA256 = "30752c9d37fb2caa092efd46d41c1f57d51d4254edceb484b57155170de654e5"
 """``config_digest`` of the committed ``p2_agents.yaml`` (the review of PR #46 at 9f5ffed):
 any edit to the agent configuration, its record included, moves it. It was ``85a608b8…``
-before the routing rules joined the record, then ``ba8efb16…`` before the label
-tie-break did (both 2026-11-03)."""
+before the routing rules joined the record, ``ba8efb16…`` before the label tie-break did
+(both 2026-11-03), and ``618f4825…6dd8`` before the secondary labels re-dated the record
+(2026-11-08)."""
 PROCEDURAL_CONFIG_SHA256 = "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36"
 """``config_digest(load_p2())``, the procedural configuration's own digest (not the pilot's
 ``cf59bcbb…f404``, which is the pilot copy's): the agent record must not move it."""
@@ -70,8 +76,10 @@ def test_the_committed_record_passes_and_freezes_every_item_the_design_names():
     procedural = check_p2_frozen(arm)  # the procedural record, checked first, as before
     assert procedural.date == "2026-10-19"
     record = check_p2_agents_frozen(arm)
-    assert record.date == "2026-11-03" and "Yes to all three" in record.word
+    assert record.date == "2026-11-08" and "Yes to all three" in record.word
     assert "lead's word of 2026-11-03" in record.word  # the routing rules (the lead's "a")
+    assert "lead''s word of 2026-11-05" not in record.word  # the YAML quoting is unescaped
+    assert "lead's word of 2026-11-05" in record.word and "Q-H4" in record.word  # the labels
     assert "First frozen 2026-10-30" in record.word and "yes to the rule tables" in record.word
     assert "01d78ac" in record.word  # the prompts as they stand after PR #43
     for part in (record.prompts_sha256, record.tools_sha256, record.allow_list, record.turns):
@@ -530,3 +538,110 @@ def test_the_role_name_tie_break_routes_a_fail_between_equal_none_claims(monkeyp
     claim, role, _ = run.leading()
     assert (claim, role) == (none, "influent")
     assert run.responders_for(verdict) == ["influent", "calibration"]
+
+
+# ------------------------------- the secondary labels (Q-H4, the lead's "a", 2026-11-05)
+
+
+def _two_claims(run: Any, second: str | None, second_confidence: str = "high") -> None:
+    """A ``sensor`` claim from data quality and, if ``second``, that claim from its role."""
+    sensor = messages.SensorFinding.model_construct(claim="sensor", confidence="high", channel="ph")
+    run.findings = {"data_quality": sensor}
+    if second == "influent":
+        run.findings["influent"] = messages.InfluentFinding.model_construct(
+            claim="influent", confidence=second_confidence
+        )
+    elif second is not None:
+        run.findings["calibration"] = messages.CalFinding.model_construct(
+            claim=second, confidence=second_confidence
+        )
+
+
+def _conclude(run: Any, verdict: str, alternative: str | None = None) -> tuple[str, list[str]]:
+    """Conclude on one verdict; the label and the secondary labels written."""
+    v = messages.Verdict.model_construct(verdict=verdict, round=1, alternative=alternative)
+    run.verdicts, run.verdict, run.verifier_rounds, run.abstentions = [v], {}, 1, []
+    if verdict == "abstain":
+        run.verdict = {"verdict": "abstain", "reason": "verifier_abstain"}
+    run.conclude()
+    cls = run.classification
+    return cls["label"], list(cls["secondary_labels"])
+
+
+def _agent_run(monkeypatch) -> Any:
+    from tests.test_p2_agents_harness import FakeTools, _admit_everything, _cfg, _install
+
+    fake = FakeTools("B", "B", offsets={"ph": 8.0})
+    _install(monkeypatch, fake)
+    _admit_everything(monkeypatch)
+    run = agents.AgentRun(_cfg())
+    run.code_steps()
+    return run
+
+
+def test_on_a_two_fault_admission_the_label_set_is_both_faults(monkeypatch):
+    """Q-H4 "a": the other admitted claim is the secondary label.
+
+    The label set then equals a two-fault truth, as the procedural arm's does. The control:
+    one claim, no secondary.
+    """
+    run = _agent_run(monkeypatch)
+    _two_claims(run, "influent")
+    assert _conclude(run, "pass") == ("sensor", ["influent"])
+    assert {"sensor", *run.classification["secondary_labels"]} == {"sensor", "influent"}
+    # the state and the report carry it: eval reads the state's final labels
+    doc = run.build_state(True)
+    assert doc["classification"]["secondary_labels"] == ["influent"]
+    assert run.build_report(doc)["secondary_labels"] == ["influent"]
+    # the control: a single admitted claim writes no secondary label
+    _two_claims(run, None)
+    assert _conclude(run, "pass") == ("sensor", [])
+
+
+def test_secondary_labels_follow_the_label_order_and_need_the_admission(monkeypatch):
+    """Two others are written in LABEL_TIE_BREAK order, and only when admitted.
+
+    Their confidence does not order them; a claim the admission rejects is not a secondary
+    label (the control: admitted, it is).
+    """
+    run = _agent_run(monkeypatch)
+    _two_claims(run, "influent")
+    run.findings["calibration"] = messages.CalFinding.model_construct(
+        claim="parameter", confidence="high"
+    )
+    run.findings["influent"] = messages.InfluentFinding.model_construct(
+        claim="influent", confidence="low"
+    )
+    assert _conclude(run, "pass") == ("sensor", ["influent", "parameter"])
+    # the control: with only sensor admitted, the other claims are not secondary labels
+    monkeypatch.setattr(
+        agents.evidence,
+        "admit_agent",
+        lambda lab, table, signatures: {"admitted": ["sensor"], "rejected": []},
+    )
+    assert _conclude(run, "pass") == ("sensor", [])
+
+
+def test_abstain_and_none_write_no_secondary_labels(monkeypatch):
+    """An abstention and `none` write no secondary labels, whatever was claimed.
+
+    The control: the same claims on a pass write one.
+    """
+    run = _agent_run(monkeypatch)
+    _two_claims(run, "influent")
+    assert _conclude(run, "abstain") == ("abstain", [])
+    assert _conclude(run, "fail", alternative="none") == ("none", [])
+    assert _conclude(run, "fail", alternative="parameter") == ("abstain", [])
+    assert _conclude(run, "pass") == ("sensor", ["influent"])  # the control
+    # `none` is never a secondary label: at equal confidence the label claim leads it (B3)
+    # and writes no secondary; when `none` leads (the more confident claim), nothing is
+    # written beside it though an admitted `influent` claim stands
+    run.findings = {
+        "data_quality": messages.SensorFinding.model_construct(claim="none", confidence="high"),
+        "influent": messages.InfluentFinding.model_construct(claim="influent", confidence="high"),
+    }
+    assert _conclude(run, "pass") == ("influent", [])
+    run.findings["influent"] = messages.InfluentFinding.model_construct(
+        claim="influent", confidence="low"
+    )
+    assert _conclude(run, "pass") == ("none", [])

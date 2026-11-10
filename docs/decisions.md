@@ -8921,6 +8921,12 @@ The output is `reports/p2_power/h4_cells.json` and `h4_summary.md`; `cells.json`
 3. *A hit on a two-fault truth* is the outcome naming **either** fault: a run writes one
    label. Which true faults the admission let through is reported beside it
    (`truth_admitted`), so "found one, missed the other" is visible. Descriptive only (§7).
+   *(Corrected 2026-11-08, the review of #48, N1, and the lead's Q-H4 ruling "a": the
+   premise was wrong. A run writes a label **and its secondary labels**, and eval scores
+   the label set: `primary_in_truth` is the label in the truth, `attribution_exact` the
+   set equal to the truth. The procedural arm wrote secondaries all along; the agent arm
+   wrote `[]`, so it could never be exact on a two-fault truth. The H4 report now carries
+   both scores by eval's names; "hit" was `primary_in_truth`.)*
 4. *Each arm has its own run store.* A run's id is keyed on its cell and seed, so two arms
    in one store would share a run directory and write over each other's outputs (found on
    the first launch, stopped within a minute, relaunched clean). Both arms of a cell and
@@ -8963,4 +8969,56 @@ null, so nothing downstream sees a fault at all.
 procedural arm alone, as PR #44 first scoped it (rejected: the relay asks for the arm); one
 run store with the arms' outputs under different names (rejected: the runner's output name
 is the workflow's, and a shared directory is a collision waiting to happen).
+
+## 2026-11-08 — Q-H4: the agent arm names both faults (the lead's "a", 2026-11-05)
+
+**The lead's word.** On merging PR #48 (5 Nov, ~17:14 UTC): **"merge 48, and a"** — Q-H4
+answer **"a": the agent arm may name both faults.** Relayed by the coordinator on 2026-11-08.
+
+**Decision.** `AgentRun.conclude` writes `secondary_labels` by the procedural arm's rule
+(`workflow.py`, `conclude`: `secondary = admitted − {label}`), read for the agent arm as the
+**other admitted claims**: a claim a permitted role made (`CLAIMS_FOR_LABEL`; a round-1
+finding never carries a round-2-only claim, `claim_allowed_in_round` refused it) whose
+label the code's admission admits (`admit_agent`), less the label and `none`, in
+`LABEL_TIE_BREAK` order (`AgentRun.secondary_labels`, over `admitted_claims`, the ranking
+`leading` already used). They are written on a pass of a claim — the verifier's, or the
+leading claim with the verifier off — and never on `none` (the null stood, or the
+verifier's alternative was `none`) or an abstention. Code writes them, never a model: no
+message schema gains a field, and the report carries them beside the label. Before this
+the arm wrote `[]` always, so on a two-fault truth eval's `attribution_exact` (the label set
+equal to the truth) could never hold for it while the procedural arm could be exact.
+
+**Not a table.** The rule is a derivation from tables already in `rules_sha256`
+(`claims_for_label`, `label_tie_break`) and the frozen admission, so nothing joins
+`agent_rule_tables()`; the code that derives it is the staged package's, named by digest in
+every run's `launch.json`. Behavioural tests with controls (`tests/test_p2_agents_freeze.py`):
+on a two-fault admission the label set is both faults (control: one claim, none written);
+two others come in label order and only when admitted (control: the admission narrowed to
+the label writes none); abstain, `fail` to `none`, a `none` that leads and a label that
+leads `none` write none (control: the same claims on a pass write one).
+
+**The record moves, by re-dating.** The agent freeze is re-dated **2026-11-08** and its
+`word` carries the ruling. `frozen_record_sha256(arm)` **`501893b3…1fa4` → `b02f19c7…95ba`**;
+`config_digest(arm)` **`618f4825…6dd8` → `30752c9d…54e5`**; the provenance key
+`agents_frozen_sha256` `8a8ab73d…c951` → `959b48b4…b748`; `rules_sha256` `0aadaf43…5c6c`
+unchanged (no table joined). **The procedural digests are unchanged and tested:**
+`c58306b4…40a0` (record), `def3c42b…ba36` (configuration) and `cf59bcbb…f404` (the pilot's
+copy).
+
+**The H4 offline cells were not re-run.** The change touches `conclude` alone and writes
+secondaries only on a pass of a claim; every offline agent run abstains (its scripted
+verifier), so their records cannot change, and the jailed arm run twice from one seed still
+abstains with `secondary_labels: []`. The committed `h4_cells.json` therefore names the
+record the runs passed (`501893b3…`, 2026-11-03), pinned in the tests as the H4 run's
+record beside today's. The report is regenerated from the stored runs with the review's
+nits: **N1** `hit` → `primary_in_truth`, `attribution_exact` (set-exact) beside it, the
+label set per row; **N2** each row's `git_commit`; **N3** each row's `llm_calls_jsonl`
+(absent in every offline run, asserted). Outcomes unchanged: the floor 0 of 8 on either
+score; the arm 8 abstentions.
+
+**Alternatives.** Secondaries from the admission alone, as the procedural arm (rejected:
+the agent arm's labels enter through the roles' claims; code naming a fault no role
+claimed would be code diagnosing); a frozen boolean "secondaries need a claim" in the
+tables (rejected: it would freeze a reading of a rule, not data the rule reads); re-running
+the eight agent cells for the new record (rejected as not needed: no record can change).
 

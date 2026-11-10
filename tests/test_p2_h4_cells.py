@@ -5,7 +5,9 @@ tests pin:
 
 * the cells, seeds and arms are the ones the lead decided (Q6, 2026-10-25);
 * each fault of a two-fault truth is a label of the vocabulary, with a role that may
-  claim it, and a run's hit is counted on its outcome, never its label alone;
+  claim it, and a run is scored on its outcome, never its label alone, by eval's two
+  names: ``primary_in_truth`` and ``attribution_exact`` (the label set, the label and the
+  secondary labels, equals the truth);
 * the cells are reproducible from their seeds: regenerated, each gives the committed
   record's observation fingerprint (exactly on one machine, its sums within a stated
   tolerance on another), and its two seeds differ;
@@ -39,10 +41,12 @@ from scripts.p2_power import (
     h4_summarise,
     observations_digest,
     observations_fingerprint,
+    run_outputs,
 )
 from tests.test_p2_agents_freeze import (
     COMMITTED_AGENT_CONFIG_SHA256,
     COMMITTED_AGENT_FROZEN_SHA256,
+    H4_CELLS_AGENT_FROZEN_SHA256,
     PROCEDURAL_CONFIG_SHA256,
 )
 from tests.test_p2_live import COMMITTED_FROZEN_SHA256, _edit_yaml
@@ -60,10 +64,22 @@ FROZEN = {
         "frozen_record_sha256": COMMITTED_AGENT_FROZEN_SHA256,
         "config_sha256": COMMITTED_AGENT_CONFIG_SHA256,
         # the provenance key a run of the arm carries: agents.frozen alone (PR #45, N4)
+        "agents_frozen_sha256": "959b48b409ba51fef1bbe73f0e965651281803aa239b39906df18d4c4400b748",
+    },
+}
+"""What each arm's record names today: the digests on ``main`` since the secondary labels
+re-dated the agent record (2026-11-08)."""
+H4_RUN_FROZEN = {
+    "procedural": FROZEN["procedural"],
+    "agents": {
+        "frozen_record_sha256": H4_CELLS_AGENT_FROZEN_SHA256,
+        "config_sha256": "618f48250c32bc868c0b8dce449d6dba4c1c86d72fbe6a322ff37461dbcd6dd8",
         "agents_frozen_sha256": "8a8ab73dba086b06a557b70e196dda57802f9f04e97648ac8d65204fbaf7c951",
     },
 }
-"""What each arm's record must name: the digests on ``main`` since PR #46."""
+"""What the committed H4 runs name: the record as it stood when they ran (PR #48, the
+2026-11-03 record). The secondary labels (Q-H4 "a") re-dated it without changing an
+abstaining run's record, so the cells were not re-run (``docs/decisions.md``, 2026-11-08)."""
 
 
 def _scenario(sid: str) -> Any:
@@ -131,28 +147,61 @@ def _row(**kw: Any) -> dict[str, Any]:
     return {**base, **kw}
 
 
-def test_a_hit_is_one_of_the_two_faults_on_the_outcome_and_an_abstention_is_excluded():
+def test_the_scores_are_evals_primary_in_truth_and_attribution_exact_on_the_outcome():
+    """N1 (the review of PR #48): the rows carry eval's two scores by eval's names.
+
+    A label in the truth is ``primary_in_truth``; the label set (label and secondary labels)
+    equal to the truth is ``attribution_exact``; an abstaining run scores neither, whatever
+    its label says.
+    """
     out = h4_summarise(
         [
-            _row(),
+            _row(secondary_labels=["influent"]),  # both faults: exact
             _row(arm="procedural", label="none", outcome="none"),
             _row(replicate=1, label="sensor", outcome="abstain", observations_sha256="b"),
             _row(replicate=1, arm="procedural", observations_sha256="b", verdict={}),
         ]
     )
     rows = {(x["replicate"], x["arm"]): x for x in out["cells"]}
-    assert rows[(0, "agents")]["hit"] and rows[(0, "agents")]["truth_admitted"] == [
-        "influent",
-        "sensor",
-    ]
-    assert not rows[(0, "procedural")]["hit"]  # none is never a fault's hit
+    exact = rows[(0, "agents")]
+    assert exact["primary_in_truth"] and exact["attribution_exact"]
+    assert exact["label_set"] == ["influent", "sensor"]
+    assert exact["truth_admitted"] == ["influent", "sensor"]
+    assert not rows[(0, "procedural")]["primary_in_truth"]  # none is never a fault
+    assert not rows[(0, "procedural")]["attribution_exact"]
+    # one fault named, no secondary: primary in truth, not exact (the control)
+    one = rows[(1, "procedural")]
+    assert one["primary_in_truth"] and not one["attribution_exact"]
+    assert one["label_set"] == ["sensor"]
     # an abstaining run is excluded, never read as its label (the label says sensor)
-    assert rows[(1, "agents")]["excluded"] and not rows[(1, "agents")]["hit"]
-    assert out["arms"]["agents"]["hits"] == "1 of 1 scored"
+    abstained = rows[(1, "agents")]
+    assert abstained["excluded"] and not abstained["primary_in_truth"]
+    assert not abstained["attribution_exact"] and abstained["label_set"] == []
+    assert out["arms"]["agents"]["primary_in_truth"] == "1 of 1 scored"
+    assert out["arms"]["agents"]["attribution_exact"] == "1 of 1 scored"
+    assert out["arms"]["procedural"]["primary_in_truth"] == "1 of 2 scored"
+    assert out["arms"]["procedural"]["attribution_exact"] == "0 of 2 scored"
     assert out["arms"]["agents"]["excluded"]["abstain"] == 1
+    # a secondary label outside the truth is not exact either (set-exact, both ways)
+    wide = h4_summarise([_row(secondary_labels=["influent", "parameter"])])["cells"][0]
+    assert wide["primary_in_truth"] and not wide["attribution_exact"]
     assert out["arms"]["agents"]["both_faults_admitted"] == 2
     assert out["arms"]["procedural"]["both_faults_admitted"] == 1
     assert out["descriptive_only"] is True
+
+
+def test_each_row_carries_its_runs_provenance_and_model_log_flag():
+    """N2 and N3 (the review of PR #48): the run's git commit and model-log flag are on the row.
+
+    ``git_commit`` is the commit the run was made at; ``llm_calls_jsonl`` whether it left a
+    model log.
+    """
+    row = h4_summarise([_row(provenance={"git_commit": "abc123"}, llm_calls_jsonl=False)])["cells"][
+        0
+    ]
+    assert row["git_commit"] == "abc123" and row["llm_calls_jsonl"] is False
+    bare = h4_summarise([_row()])["cells"][0]
+    assert bare["git_commit"] is None and bare["llm_calls_jsonl"] is None
 
 
 def test_the_seed_checks_catch_arms_that_saw_different_observations():
@@ -216,9 +265,13 @@ def test_every_committed_run_passed_the_frozen_check_offline_and_reached_no_mode
     )
     assert not out["unfinished"]
     for x in rows:
-        assert x["frozen"] == FROZEN[x["arm"]], (x["cell"], x["replicate"], x["arm"])
+        assert x["frozen"] == H4_RUN_FROZEN[x["arm"]], (x["cell"], x["replicate"], x["arm"])
         assert x["decider"] == "offline" and x["llm_turns"] is None
+        assert x["llm_calls_jsonl"] is False  # N3: no model log was left
+        assert x["git_commit"] and len(x["git_commit"]) == 40  # N2
         assert x["calls_lines"] and len(x["calls_sha256"]) == 64
+        # the offline agent arm abstains, and an abstention writes no secondary label
+        assert x["secondary_labels"] == [] and not x["attribution_exact"]
         if x["arm"] == "agents":
             assert x["routing"] and x["routing"][0] == "data_quality"
     assert all(v["arms_see_the_same_observations"] for v in out["seed_checks"].values())
@@ -336,3 +389,6 @@ def test_the_jailed_agent_arm_is_reproducible_from_its_seed(jailed_twice):
         summary = json.loads((run_dir / "workflows" / "p2" / "summary.json").read_text())
         assert summary["decider"] == "offline" and summary["llm_turns"] is None
         assert summary["model_id"] is None
+        # N3: an offline run leaves no model log, and its record says so
+        assert not (run_dir / "workflows" / "p2" / "llm_calls.jsonl").exists()
+        assert run_outputs(run_dir) == {"secondary_labels": [], "llm_calls_jsonl": False}

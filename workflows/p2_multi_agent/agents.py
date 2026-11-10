@@ -2776,11 +2776,17 @@ class AgentRun:
         return True
 
     # -- the conclusion (§4, step 6) -----------------------------------------------------
-    def leading(self) -> tuple[str | None, str | None, list[str]]:
-        """The leading admitted claim, its role, and every admitted label."""
+    def admitted_claims(self) -> tuple[list[tuple[Any, ...]], list[str]]:
+        """The admitted claims, ranked, and every admitted label.
+
+        A claim counts when a role that may claim its label (``CLAIMS_FOR_LABEL``) made it
+        and the code's admission admits the label (``none`` needs no admission); a round-1
+        finding never carries a round-2-only claim (``messages.claim_allowed_in_round``
+        refused it). Ranked by confidence, then ``LABEL_TIE_BREAK``, then the role's name.
+        """
         b = self.base
         if b.table is None and not b.signatures:
-            return None, None, []
+            return [], []
         admitted = evidence.admit_agent(self.lab, b.table, b.signatures)["admitted"]
         order = CONFIDENCE_ORDER
         candidates = []
@@ -2805,11 +2811,31 @@ class AgentRun:
                     claim,
                 )
             )
+        candidates.sort()
+        return candidates, admitted
+
+    def leading(self) -> tuple[str | None, str | None, list[str]]:
+        """The leading admitted claim, its role, and every admitted label."""
+        candidates, admitted = self.admitted_claims()
         if not candidates:
             return None, None, admitted
-        candidates.sort()
         _, _, role, claim = candidates[0]
         return claim, role, admitted
+
+    def secondary_labels(self, label: str) -> list[str]:
+        """The other admitted claims, as the procedural arm writes its secondary labels.
+
+        Q-H4, the lead's "a" (2026-11-05): the agent arm may name both faults. The
+        procedural arm writes ``secondary = admitted - {label}`` (``workflow.py``,
+        ``conclude``); here the admitted labels are the admitted **claims**
+        (:meth:`admitted_claims`: a permitted role made each, the code's admission admits
+        each), less the label and ``none``, in ``LABEL_TIE_BREAK`` order. Code writes
+        them, never a model; the caller writes none on ``none`` or an abstention.
+        """
+        candidates, _ = self.admitted_claims()
+        others = {claim for *_, claim in candidates if claim not in (label, self.lab["none"])}
+        key_of = {v: k for k, v in self.lab.items()}
+        return sorted(others, key=lambda c: LABEL_TIE_BREAK.index(key_of.get(c, "none")))
 
     def conclude(self) -> None:
         """Code writes the label (§4, step 6; the verifier's verdict is final)."""
@@ -2863,6 +2889,12 @@ class AgentRun:
         else:
             label, rule = ABSTAIN_LABEL, "abstain:verifier_abstain"
             self.verdict = {"verdict": "abstain", "reason": "verifier_abstain"}
+        # the secondary labels (Q-H4 "a"): the other admitted claims, on a pass of a claim
+        # (the verifier's, or the leading claim with the verifier off); never on `none`
+        # (the null stood, or the verifier's alternative was `none`) or an abstention
+        secondary = (
+            self.secondary_labels(label) if label not in (lab["none"], ABSTAIN_LABEL) else []
+        )
         attr = self.cfg["p0"]["attribution"]
         if label == ABSTAIN_LABEL:
             conf = 0.0
@@ -2893,7 +2925,7 @@ class AgentRun:
         )
         self.classification = {
             "label": label,
-            "secondary_labels": [],
+            "secondary_labels": secondary,
             "confidence": conf,
             "rule": rule,
             "evidence": self.evidence,
@@ -3063,6 +3095,7 @@ class AgentRun:
             "arm": "agents",
             "run_id": doc["run_id"],
             "label": cls["label"],
+            "secondary_labels": list(cls["secondary_labels"]),
             "outcome": procedural.outcome(
                 self.verdict, bool(doc["final"]["completed"]), cls["label"]
             ),
