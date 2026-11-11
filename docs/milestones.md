@@ -4606,3 +4606,20 @@ when it was cut).** The lead's "match" answers the #49 review's N-d.
   no live call before the record PR is merged and the coordinator relays the go.
 - **Next:** the coordinator's review; then the approval-record PR from the new `main`;
   then the pilot on the go.
+- **PR #51 merged at `09134eb` (the lead: "merge 51", 11 Nov ~08:55 UTC).** The review:
+  PASS; the digests recomputed on `main` equal `58f7fd5c…f155` / `26e4302f…984e`.
+
+**2026-11-11 — The approval record of the agent pilot (branch
+`claude/p2-agents-live-approval`, a draft PR cut from `main` at `09134eb`; no open PR when
+it was cut).** The lead's "approve the pilot" (in "merge 50, approve the pilot, and match").
+- `configs/workflows/p2_live_approval.yaml`: the agent freeze `58f7fd5c…` and configuration
+  `26e4302f…` (recomputed, equal to the coordinator's), `gpt-5.6-luna`, caps USD 1.00 / 240
+  / 14 M per run (proposers 0.50/200/10 M, verifier 0.50/40/4 M), the 8 H4 runs, the fresh
+  store, the lead's words verbatim with the relay times; its digest `67422d5b…`. The
+  procedural pilot's record archived byte for byte as `p2_live_approval_procedural_pilot3.yaml`.
+- Tests with controls (`tests/test_p2_agents_approval.py`): accepted for all 8 runs;
+  refused on the previous agent freeze, the procedural freeze, other caps, a tampered
+  digest, an unlisted run, another store, the procedural configuration.
+- No live call. No frozen file touched; no digest moves.
+- **Next:** the coordinator's review and the lead's word; the live driver PR (the arm on
+  the H4 cells, live, with the approval check per run); then the pilot on the go.

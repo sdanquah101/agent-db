@@ -126,13 +126,24 @@ def test_the_procedural_freeze_its_digest_and_the_pilot_approval_are_unchanged()
     assert frozen_record_sha256(arm) == COMMITTED_AGENT_FROZEN_SHA256 != COMMITTED_FROZEN_SHA256
     assert COMMITTED_AGENT_FROZEN_SHA256 != FIRST_AGENT_FROZEN_SHA256  # the rule tables moved it
     assert COMMITTED_AGENT_FROZEN_SHA256 != RULE_TABLES_AGENT_FROZEN_SHA256  # and the routing
-    # the committed approval of the procedural pilot still names the committed freeze and
-    # its own digest; an approval of the agent arm would have to name the agent digest
+    # the committed approval is the agent pilot's (the lead's "approve the pilot",
+    # 2026-11-11): it names the agent digest and its configuration, never the procedural
+    # ones; the procedural pilot's record is archived beside it, byte for byte, and still
+    # names the procedural freeze and the pilot copy's digest under its own digest
     approval = yaml.safe_load(p2_live.APPROVAL_FILE.read_text(encoding="utf-8"))
-    assert approval["frozen_sha256"] == frozen_record_sha256(load_p2())
-    assert approval["config_sha256"] == PILOT_CONFIG_SHA256
+    assert approval["frozen_sha256"] == frozen_record_sha256(arm) == COMMITTED_AGENT_FROZEN_SHA256
+    assert approval["config_sha256"] == config_digest(arm)
     assert p2_live.approval_digest(approval) == approval["digest"]
-    assert approval["frozen_sha256"] != frozen_record_sha256(arm)
+    assert approval["frozen_sha256"] != frozen_record_sha256(load_p2())
+    archived = yaml.safe_load(
+        (p2_live.APPROVAL_FILE.parent / "p2_live_approval_procedural_pilot3.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert archived["frozen_sha256"] == frozen_record_sha256(load_p2()) == COMMITTED_FROZEN_SHA256
+    assert archived["config_sha256"] == PILOT_CONFIG_SHA256
+    assert p2_live.approval_digest(archived) == archived["digest"]
+    assert archived["digest"] == "ea14d0eef9cdbab2decaaf796e8d39881944b19513e5aa8ca498ce36d3874d14"
     # the jail document carries no record and no caps: the privileged side keeps them
     doc = sandbox_config(arm)["agents"]
     assert "frozen" not in doc and "caps" not in doc and "prompts" in doc

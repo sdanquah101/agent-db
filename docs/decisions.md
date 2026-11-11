@@ -9081,3 +9081,46 @@ the lead's word); count the admission's labels rather than the label set (reject
 `none` pass the arms already differ by design, and on a pass of a claim the two counts are
 equal, so the label set is the one the arm's own record shows).
 
+## 2026-11-11 — The approval record of the agent arm's live pilot (the lead's "approve the pilot")
+
+**The lead's words**, 2026-11-11 ~00:53 UTC, verbatim: **"merge 50, approve the pilot, and
+match"**; relayed by the coordinator at 00:58 UTC (with #50's merge) and at 08:58 UTC (with
+#51's merge, the "match" change, and the instruction to open this record).
+
+**The record** (`configs/workflows/p2_live_approval.yaml`, the usual format and path, the
+seven fields under its own digest `67422d5b…74a1`): the agent freeze as it stands on `main`
+after "match", `frozen_sha256` **`58f7fd5c…f155`** (`frozen_record_sha256(arm)`: both
+committed records) and `config_sha256` **`26e4302f…984e`** (`config_digest(arm)`), both
+recomputed from `main` at `09134eb` and equal to the coordinator's; the model
+`gpt-5.6-luna` (the frozen model block, named in the `word`); the caps exactly as
+configured, the run's total **USD 1.00 / 240 requests / 14 M tokens** (`run_caps(arm)`:
+the proposers' USD 0.50 / 200 / 10 M plus the verifier's USD 0.50 / 40 / 4 M); the eight H4
+development cells, S7-01 at B/A, B/B, B/C and S7-02 at A/C, replicates 0 and 1,
+descriptive only; the fresh store `/home/user/p2_agents_pilot_store/runs`; the lead's words
+and the relay times in the `word`. **No live call is made by this PR** and none before the
+record is merged on the lead's word and the coordinator relays the go.
+
+**The procedural pilot's record is archived, byte for byte**, as
+`configs/workflows/p2_live_approval_procedural_pilot3.yaml` (its digest `ea14d0ee…74d14`
+still verifies). `require_live_approval` reads one path, the lead's current approval; the
+procedural pilot's three attempts are run and recorded (`reports/p2_pilot/`), an approval
+is for one execution of each run, and the procedural configuration is now refused at that
+path (tested), which is what "a changed configuration needs a new record" means. The
+alternative, a second path chosen by configuration, would have changed the lookup in
+`tools/p2_live.py` for no gain and widened what a forged record could aim at.
+
+**Tests** (`tests/test_p2_agents_approval.py`, each refusal with the committed record as
+its control): the record is accepted for all eight runs against the committed agent
+configuration and the named store; a run it does not list and another store are refused;
+a copy naming the previous agent freeze `b02f19c7…95ba` (re-digested) is refused as
+another freeze, as is one naming the procedural freeze; the proposers' caps alone, the
+verifier's, `p2.yaml`'s and a raised cap are refused as other caps; a record edited after
+its digest (the word, the runs, the caps, the store, the date) is refused on its digest;
+the agent record is refused for the procedural configuration. The git-cleanliness rule is
+tested on its own and stood down in these, since a branch under review is not `main`.
+
+**What follows.** The live driver for the arm on the H4 cells (the approval check per run,
+a fresh store, every call logged, the caps enforced by the gateway) is a separate PR, so
+that the go is not held by it; then the eight live runs on the go, their records committed
+as the offline H4 PR's were.
+
