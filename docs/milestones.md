@@ -4584,3 +4584,25 @@ open PR when it was cut).** The lead's "a" (5 Nov): the agent arm may name both 
   repository and is committed only on the lead's word. No live call.
 - **Next:** the coordinator's review of this PR; the approval record on the lead's word;
   then the pilot.
+- **PR #50 merged at `1a28939` (the lead: "merge 50, approve the pilot, and match",
+  2026-11-11 ~00:53 UTC; relayed 00:58).**
+
+**2026-11-11 — "match": the agent arm's confidence by the procedural rule (branch
+`claude/p2-agents-confidence-match`, a draft PR cut from `main` at `1a28939`; no open PR
+when it was cut).** The lead's "match" answers the #49 review's N-d.
+- `agents.py`, one line in `conclude`: `single` for one admitted label, `multiple` for
+  more, by the label set the arm writes (the label and its secondaries), which on a pass
+  of a claim is the procedural arm's `len(admitted)`; equal on five constructed cases
+  (tested). Abstain (0) and `none` unchanged, tested with a control.
+- The agent record re-dated 2026-11-11 with the ruling in its `word`:
+  `frozen_record_sha256(arm)` `b02f19c7…` → `58f7fd5c…`, `config_digest(arm)`
+  `30752c9d…` → `26e4302f…`, `agents_frozen_sha256` `959b48b4…` → `a2427dbb…`;
+  `rules_sha256` and the procedural `c58306b4…`, `def3c42b…`, `cf59bcbb…` unchanged
+  (tested). The H4 cells not re-run (abstentions cannot change); "today's" pin updated.
+- **The pilot is approved** (the lead's "approve the pilot"): the agent freeze (the new
+  digest), `gpt-5.6-luna`, caps USD 1.00 / 240 requests / 14 M tokens per run (proposers
+  0.50/200/10 M, verifier 0.50/40/4 M), the 8 H4 runs (S7-01 B/A, B/B, B/C; S7-02 A/C;
+  replicates 0 and 1), descriptive only. The approval-record PR follows this PR's merge;
+  no live call before the record PR is merged and the coordinator relays the go.
+- **Next:** the coordinator's review; then the approval-record PR from the new `main`;
+  then the pilot on the go.

@@ -2909,7 +2909,11 @@ class AgentRun:
         elif label == lab["none"]:
             conf = float(attr["confidence"]["none"])
         else:
-            conf = float(attr["confidence"]["single"])
+            # the lead's "match" (2026-11-11): the procedural arm's rule, `single` for one
+            # admitted label and `multiple` for more (workflow.py, conclude: by the count
+            # of its admitted labels, which on a pass of a claim is its label set). Here
+            # by the label set the arm writes: the label and its secondary labels
+            conf = float(attr["confidence"]["multiple" if secondary else "single"])
         flag = None
         if label == lab["sensor"] and isinstance(self.findings.get(role), messages.SensorFinding):
             flag = self.findings[role].channel

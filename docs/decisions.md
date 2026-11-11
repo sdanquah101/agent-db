@@ -9040,5 +9040,44 @@ rule, not data the rule reads); re-running the eight agent cells for the new rec
 coordinator).** With several admitted claims the agent arm writes the confidence
 `attribution.confidence.single` where `workflow.py` writes `multiple` for several admitted
 labels. That is behaviour, so it waits on the lead's word; the arm's confidence is not a
-score eval reads for H4.
+score eval reads for H4. *(Resolved 2026-11-11: the lead's "match"; the entry below.)*
+
+## 2026-11-11 — The agent arm's confidence matches the procedural rule (the lead's "match")
+
+**The lead's words**, 2026-11-11 ~00:53 UTC, verbatim: **"merge 50, approve the pilot, and
+match"**, relayed by the coordinator at 00:58 UTC. "match" answers the #49 review's N-d.
+
+**Decision.** `AgentRun.conclude` writes the confidence by `workflow.py`'s rule
+(`conclude`, the procedural arm): `attribution.confidence.single` for one admitted label,
+`multiple` for more. The procedural arm counts its admitted labels (`len(admitted)`), which
+on a pass of a claim is its label set (the label is admitted and the secondaries are the
+rest). The agent arm counts the label set it writes: `single` when its secondary labels are
+empty, `multiple` otherwise — one line, `conf = multiple if secondary else single`. On every
+constructed admitted set the two agree (a parametrised test over five cases: `single` iff
+`len(admitted) == 1` iff `admitted − {label}` is empty, since the label is admitted). An
+abstention still writes 0 and `none` still writes `none`, with one claim or two (tested,
+with the admission narrowed to the label as the control: the same two claims then write
+`single`). Before this the arm wrote `single` always, so with two faults admitted its
+confidence overstated the procedural arm's for the same label set.
+
+**The record moves, by re-dating.** The agent freeze is re-dated **2026-11-11** and its
+`word` carries the ruling. `frozen_record_sha256(arm)` **`b02f19c7…95ba` → `58f7fd5c…f155`**
+(`58f7fd5c6d2a4b2eeebea0167200202e89619e23f8ba5f63d15b093e4e1ff155`); `config_digest(arm)` **`30752c9d…54e5` →
+`26e4302f…984e`** (`26e4302faeb02c8c61108bd0e2c463d46045187e5e16da21cfd277968bc5984e`); the provenance key
+`agents_frozen_sha256` `959b48b4…b748` → `a2427dbb…5a6a`; `rules_sha256`
+`0aadaf43…5c6c` unchanged (no table: the rule reads the frozen `attribution` block of
+`p0.yaml`). **The procedural digests are unchanged and tested:** `c58306b4…40a0`,
+`def3c42b…ba36` and `cf59bcbb…f404`. The approval record of the agent pilot names the new
+freeze (the lead approved the pilot in the same words; the coordinator told the lead the
+digest would move).
+
+**The H4 offline cells were not re-run.** The change touches the confidence of a pass of a
+claim alone; every offline agent run abstains (confidence 0), so no record can change. The
+committed rows name the record they ran under (`501893b3…`, 2026-11-03), pinned as before;
+the test of "today's" record is updated.
+
+**Alternatives.** Keep `single` and document the difference (the N-d note; superseded by
+the lead's word); count the admission's labels rather than the label set (rejected: on a
+`none` pass the arms already differ by design, and on a pass of a claim the two counts are
+equal, so the label set is the one the arm's own record shows).
 

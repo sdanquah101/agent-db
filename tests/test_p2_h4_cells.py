@@ -64,11 +64,11 @@ FROZEN = {
         "frozen_record_sha256": COMMITTED_AGENT_FROZEN_SHA256,
         "config_sha256": COMMITTED_AGENT_CONFIG_SHA256,
         # the provenance key a run of the arm carries: agents.frozen alone (PR #45, N4)
-        "agents_frozen_sha256": "959b48b409ba51fef1bbe73f0e965651281803aa239b39906df18d4c4400b748",
+        "agents_frozen_sha256": "a2427dbbcfe49652eeeab58f1cd87d6c9c47e659381051f84b291b8bfbdd5a6a",
     },
 }
-"""What each arm's record names today: the digests on ``main`` since the secondary labels
-re-dated the agent record (2026-11-08)."""
+"""What each arm's record names today: the digests on ``main`` since the confidence rule
+re-dated the agent record (2026-11-11; the secondary labels re-dated it 2026-11-08)."""
 H4_RUN_FROZEN = {
     "procedural": FROZEN["procedural"],
     "agents": {
@@ -78,8 +78,9 @@ H4_RUN_FROZEN = {
     },
 }
 """What the committed H4 runs name: the record as it stood when they ran (PR #48, the
-2026-11-03 record). The secondary labels (Q-H4 "a") re-dated it without changing an
-abstaining run's record, so the cells were not re-run (``docs/decisions.md``, 2026-11-08)."""
+2026-11-03 record). The secondary labels (Q-H4 "a", 2026-11-08) and the confidence rule
+(the lead's "match", 2026-11-11) re-dated it without changing an abstaining run's record,
+so the cells were not re-run (``docs/decisions.md``, those dates)."""
 
 
 def _scenario(sid: str) -> Any:
