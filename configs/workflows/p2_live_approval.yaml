@@ -1,42 +1,59 @@
-ruling_date: '2026-10-20'
-word: 'The lead approved the P2 pilot as a cost-and-wiring check (option 1) on 2026-10-11,
-  ruled on 2026-10-13 that P2 runs have no wall-clock limit, on 2026-10-15 and 2026-10-19
-  approved the decision-layer and rerun rulings, on 2026-10-19 said "Implement your
-  recommendations" (the tidy-up, merged as PR #35), and on 2026-10-20 said "Yes to
-  both" to this third pilot on a fresh store with the same six runs and caps and to
-  keeping the stricter D-3 rule; relayed by the coordinator session_01Cu6G2kQjP2QSzvtkyP8cPr
-  at 21:05 UTC.'
+ruling_date: '2026-11-11'
+word: 'The lead''s words of 2026-11-11, ~00:53 UTC, verbatim: "merge 50, approve the pilot,
+  and match". The pilot the lead approved, as the coordinator described it: the agent arm
+  (docs/p2_agents_design.md) live under its frozen record as it stands on main after the lead''s
+  "match" (frozen_sha256 below, frozen_record_sha256 of the arm: both committed records, p2.yaml''s
+  and p2_agents.yaml''s agents.frozen, re-dated 2026-11-11), the model gpt-5.6-luna (OpenAI,
+  the frozen model block), the caps per run exactly as configured: the run''s total USD 1.00
+  / 240 requests / 14 M tokens (caps below), being the proposers'' USD 0.50 / 200 / 10 M (agents.caps)
+  and the verifier''s USD 0.50 / 40 / 4 M (agents.verifier_caps), the verifier''s own budget
+  of 80 evaluations and 1 assay unit on top of each cell''s envelope; the eight H4 development
+  cells (Q6): S7-01 at B/A, B/B and B/C and S7-02 at A/C, replicates 0 and 1 (runs below),
+  about USD 1.6-3.2 and 6-8 h in all, descriptive only (design note section 7), each run once
+  in the fresh store named below, every call logged, the frozen check before each run, the
+  caps enforced by the gateway. Relayed by the coordinator session_01Cu6G2kQjP2QSzvtkyP8cPr
+  on 2026-11-11 at 00:58 UTC (the words, with PR #50''s merge) and at 08:58 UTC (PR #51''s
+  merge, the "match" change, and the instruction to open this record). The live runs start
+  only once this record is merged on the lead''s word and the coordinator relays the go.'
 runs:
-- scenario: S0-01
+- scenario: S7-01
+  plant: B
+  tier: A
+  replicate: 0
+- scenario: S7-01
+  plant: B
+  tier: A
+  replicate: 1
+- scenario: S7-01
   plant: B
   tier: B
   replicate: 0
-- scenario: S0-01
+- scenario: S7-01
   plant: B
   tier: B
   replicate: 1
-- scenario: S2-01
+- scenario: S7-01
   plant: B
-  tier: B
+  tier: C
   replicate: 0
-- scenario: S2-01
+- scenario: S7-01
   plant: B
-  tier: B
+  tier: C
   replicate: 1
-- scenario: S8-01
-  plant: B
-  tier: B
+- scenario: S7-02
+  plant: A
+  tier: C
   replicate: 0
-- scenario: S8-01
-  plant: B
-  tier: B
+- scenario: S7-02
+  plant: A
+  tier: C
   replicate: 1
 caps:
-  max_requests: 60
-  max_total_tokens: 6000000
-  max_usd: 0.25
+  max_requests: 240
+  max_total_tokens: 14000000
+  max_usd: 1.0
   input_chars_per_token: 2.0
-frozen_sha256: c58306b489d0d5835284291df14092a3ac8d3188bf54779e2083691d370f40a0
-config_sha256: cf59bcbb555aab376dd53a0a3ce7d8d91e3b453df8165879c39f9163dcc2f404
-runs_root: /home/user/p2_pilot_store_3/runs
-digest: ea14d0eef9cdbab2decaaf796e8d39881944b19513e5aa8ca498ce36d3874d14
+frozen_sha256: 58f7fd5c6d2a4b2eeebea0167200202e89619e23f8ba5f63d15b093e4e1ff155
+config_sha256: 26e4302faeb02c8c61108bd0e2c463d46045187e5e16da21cfd277968bc5984e
+runs_root: /home/user/p2_agents_pilot_store/runs
+digest: 67422d5b0e5cd8d3cb0286b50f947bb7b3588e58a32ed4273ad2df72335374a1
