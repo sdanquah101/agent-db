@@ -4623,3 +4623,19 @@ it was cut).** The lead's "approve the pilot" (in "merge 50, approve the pilot, 
 - No live call. No frozen file touched; no digest moves.
 - **Next:** the coordinator's review and the lead's word; the live driver PR (the arm on
   the H4 cells, live, with the approval check per run); then the pilot on the go.
+- **PR #52 merged at `c13eaed` (the lead: "merge 52", 11 Nov).** The review: PASS.
+
+**2026-11-11 — The live driver (branch `claude/p2-agents-live-driver`, a draft PR cut from
+`main` at `c13eaed`; no open PR when it was cut).** `scripts/p2_agents_pilot.py`: the agent
+arm live on the approval record's eight H4 runs in the store the record names; per run,
+the lead's approval of that run and store, the frozen check and a fresh-store check before
+any client; the runner's own checks and the one live client after; every call through the
+agent gateway under the configured caps and logged; the record per run (labels, confidence,
+eval's two scores from the scenario's truth, spend in total and per role, cap refusals,
+finished); no live rerun; a USD 8.00 ledger stop. `run --dry-run --store DIR` goes through
+every gate and the whole run offline in a scratch store and builds no client. Ten tests, all
+offline (the live client a spy): the dry run jailed on a shortened cell; the live flow
+mocked end to end; a cap hit recorded; refusals before any client. Decisions entry. No
+frozen file touched; no digest moves; no live call.
+- **Next:** the coordinator's review and the lead's word; then, on the go, the dry run, the
+  eight live runs, the report, and the records committed as the offline H4 PR's were.

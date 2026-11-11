@@ -9124,3 +9124,66 @@ a fresh store, every call logged, the caps enforced by the gateway) is a separat
 that the go is not held by it; then the eight live runs on the go, their records committed
 as the offline H4 PR's were.
 
+## 2026-11-11 — The live driver of the agent arm's pilot (`scripts/p2_agents_pilot.py`)
+
+**Context.** PR #52 merged the lead's approval record (the lead: "merge 52"); the coordinator
+asked for the driver in one PR, with no live call before the driver is merged on the lead's
+word and the coordinator relays the go.
+
+**Decision.** A driver of its own, `scripts/p2_agents_pilot.py`, beside `scripts/p2_pilot.py`
+(the procedural pilot's, which writes a three-role copy of `p2.yaml` and reads `p2.yaml`'s
+caps) rather than a `--live` flag on `p2_power.py`'s `h4-run` (which runs both arms offline
+and would have had to grow the approval, store and key gates for one of them). It runs the
+committed `p2_agents.yaml` as is, on the approval record's eight runs, in the store the
+record names (`approved_store`, read from `runs_root`; a live run takes no store of its
+own). **Three gates before any client exists, per run:** `require_live_approval(config,
+cell, runs_root)` (the record as pushed on a clean tree, its digest, the freeze, the
+configuration, the caps, this run, this store); the frozen check (`h4_frozen("agents")`,
+which is `check_p2_frozen` and records the digests); and a fresh store
+(`check_store_fresh`: a run directory that already carries outputs or a model log is
+refused). The runner then repeats the approval and freeze checks and builds the one live
+client (`p2_live_client`); every model call goes through `P2AgentGateway` under the
+configured caps, the proposers' and the verifier's, and is logged to `llm_calls.jsonl`
+beside the registry's `calls.jsonl`. The key is read from `OPENAI_API_KEY` by the client
+and never printed, logged or recorded. A live run is never rerun (`run_counted`, live): an
+unfinished one is recorded, stops the pilot, and refuses a restart; the ledger
+`spent_usd.json` stops the pilot before a run that could pass `max_total_usd`, eight times
+the per-run cap (USD 8.00; the lead's estimate is USD 1.6–3.2).
+
+**Each run's record** (`results.jsonl`): the label, the secondary labels and the confidence
+the arm wrote (from `state.json`); eval's `primary_in_truth` and `attribution_exact`,
+computed in `scripts/` from the scenario file's truth label (never the truth store, never
+in `workflows/`) and only on a scored outcome; the spend (USD, requests, attempts, tokens,
+cache reads) in total and the meter's rows per role; every cap refusal the gateway logged
+(`refused: true` lines of `llm_calls.jsonl`) and whether the arm abstained on a cap
+(`model_cap`); whether the run finished; the frozen digests, the provenance, the
+observations' and `calls.jsonl`'s digests. `report` writes `reports/p2_agents_pilot/`
+(`cells.json`, `summary.md`, and each run's visible records: the model log, the decisions,
+the messages, the report, the state, the summary, the spend and the registry log).
+
+**The dry run** (`run --dry-run --store DIR`): every gate but the store binding (the record
+as a whole and each run, the freeze, the fresh store), then the whole run with the offline
+scripted model in a scratch store that is neither the repository nor the approved store;
+it needs no key and builds no client. The store binding is left out because the dry run
+must not touch the approved store, which has to be fresh for the live runs.
+
+**Tests** (`tests/test_p2_agents_pilot.py`, every one offline; the live client is a spy that
+raises or records in every test that reaches the runner's live path): the plan is the
+record's; a refused approval (no record, another store, the previous freeze), a missing key,
+a `--store` on a live run and a `--part` on a live run each stop before any client; the
+dry run refuses the approved store and the repository; `check_store_fresh` refuses outputs
+and a model log (the control: an empty run directory); the scores on the outcome; **the dry
+run, jailed, on a shortened S7-01 B/B passes every gate and the whole run and builds no
+client** (the control: the mocked live flow builds exactly one, after the approval was
+checked twice); the live flow end to end on one cell with a scripted client and a faked
+launch records the labels, the scores, the spend and the gateway's caps (240 / USD 1.00),
+and a second start runs nothing; a cap hit (`abstain:model_cap`, a refused line) is
+recorded and the run counts as finished; a store that already holds the run stops before
+any client; an unfinished live run is recorded, never rerun, and refuses a restart. No
+frozen file is touched and no digest moves.
+
+**The command on the go:** `OPENAI_API_KEY=… python -m scripts.p2_agents_pilot run --live`
+from `main` at the merged driver (the record must be the pushed blob on a clean tree), then
+`python -m scripts.p2_agents_pilot report`; the dry run before it, on this tree:
+`python -m scripts.p2_agents_pilot run --dry-run --store /tmp/…/p2_agents_dry`.
+
