@@ -2823,14 +2823,18 @@ class AgentRun:
         return claim, role, admitted
 
     def secondary_labels(self, label: str) -> list[str]:
-        """The other admitted claims, as the procedural arm writes its secondary labels.
+        """The other admitted claims: the secondary labels on a pass of a claim.
 
-        Q-H4, the lead's "a" (2026-11-05): the agent arm may name both faults. The
-        procedural arm writes ``secondary = admitted - {label}`` (``workflow.py``,
-        ``conclude``); here the admitted labels are the admitted **claims**
-        (:meth:`admitted_claims`: a permitted role made each, the code's admission admits
-        each), less the label and ``none``, in ``LABEL_TIE_BREAK`` order. Code writes
-        them, never a model; the caller writes none on ``none`` or an abstention.
+        Q-H4, the lead's "a" (2026-11-05): the agent arm may name both faults. On a pass
+        of a claim this is the procedural arm's rule, ``secondary = admitted - {label}``
+        (``workflow.py``, ``conclude``), with the admitted labels read as the admitted
+        **claims** (:meth:`admitted_claims`: a permitted role made each, the code's
+        admission admits each), less the label and ``none``, in ``LABEL_TIE_BREAK`` order.
+        The arms differ on a ``none`` pass: ``workflow.py`` writes its line unconditionally,
+        so a procedural ``none`` over admitted labels carries them; the caller here writes
+        none on ``none`` (the null stood, or the verifier's alternative was ``none``: no
+        fault is being named, so no second one is) or an abstention. Code writes them,
+        never a model.
         """
         candidates, _ = self.admitted_claims()
         others = {claim for *_, claim in candidates if claim not in (label, self.lab["none"])}
@@ -2890,8 +2894,11 @@ class AgentRun:
             label, rule = ABSTAIN_LABEL, "abstain:verifier_abstain"
             self.verdict = {"verdict": "abstain", "reason": "verifier_abstain"}
         # the secondary labels (Q-H4 "a"): the other admitted claims, on a pass of a claim
-        # (the verifier's, or the leading claim with the verifier off); never on `none`
-        # (the null stood, or the verifier's alternative was `none`) or an abstention
+        # (the verifier's, or the leading claim with the verifier off), as the procedural
+        # arm writes them on such a pass; never on `none` (the null stood, or the
+        # verifier's alternative was `none`: no fault is named, so no second one is) or an
+        # abstention, where the procedural arm's unconditional line would still carry the
+        # admitted labels (the review of PR #49, N-a)
         secondary = (
             self.secondary_labels(label) if label not in (lab["none"], ABSTAIN_LABEL) else []
         )

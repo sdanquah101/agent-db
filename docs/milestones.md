@@ -4559,3 +4559,28 @@ open PR when it was cut).** The lead's "a" (5 Nov): the agent arm may name both 
   2026-11-03 record they passed, pinned beside today's.
 - **Next:** the coordinator's review; then the agent pilot, only on a new approval record
   the lead approves.
+- **PR #49 merged at `b273067` (the lead: "merge 49", 10 Nov).** The review (PASS WITH
+  NITS): the secondary rule matched `workflow.py` on constructed cases; mutations caught;
+  digests as stated; no live path. Nits N-a–N-d below.
+
+**2026-11-10 — The #49 nits (branch `claude/p2-secondary-labels-nits`, a draft PR cut from
+`main` at `b273067`; no open PR when it was cut; docs and tests only, no digest moves).**
+- N-a: "the procedural arm's rule" over-stated it. `workflow.py` writes its secondary line
+  unconditionally, so a procedural `none` pass over admitted labels carries them; the agent
+  arm writes `[]` on `none`. The arms are identical on a pass of a claim and differ on a
+  `none` pass; the agent arm's choice is right (a `none` pass names no fault). Said so in
+  the 2026-11-08 decisions entry, the `secondary_labels` docstring and the `conclude`
+  comment.
+- N-b: the Alternatives list the refused Q-H4 option (b), the single label scored on
+  `primary_in_truth` with the asymmetry stated, and why it was refused.
+- N-c: a behavioural test with a control that the `CLAIMS_FOR_LABEL` filter holds for
+  secondaries: an `influent` claim from calibration is not written, the same claim from
+  the influent role is, and with calibration permitted the calibration claim is.
+- N-d (noted, not changed): the arm writes confidence `single` with several admitted
+  claims where `workflow.py` writes `multiple`; under "Known differences", put to the lead
+  by the coordinator.
+- **The live pilot waits** on a new approval record the lead approves (the agent freeze
+  `b02f19c7…95ba`, `gpt-5.6-luna`, the caps, the cells); a draft is prepared outside the
+  repository and is committed only on the lead's word. No live call.
+- **Next:** the coordinator's review of this PR; the approval record on the lead's word;
+  then the pilot.

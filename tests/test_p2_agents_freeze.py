@@ -645,3 +645,33 @@ def test_abstain_and_none_write_no_secondary_labels(monkeypatch):
         claim="influent", confidence="low"
     )
     assert _conclude(run, "pass") == ("none", [])
+
+
+def test_a_claim_from_a_role_not_permitted_for_its_label_is_no_secondary_label(monkeypatch):
+    """The CLAIMS_FOR_LABEL filter holds for secondaries too (the review of PR #49, N-c).
+
+    An ``influent`` claim made by calibration, which may not claim it, is not written as a
+    secondary label; the control: the same claim from the influent role is.
+    """
+    run = _agent_run(monkeypatch)
+    _two_claims(run, None)
+    assert "calibration" not in agents.CLAIMS_FOR_LABEL["influent"]
+    run.findings["calibration"] = messages.CalFinding.model_construct(
+        claim="influent", confidence="high"
+    )
+    assert _conclude(run, "pass") == ("sensor", [])
+    # the control: the permitted role's identical claim is the secondary label
+    del run.findings["calibration"]
+    run.findings["influent"] = messages.InfluentFinding.model_construct(
+        claim="influent", confidence="high"
+    )
+    assert _conclude(run, "pass") == ("sensor", ["influent"])
+    # and the filter is what decides it: with calibration permitted, its claim is written
+    monkeypatch.setattr(
+        agents, "CLAIMS_FOR_LABEL", {**agents.CLAIMS_FOR_LABEL, "influent": ("calibration",)}
+    )
+    del run.findings["influent"]
+    run.findings["calibration"] = messages.CalFinding.model_construct(
+        claim="influent", confidence="high"
+    )
+    assert _conclude(run, "pass") == ("sensor", ["influent"])
