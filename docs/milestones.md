@@ -4639,3 +4639,30 @@ mocked end to end; a cap hit recorded; refusals before any client. Decisions ent
 frozen file touched; no digest moves; no live call.
 - **Next:** the coordinator's review and the lead's word; then, on the go, the dry run, the
   eight live runs, the report, and the records committed as the offline H4 PR's were.
+
+**2026-11-11 — The live pilot, first and second starts (no PR).** The dry run on `main` at
+`311c253` passed: 8 of 8 abstained offline, with no refusal. The first live start (18:04
+UTC) ran S7-01 B/A r0 with every call refused for credits ("You have no credits
+remaining"), and the driver scored it as an abstain. The session stopped the driver 42 s
+into r1, and the store was set aside as `p2_agents_pilot_store.void_nocredits`. After the
+owner added credits, the second start (22:27 UTC) made 14 successful calls before a
+container restart at about 23:35 UTC killed the driver mid-run. Both were reported on PR
+#53.
+
+**2026-11-12 — The driver fix on the lead's "B" (branch `p2-pilot-driver-fix-b`, a draft PR
+cut from `main` at `311c253`; no open PR when it was cut).** Changes to
+`scripts/p2_agents_pilot.py`:
+- An unreachable model (a credit, auth, quota or permission error on any attempt, or every
+  attempt failing) is recorded unfinished with the error quoted, prints STOP and stops the
+  pilot.
+- A run cut off by a restart is set aside whole under `set_aside/`, recorded in
+  `restarts.jsonl`, and redone once through every gate. A second interruption is
+  unfinished and stops the pilot.
+- The ledger charges a set-aside run its whole cap, so the ceiling never resets.
+
+Eleven new test cases (nine functions; the driver suite is 21), all offline, with controls;
+each guard is mutation-checked. Decisions entry.
+No frozen file touched; no digest moves; no live call.
+- **Next:** the coordinator's review and the lead's word. Then, on the go: set both
+  current stores aside, run the dry run, run the live pilot in a fresh store at the
+  approved path, then `report` and the results PR.
