@@ -114,9 +114,17 @@ def _fake_generate(scenario: Any, tier: Any, *, plant: Any, replicate: int = 0, 
 
 
 def _fake_launch_writing(
-    label: str, secondary: list[str], confidence: float, *, cap: bool = False
+    label: str,
+    secondary: list[str],
+    confidence: float,
+    *,
+    cap: bool = False,
+    calls: list[dict[str, Any]] | None = None,
 ) -> Any:
-    """A launch that leaves a finished run's record, as the arm would, and a model log."""
+    """A launch that leaves a finished run's record, as the arm would, and a model log.
+
+    ``calls``: the model log's lines (each a dict with an ``error``), empty by default.
+    """
     from tests.eval_support import minimal_state
 
     gateways: list[Any] = []
@@ -141,7 +149,9 @@ def _fake_launch_writing(
                       "rule": "agents:pass", "confidence": confidence,
                       "verdict": {"verdict": "pass", "reason": "pass"},
                       "routing": [{"to": "data_quality"}]}  # fmt: skip
-            (out / "llm_calls.jsonl").write_text("")
+            (out / "llm_calls.jsonl").write_text(
+                "".join(json.dumps(c) + "\n" for c in (calls or []))
+            )
         (out / "report.json").write_text(json.dumps(report))
         (kw["run_dir"] / "calls.jsonl").write_text(
             json.dumps({"seq": 0, "name": "simulate", "args_hash": "a", "outcome": "ok"}) + "\n"
@@ -416,3 +426,250 @@ def test_an_unfinished_live_run_stops_the_pilot_and_is_never_rerun(
     pilot.run(live=True)
     assert client_spy.count("client") == 1
     assert "needs the lead's approval" in capsys.readouterr().out
+
+
+# ------------------------------------------------------------------ the lead's "B" (12 Nov)
+
+NO_CREDITS = (
+    "RateLimitError: Error code: 429 - You have no credits remaining. Add credits to "
+    "continue using the API at https://platform.openai.com/settings/organization/billing/."
+)
+AUTH = "AuthenticationError: Error code: 401 - Incorrect API key provided."
+TRANSIENT = "RateLimitError: Error code: 429 - Rate limit reached for requests. Try again in 2s."
+OK = {"error": "", "response": {"usage": {"input_tokens": 3, "output_tokens": 300}}}
+
+
+def _err(text: str) -> dict[str, Any]:
+    return {"error": text, "response": None}
+
+
+class Killed(BaseException):
+    """A container restart: the driver dies mid-run, nothing after it is written."""
+
+
+@pytest.fixture
+def two_seeds(monkeypatch):
+    monkeypatch.setattr(pilot, "CELLS", ONE_CELL)
+    monkeypatch.setattr(pilot, "REPLICATES", (0, 1))
+
+
+def _model_log(run_dir: Path, calls: list[dict[str, Any]]) -> None:
+    out = run_dir / "workflows" / "p2"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "llm_calls.jsonl").write_text("".join(json.dumps(c) + "\n" for c in calls))
+
+
+def _interrupted(store: Path, rep: int = 0, attempt: int = 1) -> str:
+    """A run the driver started and a restart cut off: a journal start, a partial log."""
+    from scripts.p2_rerun import InFlight
+
+    rid = f"run_S7-01_B_B_{rep}"
+    _model_log(store / "runs" / rid, [OK, OK])
+    InFlight(store / "in_flight.jsonl").start("S7-01 B/B", rep, attempt, rid)
+    return rid
+
+
+def _rows(path: Path) -> list[dict[str, Any]]:
+    return [json.loads(x) for x in path.read_text().splitlines() if x.strip()]
+
+
+def test_model_unreachable_reads_the_runs_own_model_log(tmp_path):
+    run_dir = tmp_path / "run_x"
+    assert pilot.model_unreachable(run_dir) is None  # no log: the offline model
+    cases = {
+        "no credits, among successes": ([OK, OK, _err(NO_CREDITS)], NO_CREDITS),
+        "an auth error": ([_err(AUTH), OK], AUTH),
+        "a quota error": ([OK, _err("Error code: 429 - insufficient_quota")], "insufficient"),
+        "a permission error": ([_err("PermissionDeniedError: Error code: 403")], "403"),
+    }
+    for name, (calls, quoted) in cases.items():
+        _model_log(run_dir, calls)
+        got = pilot.model_unreachable(run_dir)
+        assert got is not None and quoted in got, name
+    _model_log(run_dir, [_err(TRANSIENT), _err("APIConnectionError: Connection error.")])
+    got = pilot.model_unreachable(run_dir)
+    assert got and got.startswith("every attempt failed (2 of 2)") and "Connection" in got
+    # the controls: successes with one transient failure; a cap refusal only; an empty log
+    _model_log(run_dir, [OK, _err(TRANSIENT), OK])
+    assert pilot.model_unreachable(run_dir) is None
+    _model_log(run_dir, [{"refused": True, "error": "max_requests: 200 reached"}])
+    assert pilot.model_unreachable(run_dir) is None
+    _model_log(run_dir, [])
+    assert pilot.model_unreachable(run_dir) is None
+
+
+@pytest.mark.parametrize(
+    ("calls", "quoted"),
+    [
+        ([_err(NO_CREDITS)] * 4 + [OK], "You have no credits remaining"),
+        ([OK, _err(AUTH)], "Incorrect API key provided"),
+        ([_err(TRANSIENT)] * 3, "every attempt failed (3 of 3)"),
+    ],
+    ids=["no-credits-429", "auth-error", "all-attempts-failed"],
+)
+def test_an_unreachable_model_is_unfinished_never_scored_and_stops_the_pilot(
+    tmp_path, monkeypatch, two_seeds, approved_test_store, client_spy, faked_runner, capsys,
+    calls, quoted,
+):  # fmt: skip
+    """The first start of 11 Nov: every call refused for credits, an abstain scored."""
+    store = approved_test_store
+    monkeypatch.setattr(pilot, "approved_store", lambda: store)
+    faked_runner(_fake_launch_writing("abstain", [], 0.0, calls=calls))
+    pilot.run(live=True)
+    out = capsys.readouterr().out
+    assert "STOP: S7-01 B/B r0: the model could not be reached: " in out and quoted in out
+    assert not (store / "results.jsonl").exists()  # never a result
+    (u,) = _rows(store / "unfinished.jsonl")
+    assert (u["cell"], u["replicate"], u["status"]) == ("S7-01 B/B", 0, "model_unreachable")
+    assert quoted in u["error"] and quoted in u["attempts"][0]["error"]
+    assert u["attempts"][0]["failure_reason"] == "model_unreachable"
+    assert client_spy.count("client") == 1  # the pilot stopped: r1 never ran
+    assert "START S7-01 B/B r1" not in out
+    # a restart is refused on the unfinished record: no second client, still no result
+    pilot.run(live=True)
+    assert "needs the lead's approval" in capsys.readouterr().out
+    assert client_spy.count("client") == 1 and not (store / "results.jsonl").exists()
+
+
+def test_a_run_with_successes_and_one_transient_failure_is_scored(
+    tmp_path, monkeypatch, one_cell, approved_test_store, client_spy, faked_runner
+):
+    """The control: a transient failure among successful calls is not unreachable."""
+    store = approved_test_store
+    monkeypatch.setattr(pilot, "approved_store", lambda: store)
+    faked_runner(_fake_launch_writing("sensor", ["influent"], 0.5, calls=[OK, _err(TRANSIENT), OK]))
+    pilot.run(live=True)
+    (row,) = _rows(store / "results.jsonl")
+    assert row["finished"] and row["attribution_exact"] and "unreachable" not in row
+    assert not (store / "unfinished.jsonl").exists()
+
+
+def test_restart_eligible_holds_the_limit_of_one_twice(tmp_path):
+    """The journal shows one attempt only, and no restart is recorded: both must hold."""
+    from scripts.p2_rerun import InFlight
+
+    store = tmp_path
+    one = [{"run_id": "run_a", "attempt": 1}]
+    assert pilot.restart_eligible(store, "S7-01 B/B", 0, one)  # the control
+    assert not pilot.restart_eligible(store, "S7-01 B/B", 0, [*one, {"run_id": "run_a"}])
+    assert not pilot.restart_eligible(store, InFlight.TORN[0], InFlight.TORN[1], one)
+    (store / "restarts.jsonl").write_text(
+        json.dumps({"cell": "S7-01 B/B", "replicate": 0, "run_id": "run_a"}) + "\n"
+    )
+    assert not pilot.restart_eligible(store, "S7-01 B/B", 0, one)
+    assert pilot.restart_eligible(store, "S7-01 B/B", 1, one)  # another run is unaffected
+
+
+def test_a_run_cut_off_by_a_restart_is_redone_once_and_scored_on_the_record(
+    tmp_path, monkeypatch, two_seeds, approved_test_store, client_spy, faked_runner, capsys
+):
+    store = approved_test_store
+    monkeypatch.setattr(pilot, "approved_store", lambda: store)
+    rid = _interrupted(store, rep=0)
+    faked_runner(_fake_launch_writing("sensor", ["influent"], 0.5, calls=[OK]))
+    pilot.run(live=True)
+    out = capsys.readouterr().out
+    assert f"RESTART S7-01 B/B r0: {rid} set aside" in out
+    # the interrupted run set aside whole, under its recorded name, never deleted
+    kept = store / "set_aside" / f"{rid}.restart-1"
+    assert (kept / "workflows" / "p2" / "llm_calls.jsonl").read_text().count("\n") == 2
+    (r,) = pilot.restarts(store)
+    assert (r["cell"], r["replicate"], r["run_id"], r["attempt"]) == ("S7-01 B/B", 0, rid, 1)
+    assert r["set_aside"] == str(kept) and r["ruling"] == "the lead's B of 12 Nov"
+    assert r["time"] and r["usd_charged"] == 1.0 and r["model_calls"] == 2
+    # redone once, through every gate (the approval before the one client, a fresh run dir)
+    rows = _rows(store / "results.jsonl")
+    assert [(x["replicate"], x["attempt"]) for x in rows] == [(0, 2), (1, 1)]
+    assert rows[0]["finished"] and rows[0]["restart"] == r and rows[1]["restart"] is None
+    assert client_spy.count("client") == 2 and client_spy.index("approval") < client_spy.index(
+        "client"
+    )
+    assert not (store / "unfinished.jsonl").exists()
+    # (c) the ledger: the set-aside run at its whole cap, plus the two runs' own spend
+    assert json.loads((store / "spent_usd.json").read_text()) == {"usd": 1.0}
+    # the report lists the restart
+    monkeypatch.setattr(pilot, "REPORT_DIR", tmp_path / "report")
+    assert pilot.report(store)["restarts"] == [r]
+    assert (
+        "Restarted (the lead's B of 12 Nov): S7-01 B/B r0"
+        in (tmp_path / "report" / "summary.md").read_text()
+    )
+
+
+def test_a_second_interruption_of_the_same_run_is_unfinished_and_stops(
+    tmp_path, monkeypatch, two_seeds, approved_test_store, client_spy, faked_runner, capsys
+):
+    store = approved_test_store
+    monkeypatch.setattr(pilot, "approved_store", lambda: store)
+    _interrupted(store, rep=0)
+
+    def dies(script: Any, registry: Any, **kw: Any) -> Any:
+        _model_log(kw["run_dir"], [OK])
+        raise Killed  # the container restarts again, during the redo
+
+    faked_runner(dies)
+    with pytest.raises(Killed):
+        pilot.run(live=True)
+    assert len(pilot.restarts(store)) == 1 and client_spy.count("client") == 1
+    capsys.readouterr()
+    faked_runner(_fake_launch_writing("sensor", ["influent"], 0.5))
+    pilot.run(live=True)
+    out = capsys.readouterr().out
+    assert "STOP: S7-01 B/B r0 was left unfinished by a stopped pilot" in out
+    assert "RESTART" not in out and len(pilot.restarts(store)) == 1  # never redone twice
+    (u,) = _rows(store / "unfinished.jsonl")
+    assert u["status"] == "unfinished_live" and len(u["attempts"]) == 2
+    assert client_spy.count("client") == 1  # no client after the second interruption
+    assert not (store / "results.jsonl").exists()
+
+
+def test_a_finished_run_is_never_redone(
+    tmp_path, monkeypatch, one_cell, approved_test_store, client_spy, faked_runner, capsys
+):
+    store = approved_test_store
+    monkeypatch.setattr(pilot, "approved_store", lambda: store)
+    faked_runner(_fake_launch_writing("sensor", ["influent"], 0.5))
+    pilot.run(live=True)
+    assert len(_rows(store / "results.jsonl")) == 1
+    capsys.readouterr()
+    pilot.run(live=True)
+    assert "RESTART" not in capsys.readouterr().out
+    assert not (store / "restarts.jsonl").exists() and not (store / "set_aside").exists()
+    assert len(_rows(store / "results.jsonl")) == 1 and client_spy.count("client") == 1
+
+
+def test_the_ledger_counts_a_set_aside_run_and_the_ceiling_never_resets(
+    tmp_path, monkeypatch, one_cell, approved_test_store, client_spy, faked_runner, capsys
+):
+    """One run approved (USD 1.00 in all): its set-aside attempt leaves no room for a redo."""
+    store = approved_test_store
+    monkeypatch.setattr(pilot, "approved_store", lambda: store)
+    assert pilot.max_total_usd() == 1.0
+    _interrupted(store, rep=0)
+    faked_runner(_fake_launch_writing("sensor", ["influent"], 0.5))
+    pilot.run(live=True)
+    out = capsys.readouterr().out
+    assert "RESTART S7-01 B/B r0" in out
+    assert "STOP: USD 1.000 spent; one more run could pass 1.00" in out
+    assert json.loads((store / "spent_usd.json").read_text()) == {"usd": 1.0}
+    assert "client" not in client_spy and not (store / "results.jsonl").exists()
+
+
+def test_every_gate_applies_to_a_redo_and_a_refusal_sets_nothing_aside(
+    tmp_path, monkeypatch, two_seeds, approved_test_store, client_spy, faked_runner, capsys
+):
+    store = approved_test_store
+    monkeypatch.setattr(pilot, "approved_store", lambda: store)
+    rid = _interrupted(store, rep=0)
+    faked_runner(_fake_launch_writing("sensor", ["influent"], 0.5))
+
+    def thawed(arm: str) -> Any:
+        raise ValueError("the agent freeze does not hold")
+
+    monkeypatch.setattr(pilot, "h4_frozen", thawed)
+    pilot.run(live=True)
+    assert "STOP: S7-01 B/B r0 refused before any run: the agent freeze" in capsys.readouterr().out
+    # nothing set aside, the redo not spent, no client: the interrupted run still waits
+    assert (store / "runs" / rid / "workflows" / "p2" / "llm_calls.jsonl").is_file()
+    assert not (store / "set_aside").exists() and pilot.restarts(store) == []
+    assert "client" not in client_spy and not (store / "spent_usd.json").exists()

@@ -9187,3 +9187,72 @@ from `main` at the merged driver (the record must be the pushed blob on a clean 
 `python -m scripts.p2_agents_pilot report`; the dry run before it, on this tree:
 `python -m scripts.p2_agents_pilot run --dry-run --store /tmp/…/p2_agents_dry`.
 
+
+## 2026-11-12 — The pilot driver's fix on the lead's "B": an unreachable model is unfinished; a restart is redone once
+
+**The lead's ruling (12 Nov 2026, relayed by the coordinator), verbatim: "B".** "B" means a
+small driver fix first, reviewed and merged on the lead's word; then the current stores are
+voided and all eight runs are redone. It is also the standing word that **a run cut off by
+a container restart before its result is recorded is set aside and redone once,
+automatically and on the record**.
+
+**What happened (11 Nov).**
+- **The first start (18:04 UTC).** Its first run, S7-01 B/A r0, sent 16 attempts. Every one
+  failed with `RateLimitError: Error code: 429 - You have no credits remaining.` Every agent
+  decision point fell back to its script, and the run concluded `abstain:no_verdict`. **The
+  driver scored that as a finished run** (an abstain, USD 0.339 on its ledger, which counts
+  failed attempts at their worst case; the provider served no tokens) and started r1. The
+  session stopped the driver 42 s into r1, before r1's first call. That store is kept as
+  `/home/user/p2_agents_pilot_store.void_nocredits`.
+- **The second start (22:27 UTC),** after credits were added, in a fresh store. Its first
+  run's calls succeeded: 14 calls and no errors. **A container restart at about 23:35 UTC
+  killed the driver mid-run** (the run's last write was at 23:31:16). The run had no result,
+  and the driver had no rule to redo it.
+
+**Decision.**
+1. **An unreachable model is unfinished, never scored.** After each run the driver reads the
+   run's own `llm_calls.jsonl` (`model_unreachable`). A credit, auth, quota or permission
+   error on any attempt, or every attempt failing, makes the run unfinished. It is recorded
+   in `unfinished.jsonl` with status `model_unreachable` and the error quoted, the driver
+   prints STOP, and the pilot stops. It never goes into `results.jsonl`.
+   - The match is on the error text: `AuthenticationError`, `PermissionDeniedError`, codes
+     401/402/403, `invalid_api_key`, `insufficient_quota`, "no credits", "credit balance",
+     "quota", "billing".
+   - A transient error (a rate limit, a timeout, a dropped connection) among successful
+     calls does not match, and the run is scored.
+   - A gateway cap refusal is not an attempt: it counts neither way.
+2. **A run interrupted by a restart is redone once.** At start-up, a live run in the
+   in-flight journal with no result and no unfinished record is checked
+   (`restart_eligible`). If the journal shows that one attempt only, and `restarts.jsonl`
+   holds no restart of it, then:
+   - its run directory is moved whole to `set_aside/<run id>.restart-N`, never deleted;
+   - `restarts.jsonl` records the run, the set-aside directory, the time, the ruling ("the
+     lead's B of 12 Nov") and the USD charged;
+   - the run is redone once in the same store as journal attempt 2, through every gate
+     (approval, freeze, fresh run directory), and its result row carries the restart record.
+
+   **The limit of one is held twice,** by the journal count and by the restart record. A
+   second interruption of the same run fails both, so it is recorded unfinished and the
+   pilot stops. A run that finished is settled and never redone.
+3. **The ledger counts a set-aside run at its whole per-run cap (USD 1.00).** Its meter died
+   with it, and the cap is the gateway's bound on what it could have spent. The USD 8.00
+   ceiling is never raised for a redo, so the pilot stops rather than pass it.
+
+**Reasons.** A run with no model behind it is not a measurement of the agent arm: scoring
+it as an abstention would count a billing failure as the arm's answer. A restart is the
+container's fault, not the arm's; one redo on the record keeps the pilot whole, and a
+second interruption is a pattern the lead should see before more spend.
+
+**Alternatives.**
+- Detect unreachability by the gateway's attempt counts alone, without the error text.
+  Rejected: a credit error on the first call of a role is then indistinguishable from a
+  transient one.
+- Stop the run at the first credit error, inside the runner. Rejected: `tools/runner.py`
+  and `tools/p2_live.py` stay as they are (no digest moves); the check is read from the
+  run's own log after it returns.
+- Charge the set-aside run by the tokens in its partial log. Rejected for the ceiling: the
+  log of a killed run may be torn or behind, and the cap is a bound that cannot be low.
+
+**Scope.** Only `scripts/p2_agents_pilot.py`, its tests, this entry and the milestones
+changed. Nothing frozen was touched and no digest moves. Tests, all offline, with
+controls and mutation checks, are listed in the PR.

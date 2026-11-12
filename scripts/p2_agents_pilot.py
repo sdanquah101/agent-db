@@ -21,6 +21,21 @@ logged and whether the arm abstained on a cap; and whether the run finished. A l
 never rerun (the lead's rulings of 2026-10-19): an unfinished one is recorded and stops the
 pilot, and a rerun needs the lead's approval relayed by the coordinator.
 
+**The lead's "B" (12 Nov 2026)** adds two rules and one bound:
+
+- **An unreachable model is unfinished, never scored.** A run whose own ``llm_calls.jsonl``
+  shows a credit, auth, quota or permission error on any attempt, or every attempt failing,
+  is recorded in ``unfinished.jsonl`` with the error quoted, prints STOP and stops the pilot
+  (:func:`model_unreachable`). The first live start's runs abstained on scripted fallbacks
+  because every call failed with "no credits remaining"; such a run is not a result.
+- **A run cut off by a restart is redone once.** A live run in the in-flight journal with
+  no result and no unfinished record, and only that one attempt, has its run directory
+  set aside under ``set_aside/`` (never deleted), is recorded in ``restarts.jsonl``, and is
+  run again **once** in the same store through every gate. A second interruption of the same
+  run is unfinished and stops the pilot (:func:`restart_eligible`).
+- **The ledger counts a set-aside run** at the whole per-run cap (its meter died with it),
+  so a redo never resets the USD ceiling.
+
 ``python -m scripts.p2_agents_pilot run --live`` runs the pilot in the approved store
 (``OPENAI_API_KEY`` in the environment, never logged); ``run --dry-run --store DIR`` goes
 through every check and every run with the offline scripted model in a scratch store and
@@ -33,8 +48,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -67,6 +84,19 @@ RUN_RECORDS = (
     ("calls.jsonl", "calls.jsonl"),
 )
 """Each run's visible records the report copies beside its tables."""
+
+RESTART_RULING = "the lead's B of 12 Nov"
+"""The word a restart's redo is made on, written into every restart record."""
+UNREACHABLE = re.compile(
+    r"AuthenticationError|PermissionDeniedError|Error code: (?:401|402|403)\b"
+    r"|invalid_api_key|insufficient_quota|no credits|credit balance|quota|billing",
+    re.IGNORECASE,
+)
+"""A provider error that means the model cannot be reached: credit, auth, quota, permission.
+
+A transient error (a rate limit, a timeout, a dropped connection) does not match: a run with
+one is scored unless every attempt failed.
+"""
 
 
 def config_path() -> Path:
@@ -197,6 +227,42 @@ def cap_refusals(run_dir: Path) -> list[dict[str, Any]]:
                 "error": line.get("error"),
             })  # fmt: skip
     return out
+
+
+def _model_calls(run_dir: Path) -> list[dict[str, Any]]:
+    """The run's model attempts from its own ``llm_calls.jsonl``, cap refusals left out."""
+    path = run_dir / "workflows" / "p2" / "llm_calls.jsonl"
+    if not path.is_file():
+        return []
+    out = []
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        if not raw.strip():
+            continue
+        try:
+            line = json.loads(raw)
+        except ValueError:
+            continue
+        if isinstance(line, dict) and not line.get("refused"):
+            out.append(line)
+    return out
+
+
+def model_unreachable(run_dir: Path) -> str | None:
+    """Why the provider could not be reached in this run, quoted; ``None`` if it could.
+
+    Read from the run's own ``llm_calls.jsonl`` (the lead's "B", 12 Nov): a credit, auth,
+    quota or permission error on any attempt (:data:`UNREACHABLE`), or every attempt
+    failing. A gateway cap refusal is not an attempt and counts neither way; a run with no
+    attempt at all (the offline model) is not unreachable.
+    """
+    calls = _model_calls(run_dir)
+    errors = [str(x["error"]) for x in calls if x.get("error")]
+    for error in errors:
+        if UNREACHABLE.search(error):
+            return error
+    if calls and len(errors) == len(calls):
+        return f"every attempt failed ({len(calls)} of {len(calls)}); the last: {errors[-1]}"
+    return None
 
 
 def scores(label: Any, secondary: list[str], outcome: str, truth: list[str]) -> dict[str, Any]:
@@ -399,21 +465,38 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
         name = key(cell)
         if (name, rep) in done:
             continue
-        if live and spent + per_run > limit:
-            print(f"STOP: USD {spent:.3f} spent; one more run could pass {limit:.2f}", flush=True)
-            return
         approved_cell = {"scenario": sid, "plant": plant_id, "tier": tier, "replicate": rep}
         # gate 1, the lead's approval of this run (and, live, of this store); gate 2, the
-        # freeze; both before anything is generated and before any client could exist
+        # freeze; both before a redo is set aside, before anything is generated and before
+        # any client could exist
         try:
             check_run_approved(approved_cell, (store / "runs") if live else None)
             frozen = h4_frozen(ARM)
         except ValueError as exc:
             print(f"STOP: {name} r{rep} refused before any run: {exc}", flush=True)
             return
+        prior = orphans.get((name, rep), [])
+        offset = 0  # the journal's attempt number of this run's first attempt, less one
+        restart: dict[str, Any] | None = None
+        if live and prior:
+            # the lead's "B": a run cut off by a restart is set aside and redone once; any
+            # other orphan was recorded unfinished by record_stopped_live and never gets here
+            if not restart_eligible(store, name, rep, prior):
+                print(f"STOP: {name} r{rep} was interrupted again; it is not redone twice",
+                      flush=True)  # fmt: skip
+                return
+            restart = set_aside_restart(store, name, rep, prior[-1], usd=per_run)
+            spent += per_run  # the set-aside run's meter died with it: its whole cap
+            ledger.write_text(json.dumps({"usd": spent}), encoding="utf-8")
+            print(f"RESTART {name} r{rep}: {restart['run_id']} set aside at "
+                  f"{restart['set_aside']}; redone once ({RESTART_RULING})",
+                  flush=True)  # fmt: skip
+            offset, prior = len(prior), []
+        if live and spent + per_run > limit:
+            print(f"STOP: USD {spent:.3f} spent; one more run could pass {limit:.2f}", flush=True)
+            return
         plant = load_plant_config(plant_id)
         scenario = scenario_for(sid, plant)
-        prior = orphans.get((name, rep), [])
         run_ids: list[str] = [str(p["run_id"]) for p in prior]
 
         def attempt(
@@ -426,9 +509,10 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
             tier: str = tier,
             run_ids: list[str] = run_ids,
             frozen: dict[str, str] = frozen,
+            restart: dict[str, Any] | None = restart,
         ) -> dict:
             nonlocal spent
-            if n > 1:  # dry runs only: a live run is never rerun (run_counted, live=True)
+            if n > 1 and not live:  # an offline rerun; a live redo was set aside whole
                 set_aside(store / "runs" / run_ids[-1], n - 1)
             art = generate_run(scenario, tier, plant=plant, replicate=rep,
                                runs_root=store / "runs")  # fmt: skip
@@ -453,10 +537,21 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
             record = run_record(cell, rep, list(scenario.truth_label), run_dir, result,
                                 time.perf_counter() - started, frozen, live=live)  # fmt: skip
             record["attempt"] = n
+            record["restart"] = restart
+            reason = model_unreachable(run_dir)
+            if reason is not None:  # the lead's "B": never a result, whatever it concluded
+                record.update({"unreachable": reason, "finished": False,
+                               "error": f"the model could not be reached: {reason}",
+                               "failure_reason": "model_unreachable"})  # fmt: skip
             return record
 
         try:
-            done_cell = run_counted(attempt, live=live, prior=prior, is_finished=_finished)
+            done_cell = run_counted(
+                lambda n, offset=offset: attempt(n + offset),
+                live=live,
+                prior=prior,
+                is_finished=_finished,
+            )
         except ValueError as exc:  # a store that already holds the run, or a refused run
             print(f"STOP: {name} r{rep}: {exc}", flush=True)
             return
@@ -464,8 +559,17 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
             if not live and run_ids:
                 set_aside(store / "runs" / run_ids[-1], len(done_cell.attempts))
             failure = {"cell": name, "replicate": rep, **done_cell.failure()}
+            last = done_cell.attempts[-1] if done_cell.attempts else {}
+            if last.get("unreachable"):
+                failure.update({"status": "model_unreachable", "error": last["unreachable"]})
+            if restart is not None:
+                failure["restart"] = restart
             append_synced(unfinished, json.dumps(failure, sort_keys=True, default=str) + "\n")
-            print(f"STOP: {name} r{rep} is unfinished ({done_cell.status}); nothing is "
+            if last.get("unreachable"):
+                print(f"STOP: {name} r{rep}: the model could not be reached: "
+                      f"{last['unreachable']}; recorded unfinished, never scored",
+                      flush=True)  # fmt: skip
+            print(f"STOP: {name} r{rep} is unfinished ({failure['status']}); nothing is "
                   f"scored for it. Report it to the coordinator: {failure['attempts']}",
                   flush=True)  # fmt: skip
             return
@@ -477,8 +581,12 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
 
 
 def _finished(record: dict[str, Any]) -> bool:
-    """A run is a result when the runner saw it complete and its report is not pending."""
-    return bool(record.get("completed")) and record.get("outcome") != "pending"
+    """A run is a result: complete, not pending, the model reached (the lead's "B")."""
+    return (
+        bool(record.get("completed"))
+        and record.get("outcome") != "pending"
+        and not record.get("unreachable")
+    )
 
 
 def _cells_in(paths: list[Path]) -> set[tuple[str, int]]:
@@ -509,6 +617,9 @@ def record_stopped_live(store: Path) -> bool:
     if not (store / "in_flight.jsonl").is_file():
         return False
     orphans = InFlight(store / "in_flight.jsonl").orphans(settled(store, live=True))
+    orphans = {
+        k: v for k, v in orphans.items() if not restart_eligible(store, k[0], k[1], v)
+    }  # a run cut off once by a restart is redone, not recorded (the lead's "B")
     for (cell, rep), prior in orphans.items():
         failure = {"cell": cell, "replicate": rep, "status": "unfinished_live",
                    "attempts": [{"run_id": p["run_id"], "completed": False,
@@ -520,6 +631,66 @@ def record_stopped_live(store: Path) -> bool:
               "unfinished and not rerun: a live rerun needs the lead's approval relayed "
               "by the coordinator", flush=True)  # fmt: skip
     return bool(orphans)
+
+
+def restarts(store: Path) -> list[dict[str, Any]]:
+    """The restart records of a live store (``restarts.jsonl``), oldest first."""
+    from scripts.p2_rerun import read_unfinished
+
+    path = store / "restarts.jsonl"
+    return read_unfinished([path]) if path.is_file() else []
+
+
+def restart_eligible(store: Path, cell: str, rep: int, prior: list[dict[str, Any]]) -> bool:
+    """Whether an orphaned live run is redone: cut off once, and never redone before.
+
+    The limit of one (the lead's "B", 12 Nov) is held twice: the journal shows that one
+    attempt only, and ``restarts.jsonl`` holds no restart of this run. A second
+    interruption fails both; a torn line naming no cell is never redone.
+    """
+    from scripts.p2_rerun import InFlight
+
+    if (cell, rep) == InFlight.TORN or len(prior) != 1:
+        return False
+    return not any((x["cell"], int(x["replicate"])) == (cell, rep) for x in restarts(store))
+
+
+def set_aside_restart(
+    store: Path, cell: str, rep: int, prior: dict[str, Any], *, usd: float
+) -> dict[str, Any]:
+    """Set an interrupted run's directory aside, whole, and record the restart. No call.
+
+    Into ``set_aside/<run id>.restart-N`` (the next free ``N``; never deleted, never
+    overwritten); recorded in ``restarts.jsonl`` with the time, the ruling and the USD the
+    ledger charges for it.
+    """
+    from scripts.p2_rerun import append_synced
+
+    run_id = str(prior.get("run_id"))
+    src = store / "runs" / run_id
+    dest: Path | None = None
+    calls = _model_calls(src)
+    if src.is_dir():
+        (store / "set_aside").mkdir(exist_ok=True)
+        n = 1
+        while (store / "set_aside" / f"{run_id}.restart-{n}").exists():
+            n += 1
+        dest = store / "set_aside" / f"{run_id}.restart-{n}"
+        shutil.move(str(src), str(dest))
+    entry = {
+        "cell": cell,
+        "replicate": rep,
+        "run_id": run_id,
+        "attempt": prior.get("attempt"),
+        "set_aside": str(dest) if dest else None,
+        "time": datetime.now(UTC).isoformat(timespec="seconds"),
+        "ruling": RESTART_RULING,
+        "usd_charged": usd,
+        "model_calls": len(calls),
+        "model_errors": sum(bool(x.get("error")) for x in calls),
+    }
+    append_synced(store / "restarts.jsonl", json.dumps(entry, sort_keys=True) + "\n")
+    return entry
 
 
 # ------------------------------------------------------------------ the report
@@ -566,6 +737,7 @@ def report(store: Path | None = None, *, live: bool = True) -> dict[str, Any]:
     paths = journals(store, live=live)
     if any(p.is_file() for p in paths):
         out["unfinished"] += stopped(InFlight(paths[0], paths).orphans(settled(store, live=live)))
+    out["restarts"] = restarts(store) if live else []
     dest = REPORT_DIR if live else REPORT_DIR / "dry_run"
     dest.mkdir(parents=True, exist_ok=True)
     (dest / "cells.json").write_text(
@@ -595,6 +767,9 @@ def report(store: Path | None = None, *, live: bool = True) -> dict[str, Any]:
         *([""] if out["unfinished"] else []),
         *[f"Unfinished (not scored): {u.get('cell')} r{u.get('replicate', 0)}, {u.get('status')}: "
           f"{u.get('attempts')}" for u in out["unfinished"]],
+        *[f"Restarted ({r['ruling']}): {r['cell']} r{r['replicate']}, {r['run_id']} set aside "
+          f"at {r['set_aside']} on {r['time']}, USD {r['usd_charged']} charged"
+          for r in out["restarts"]],
         "",
         "| cell | seed | truth | outcome | label set | confidence | primary in truth | exact "
         "| rule | USD | requests | tokens | cap hit | wall min |",
