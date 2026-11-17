@@ -4666,3 +4666,30 @@ No frozen file touched; no digest moves; no live call.
 - **Next:** the coordinator's review and the lead's word. Then, on the go: set both
   current stores aside, run the dry run, run the live pilot in a fresh store at the
   approved path, then `report` and the results PR.
+
+**2026-11-13 to 2026-11-16 — The live pilot, third start, stopped (no PR).**
+- The dry run on `main` at `14c220f` passed 8 of 8 offline.
+- Live start at 02:48 UTC on 13 Nov. S7-01 B/A r0 and r1 finished, both
+  `abstain:no_verdict`, USD 0.122 and 0.102.
+- A container restart killed S7-01 B/B r0. It was set aside and redone once under "B", with
+  USD 1.00 charged.
+- A second restart killed the redo. On 16 Nov the driver recorded it unfinished and printed
+  STOP. Ledger: USD 1.2241.
+- The root cause of the abstentions was found and posted on PR #53: the `emit_finding`
+  schema's references dangled as sent.
+
+**2026-11-17 — The emit_finding schema fix (branch `claude/p2-agents-emit-finding-schema`,
+a draft PR cut from `main` at `14c220f`; no open PR when it was cut).** This follows the
+lead's "stop, and yes to the fix". The store at `/home/user/p2_agents_pilot_store` is kept
+as it is.
+- The finding's `$defs` are hoisted to the root of each role's `emit_finding` parameters.
+- A refusal names every schema error, up to 20.
+- The agent freeze is re-dated 2026-11-17 and its six tool digests move:
+  `frozen_record_sha256(arm)` `58f7fd5c…` → `d167f1e4…`, `config_digest(arm)` `26e4302f…` →
+  `efebeff5…`. The procedural digests do not move.
+- New offline tests with controls, including a schema-only scripted model; both fixes are
+  mutation-checked. Decisions entry.
+- No live call. The approval tests fail until the approval record names the new freeze.
+- **Next:** the coordinator's review and the lead's word to merge. Then a separate PR
+  renewing the approval record, then a one-run live smoke test, then the eight runs, each
+  on the lead's word relayed by the coordinator.

@@ -38,15 +38,17 @@ from tools.workflow_config import load_p1, load_p2, sandbox_config
 from workflows.p2_multi_agent import agents, messages
 
 REPO = Path(__file__).resolve().parents[1]
-COMMITTED_AGENT_FROZEN_SHA256 = "58f7fd5c6d2a4b2eeebea0167200202e89619e23f8ba5f63d15b093e4e1ff155"
+COMMITTED_AGENT_FROZEN_SHA256 = "d167f1e4d44cb6a7d9dd5e0d45c4a3ff2a39202b7a4a2256a0d3f3ec253f65a8"
 """The digest of both committed records an approval of the agent arm names (the procedural
 ``frozen`` and ``agents.frozen``): a new agent freeze edits it, the procedural one stands.
 It moved from ``2089b2e2…a77b`` when the rule tables joined the record (2026-11-01), from
 ``b373dfaf…4a82`` when the routing rules joined them (the lead's "a", 2026-11-03, first
 ``2ed56ecf…9ead``, then ``501893b3…1fa4`` with the leading claim's label tie-break), and
 from ``501893b3…1fa4`` when the record was re-dated 2026-11-08 for the secondary labels
-(Q-H4, the lead's "a", 2026-11-05), and from ``b02f19c7…95ba`` when it was re-dated
-2026-11-11 for the confidence rule (the lead's "match")."""
+(Q-H4, the lead's "a", 2026-11-05), from ``b02f19c7…95ba`` when it was re-dated
+2026-11-11 for the confidence rule (the lead's "match"), and from ``58f7fd5c…f155`` when it
+was re-dated 2026-11-17 for the self-contained emit_finding schema (the lead's "stop, and
+yes to the fix")."""
 SECONDARY_LABELS_AGENT_FROZEN_SHA256 = (
     "b02f19c73d09794ad8edf7317c55b3b4731de1b3227281cd23d51f2bc01d95ba"
 )
@@ -58,12 +60,13 @@ RULE_TABLES_AGENT_FROZEN_SHA256 = "b373dfaf01636999d0a80ff2b211108a3c9ab94f786a2
 """The digest of the record with the rule tables of 2026-11-01, before the routing rules."""
 FIRST_AGENT_FROZEN_SHA256 = "2089b2e2f6378b8b3bd88bab3431ff1bf483afe209da329d2a1c4f27885ba77b"
 """The digest of the record as first cut on 2026-10-30, before the rule tables."""
-COMMITTED_AGENT_CONFIG_SHA256 = "26e4302faeb02c8c61108bd0e2c463d46045187e5e16da21cfd277968bc5984e"
+COMMITTED_AGENT_CONFIG_SHA256 = "efebeff51203879fc21491fd15a80f5180fe0df94220010a193e299b9608c7a1"
 """``config_digest`` of the committed ``p2_agents.yaml`` (the review of PR #46 at 9f5ffed):
 any edit to the agent configuration, its record included, moves it. It was ``85a608b8…``
 before the routing rules joined the record, ``ba8efb16…`` before the label tie-break did
 (both 2026-11-03), ``618f4825…6dd8`` before the secondary labels re-dated the record
-(2026-11-08), and ``30752c9d…54e5`` before the confidence rule did (2026-11-11)."""
+(2026-11-08), ``30752c9d…54e5`` before the confidence rule did (2026-11-11), and
+``26e4302f…984e`` before the self-contained emit_finding schema did (2026-11-17)."""
 PROCEDURAL_CONFIG_SHA256 = "def3c42bc638608e28c240b52f7ecc1c12c776f31a4b516cfd8d60ff23e0ba36"
 """``config_digest(load_p2())``, the procedural configuration's own digest (not the pilot's
 ``cf59bcbb…f404``, which is the pilot copy's): the agent record must not move it."""
@@ -81,7 +84,9 @@ def test_the_committed_record_passes_and_freezes_every_item_the_design_names():
     procedural = check_p2_frozen(arm)  # the procedural record, checked first, as before
     assert procedural.date == "2026-10-19"
     record = check_p2_agents_frozen(arm)
-    assert record.date == "2026-11-11" and "Yes to all three" in record.word
+    assert record.date == "2026-11-17" and "Yes to all three" in record.word
+    # the self-contained emit_finding schema (the lead's "stop, and yes to the fix")
+    assert "lead's word of 2026-11-17" in record.word and "yes to the fix" in record.word
     assert "lead's word of 2026-11-11" in record.word and '"match"' in record.word
     assert "lead's word of 2026-11-03" in record.word  # the routing rules (the lead's "a")
     assert "lead''s word of 2026-11-05" not in record.word  # the YAML quoting is unescaped

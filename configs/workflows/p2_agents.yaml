@@ -79,11 +79,11 @@ agents:
   # difference; frozen_record_sha256(config) names both records to an approval. A changed
   # prompt, schema, tool, list, budget or cap is a new freeze, on the lead's word.
   frozen:
-    date: '2026-11-11'
+    date: '2026-11-17'
     word: 'The lead''s word of 2026-10-30 ("Yes to all three", relayed by the coordinator at 11:03 UTC):
       the agent arm''s own record is cut first (design note section 6), the prompts frozen as they stand
       after PR #43 (merged at 01d78ac: the verifier''s own budget under ruling B, the second round and the
-      separating test), then the Q6 cells. First frozen 2026-10-30; the coordinator''s rule tables added on the lead''s word of 2026-11-01 ("merge 45, and yes to the rule tables"); the coordinator''s routing rules added on the lead''s word of 2026-11-03 ("a"), with the leading claim''s label tie-break (the review of 0f11477); the secondary labels on the lead''s word of 2026-11-05 (Q-H4, "a": the agent arm may name both faults), written by code from the other admitted claims as the procedural arm writes them, never by a model; the confidence on the lead''s word of 2026-11-11 ("match"): single for one admitted label, multiple for more, by the label set, as the procedural arm writes it.'
+      separating test), then the Q6 cells. First frozen 2026-10-30; the coordinator''s rule tables added on the lead''s word of 2026-11-01 ("merge 45, and yes to the rule tables"); the coordinator''s routing rules added on the lead''s word of 2026-11-03 ("a"), with the leading claim''s label tie-break (the review of 0f11477); the secondary labels on the lead''s word of 2026-11-05 (Q-H4, "a": the agent arm may name both faults), written by code from the other admitted claims as the procedural arm writes them, never by a model; the confidence on the lead''s word of 2026-11-11 ("match"): single for one admitted label, multiple for more, by the label set, as the procedural arm writes it; the emit_finding schema made self-contained on the lead''s word of 2026-11-17 ("stop, and yes to the fix"): the finding''s $defs at the root of each role''s tool parameters, where its references resolve as sent, and a refusal naming every schema error at once.'
     prompts_sha256:
       data_quality: bb2efc24e0915e2db3ffd9b155d57633f6cf8fc29644524eb499f972b981513e
       influent: f4daf255603808f8f5fad5677223f64a3e0de0379360c2d50c44df6ea4452d94
@@ -105,12 +105,12 @@ agents:
       Grant: 25cada76ffe19b5cde32eba3979b9e4a0615c9ad636d9c46f571252f7a555b68
       RoutingEntry: 403559e4cf17f41cb883562afe3781b83cd42354ddfed20c053ee177559cb43b
     tools_sha256:
-      data_quality: d9818323fb8e9d2ce2b613a730eef10c3b8c18ee0fe68332644259029a269c30
-      influent: 2a2ebc3671c5e6ff9afd7664076278e580a1f5652652ec8569d0a45eed5e2a24
-      identifiability: ec7334d50c57db013a926fb3c6c02c100c285e64c938e3eaa67b05986fa70e88
-      calibration: 8cd3d70b687be5fc2f8882e3dd5a8de6c6ed5a495c4ef121cdc279fe7af21239
-      design: 29f07e2604af41820b7ed4ce3b83c033d806c666a320c9368f234ed537cf25e1
-      verification: b128de8b4c70aa8e833af62f92516158b73fe3a3936ec648a8dbf3e5f8e96d98
+      data_quality: c720949201526723c35430d027ec0ab2451ec640ee2d1403e53e2ea93da63115
+      influent: 55e5c1f2788c1b1d255632c79daffd7c4b1a39911cf307b469ce506f6f7e3c4f
+      identifiability: 52c540515ceda10a61badee8cd035e121f7a4b92ec98c6fecb627ec21d42a69b
+      calibration: 12303d6e785e68ed24052d3dfa4dba670686ca3865be1691eb6f74749cf89a53
+      design: 47a71da80a3d7ccccd12673b922c9643ad0dff52ad37dedf7a5d5bb12b26dbcd
+      verification: aad682721309b255c6327b80bb10d0b76edff535b22d36c1e26362665759f1b6
     allow_list:
       data_quality:
       - data_qc
