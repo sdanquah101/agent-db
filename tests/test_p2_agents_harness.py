@@ -240,8 +240,13 @@ def test_each_role_is_offered_its_tools_stored_and_its_typed_finding():
         specs = agents.role_tool_specs(role, list(spec.tools))
         names = [s["name"] for s in specs]
         assert set(names) == set(spec.tools) | {"stored", "emit_finding"}
-        schema = specs[-1]["input_schema"]["properties"]["finding"]
-        assert schema == messages.FINDINGS[role].model_json_schema()
+        sent = specs[-1]["input_schema"]
+        schema = sent["properties"]["finding"]
+        # the message's schema, whole: its $defs hoisted to the sent root, where the
+        # root-relative references resolve (test_p2_agents_emit_schema.py)
+        assert "$defs" not in schema
+        whole = messages.FINDINGS[role].model_json_schema()
+        assert {**schema, "$defs": sent["$defs"]} == whole
     with pytest.raises(ValueError, match="no specification"):
         agents.role_tool_specs("design", ["conclude"])
 

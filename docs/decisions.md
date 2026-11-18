@@ -9256,3 +9256,139 @@ second interruption is a pattern the lead should see before more spend.
 **Scope.** Only `scripts/p2_agents_pilot.py`, its tests, this entry and the milestones
 changed. Nothing frozen was touched and no digest moves. Tests, all offline, with
 controls and mutation checks, are listed in the PR.
+
+## 2026-11-17 — The emit_finding schema made self-contained; a refusal names every schema error (the lead's "stop, and yes to the fix")
+
+**Ruling.** The lead, relayed by the coordinator on 17 Nov: "stop, and yes to the fix". The
+live pilot is stopped and its store kept as it is. The fix is a new agent freeze; a renewed
+approval record, a one-run live smoke test and the eight runs follow, each on the lead's
+word.
+
+**Root cause (the live pilot, 13 Nov; PR #53).** `role_tool_specs` put Pydantic's
+`model_json_schema()` of each role's finding under `input_schema.properties.finding`, with
+its `$defs` left nested there. Pydantic's references are root-relative
+(`#/$defs/EvidenceRef`, `#/$defs/HoldoutResult`, `#/$defs/SeparatingTest`), and
+`tools/llm.py` sends `input_schema` itself as the tool's `parameters`. So every reference
+dangled, for every role. The model saw a finding's top-level fields but not the shape of an
+evidence item, a hold-out or a separating test, and it invented them (`call_index`,
+`identifiers`, `source_call`, `value`/`unit`, `test`, `reason`). `check_finding` named only
+the first validation error (`exc.errors()[0]`), so each refusal revealed one field at a cost
+of one turn.
+
+**Evidence (runs 1–2, S7-01 B/A r0 and r1).**
+- Both runs ended `abstain:no_verdict`. The verifier used 14 of 14 turns each time, with 10
+  `emit_finding` attempts per run; in run 1 all ten were refused by schema validation.
+- In run 1 no proposer finding was accepted. In run 2 one was: calibration's `no_claim`, on
+  its 9th attempt, after it dropped every value.
+- Every first-attempt error fell inside a referenced object; none fell in a top-level field.
+- The offline arm never showed the bug: `OfflineModel` builds its finding from code, not
+  from the schema.
+
+**Decision.**
+1. **The schema is self-contained.** `role_tool_specs` hoists the finding schema's `$defs`
+   to the root of `emit_finding`'s `input_schema`, where its references resolve in exactly
+   what the client sends. The finding's own schema is otherwise unchanged; `messages.py` is
+   not touched.
+2. **All errors at once.** A new `parse_finding` (the schema stage of `check_finding`) names
+   every validation error in one refusal, each with its location and message, up to
+   `FINDING_ERRORS_SHOWN = 20`; the rest are counted. The checks after the schema stage
+   still name the first refusal.
+3. **The freeze moves.** `agents.frozen` is re-dated 2026-11-17. Only the six
+   `tools_sha256` move; the prompts, schemas, rule tables and projection do not.
+   - `frozen_record_sha256(arm)`: `58f7fd5c…f155` → `d167f1e4…65a8`
+   - `config_digest(arm)`: `26e4302f…984e` → `efebeff5…c7a1`
+   - `agents_frozen_sha256`: `a2427dbb…5a6a` → `06291b87…cb41`
+   - The procedural digests stand: `frozen_record_sha256()` `c58306b4…40a0`,
+     `config_digest(p2)` `def3c42b…ba36`, the pilot's `cf59bcbb…f404`.
+
+**Reasons.** Hoisting is the smallest change that makes every reference resolve as sent:
+the schema is still the message's own, so the model is shown exactly the fields code checks.
+Naming every error turns a field-by-field search into one correction. Neither touches the
+client, the runner or anything frozen outside the agent record.
+
+**Alternatives.**
+- Inline every `$ref`. Equivalent for the model, but it duplicates `EvidenceRef` into each
+  use and departs further from the message's own schema. Not chosen; the coordinator allowed
+  either.
+- Send the schema in strict mode. Rejected: `tools/llm.py` is frozen, and strict mode limits
+  optional fields.
+- Raise the turn budgets. Rejected: it would hide the defect and change the frozen budgets.
+
+**Tests** (`tests/test_p2_agents_emit_schema.py`, all offline, each with its control):
+- For every role, every `$ref` in the `emit_finding` parameters built by
+  `tools.llm.to_responses_request` resolves. The old nesting dangles under the same test.
+- A finding valid against the sent schema passes the schema stage. The validator refuses an
+  unresolved reference and any keyword it does not know.
+- A finding missing two nested fields is refused with both named; more than the bound are
+  counted.
+- A scripted model that builds its finding from the sent schema alone gets it accepted
+  through the role's own loop, for the verifier and the four proposers that can act with no
+  assay. On the old nesting the same model cannot build a finding.
+- Reverting (a), or reverting (b), fails tests.
+
+**Scope.** `workflows/p2_multi_agent/agents.py`, the agent record in
+`configs/workflows/p2_agents.yaml`, the tests (the new file, one harness assertion, and the
+freeze pins in `test_p2_agents_freeze.py` and `test_p2_h4_cells.py`), this entry and the
+milestones. Not touched: `tools/llm.py`, `tools/runner.py`, `tools/p2_live.py`,
+`workflow.py`, `messages.py` and the approval record. The approval record still names the
+old freeze, so the approval tests fail until its own PR renews it. No live call was made.
+
+## 2026-11-18 — The renewed approval folded into the fix's PR, and a one-run smoke option (the lead's "fold")
+
+**Ruling.** The lead, relayed by the coordinator on 18 Nov at 01:32 UTC: **"fold"**. This
+approves the agent pilot on the new freeze of 2026-11-17. The renewed approval goes into PR
+#55, so the schema fix and the approval merge as one green PR, not as two PRs with a red one
+between them.
+
+**Decision.**
+1. **`configs/workflows/p2_live_approval.yaml` is renewed.**
+   - The pilot is the same as before: the same eight runs (S7-01 B/A, B/B, B/C and S7-02 A/C,
+     replicates 0 and 1), the same model `gpt-5.6-luna`, and the same caps (240 requests,
+     14,000,000 tokens, USD 1.00 and 2.0 characters per token).
+   - It names the new freeze, `frozen_sha256` `d167f1e4…65a8`, and the new configuration,
+     `config_sha256` `efebeff5…c7a1`.
+   - It names a fresh store, `/home/user/p2_agents_pilot2_store/runs`, which does not exist yet.
+     The stores of 2026-11-11 to 2026-11-16 stay as they are until the go.
+   - `ruling_date` is 2026-11-18. The word quotes "stop, and yes to the fix" and "fold"
+     verbatim, with the coordinator's relays.
+   - The digest is recomputed with `approval_digest`: `96db9a43…fe1c`.
+2. **The record of 2026-11-11 is archived beside it, byte for byte**, as
+   `p2_live_approval_agents_pilot1.yaml`. It still names `58f7fd5c…`, under its own digest
+   `67422d5b…`, and the check refuses it for the committed configuration.
+3. **`run --live --max-runs N`** (`scripts/p2_agents_pilot.py`) stops cleanly once N new runs
+   have a result and prints a `PAUSE` line.
+   - It never stops inside a run, so nothing is recorded unfinished and the journal holds no
+     orphan.
+   - A later start of the same command runs what is left.
+   - Every gate applies to every run, as before.
+   - A redo after a restart is a run like any other and counts towards N.
+   - N must be at least 1. The ban on `--part` for a live run stays.
+
+**Reasons.** The approval names the freeze it approves, so a new freeze needs a new record.
+Merging the record with the fix keeps `main` green, which neither PR could manage alone. The
+smoke option lets the first live run on the new freeze be one run, as the lead's sequence
+asks, with no special code path: it is the same command, stopped between runs.
+
+**Alternatives.**
+- A separate approval PR after #55. Superseded by the ruling: #55 would merge red.
+- A smoke script of its own. Rejected: it would duplicate the gates and could drift from
+  them.
+
+**Tests.**
+- The pins of the renewed record are updated, and the archive has a test of its own.
+- `--max-runs` is covered by `None` as a control, 1 and 2, then a later start; by the gates
+  still refusing, a redo counting towards N, and a refusal of N = 0.
+- Mutation checks: removing the bound fails 3 tests; removing the lower bound fails 1.
+
+**A test fix after review (the coordinator's review of 28159e1).** One `--max-runs` test called
+`monkeypatch.undo()` part-way through. That removed its client spy and its faked simulator, so
+the second half built the real client. No request went out, because the launch was faked, but
+CI failed wherever the openai SDK was not installed.
+- The test is split in two, with no undo.
+- An autouse guard in `tests/test_p2_agents_pilot.py` makes both ways to the real client raise
+  unless a test installs a spy over it. The guard uses its own `MonkeyPatch`, so a test's undo
+  restores the guard, never the real client.
+- Control: the old undo pattern, run with the SDK installed, now fails with "the real live client
+  was built in a test".
+
+No live call was made. The smoke run waits for #55's merge and the coordinator's relayed go.

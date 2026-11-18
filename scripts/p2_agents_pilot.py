@@ -1,4 +1,4 @@
-"""The agent arm's live pilot on the H4 cells (the lead's "approve the pilot", 2026-11-11).
+"""The agent arm's live pilot on the H4 cells (approved 2026-11-11; renewed by "fold", 2026-11-18).
 
 Eight runs, S7-01 at B/A, B/B, B/C and S7-02 at A/C at replicates 0 and 1, of the agent
 arm (``configs/workflows/p2_agents.yaml`` as committed) with the live decider, in the fresh
@@ -387,8 +387,15 @@ def run_record(
 # ------------------------------------------------------------------ the driver
 
 
-def run(*, live: bool, store: Path | None = None, part: str = "0/1") -> None:
+def run(
+    *, live: bool, store: Path | None = None, part: str = "0/1", max_runs: int | None = None
+) -> None:
     """Run the pilot: live in the approved store, or a dry run in a scratch store.
+
+    ``max_runs`` (the lead's "fold", 2026-11-18: the one-run smoke test) stops the driver
+    cleanly once that many new runs have a result: it never stops inside a run, so it
+    records nothing unfinished, and the runs left are run by a later start of the same
+    command. Every gate applies to every run as before.
 
     Raises:
         SystemExit: Live without the lead's approval, the key or the approved store; a
@@ -396,6 +403,8 @@ def run(*, live: bool, store: Path | None = None, part: str = "0/1") -> None:
     """
     from tools.p2_live import require_live_approval
 
+    if max_runs is not None and max_runs < 1:
+        raise SystemExit("--max-runs must be at least 1")
     if live:
         if store is not None:
             raise SystemExit("a live run uses the store the approval names; pass no --store")
@@ -423,10 +432,10 @@ def run(*, live: bool, store: Path | None = None, part: str = "0/1") -> None:
             require_live_approval(load_config())
         except ValueError as exc:
             raise SystemExit(f"the pilot is not approved: {exc}") from exc
-    _runs(store, live=live, part=part)
+    _runs(store, live=live, part=part, max_runs=max_runs)
 
 
-def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
+def _runs(store: Path, *, live: bool, part: str = "0/1", max_runs: int | None = None) -> None:
     store = store.resolve()
     if store == REPO or REPO in store.parents:
         raise SystemExit("the store must be outside the repository")
@@ -458,6 +467,7 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
     ledger = store / f"spent_usd{suffix}.json"
     spent = float(json.loads(ledger.read_text())["usd"]) if ledger.is_file() else 0.0
     order = [(c, r) for c in CELLS for r in REPLICATES]
+    new_runs = 0  # runs this start brought to a result (``max_runs``)
     for k, ((sid, plant_id, tier), rep) in enumerate(order):
         if k % n_part != i_part:
             continue
@@ -578,6 +588,13 @@ def _runs(store: Path, *, live: bool, part: str = "0/1") -> None:
         print(f"DONE {name} r{rep}: {line['outcome']} ({line['rule']}); labels "
               f"{line['label_set']}; USD {line['spend']['usd']} (USD {spent:.3f} so far)"
               + ("; CAP HIT" if line["cap"]["hit"] else ""), flush=True)  # fmt: skip
+        new_runs += 1
+        if max_runs is not None and new_runs >= max_runs:
+            left = sum(1 for c, r in order if (key(c), r) not in settled(store, live=live))
+            print(f"PAUSE: --max-runs {max_runs} reached after {name} r{rep}; {left} run(s) "
+                  "left for a later start of the same command; nothing is unfinished",
+                  flush=True)  # fmt: skip
+            return
 
 
 def _finished(record: dict[str, Any]) -> bool:
@@ -701,7 +718,7 @@ def summarise(rows: list[dict[str, Any]]) -> dict[str, Any]:
     scored = [x for x in rows if x["finished"] and x["outcome"] not in ("abstain", "pending")]
     usd = [float(x["spend"]["usd"] or 0.0) for x in rows]
     return {
-        "what": "the agent arm live on the H4 cells (the lead's approval of 2026-11-11)",
+        "what": 'the agent arm live on the H4 cells (the lead\'s approval of 2026-11-18, "fold")',
         "descriptive_only": True,
         "runs": len(rows),
         "finished": sum(x["finished"] for x in rows),
@@ -754,7 +771,7 @@ def report(store: Path | None = None, *, live: bool = True) -> dict[str, Any]:
             if src.is_file():
                 shutil.copy2(src, target / name)
     lines = [
-        "# The agent arm live on the H4 cells (the lead's approval of 2026-11-11)",
+        "# The agent arm live on the H4 cells (the lead's approval of 2026-11-18, \"fold\")",
         "",
         "Descriptive only (design note §7). The scores are eval's: `primary in truth`, the",
         "label names one of the two faults; `exact`, the label set (the label and the",
@@ -798,6 +815,9 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--dry-run", action="store_true", help="every check, the offline model")
     p_run.add_argument("--store", type=Path, default=None, help="the dry run's scratch store")
     p_run.add_argument("--part", default="0/1", help="dry runs only: i/n")
+    p_run.add_argument(
+        "--max-runs", type=int, default=None, help="stop cleanly after N new runs (the smoke test)"
+    )
     p_rep = sub.add_parser("report", help="write reports/p2_agents_pilot/")
     p_rep.add_argument("--store", type=Path, default=None)
     p_rep.add_argument("--dry-run", action="store_true")
@@ -807,7 +827,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.action == "run":
         if args.live and args.part != "0/1":
             raise SystemExit("the live pilot runs whole: one process, no --part")
-        run(live=bool(args.live), store=args.store, part=args.part)
+        run(live=bool(args.live), store=args.store, part=args.part, max_runs=args.max_runs)
     else:
         report(args.store, live=not args.dry_run)
     del p_plan

@@ -873,7 +873,12 @@ def role_tool_specs(role: str, allowed: list[str]) -> list[dict[str, Any]]:
     """The tools a role is offered: its registry tools, ``stored`` and its ``emit_finding``.
 
     ``emit_finding``'s schema is the role's typed message (``messages.FINDINGS``), so the
-    model is shown exactly the fields code will check.
+    model is shown exactly the fields code will check. The message's ``$defs`` are hoisted
+    to the root of the tool's ``input_schema``: Pydantic's references are root-relative
+    (``#/$defs/EvidenceRef``), and the client sends ``input_schema`` itself as the tool's
+    parameters, so nested ``$defs`` would leave every reference dangling and the model blind
+    to the shape of an evidence item, a hold-out or a separating test (the live pilot of
+    2026-11-13; the lead's "stop, and yes to the fix", 2026-11-17).
     """
     registry = registry_tool_specs()
     unknown = sorted(set(allowed) - set(registry))
@@ -889,6 +894,16 @@ def role_tool_specs(role: str, allowed: list[str]) -> list[dict[str, Any]]:
     )
     model = messages.FINDINGS[role]
     schema = model.model_json_schema()
+    defs = schema.pop("$defs", None)
+    input_schema: dict[str, Any] = {
+        "type": "object",
+        "description": f"{model.__name__}",
+        "properties": {"finding": schema},
+        "required": ["finding"],
+        "additionalProperties": False,
+    }
+    if defs:
+        input_schema["$defs"] = defs  # where "#/$defs/..." resolves: the sent root
     specs.append(
         {
             "name": "emit_finding",
@@ -897,13 +912,7 @@ def role_tool_specs(role: str, allowed: list[str]) -> list[dict[str, Any]]:
                 "evidence item cites call indices of this run and carries numbers those "
                 "calls returned, with their unit symbols."
             ),
-            "input_schema": {
-                "type": "object",
-                "description": f"{model.__name__}",
-                "properties": {"finding": schema},
-                "required": ["finding"],
-                "additionalProperties": False,
-            },
+            "input_schema": input_schema,
         }
     )
     return specs
@@ -1904,6 +1913,34 @@ class Workspace:
 
 # ------------------------------------------------------------------ findings
 
+FINDING_ERRORS_SHOWN = 20
+"""At most this many schema errors are named in one refusal; the rest are counted."""
+
+
+def parse_finding(role: str, payload: Any) -> Any:
+    """The schema stage of :func:`check_finding`: the role's typed message, or a refusal.
+
+    Every validation error is named in the one refusal, each with its location and its
+    message (at most :data:`FINDING_ERRORS_SHOWN`, the rest counted): a refusal that named
+    only the first error cost the live pilot of 2026-11-13 a turn per field (the lead's
+    "stop, and yes to the fix", 2026-11-17).
+
+    Raises:
+        ActionError: Naming every schema error, up to the bound.
+    """
+    model = messages.FINDINGS[role]
+    try:
+        return model.model_validate(payload)
+    except ValidationError as exc:
+        errors = exc.errors()
+        shown = [
+            f"{'.'.join(str(p) for p in e.get('loc', ())) or '(root)'}: {e.get('msg')}"
+            for e in errors[:FINDING_ERRORS_SHOWN]
+        ]
+        more = len(errors) - len(shown)
+        tail = f"; and {more} more" if more > 0 else ""
+        raise ActionError(f"finding: {len(errors)} error(s): " + "; ".join(shown) + tail) from exc
+
 
 def check_finding(ws: Workspace, role: str, payload: Any, round_: int) -> Any:
     """A role's typed finding, checked by code; the model instance when it passes.
@@ -1917,16 +1954,13 @@ def check_finding(ws: Workspace, role: str, payload: Any, round_: int) -> Any:
     alternative the amended rule does not admit; a verdict's hold-out citing a call that
     is not a ``validate`` of this run.
 
+    The schema stage (:func:`parse_finding`) names every validation error at once; the
+    checks after it name the first refusal.
+
     Raises:
-        ActionError: Naming the first refusal.
+        ActionError: Naming the schema errors, or the first refusal after them.
     """
-    model = messages.FINDINGS[role]
-    try:
-        finding = model.model_validate(payload)
-    except ValidationError as exc:
-        first = exc.errors()[0]
-        where = ".".join(str(p) for p in first.get("loc", ()))
-        raise ActionError(f"finding: {where}: {first.get('msg')}") from exc
+    finding = parse_finding(role, payload)
     if not messages.claim_allowed_in_round(finding, round_):
         raise ActionError(f"finding: claim {finding.claim!r} is a round-2 claim")
     checked: list[Any] = []

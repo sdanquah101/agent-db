@@ -64,11 +64,12 @@ FROZEN = {
         "frozen_record_sha256": COMMITTED_AGENT_FROZEN_SHA256,
         "config_sha256": COMMITTED_AGENT_CONFIG_SHA256,
         # the provenance key a run of the arm carries: agents.frozen alone (PR #45, N4)
-        "agents_frozen_sha256": "a2427dbbcfe49652eeeab58f1cd87d6c9c47e659381051f84b291b8bfbdd5a6a",
+        "agents_frozen_sha256": "06291b87d19152513df4ba5d38fe419f055bb31455f41be2a0fb4ecdccf9cb41",
     },
 }
 """What each arm's record names today: the digests on ``main`` since the confidence rule
-re-dated the agent record (2026-11-11; the secondary labels re-dated it 2026-11-08)."""
+re-dated the agent record (2026-11-17, the self-contained emit_finding schema;
+2026-11-11, the confidence rule; 2026-11-08, the secondary labels)."""
 H4_RUN_FROZEN = {
     "procedural": FROZEN["procedural"],
     "agents": {
