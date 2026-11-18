@@ -36,6 +36,27 @@ def _committed_record() -> dict[str, Any]:
     return yaml.safe_load(COMMITTED_APPROVAL.read_text(encoding="utf-8"))
 
 
+@pytest.fixture(autouse=True)
+def _never_the_real_client():
+    """No test here may build the real client: both ways to it raise by default.
+
+    A test that needs a client installs a spy (``client_spy``) over this guard, or the
+    explicit ban (``no_live_client``). The review of 28159e1 (2026-11-18): a test that undid
+    its patches built the real client where the openai SDK was installed, and failed only
+    where it was not.
+    """
+
+    def guard(*a: Any, **k: Any) -> Any:
+        raise AssertionError("the real live client was built in a test")
+
+    # its own MonkeyPatch, not the test's: a test's ``monkeypatch.undo()`` restores the
+    # guard, never the real client
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(p2_live, "p2_live_client", guard)
+        mp.setattr("tools.llm.OpenAIResponsesClient.__init__", guard)
+        yield
+
+
 @pytest.fixture
 def no_live_client(monkeypatch):
     """The live client can never be built: both ways to it raise."""
@@ -725,13 +746,13 @@ def test_max_runs_keeps_every_gate(
     pilot.run(live=True, max_runs=1)
     assert "STOP: S7-01 B/B r0 refused before any run: the agent freeze" in capsys.readouterr().out
     assert "client" not in client_spy and not (store / "results.jsonl").exists()
-    # and a redo after a restart is a run like any other: it counts towards the bound
-    monkeypatch.undo()
-    monkeypatch.setattr(pilot, "CELLS", ONE_CELL)
-    monkeypatch.setattr(pilot, "REPLICATES", (0, 1))
-    monkeypatch.setattr(p2_live, "_git_clean", lambda p: (True, ""))
-    monkeypatch.setattr(p2_live, "APPROVAL_FILE", store.parent / "p2_live_approval.yaml")
-    monkeypatch.setenv(pilot.KEY_VARIABLE, "sk-not-a-key")
+
+
+def test_max_runs_counts_a_redo_after_a_restart_as_a_run(
+    monkeypatch, two_seeds, approved_test_store, client_spy, faked_runner, capsys
+):
+    """A redo is a run like any other: it counts towards the bound, through every gate."""
+    store = approved_test_store
     monkeypatch.setattr(pilot, "approved_store", lambda: store)
     faked_runner(_fake_launch_writing("sensor", ["influent"], 0.5))
     _interrupted(store, rep=0)
@@ -739,6 +760,7 @@ def test_max_runs_keeps_every_gate(
     out = capsys.readouterr().out
     assert "RESTART S7-01 B/B r0" in out and "PAUSE: --max-runs 1 reached after S7-01 B/B r0" in out
     assert [r["replicate"] for r in _rows(store / "results.jsonl")] == [0]
+    assert client_spy.count("client") == 1  # the spy's client, never the real one
 
 
 def test_max_runs_must_be_positive_and_the_live_part_ban_stays(no_live_client):

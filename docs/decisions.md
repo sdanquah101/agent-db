@@ -9380,4 +9380,15 @@ asks, with no special code path: it is the same command, stopped between runs.
   still refusing, a redo counting towards N, and a refusal of N = 0.
 - Mutation checks: removing the bound fails 3 tests; removing the lower bound fails 1.
 
+**A test fix after review (the coordinator's review of 28159e1).** One `--max-runs` test called
+`monkeypatch.undo()` part-way through. That removed its client spy and its faked simulator, so
+the second half built the real client. No request went out, because the launch was faked, but
+CI failed wherever the openai SDK was not installed.
+- The test is split in two, with no undo.
+- An autouse guard in `tests/test_p2_agents_pilot.py` makes both ways to the real client raise
+  unless a test installs a spy over it. The guard uses its own `MonkeyPatch`, so a test's undo
+  restores the guard, never the real client.
+- Control: the old undo pattern, run with the SDK installed, now fails with "the real live client
+  was built in a test".
+
 No live call was made. The smoke run waits for #55's merge and the coordinator's relayed go.
