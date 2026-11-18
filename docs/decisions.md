@@ -9332,3 +9332,52 @@ freeze pins in `test_p2_agents_freeze.py` and `test_p2_h4_cells.py`), this entry
 milestones. Not touched: `tools/llm.py`, `tools/runner.py`, `tools/p2_live.py`,
 `workflow.py`, `messages.py` and the approval record. The approval record still names the
 old freeze, so the approval tests fail until its own PR renews it. No live call was made.
+
+## 2026-11-18 — The renewed approval folded into the fix's PR, and a one-run smoke option (the lead's "fold")
+
+**Ruling.** The lead, relayed by the coordinator on 18 Nov at 01:32 UTC: **"fold"**. This
+approves the agent pilot on the new freeze of 2026-11-17. The renewed approval goes into PR
+#55, so the schema fix and the approval merge as one green PR, not as two PRs with a red one
+between them.
+
+**Decision.**
+1. **`configs/workflows/p2_live_approval.yaml` is renewed.**
+   - The pilot is the same as before: the same eight runs (S7-01 B/A, B/B, B/C and S7-02 A/C,
+     replicates 0 and 1), the same model `gpt-5.6-luna`, and the same caps (240 requests,
+     14,000,000 tokens, USD 1.00 and 2.0 characters per token).
+   - It names the new freeze, `frozen_sha256` `d167f1e4…65a8`, and the new configuration,
+     `config_sha256` `efebeff5…c7a1`.
+   - It names a fresh store, `/home/user/p2_agents_pilot2_store/runs`, which does not exist yet.
+     The stores of 2026-11-11 to 2026-11-16 stay as they are until the go.
+   - `ruling_date` is 2026-11-18. The word quotes "stop, and yes to the fix" and "fold"
+     verbatim, with the coordinator's relays.
+   - The digest is recomputed with `approval_digest`: `96db9a43…fe1c`.
+2. **The record of 2026-11-11 is archived beside it, byte for byte**, as
+   `p2_live_approval_agents_pilot1.yaml`. It still names `58f7fd5c…`, under its own digest
+   `67422d5b…`, and the check refuses it for the committed configuration.
+3. **`run --live --max-runs N`** (`scripts/p2_agents_pilot.py`) stops cleanly once N new runs
+   have a result and prints a `PAUSE` line.
+   - It never stops inside a run, so nothing is recorded unfinished and the journal holds no
+     orphan.
+   - A later start of the same command runs what is left.
+   - Every gate applies to every run, as before.
+   - A redo after a restart is a run like any other and counts towards N.
+   - N must be at least 1. The ban on `--part` for a live run stays.
+
+**Reasons.** The approval names the freeze it approves, so a new freeze needs a new record.
+Merging the record with the fix keeps `main` green, which neither PR could manage alone. The
+smoke option lets the first live run on the new freeze be one run, as the lead's sequence
+asks, with no special code path: it is the same command, stopped between runs.
+
+**Alternatives.**
+- A separate approval PR after #55. Superseded by the ruling: #55 would merge red.
+- A smoke script of its own. Rejected: it would duplicate the gates and could drift from
+  them.
+
+**Tests.**
+- The pins of the renewed record are updated, and the archive has a test of its own.
+- `--max-runs` is covered by `None` as a control, 1 and 2, then a later start; by the gates
+  still refusing, a redo counting towards N, and a refusal of N = 0.
+- Mutation checks: removing the bound fails 3 tests; removing the lower bound fails 1.
+
+No live call was made. The smoke run waits for #55's merge and the coordinator's relayed go.

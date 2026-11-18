@@ -4693,3 +4693,15 @@ as it is.
 - **Next:** the coordinator's review and the lead's word to merge. Then a separate PR
   renewing the approval record, then a one-run live smoke test, then the eight runs, each
   on the lead's word relayed by the coordinator.
+
+**2026-11-18 — "fold" (new commits on PR #55's branch; no rebase).**
+- The approval record is renewed for the new freeze (`d167f1e4…` / `efebeff5…`) and a fresh
+  store, `/home/user/p2_agents_pilot2_store`, with the digest `96db9a43…`. The record of
+  2026-11-11 is archived as `p2_live_approval_agents_pilot1.yaml`.
+- A smoke option, `run --live --max-runs N`, stops cleanly between runs. It is tested offline,
+  with mutation checks.
+- The full suite runs offline and green. Decisions entry.
+- No live call. Both old stores are untouched.
+- **Next:** the lead's merge of #55, then the coordinator's go. At the go, the old stores are
+  set aside under recorded names and `run --live --max-runs 1` runs once in the new store.
+  The remaining seven runs follow, each on the lead's word.

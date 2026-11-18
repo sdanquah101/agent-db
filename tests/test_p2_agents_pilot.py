@@ -29,7 +29,7 @@ from tools.llm import ScriptedClient
 REPO = Path(__file__).resolve().parents[1]
 COMMITTED_APPROVAL = REPO / "configs" / "workflows" / "p2_live_approval.yaml"
 ONE_CELL = (("S7-01", "B", "B"),)
-APPROVED_STORE = Path("/home/user/p2_agents_pilot_store")
+APPROVED_STORE = Path("/home/user/p2_agents_pilot2_store")  # the "fold" record's fresh store
 
 
 def _committed_record() -> dict[str, Any]:
@@ -673,3 +673,76 @@ def test_every_gate_applies_to_a_redo_and_a_refusal_sets_nothing_aside(
     assert (store / "runs" / rid / "workflows" / "p2" / "llm_calls.jsonl").is_file()
     assert not (store / "set_aside").exists() and pilot.restarts(store) == []
     assert "client" not in client_spy and not (store / "spent_usd.json").exists()
+
+
+# ------------------------------------------------------------------ --max-runs (the lead's "fold")
+
+
+@pytest.mark.parametrize(
+    ("max_runs", "first", "paused"), [(None, 2, False), (1, 1, True), (2, 2, True)]
+)
+def test_max_runs_stops_cleanly_and_a_later_start_runs_the_rest(
+    monkeypatch, two_seeds, approved_test_store, client_spy, faked_runner, capsys,
+    max_runs, first, paused,
+):  # fmt: skip
+    """The smoke test (2026-11-18): stop after N new runs, record nothing unfinished.
+
+    The control is ``max_runs=None``: the same start runs both seeds.
+    """
+    from scripts.p2_rerun import InFlight
+
+    store = approved_test_store
+    monkeypatch.setattr(pilot, "approved_store", lambda: store)
+    faked_runner(_fake_launch_writing("sensor", ["influent"], 0.5))
+    pilot.run(live=True, max_runs=max_runs)
+    out = capsys.readouterr().out
+    assert len(_rows(store / "results.jsonl")) == first
+    assert ("PAUSE: --max-runs" in out) is paused
+    if max_runs == 1:
+        assert "PAUSE: --max-runs 1 reached after S7-01 B/B r0; 1 run(s) left" in out
+    # stopped between runs: no orphan in the journal, nothing unfinished, one client per run
+    assert not (store / "unfinished.jsonl").exists()
+    assert InFlight(store / "in_flight.jsonl").orphans(pilot.settled(store, live=True)) == {}
+    assert client_spy.count("client") == first
+    # a later start of the same command runs what is left, through every gate, and no more
+    pilot.run(live=True, max_runs=max_runs)
+    assert [r["replicate"] for r in _rows(store / "results.jsonl")] == [0, 1]
+    assert client_spy.count("client") == 2
+    assert "RESTART" not in capsys.readouterr().out  # a clean stop is never a restart
+
+
+def test_max_runs_keeps_every_gate(
+    monkeypatch, two_seeds, approved_test_store, client_spy, faked_runner, capsys
+):
+    store = approved_test_store
+    monkeypatch.setattr(pilot, "approved_store", lambda: store)
+    faked_runner(_fake_launch_writing("sensor", ["influent"], 0.5))
+
+    def thawed(arm: str) -> Any:
+        raise ValueError("the agent freeze does not hold")
+
+    monkeypatch.setattr(pilot, "h4_frozen", thawed)
+    pilot.run(live=True, max_runs=1)
+    assert "STOP: S7-01 B/B r0 refused before any run: the agent freeze" in capsys.readouterr().out
+    assert "client" not in client_spy and not (store / "results.jsonl").exists()
+    # and a redo after a restart is a run like any other: it counts towards the bound
+    monkeypatch.undo()
+    monkeypatch.setattr(pilot, "CELLS", ONE_CELL)
+    monkeypatch.setattr(pilot, "REPLICATES", (0, 1))
+    monkeypatch.setattr(p2_live, "_git_clean", lambda p: (True, ""))
+    monkeypatch.setattr(p2_live, "APPROVAL_FILE", store.parent / "p2_live_approval.yaml")
+    monkeypatch.setenv(pilot.KEY_VARIABLE, "sk-not-a-key")
+    monkeypatch.setattr(pilot, "approved_store", lambda: store)
+    faked_runner(_fake_launch_writing("sensor", ["influent"], 0.5))
+    _interrupted(store, rep=0)
+    pilot.run(live=True, max_runs=1)
+    out = capsys.readouterr().out
+    assert "RESTART S7-01 B/B r0" in out and "PAUSE: --max-runs 1 reached after S7-01 B/B r0" in out
+    assert [r["replicate"] for r in _rows(store / "results.jsonl")] == [0]
+
+
+def test_max_runs_must_be_positive_and_the_live_part_ban_stays(no_live_client):
+    with pytest.raises(SystemExit, match="at least 1"):
+        pilot.main(["run", "--live", "--max-runs", "0"])
+    with pytest.raises(SystemExit, match="no --part"):
+        pilot.main(["run", "--live", "--part", "0/2", "--max-runs", "1"])
