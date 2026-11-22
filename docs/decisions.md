@@ -9392,3 +9392,44 @@ CI failed wherever the openai SDK was not installed.
   was built in a test".
 
 No live call was made. The smoke run waits for #55's merge and the coordinator's relayed go.
+
+## 2026-11-22 — The agent arm cannot reach a correct label as built; a redesign note for the lead (the lead's "Redesign note")
+
+**Ruling.** The lead, relayed by the coordinator on 22 Nov at 01:01 UTC: **"Redesign note"**.
+It followed the lead's question after the smoke run of 18 Nov, whether the agent arm can get the
+right result at all, and the coordinator's review of `main` at `4033a2d`, which found it cannot.
+**The remaining seven live runs of the pilot are not run.**
+
+**Decision.** `docs/p2_agents_redesign.md` is added as a proposal, as `docs/p2_agents_design.md`
+was. No code, configuration or test changes; no live call.
+- It checks the coordinator's fifteen findings (A1–C15) against the code and the three live
+  runs. All fifteen hold.
+- The note corrects one statement of the P2 session's own. The smoke run's comment on #53 put
+  its `sensor` refusal down to tier A. The cause is the offline `dq.coupled` fallback
+  (`insufficient`), at any tier.
+- It adds four findings (D1, D2, C16 and the onset proposal that never reaches admission).
+- It tabulates reachability: a correct primary label is reachable on 0 of the 8 H4 runs and 0 of
+  the 6 faulted development cells. The only labels reachable on H4 are `none` (8 of 8) and
+  `parameter` (2 of 8), both wrong there.
+- It puts one central question to the lead, with options (a), (b) and (c) and the reachability
+  each would give. **The P2 session recommends (c):**
+  - each label is admitted by its own code test on cited calls;
+  - thresholds are calibrated on clean runs to a fixed false-positive rate;
+  - the null reports and routes but does not veto;
+  - compound faults are admitted together through an explain-away re-fit;
+  - every run is scored under both the frozen and the new admission.
+
+**Reasons.**
+- Admission reads the base procedural workflow's signatures at its offline fallbacks, never the
+  agents' evidence (`agents.py:2488`, `2821-2824`).
+- The null cases assume one fault (`evidence.py:147-157`, `446-462`).
+- Fixing the agents' tooling (B7–B13) alone therefore changes no outcome.
+
+**Alternatives.** (a) and (b), set out in the note §3 with what each fixes and leaves broken.
+Running the seven remaining runs first was ruled out by the lead's stop.
+
+**What does not change.**
+- P0, P1, the procedural P2's `admit` and the null rule of 2026-10-07.
+- The registry and its budgets.
+- Code writes the label.
+- The stores of 13–18 Nov stay untouched.

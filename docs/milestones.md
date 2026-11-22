@@ -4705,3 +4705,22 @@ as it is.
 - **Next:** the lead's merge of #55, then the coordinator's go. At the go, the old stores are
   set aside under recorded names and `run --live --max-runs 1` runs once in the new store.
   The remaining seven runs follow, each on the lead's word.
+
+**2026-11-18 to 2026-11-22 — The smoke run, then the stop and the redesign note (branch
+`claude/p2-agents-redesign-note`, a draft PR cut from `main` at `4033a2d`; no open PR when it
+was cut).**
+- 18 Nov, on the coordinator's go after #55 merged:
+  - the store of 13–16 Nov was set aside as
+    `/home/user/p2_agents_pilot_void/2026-11-13T0248Z_pilot1_noverdict`;
+  - the dry run passed 8 of 8 offline;
+  - `run --live --max-runs 1` ran S7-01 B/A r0 (`run_45be0bcd18b9`) and ended on its PAUSE line:
+    `abstain:no_proposal`, USD 0.068947, 33 requests, 911,979 tokens, no cap hit, 6,021 s.
+    Result posted on #53.
+- 22 Nov, the lead's "Redesign note": the remaining seven runs are stopped.
+  `docs/p2_agents_redesign.md` checks the coordinator's findings A1–C15 (all hold), tabulates
+  reachability (0 of 8 H4 runs can reach a correct label), and puts the admission question to
+  the lead with options (a)/(b)/(c), recommending (c). Decisions entry.
+- No code, config or test changes. No live call. The stores are untouched.
+- **Blocked on:** the lead's ruling on the note's §10 questions.
+- **Next:** on the ruling, the order of work in the note's §8. That begins with the model double
+  that reads only what a live model is sent, and the `none` reachability test.
